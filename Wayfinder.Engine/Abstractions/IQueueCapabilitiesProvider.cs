@@ -1,9 +1,9 @@
-namespace UmbracoPrism.WorkflowRuntime.Abstractions;
+namespace UmbracoPrism.ProcessManager.Abstractions;
 
 /// <summary>
 /// Host-implemented extension point declaring which PrismComponent "type" discriminators
 /// (see <c>PrismComponentTypeCatalog</c>) a queue's host application can actually render.
-/// Optional at the toolkit level (see <see cref="Services.WorkflowAuthoringService"/>'s
+/// Optional at the toolkit level (see <see cref="Services.ServiceBlueprintAuthoringService"/>'s
 /// nullable constructor param) — a host that doesn't care about this simply never registers
 /// one, and the capability check is skipped entirely.
 /// </summary>
@@ -16,13 +16,13 @@ public interface IQueueCapabilitiesProvider
     /// non-null, possibly empty list when the queue IS declared — an empty list is an honest
     /// "this host currently renders zero component types for this queue." Null vs. empty must
     /// stay distinguishable; this is a different convention to
-    /// <c>WorkflowAccessProfile</c>'s "empty list = unrestricted", deliberately so.
+    /// <c>ActorProfile</c>'s "empty list = unrestricted", deliberately so.
     /// </summary>
     IReadOnlyList<string>? GetSupportedComponentTypes(string queueKey);
 
     /// <summary>
     /// Every queue this host has an explicit declaration for, keyed by queue key. Backs
-    /// discovering what's safe to author for a queue before drafting a state for it.
+    /// discovering what's safe to author for a queue before drafting a stage for it.
     /// </summary>
     IReadOnlyDictionary<string, IReadOnlyList<string>> GetAllDeclaredCapabilities();
 }
@@ -31,7 +31,7 @@ public interface IQueueCapabilitiesProvider
 /// Dictionary-backed reference implementation for hosts with a fixed, compile-time-known
 /// capability set — the common case, since a host's rendering surface doesn't usually change
 /// at runtime. Pass an <see cref="StringComparer.OrdinalIgnoreCase"/>-keyed dictionary,
-/// matching <c>StepDefinition.QueueKey</c>/<c>WorkflowAccessProfile</c>'s own
+/// matching <c>StageDefinition.QueueKey</c>/<c>ActorProfile</c>'s own
 /// case-insensitivity convention.
 /// </summary>
 public sealed class StaticQueueCapabilitiesProvider(
