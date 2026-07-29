@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
 
-namespace UmbracoPrism.Shared.Models.ServiceDesign.Components;
+namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
 /// Reflects <see cref="PrismComponent"/>'s <c>[JsonDerivedType]</c> attribute list ONCE into

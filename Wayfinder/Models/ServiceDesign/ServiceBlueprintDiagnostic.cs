@@ -1,4 +1,4 @@
-namespace UmbracoPrism.Shared.Models.ServiceDesign;
+namespace Wayfinder.Models.ServiceDesign;
 
 /// <summary>Severity of a <see cref="ServiceBlueprintDiagnostic"/>.</summary>
 public enum ServiceBlueprintDiagnosticSeverity

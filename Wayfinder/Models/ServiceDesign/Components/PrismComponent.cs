@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UmbracoPrism.Shared.Models.ServiceDesign.Components;
+namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
 /// Abstract base for all blueprint component types in the v2.0 schema.

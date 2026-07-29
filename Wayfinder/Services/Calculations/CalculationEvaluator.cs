@@ -1,7 +1,7 @@
 using System.Globalization;
-using UmbracoPrism.Shared.Models.ServiceDesign.Calculations;
+using Wayfinder.Models.ServiceDesign.Calculations;
 
-namespace UmbracoPrism.Shared.Services.Calculations;
+namespace Wayfinder.Services.Calculations;
 
 /// <summary>Result of evaluating a <see cref="ServiceBlueprintCalculationSet"/>.</summary>
 public sealed record CalculationResult
@@ -36,7 +36,7 @@ public sealed record CalculationEvaluationResult(CalculationResult Result, IRead
 /// exponents are not exact in any base — outputs that matter should be wrapped in
 /// <c>round()</c>. Any other runtime implementing this grammar (e.g. the TypeScript
 /// client evaluator) must match these semantics; the shared golden fixtures in
-/// <c>src/UmbracoPrism.Shared/calculation-fixtures/</c> are the conformance suite.
+/// <c>src/Wayfinder/calculation-fixtures/</c> are the conformance suite.
 /// </summary>
 public sealed class CalculationEvaluator
 {

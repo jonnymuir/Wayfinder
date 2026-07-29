@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace UmbracoPrism.Shared.Services.Calculations;
+namespace Wayfinder.Services.Calculations;
 
 /// <summary>
 /// Converts a JSON document into calculation-scope values: <see cref="decimal"/> for numbers,

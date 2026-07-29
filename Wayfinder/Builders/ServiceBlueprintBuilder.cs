@@ -1,7 +1,7 @@
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.Shared.Models.ServiceDesign.Components;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Models.ServiceDesign.Components;
 
-namespace UmbracoPrism.Shared.Builders;
+namespace Wayfinder.Builders;
 
 /// <summary>
 /// Fluent builder for creating v2.0 service blueprints in code with full IntelliSense support.

@@ -1,4 +1,4 @@
-namespace UmbracoPrism.Shared.Models.ServiceDesign;
+namespace Wayfinder.Models.ServiceDesign;
 
 public record ActorProfile
 {

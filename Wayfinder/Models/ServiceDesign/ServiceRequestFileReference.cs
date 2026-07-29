@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace UmbracoPrism.Shared.Models.ServiceDesign;
+namespace Wayfinder.Models.ServiceDesign;
 
 /// <summary>
 /// Reference to a file uploaded against a <c>file-upload</c> field, stored as the field's

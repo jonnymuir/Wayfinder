@@ -1,4 +1,4 @@
-namespace UmbracoPrism.Shared.Models.ServiceDesign.Components;
+namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
 /// GDS body component: renders paragraph text content.

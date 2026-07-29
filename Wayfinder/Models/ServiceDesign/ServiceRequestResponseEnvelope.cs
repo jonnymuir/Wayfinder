@@ -1,6 +1,6 @@
-using UmbracoPrism.Shared.Models.ServiceDesign.Components;
+using Wayfinder.Models.ServiceDesign.Components;
 
-namespace UmbracoPrism.Shared.Models.ServiceDesign;
+namespace Wayfinder.Models.ServiceDesign;
 
 /// <summary>
 /// Standard API response envelope for service request operations.
