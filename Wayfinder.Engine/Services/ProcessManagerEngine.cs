@@ -7,11 +7,11 @@ using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Services.Sanitization;
-using UmbracoPrism.ProcessManager.Abstractions;
-using UmbracoPrism.ProcessManager.Models;
-using UmbracoPrism.ProcessManager.Stores;
+using Wayfinder.Engine.Abstractions;
+using Wayfinder.Engine.Models;
+using Wayfinder.Engine.Stores;
 
-namespace UmbracoPrism.ProcessManager.Services;
+namespace Wayfinder.Engine.Services;
 
 /// <summary>
 /// Generic in-memory runtime engine that executes Prism service blueprints.

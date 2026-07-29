@@ -4,9 +4,9 @@ using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Services.Calculations;
-using UmbracoPrism.ProcessManager.Abstractions;
+using Wayfinder.Engine.Abstractions;
 
-namespace UmbracoPrism.ProcessManager.Services;
+namespace Wayfinder.Engine.Services;
 
 /// <summary>Outcome of validating a service blueprint.</summary>
 public sealed record ServiceBlueprintValidationOutcome(bool IsValid, IReadOnlyList<ServiceBlueprintDiagnostic> Diagnostics)

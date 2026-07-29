@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace UmbracoPrism.ProcessManager.Mcp;
+namespace Wayfinder.Engine.Mcp;
 
 /// <summary>
 /// Registers and maps the Prism service blueprint authoring toolkit as MCP tools over HTTP. Hosted

@@ -1,4 +1,4 @@
-namespace UmbracoPrism.ProcessManager.Abstractions;
+namespace Wayfinder.Engine.Abstractions;
 
 /// <summary>
 /// Host-implemented extension point declaring which PrismComponent "type" discriminators

@@ -2,9 +2,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Services.Calculations;
-using UmbracoPrism.ProcessManager.Stores;
+using Wayfinder.Engine.Stores;
 
-namespace UmbracoPrism.ProcessManager.Services;
+namespace Wayfinder.Engine.Services;
 
 /// <summary>
 /// One action to advance a simulated service request, optionally supplying field values

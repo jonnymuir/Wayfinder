@@ -1,6 +1,6 @@
 using Wayfinder.Models.ServiceDesign;
 
-namespace UmbracoPrism.ProcessManager.Abstractions;
+namespace Wayfinder.Engine.Abstractions;
 
 /// <summary>
 /// Persists authored/runtime service blueprints, keyed by <see cref="ServiceBlueprint.DefinitionKey"/>.

@@ -1,6 +1,6 @@
-using UmbracoPrism.ProcessManager.Models;
+using Wayfinder.Engine.Models;
 
-namespace UmbracoPrism.ProcessManager.Abstractions;
+namespace Wayfinder.Engine.Abstractions;
 
 /// <summary>
 /// The toolkit's extension point for blueprint *instance* storage — mirrors

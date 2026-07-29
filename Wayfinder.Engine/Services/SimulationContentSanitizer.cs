@@ -1,6 +1,6 @@
 using Wayfinder.Services.Sanitization;
 
-namespace UmbracoPrism.ProcessManager.Services;
+namespace Wayfinder.Engine.Services;
 
 /// <summary>
 /// Identity sanitizer used only by <see cref="ServiceBlueprintSimulationRunner"/>'s dry-run engine.

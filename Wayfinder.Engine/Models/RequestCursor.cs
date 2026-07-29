@@ -1,4 +1,4 @@
-namespace UmbracoPrism.ProcessManager.Models;
+namespace Wayfinder.Engine.Models;
 
 /// <summary>
 /// Tracks a single active execution point within a multi-queue service request.

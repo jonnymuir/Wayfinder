@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
-using UmbracoPrism.ProcessManager.Abstractions;
-using UmbracoPrism.ProcessManager.Models;
+using Wayfinder.Engine.Abstractions;
+using Wayfinder.Engine.Models;
 
-namespace UmbracoPrism.ProcessManager.Stores;
+namespace Wayfinder.Engine.Stores;
 
 /// <summary>
 /// Default <see cref="IServiceRequestStore"/> — process-lifetime only, exactly matching

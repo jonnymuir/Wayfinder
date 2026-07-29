@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Wayfinder.Models.ServiceDesign;
-using UmbracoPrism.ProcessManager.Abstractions;
+using Wayfinder.Engine.Abstractions;
 
-namespace UmbracoPrism.ProcessManager.Stores;
+namespace Wayfinder.Engine.Stores;
 
 /// <summary>
 /// Serves a single, caller-supplied definition. Used to wire a real <c>ProcessManagerEngine</c>

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Wayfinder.Models.ServiceDesign;
 
-namespace UmbracoPrism.ProcessManager.Abstractions;
+namespace Wayfinder.Engine.Abstractions;
 
 public interface IServiceBlueprintStore
 {

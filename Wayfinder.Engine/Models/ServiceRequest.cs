@@ -1,6 +1,6 @@
 using Wayfinder.Services.Calculations;
 
-namespace UmbracoPrism.ProcessManager.Models;
+namespace Wayfinder.Engine.Models;
 
 /// <summary>
 /// Runtime stage for a service request held in-memory by the host application.

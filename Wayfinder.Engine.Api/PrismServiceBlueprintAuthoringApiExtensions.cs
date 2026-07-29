@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Services.Calculations;
-using UmbracoPrism.ProcessManager.Services;
+using Wayfinder.Engine.Services;
 
-namespace UmbracoPrism.ProcessManager.Api;
+namespace Wayfinder.Engine.Api;
 
 /// <summary>
 /// Maps the Prism service blueprint authoring toolkit's HTTP surface — list/read/validate/save/simulate —
