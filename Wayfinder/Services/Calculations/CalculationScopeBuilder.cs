@@ -1,9 +1,9 @@
 using System.Globalization;
-using UmbracoPrism.Shared.Extensions;
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.Shared.Models.ServiceDesign.Components;
+using Wayfinder.Extensions;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Models.ServiceDesign.Components;
 
-namespace UmbracoPrism.Shared.Services.Calculations;
+namespace Wayfinder.Services.Calculations;
 
 /// <summary>
 /// Builds the typed evaluation scope for a blueprint's calculation set from raw instance

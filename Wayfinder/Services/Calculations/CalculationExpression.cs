@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace UmbracoPrism.Shared.Services.Calculations;
+namespace Wayfinder.Services.Calculations;
 
 /// <summary>
 /// Thrown for any parse or evaluation failure. Messages include enough position/name

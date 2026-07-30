@@ -1,9 +1,9 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using UmbracoPrism.Shared.Extensions;
-using UmbracoPrism.Shared.Models.ServiceDesign.Components;
+using Wayfinder.Extensions;
+using Wayfinder.Models.ServiceDesign.Components;
 
-namespace UmbracoPrism.Shared.Models.ServiceDesign;
+namespace Wayfinder.Models.ServiceDesign;
 
 /// <summary>
 /// Persisted service blueprint contract shared by authoring, seed files and runtime loading.

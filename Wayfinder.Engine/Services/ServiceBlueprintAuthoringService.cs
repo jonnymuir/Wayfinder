@@ -1,12 +1,12 @@
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.Shared.Extensions;
-using UmbracoPrism.Shared.Models.ServiceDesign.Components;
-using UmbracoPrism.Shared.Services.Calculations;
-using UmbracoPrism.ProcessManager.Abstractions;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Extensions;
+using Wayfinder.Models.ServiceDesign.Components;
+using Wayfinder.Services.Calculations;
+using Wayfinder.Engine.Abstractions;
 
-namespace UmbracoPrism.ProcessManager.Services;
+namespace Wayfinder.Engine.Services;
 
 /// <summary>Outcome of validating a service blueprint.</summary>
 public sealed record ServiceBlueprintValidationOutcome(bool IsValid, IReadOnlyList<ServiceBlueprintDiagnostic> Diagnostics)

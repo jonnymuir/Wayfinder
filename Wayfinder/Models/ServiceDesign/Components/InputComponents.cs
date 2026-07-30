@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace UmbracoPrism.Shared.Models.ServiceDesign.Components;
+namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
 /// Accepts a default value authored as its natural JSON scalar type (string, boolean, or

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace UmbracoPrism.Shared.Models.ServiceDesign.Calculations;
+namespace Wayfinder.Models.ServiceDesign.Calculations;
 
 /// <summary>
 /// Declarative calculation block for a service blueprint. Fields are evaluated in

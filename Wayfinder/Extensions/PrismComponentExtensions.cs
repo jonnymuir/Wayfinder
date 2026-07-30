@@ -1,6 +1,6 @@
-using UmbracoPrism.Shared.Models.ServiceDesign.Components;
+using Wayfinder.Models.ServiceDesign.Components;
 
-namespace UmbracoPrism.Shared.Extensions;
+namespace Wayfinder.Extensions;
 
 /// <summary>
 /// Tree-walking helpers for the v2.0 polymorphic <see cref="PrismComponent"/> hierarchy.

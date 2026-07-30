@@ -1,7 +1,7 @@
 using System.Reflection;
 using ModelContextProtocol.Server;
 
-namespace UmbracoPrism.ProcessManager.Mcp;
+namespace Wayfinder.Engine.Mcp;
 
 /// <summary>
 /// MCP resources exposing the service blueprint authoring reference docs — the calculation

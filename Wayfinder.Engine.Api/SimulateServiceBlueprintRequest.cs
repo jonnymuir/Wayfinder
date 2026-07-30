@@ -1,8 +1,8 @@
 using System.Text.Json;
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.ProcessManager.Services;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Engine.Services;
 
-namespace UmbracoPrism.ProcessManager.Api;
+namespace Wayfinder.Engine.Api;
 
 /// <summary>Request body for the simulate endpoint — bundles the inputs a dry-run needs.</summary>
 /// <param name="MockServiceInputs">

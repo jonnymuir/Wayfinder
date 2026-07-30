@@ -1,12 +1,12 @@
 using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.Shared.Services.Calculations;
-using UmbracoPrism.ProcessManager.Abstractions;
-using UmbracoPrism.ProcessManager.Services;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Services.Calculations;
+using Wayfinder.Engine.Abstractions;
+using Wayfinder.Engine.Services;
 
-namespace UmbracoPrism.ProcessManager.Mcp;
+namespace Wayfinder.Engine.Mcp;
 
 /// <summary>
 /// MCP tool wrappers over <see cref="ServiceBlueprintAuthoringService"/>. Calls it directly,

@@ -4,10 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>UmbracoPrism.ProcessManager.Mcp</RootNamespace>
+    <RootNamespace>Wayfinder.Engine.Mcp</RootNamespace>
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <PackageId>UmbracoPrism.ProcessManager.Mcp</PackageId>
+    <PackageId>Wayfinder.Engine.Mcp</PackageId>
     <Title>Umbraco Prism Blueprint Authoring MCP</Title>
     <Version>0.1.0</Version>
     <Authors>Jonny Muir</Authors>
@@ -31,14 +31,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../UmbracoPrism.ProcessManager/UmbracoPrism.ProcessManager.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine/Wayfinder.Engine.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="../../docs/guides/calculation-language.md" LogicalName="UmbracoPrism.ProcessManager.Mcp.docs.calculation-language.md" />
-    <EmbeddedResource Include="../../docs/guides/reference-service-blueprint-contract.md" LogicalName="UmbracoPrism.ProcessManager.Mcp.docs.reference-service-blueprint-contract.md" />
-    <EmbeddedResource Include="../../docs/guides/service-design-principles.md" LogicalName="UmbracoPrism.ProcessManager.Mcp.docs.service-design-principles.md" />
-    <EmbeddedResource Include="../../docs/guides/ai-service-blueprint-authoring.md" LogicalName="UmbracoPrism.ProcessManager.Mcp.docs.ai-service-blueprint-authoring.md" />
+    <EmbeddedResource Include="../../docs/guides/calculation-language.md" LogicalName="Wayfinder.Engine.Mcp.docs.calculation-language.md" />
+    <EmbeddedResource Include="../../docs/guides/reference-service-blueprint-contract.md" LogicalName="Wayfinder.Engine.Mcp.docs.reference-service-blueprint-contract.md" />
+    <EmbeddedResource Include="../../docs/guides/service-design-principles.md" LogicalName="Wayfinder.Engine.Mcp.docs.service-design-principles.md" />
+    <EmbeddedResource Include="../../docs/guides/ai-service-blueprint-authoring.md" LogicalName="Wayfinder.Engine.Mcp.docs.ai-service-blueprint-authoring.md" />
   </ItemGroup>
 
   <ItemGroup>

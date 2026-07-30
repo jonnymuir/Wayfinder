@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.ProcessManager.Abstractions;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Engine.Abstractions;
 
-namespace UmbracoPrism.ProcessManager.Stores;
+namespace Wayfinder.Engine.Stores;
 
 public sealed class FilesystemServiceBlueprintStore(string blueprintSeedPath) : IServiceBlueprintStore
 {

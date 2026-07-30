@@ -1,9 +1,9 @@
-namespace UmbracoPrism.Shared.Services.Sanitization;
+namespace Wayfinder.Services.Sanitization;
 
 /// <summary>Sanitizes HTML authored in a service blueprint before it reaches Razor.</summary>
 /// <remarks>
 /// Implementations must be thread-safe; register as singleton.
-/// The engine is the sole producer of <see cref="UmbracoPrism.Shared.Models.ServiceDesign.ServiceRequestResponseEnvelope"/>
+/// The engine is the sole producer of <see cref="Wayfinder.Models.ServiceDesign.ServiceRequestResponseEnvelope"/>
 /// payloads; all Content/Heading fields MUST be routed through this sanitizer before the payload is built.
 /// </remarks>
 public interface IServiceContentSanitizer

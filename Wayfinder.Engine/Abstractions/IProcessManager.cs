@@ -1,7 +1,7 @@
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.ProcessManager.Models;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Engine.Models;
 
-namespace UmbracoPrism.ProcessManager.Abstractions;
+namespace Wayfinder.Engine.Abstractions;
 
 public interface IProcessManager
 {

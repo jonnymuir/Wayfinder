@@ -1,9 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
-using UmbracoPrism.ProcessManager.Abstractions;
-using UmbracoPrism.ProcessManager.Services;
-using UmbracoPrism.ProcessManager.Stores;
+using Wayfinder.Engine.Abstractions;
+using Wayfinder.Engine.Services;
+using Wayfinder.Engine.Stores;
 
-namespace UmbracoPrism.ProcessManager.Extensions;
+namespace Wayfinder.Engine.Extensions;
 
 public static class ProcessManagerServiceExtensions
 {

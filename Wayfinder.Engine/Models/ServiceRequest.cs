@@ -1,6 +1,6 @@
-using UmbracoPrism.Shared.Services.Calculations;
+using Wayfinder.Services.Calculations;
 
-namespace UmbracoPrism.ProcessManager.Models;
+namespace Wayfinder.Engine.Models;
 
 /// <summary>
 /// Runtime stage for a service request held in-memory by the host application.
@@ -19,7 +19,7 @@ public record ServiceRequest
     /// True when <see cref="UserId"/> identifies a signed-in user rather than an anonymous
     /// visitor's correlation cookie. A store may use this to apply a longer-lived (or
     /// unbounded) retention policy than it would for an anonymous session — see
-    /// <c>UmbracoCmsServiceRequestStore</c>, whose 30-minute sliding expiry is skipped
+    /// <c>UmbracoServiceRequestStore</c>, whose 30-minute sliding expiry is skipped
     /// entirely for authenticated instances.
     /// </summary>
     public bool IsAuthenticated { get; init; }

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <PackageId>UmbracoPrism.ProcessManager</PackageId>
+    <PackageId>Wayfinder.Engine</PackageId>
     <Title>Umbraco Prism Blueprint Runtime</Title>
     <Version>0.1.0</Version>
     <Authors>Jonny Muir</Authors>
@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../UmbracoPrism.Shared/UmbracoPrism.Shared.csproj" />
+    <ProjectReference Include="../Wayfinder/Wayfinder.csproj" />
   </ItemGroup>
 
   <ItemGroup>

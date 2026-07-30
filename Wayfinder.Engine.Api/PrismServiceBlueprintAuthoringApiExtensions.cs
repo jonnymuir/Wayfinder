@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.Shared.Services.Calculations;
-using UmbracoPrism.ProcessManager.Services;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Services.Calculations;
+using Wayfinder.Engine.Services;
 
-namespace UmbracoPrism.ProcessManager.Api;
+namespace Wayfinder.Engine.Api;
 
 /// <summary>
 /// Maps the Prism service blueprint authoring toolkit's HTTP surface — list/read/validate/save/simulate —

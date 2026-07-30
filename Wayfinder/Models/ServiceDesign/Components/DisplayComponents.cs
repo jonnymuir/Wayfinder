@@ -1,4 +1,4 @@
-namespace UmbracoPrism.Shared.Models.ServiceDesign.Components;
+namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
 /// A group of headline statistic tiles (label + value + qualifier), rendered read-only.

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <PackageId>UmbracoPrism.ProcessManager.Api</PackageId>
+    <PackageId>Wayfinder.Engine.Api</PackageId>
     <Title>Umbraco Prism Blueprint Authoring API</Title>
     <Version>0.1.0</Version>
     <Authors>Jonny Muir</Authors>
@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../UmbracoPrism.ProcessManager/UmbracoPrism.ProcessManager.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine/Wayfinder.Engine.csproj" />
   </ItemGroup>
 
   <ItemGroup>

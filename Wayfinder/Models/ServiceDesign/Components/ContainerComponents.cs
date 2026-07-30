@@ -1,4 +1,4 @@
-namespace UmbracoPrism.Shared.Models.ServiceDesign.Components;
+namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
 /// GDS fieldset component: groups related fields with an optional legend.

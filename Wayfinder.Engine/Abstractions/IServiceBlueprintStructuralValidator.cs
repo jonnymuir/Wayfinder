@@ -1,6 +1,6 @@
-using UmbracoPrism.Shared.Models.ServiceDesign;
+using Wayfinder.Models.ServiceDesign;
 
-namespace UmbracoPrism.ProcessManager.Abstractions;
+namespace Wayfinder.Engine.Abstractions;
 
 /// <summary>
 /// A host-supplied structural constraint, checked alongside <see cref="Services.ServiceBlueprintAuthoringService"/>'s

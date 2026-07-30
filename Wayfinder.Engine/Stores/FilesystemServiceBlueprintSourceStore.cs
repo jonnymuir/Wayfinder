@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using UmbracoPrism.Shared.Models.ServiceDesign;
-using UmbracoPrism.ProcessManager.Abstractions;
+using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Engine.Abstractions;
 
-namespace UmbracoPrism.ProcessManager.Stores;
+namespace Wayfinder.Engine.Stores;
 
 /// <summary>
 /// File-backed, dependency-light implementation of <see cref="IServiceBlueprintSourceStore"/> — one

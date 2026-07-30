@@ -1,4 +1,4 @@
-namespace UmbracoPrism.Shared.Models.ServiceDesign.Components;
+namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
 /// Waiting component: displays a message while the blueprint is paused pending external processing.
