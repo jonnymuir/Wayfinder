@@ -9,6 +9,9 @@ on:
 jobs:
   build-and-pack:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -25,3 +28,16 @@ jobs:
 
       - name: Pack
         run: dotnet pack Wayfinder.slnx -c Release --no-build -o ./artifacts
+
+      # Publishes on every push to main using the workflow's own auto-provisioned token —
+      # no PAT needed for this repo to publish its own packages. Consuming these packages
+      # from a different repo's CI (e.g. Wayfinder.Umbraco) does need a PAT with
+      # read:packages, since a repo's automatic GITHUB_TOKEN doesn't read another repo's
+      # packages under a personal account.
+      - name: Publish to GitHub Packages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          dotnet nuget push "./artifacts/*.nupkg" \
+            --source "https://nuget.pkg.github.com/jonnymuir/index.json" \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
+            --skip-duplicate
