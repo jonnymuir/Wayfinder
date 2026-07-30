@@ -13,8 +13,8 @@
     <Company>Umbraco Prism</Company>
     <Description>Umbraco/Umbraco.Cms-independent GDS-style blueprint state-machine engine (queue routing, gateway evaluation, instance persistence) used by Umbraco Prism. Reusable by any .NET host building its own blueprint-driven business app.</Description>
     <PackageTags>Blueprint;State-machine;GDS;Umbraco-Prism</PackageTags>
-    <PackageProjectUrl>https://github.com/jonnymuir/Umbraco.Prism</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/jonnymuir/Umbraco.Prism</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageIcon>assets/logo-vertical-lockup.png</PackageIcon>
@@ -31,9 +31,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="../../README.md" Pack="true" PackagePath="/" />
-    <None Include="../../assets/logo-vertical-lockup.png" Pack="true" PackagePath="assets/" />
-    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Include="../assets/logo-vertical-lockup.png" Pack="true" PackagePath="assets/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>

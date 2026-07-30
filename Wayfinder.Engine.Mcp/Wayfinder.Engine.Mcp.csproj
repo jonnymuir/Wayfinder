@@ -14,8 +14,8 @@
     <Company>Umbraco Prism</Company>
     <Description>ASP.NET Core MCP-over-HTTP endpoint mapping that exposes Umbraco Prism service blueprint authoring (list/read/validate/save/simulate) as MCP tools — a single MapPrismServiceBlueprintAuthoringMcp() call any host adds to its own pipeline, alongside MapPrismServiceBlueprintAuthoringApi(), inheriting its own auth.</Description>
     <PackageTags>Blueprint;MCP;Model-Context-Protocol;Umbraco-Prism</PackageTags>
-    <PackageProjectUrl>https://github.com/jonnymuir/Umbraco.Prism</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/jonnymuir/Umbraco.Prism</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageIcon>assets/logo-vertical-lockup.png</PackageIcon>
@@ -35,15 +35,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="../../docs/guides/calculation-language.md" LogicalName="Wayfinder.Engine.Mcp.docs.calculation-language.md" />
-    <EmbeddedResource Include="../../docs/guides/reference-service-blueprint-contract.md" LogicalName="Wayfinder.Engine.Mcp.docs.reference-service-blueprint-contract.md" />
-    <EmbeddedResource Include="../../docs/guides/service-design-principles.md" LogicalName="Wayfinder.Engine.Mcp.docs.service-design-principles.md" />
-    <EmbeddedResource Include="../../docs/guides/ai-service-blueprint-authoring.md" LogicalName="Wayfinder.Engine.Mcp.docs.ai-service-blueprint-authoring.md" />
+    <EmbeddedResource Include="../docs/guides/calculation-language.md" LogicalName="Wayfinder.Engine.Mcp.docs.calculation-language.md" />
+    <EmbeddedResource Include="../docs/guides/reference-service-blueprint-contract.md" LogicalName="Wayfinder.Engine.Mcp.docs.reference-service-blueprint-contract.md" />
+    <EmbeddedResource Include="../docs/guides/service-design-principles.md" LogicalName="Wayfinder.Engine.Mcp.docs.service-design-principles.md" />
+    <EmbeddedResource Include="../docs/guides/ai-service-blueprint-authoring.md" LogicalName="Wayfinder.Engine.Mcp.docs.ai-service-blueprint-authoring.md" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="../../assets/logo-vertical-lockup.png" Pack="true" PackagePath="assets/" />
-    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../assets/logo-vertical-lockup.png" Pack="true" PackagePath="assets/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
     <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 

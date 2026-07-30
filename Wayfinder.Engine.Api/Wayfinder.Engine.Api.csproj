@@ -13,8 +13,8 @@
     <Company>Umbraco Prism</Company>
     <Description>ASP.NET Core minimal-API endpoint mapping that exposes Umbraco Prism service blueprint authoring (list/read/validate/save/simulate) as HTTP endpoints — a single MapPrismServiceBlueprintAuthoringApi() call any host adds to its own pipeline, inheriting its own auth.</Description>
     <PackageTags>Blueprint;WebApi;Umbraco-Prism</PackageTags>
-    <PackageProjectUrl>https://github.com/jonnymuir/Umbraco.Prism</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/jonnymuir/Umbraco.Prism</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageIcon>assets/logo-vertical-lockup.png</PackageIcon>
@@ -30,8 +30,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="../../assets/logo-vertical-lockup.png" Pack="true" PackagePath="assets/" />
-    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="../assets/logo-vertical-lockup.png" Pack="true" PackagePath="assets/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
     <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
