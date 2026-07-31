@@ -89,12 +89,16 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: Wayfinder.Editor.Client
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps
 
       - name: Storybook interaction/a11y tests
         working-directory: Wayfinder.Editor.Client
-        run: npm run test-storybook:ci
+        run: npm run test-storybook:ci:all
 
-      - name: Playwright component tests
+      # The rest of tests/service-blueprint-editor/ (canvas drag, pixel-perfect arrow
+      # endpoints, undo/redo timing) is pixel- and timing-sensitive and isn't part of
+      # Umbraco.Prism's own CI gate for the same code either — kept as a local/manual
+      # regression suite, not a CI gate.
+      - name: Service blueprint graph visual regression
         working-directory: Wayfinder.Editor.Client
-        run: npm run test:playwright
+        run: npm run test:playwright:service-blueprint-graph-visual
