@@ -1,40 +1,13 @@
 {
   "name": "@wayfinder/editor-client",
+  "private": true,
   "version": "0.1.0",
-  "description": "Wayfinder's service blueprint visual editor as host-agnostic Lit custom elements (graph canvas, definition JSON editor, validation, simulation) with no assumptions about hosting or persistence.",
+  "description": "Wayfinder's service blueprint visual editor as host-agnostic Lit custom elements (graph canvas, definition JSON editor, validation, simulation) with no assumptions about hosting or persistence. Not published to a registry — consumed by other Wayfinder projects as a pre-built ES module bundle shipped inside the Wayfinder.Editor NuGet package's static web assets, the same way any Umbraco backoffice extension bundle is loaded by URL at runtime.",
   "type": "module",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jonnymuir/Wayfinder.git",
-    "directory": "Wayfinder.Editor.Client"
-  },
-  "homepage": "https://github.com/jonnymuir/Wayfinder",
-  "publishConfig": {
-    "access": "public"
-  },
-  "files": [
-    "dist"
-  ],
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/types/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "peerDependencies": {
-    "lit": "^3.3.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "@xyflow/react": "^12.11.2"
-  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build --config vite.service-blueprint-editor.config.ts",
-    "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
@@ -54,13 +27,13 @@
     "@codemirror/lint": "^6.9.6",
     "@codemirror/search": "^6.7.0",
     "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.43.0"
-  },
-  "devDependencies": {
+    "@codemirror/view": "^6.43.0",
     "@xyflow/react": "^12.11.2",
     "lit": "^3.3.1",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
     "@playwright/test": "^1.46.1",
     "@storybook/addon-a11y": "^8.6.18",
     "@storybook/addon-essentials": "^8.6.18",

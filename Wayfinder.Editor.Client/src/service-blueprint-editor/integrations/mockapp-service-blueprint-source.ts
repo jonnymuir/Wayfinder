@@ -1,4 +1,4 @@
-// Host integration EXAMPLE — not part of the `@wayfinder/editor-client` boundary
+// Host integration EXAMPLE — not part of the editor's own public bundle
 // surface. The reference MockBusinessApp uses this implementation to wire its
 // `/mockapp/service-blueprints/*` endpoints into the editor's `ServiceBlueprintSource` contract.
 // Real downstream apps fork/copy this file into their own bundle.

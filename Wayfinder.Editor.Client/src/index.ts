@@ -1,10 +1,10 @@
 /**
- * Public library entry point for @wayfinder/editor-client.
+ * Public entry point for the editor's bundles (vite.service-blueprint-editor.config.ts's
+ * `wayfinder-elements` entry — see src/service-blueprint-editor/README.md).
  *
- * Importing this module registers the three public custom elements (see
- * src/service-blueprint-editor/README.md for the full contract) and exposes
- * the TypeScript boundary types a host needs to wire them up. Everything
- * else in service-blueprint-editor/ is composition detail, tagged
+ * Importing this module registers the three public custom elements and
+ * exposes the TypeScript boundary types a host needs to wire them up.
+ * Everything else in service-blueprint-editor/ is composition detail, tagged
  * `@internal`, and not exported here.
  */
 

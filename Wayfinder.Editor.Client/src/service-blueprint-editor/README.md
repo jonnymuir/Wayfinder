@@ -1,28 +1,38 @@
 # ServiceBlueprint editor — component API
 
-The serviceBlueprint editor ships as a Lit-based bundle (`serviceBlueprint-editor.js`, served from
-`Wayfinder.Editor/wwwroot/dist/`). Only three custom elements are
-considered **public API**. Everything else in this folder is composition detail
-and is marked `@internal` in its source — Razor authors and host applications
-should not depend on it, and breaking changes there will not bump a contract.
+The service blueprint editor ships as a Lit-based bundle, built in two forms
+from the same `src/index.ts` public entry (`vite.service-blueprint-editor.config.ts`),
+both landing in `Wayfinder.Editor`'s NuGet package as static web assets under
+`wwwroot/dist/` — there is no separate npm package to install. Only three
+custom elements are considered **public API**. Everything else in this folder
+is composition detail and is marked `@internal` in its source — Razor authors
+and host applications should not depend on it, and breaking changes there will
+not bump a contract.
+
+| Bundle | Entry | Use |
+|---|---|---|
+| `service-blueprint-editor.js` | `service-blueprint-editor.html` | Standalone host page — a business app with no backoffice serves this directly (see MockBusinessApp, TestSite Razor pages, the Storybook harness). |
+| `wayfinder-elements.js` | `src/index.ts` | Bare ES module, no HTML wrapper — registers the same three custom elements for a host that embeds them into its own page, e.g. loaded by URL from an Umbraco backoffice extension manifest the same way Umbraco loads any other extension bundle. |
+
+Both bundles are fully self-contained (React, Lit, and `@xyflow/react` ship
+bundled in) since there's no host-side bundler to dedupe against — a browser
+loading a URL, not a `node_modules` resolution.
 
 > **Host it wherever the implementation needs it.** The editor is a plain Lit
 > bundle with no assumptions about its host — the toolkit's job is to make
-> hosting trivial anywhere, not to prescribe one hosting model. MockBusinessApp
-> is a pure business-app host with no backoffice, so it hosts the editor
-> runtime-only (`vite.service-blueprint-editor.config.ts` → `Wayfinder.Editor`'s
-> static assets, served as a standalone page — see TestSite Razor pages, the
-> Storybook harness, and the reference shell). Today's only backoffice host is
-> Umbraco.Prism's own CMS Service Blueprint feature (`UmbracoPrism.Core`),
-> whose entire reason for existing is the backoffice editing experience — it
-> mounts the same components natively as a Collection + entity-actions +
-> Workspace backoffice screen instead (`vite.config.ts`'s
+> hosting trivial anywhere, not to prescribe one hosting model. Today's only
+> backoffice host is Umbraco.Prism's own CMS Service Blueprint feature
+> (`UmbracoPrism.Core`), whose entire reason for existing is the backoffice
+> editing experience — it mounts the same components natively as a Collection +
+> entity-actions + Workspace backoffice screen instead (`vite.config.ts`'s
 > `prism-cms-service-blueprint-tab` entry → `UmbracoPrism.Core`'s own bundle;
 > `<wayfinder-service-blueprint-editor>` itself is mounted by
 > `cms-service-blueprint-workspace-editor.element.ts` in
 > `UmbracoPrism.Client/src/backoffice/cms-service-blueprint/workspace/`, scoped to whichever
 > definitionKey the workspace route is currently editing). This is expected to
-> move to a `Wayfinder.Umbraco`-native backoffice section — see the Phase 2 plan.
+> move to a `Wayfinder.Umbraco`-native backoffice section that instead loads
+> `wayfinder-elements.js` by URL from `Wayfinder.Editor`'s static web assets —
+> see the Phase 2 plan.
 
 ## Public elements
 
@@ -32,7 +42,7 @@ should not depend on it, and breaking changes there will not bump a contract.
 | `<wayfinder-service-blueprint-editor-shell>` | Host harness — serviceBlueprint picker, API base wiring, URL sync. Mounts `<wayfinder-service-blueprint-editor>`. | yes |
 | `<wayfinder-service-blueprint-graph>` | Vertical-queues graph. Authoring (default) or **read-only viewer** when `read-only` is set. | yes |
 
-All three are registered as `customElements` when `serviceBlueprint-editor.js` loads.
+All three are registered as `customElements` when either bundle loads.
 
 `<wayfinder-service-blueprint-graph>` is a Lit wrapper around a lazily-loaded
 [React Flow](https://reactflow.dev) canvas (`graph/` module): the wrapper owns
@@ -232,10 +242,12 @@ the public surface.
 
 ## Bundle reference
 
-Built artefacts land in `Wayfinder.Editor/wwwroot/dist/`:
+Built artefacts land in `Wayfinder.Editor/wwwroot/dist/`, packaged into the
+`Wayfinder.Editor` NuGet package as static web assets:
 
-* `service-blueprint-editor.js` — Lit bundle that registers the three public elements.
+* `service-blueprint-editor.js` — Lit bundle that registers the three public elements, for the standalone host page.
 * `service-blueprint-editor.html` — host harness used by TestSite Razor pages.
+* `wayfinder-elements.js` — bare ES module registering the same three elements, for embedding into a host's own page (e.g. an Umbraco backoffice extension manifest).
 
 Build with `npm run build` from `Wayfinder.Editor.Client/`.
 
