@@ -15,6 +15,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Wayfinder.Editor.Client/package-lock.json
+
+      # Wayfinder.Editor packs the compiled service-blueprint-editor bundle as a static
+      # web asset (wwwroot/dist), so that bundle must exist on disk before dotnet build/pack
+      # run against it.
+      - name: Install editor client dependencies
+        working-directory: Wayfinder.Editor.Client
+        run: npm ci
+
+      - name: Build editor client bundle
+        working-directory: Wayfinder.Editor.Client
+        run: npm run build
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -44,3 +62,39 @@ jobs:
             --source "https://nuget.pkg.github.com/jonnymuir/index.json" \
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --skip-duplicate
+
+  editor-client-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Wayfinder.Editor.Client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: Wayfinder.Editor.Client
+        run: npm ci
+
+      - name: TypeScript build check
+        working-directory: Wayfinder.Editor.Client
+        run: npm run build
+
+      - name: Graph layout tests
+        working-directory: Wayfinder.Editor.Client
+        run: npm run test:graph-layout
+
+      - name: Install Playwright browsers
+        working-directory: Wayfinder.Editor.Client
+        run: npx playwright install --with-deps chromium
+
+      - name: Storybook interaction/a11y tests
+        working-directory: Wayfinder.Editor.Client
+        run: npm run test-storybook:ci
+
+      - name: Playwright component tests
+        working-directory: Wayfinder.Editor.Client
+        run: npm run test:playwright
