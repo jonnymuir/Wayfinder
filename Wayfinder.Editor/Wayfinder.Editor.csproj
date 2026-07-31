@@ -10,7 +10,7 @@
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <PackageId>Wayfinder.Editor</PackageId>
     <Title>Wayfinder Service Blueprint Editor</Title>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>Razor Class Library hosting the compiled Wayfinder service blueprint visual editor (a runtime-only, host-agnostic Lit web component bundle: graph canvas, definition JSON editor, validation, simulation) as a static web asset. Host it wherever the implementation needs it — a standalone page, or embedded in a backoffice.</Description>
@@ -21,6 +21,13 @@
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageIcon>assets/logo-vertical-lockup.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- The explicit Content-item packaging below (needed to route around the wwwroot/dist
+         gitignore issue) bypasses the SDK's own wwwroot pipeline, which is what normally
+         defaults a referenced RCL's static web assets to `_content/{PackageId}` — confirmed
+         live: without this, a consuming host served these files at bare `/dist/...` (site
+         root), not `/_content/Wayfinder.Editor/dist/...`. Setting it explicitly restores the
+         normal, expected behavior. -->
+    <StaticWebAssetBasePath>_content/Wayfinder.Editor</StaticWebAssetBasePath>
   </PropertyGroup>
 
   <ItemGroup>
