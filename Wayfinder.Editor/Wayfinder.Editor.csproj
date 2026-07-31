@@ -10,7 +10,7 @@
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <PackageId>Wayfinder.Editor</PackageId>
     <Title>Wayfinder Service Blueprint Editor</Title>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>Razor Class Library hosting the compiled Wayfinder service blueprint visual editor (a runtime-only, host-agnostic Lit web component bundle: graph canvas, definition JSON editor, validation, simulation) as a static web asset. Host it wherever the implementation needs it — a standalone page, or embedded in a backoffice.</Description>
