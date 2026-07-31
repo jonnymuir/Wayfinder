@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="Wayfinder.Editor/Wayfinder.Editor.csproj" />
   <Project Path="Wayfinder.Engine.Api/Wayfinder.Engine.Api.csproj" />
   <Project Path="Wayfinder.Engine.Mcp/Wayfinder.Engine.Mcp.csproj" />
   <Project Path="Wayfinder.Engine/Wayfinder.Engine.csproj" />

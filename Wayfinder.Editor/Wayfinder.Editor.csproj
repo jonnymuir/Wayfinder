@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>Library</OutputType>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <PackageId>Wayfinder.Editor</PackageId>
+    <Title>Wayfinder Service Blueprint Editor</Title>
+    <Version>0.1.0</Version>
+    <Authors>Jonny Muir</Authors>
+    <Company>Wayfinder</Company>
+    <Description>Razor Class Library hosting the compiled Wayfinder service blueprint visual editor (a runtime-only, host-agnostic Lit web component bundle: graph canvas, definition JSON editor, validation, simulation) as a static web asset. Host it wherever the implementation needs it — a standalone page, or embedded in a backoffice.</Description>
+    <PackageTags>Blueprint;GDS;Editor;Wayfinder</PackageTags>
+    <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIcon>assets/logo-vertical-lockup.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Include="../assets/logo-vertical-lockup.png" Pack="true" PackagePath="assets/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <!--
+    wwwroot/dist is npm build output (from Wayfinder.Editor.Client), so it's covered by the
+    repo's blanket `dist/` .gitignore entry — and .NET's static web asset discovery respects
+    .gitignore for its default wwwroot glob, silently excluding it (confirmed: the default
+    glob found 0 assets here despite the files being on disk). Explicit Content items aren't
+    subject to that default-glob exclusion, so declare them directly instead of relying on
+    EnableDefaultContentItems' implicit discovery.
+  -->
+  <ItemGroup>
+    <Content Include="wwwroot/dist/**" Exclude="wwwroot/dist/**/*.map">
+      <Pack>true</Pack>
+      <PackagePath>staticwebassets/%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
