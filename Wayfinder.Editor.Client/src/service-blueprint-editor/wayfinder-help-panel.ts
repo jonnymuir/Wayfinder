@@ -3,10 +3,10 @@ import { customElement } from 'lit/decorators.js';
 import { SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor>; not part of the public API surface.
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
  */
-@customElement('prism-help-panel')
-export class PrismHelpPanel extends LitElement {
+@customElement('wayfinder-help-panel')
+export class WayfinderHelpPanel extends LitElement {
   render() {
     return html`
       <div class="help-root">
@@ -185,6 +185,6 @@ export class PrismHelpPanel extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-help-panel': PrismHelpPanel;
+    'wayfinder-help-panel': WayfinderHelpPanel;
   }
 }

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { expect, waitFor } from '@storybook/test';
-import './prism-service-blueprint-graph.js';
-import type { PrismServiceBlueprintGraphElement } from './prism-service-blueprint-graph.js';
+import './wayfinder-service-blueprint-graph.js';
+import type { WayfinderServiceBlueprintGraphElement } from './wayfinder-service-blueprint-graph.js';
 import { STUB_SERVICE_BLUEPRINT } from './types.js';
 import type { AuthoredServiceBlueprint } from './types.js';
 import { LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT, PAYMENT_DEMO_SERVICE_BLUEPRINT, COMMUNITY_ENQUIRY_SERVICE_BLUEPRINT, INFORMATION_REQUEST_SERVICE_BLUEPRINT, MONEY_MODELLER_SERVICE_BLUEPRINT, PLANNING_SERVICE_BLUEPRINT_MIGRATED, cloneAuthoredServiceBlueprint } from './fixtures/index.js';
@@ -96,8 +96,8 @@ type StoryArgs = {
   serviceBlueprint: AuthoredServiceBlueprint | null;
 };
 
-function makeElement(args: StoryArgs): PrismServiceBlueprintGraphElement {
-  const el = document.createElement('prism-service-blueprint-graph') as PrismServiceBlueprintGraphElement;
+function makeElement(args: StoryArgs): WayfinderServiceBlueprintGraphElement {
+  const el = document.createElement('wayfinder-service-blueprint-graph') as WayfinderServiceBlueprintGraphElement;
   el.serviceBlueprint = args.serviceBlueprint;
   el.style.cssText = 'display:block;height:560px;';
   return el;
@@ -105,43 +105,43 @@ function makeElement(args: StoryArgs): PrismServiceBlueprintGraphElement {
 
 /**
  * React Flow mounts lazily (dynamic import) and signals completion via the
- * `data-prism-graph-ready` attribute — poll for that instead of a fixed
+ * `data-wayfinder-graph-ready` attribute — poll for that instead of a fixed
  * delay, which races the async mount under CI load.
  */
-async function waitForGraphReady(canvasElement: HTMLElement): Promise<PrismServiceBlueprintGraphElement> {
-  const el = canvasElement.querySelector('prism-service-blueprint-graph') as PrismServiceBlueprintGraphElement;
+async function waitForGraphReady(canvasElement: HTMLElement): Promise<WayfinderServiceBlueprintGraphElement> {
+  const el = canvasElement.querySelector('wayfinder-service-blueprint-graph') as WayfinderServiceBlueprintGraphElement;
   await el.updateComplete;
   await waitFor(() => {
     const hasStages = (el.serviceBlueprint?.stages?.length ?? 0) > 0;
-    if (!hasStages || el.hasAttribute('data-prism-graph-ready')) {
+    if (!hasStages || el.hasAttribute('data-wayfinder-graph-ready')) {
       return;
     }
-    throw new Error('serviceBlueprint graph canvas has not signalled data-prism-graph-ready yet');
+    throw new Error('serviceBlueprint graph canvas has not signalled data-wayfinder-graph-ready yet');
   }, { timeout: 5000 });
   return el;
 }
 
 function fillCreateStageDialog(root: ShadowRoot, name: string, key: string, lane: string, type: string) {
-  const nameInput = root.querySelector<HTMLInputElement>('[data-prism-create-stage-title]')!;
+  const nameInput = root.querySelector<HTMLInputElement>('[data-wayfinder-create-stage-title]')!;
   nameInput.value = name;
   nameInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
 
-  const keyInput = root.querySelector<HTMLInputElement>('[data-prism-create-stage-key]')!;
+  const keyInput = root.querySelector<HTMLInputElement>('[data-wayfinder-create-stage-key]')!;
   keyInput.value = key;
   keyInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
 
-  const laneInput = root.querySelector<HTMLInputElement>('[data-prism-create-stage-queue]')!;
+  const laneInput = root.querySelector<HTMLInputElement>('[data-wayfinder-create-stage-queue]')!;
   laneInput.value = lane;
   laneInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
 
-  const typeSelect = root.querySelector<HTMLSelectElement>('[data-prism-create-stage-type]')!;
+  const typeSelect = root.querySelector<HTMLSelectElement>('[data-wayfinder-create-stage-type]')!;
   typeSelect.value = type;
   typeSelect.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
 }
 
 const meta: Meta<StoryArgs> = {
   title: 'Service Blueprint Editor/Service Blueprint Graph',
-  component: 'prism-service-blueprint-graph',
+  component: 'wayfinder-service-blueprint-graph',
   tags: ['autodocs'],
   parameters: {
     a11y: {
@@ -167,7 +167,7 @@ export const Empty: Story = {
   play: async ({ canvasElement }) => {
     const el = await waitForGraphReady(canvasElement);
 
-    const container = el.shadowRoot?.querySelector('[data-prism-component="service-blueprint-graph"]');
+    const container = el.shadowRoot?.querySelector('[data-wayfinder-component="service-blueprint-graph"]');
     await expect(container).not.toBeNull();
   },
 };
@@ -178,8 +178,8 @@ export const WorkspaceCanvas: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-stage]').length).toBe(WORKSPACE_SERVICE_BLUEPRINT.stages.length);
-    await expect(root.querySelectorAll('[data-prism-transition]').length).toBeGreaterThanOrEqual(0);
+    await expect(root.querySelectorAll('[data-wayfinder-stage]').length).toBe(WORKSPACE_SERVICE_BLUEPRINT.stages.length);
+    await expect(root.querySelectorAll('[data-wayfinder-transition]').length).toBeGreaterThanOrEqual(0);
   },
 };
 
@@ -189,16 +189,16 @@ export const InteractiveWorkspace: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    root.querySelector<HTMLButtonElement>('[data-prism-add-stage]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-wayfinder-add-stage]')!.click();
     await el.updateComplete;
-    await expect(root.querySelector('[data-prism-create-stage-dialog]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-create-stage-dialog]')).not.toBeNull();
 
     fillCreateStageDialog(root, 'Evidence Review', 'evidence-review', 'reviewer', 'review');
-    root.querySelector<HTMLButtonElement>('[data-prism-create-stage-submit]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-wayfinder-create-stage-submit]')!.click();
     await el.updateComplete;
-    await expect(root.querySelectorAll('[data-prism-stage]').length).toBe(WORKSPACE_SERVICE_BLUEPRINT.stages.length + 1);
+    await expect(root.querySelectorAll('[data-wayfinder-stage]').length).toBe(WORKSPACE_SERVICE_BLUEPRINT.stages.length + 1);
 
-    const declaration = root.querySelector<HTMLElement>('[data-prism-stage="applicant-details"]')!;
+    const declaration = root.querySelector<HTMLElement>('[data-wayfinder-stage="applicant-details"]')!;
     let inspectorOpened = false;
     el.addEventListener('inspector-requested', event => {
       const detail = (event as CustomEvent<{ kind: string; stageKey?: string }>).detail;
@@ -218,11 +218,11 @@ export const InteractiveWorkspace: Story = {
       clientY: 220,
     }));
     await el.updateComplete;
-    await expect(root.querySelector('[data-prism-context-menu]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-context-menu]')).not.toBeNull();
 
-    root.querySelector<HTMLButtonElement>('[data-prism-fit-screen]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-wayfinder-fit-screen]')!.click();
     await el.updateComplete;
-    await expect(Boolean(root.querySelector<HTMLElement>('[data-prism-zoom]')?.textContent?.includes('%'))).toBe(true);
+    await expect(Boolean(root.querySelector<HTMLElement>('[data-wayfinder-zoom]')?.textContent?.includes('%'))).toBe(true);
   },
 };
 
@@ -232,7 +232,7 @@ export const DeleteConfirmation: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    const stage = root.querySelector<HTMLElement>('[data-prism-stage="reviewer-assessment"]')!;
+    const stage = root.querySelector<HTMLElement>('[data-wayfinder-stage="reviewer-assessment"]')!;
     stage.dispatchEvent(new MouseEvent('contextmenu', {
       bubbles: true,
       composed: true,
@@ -241,16 +241,16 @@ export const DeleteConfirmation: Story = {
     }));
     await el.updateComplete;
 
-    await expect(root.querySelector('[data-prism-context-menu]')).not.toBeNull();
-    root.querySelector<HTMLButtonElement>('[data-prism-context-menu] .danger')!.click();
+    await expect(root.querySelector('[data-wayfinder-context-menu]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-wayfinder-context-menu] .danger')!.click();
     await el.updateComplete;
 
-    await expect(root.querySelector('[data-prism-delete-stage-dialog]')).not.toBeNull();
-    await expect(root.querySelectorAll('[data-prism-delete-stage-transitions] li').length).toBeGreaterThan(0);
+    await expect(root.querySelector('[data-wayfinder-delete-stage-dialog]')).not.toBeNull();
+    await expect(root.querySelectorAll('[data-wayfinder-delete-stage-transitions] li').length).toBeGreaterThan(0);
 
-    root.querySelector<HTMLButtonElement>('[data-prism-delete-stage-cancel]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-wayfinder-delete-stage-cancel]')!.click();
     await el.updateComplete;
-    await expect(root.querySelector('[data-prism-delete-stage-dialog]')).toBeNull();
+    await expect(root.querySelector('[data-wayfinder-delete-stage-dialog]')).toBeNull();
   },
 };
 
@@ -268,9 +268,9 @@ export const GatewayRepresentation: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-gateway]').length).toBe(2);
-    await expect(root.querySelector('[data-prism-gateway-kind="Split"]')).not.toBeNull();
-    await expect(root.querySelector('[data-prism-gateway-kind="Join"]')).not.toBeNull();
+    await expect(root.querySelectorAll('[data-wayfinder-gateway]').length).toBe(2);
+    await expect(root.querySelector('[data-wayfinder-gateway-kind="Split"]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-gateway-kind="Join"]')).not.toBeNull();
   },
 };
 
@@ -286,9 +286,9 @@ export const PaymentDemoGraph: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-gateway]').length).toBe(2);
-    await expect(root.querySelector('[data-prism-gateway="submit-payment"]')).not.toBeNull();
-    await expect(root.querySelector('[data-prism-gateway="await-payment-confirmation"]')).not.toBeNull();
+    await expect(root.querySelectorAll('[data-wayfinder-gateway]').length).toBe(2);
+    await expect(root.querySelector('[data-wayfinder-gateway="submit-payment"]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-gateway="await-payment-confirmation"]')).not.toBeNull();
   },
 };
 
@@ -298,9 +298,9 @@ export const SameLaneFanOut: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-gateway-kind="Split"]').length).toBe(1);
-    await expect(root.querySelector('[data-prism-gateway-kind="Join"]')).not.toBeNull();
-    await expect(root.querySelector('[data-prism-gateway="decision-ready"]')).not.toBeNull();
+    await expect(root.querySelectorAll('[data-wayfinder-gateway-kind="Split"]').length).toBe(1);
+    await expect(root.querySelector('[data-wayfinder-gateway-kind="Join"]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-gateway="decision-ready"]')).not.toBeNull();
   },
 };
 
@@ -311,7 +311,7 @@ export const GraphReadOnly: Story = {
       description: {
         story:
           'Renders a published serviceBlueprint purely from HTML attributes — no JS plumbing. ' +
-          'Demonstrates the `<prism-service-blueprint-graph read-only service-blueprint-json="...">` recipe an ' +
+          'Demonstrates the `<wayfinder-service-blueprint-graph read-only service-blueprint-json="...">` recipe an ' +
           'integrator can drop into a Razor view to show a service blueprint diagram on a public page.',
       },
     },
@@ -321,7 +321,7 @@ export const GraphReadOnly: Story = {
     container.style.cssText = 'display:block;height:560px;';
     const json = JSON.stringify(GATEWAY_SERVICE_BLUEPRINT).replaceAll('"', '&quot;');
     container.innerHTML =
-      `<prism-service-blueprint-graph read-only service-blueprint-json="${json}" style="display:block;height:100%;"></prism-service-blueprint-graph>`;
+      `<wayfinder-service-blueprint-graph read-only service-blueprint-json="${json}" style="display:block;height:100%;"></wayfinder-service-blueprint-graph>`;
     return container;
   },
   play: async ({ canvasElement }) => {
@@ -331,20 +331,20 @@ export const GraphReadOnly: Story = {
     // Read-only viewer: published serviceBlueprint loaded from attribute only.
     await expect(el.readOnly).toBe(true);
     await expect(el.serviceBlueprint).not.toBeNull();
-    await expect(root.querySelector('[data-prism-read-only="true"]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-read-only="true"]')).not.toBeNull();
 
     // No create affordances should be exposed.
-    await expect(root.querySelector('[data-prism-add-stage]')).toBeNull();
-    await expect(root.querySelector('[data-prism-add-gateway]')).toBeNull();
-    await expect(root.querySelector('[data-prism-empty-add-stage]')).toBeNull();
-    await expect(root.querySelector('[data-prism-context-menu]')).toBeNull();
-    await expect(root.querySelector('[data-prism-create-stage-dialog]')).toBeNull();
-    await expect(root.querySelector('[data-prism-create-gateway-dialog]')).toBeNull();
-    await expect(root.querySelector('[data-prism-delete-stage-dialog]')).toBeNull();
+    await expect(root.querySelector('[data-wayfinder-add-stage]')).toBeNull();
+    await expect(root.querySelector('[data-wayfinder-add-gateway]')).toBeNull();
+    await expect(root.querySelector('[data-wayfinder-empty-add-stage]')).toBeNull();
+    await expect(root.querySelector('[data-wayfinder-context-menu]')).toBeNull();
+    await expect(root.querySelector('[data-wayfinder-create-stage-dialog]')).toBeNull();
+    await expect(root.querySelector('[data-wayfinder-create-gateway-dialog]')).toBeNull();
+    await expect(root.querySelector('[data-wayfinder-delete-stage-dialog]')).toBeNull();
 
     // Graph content still renders, keyboard navigation still works.
-    await expect(root.querySelectorAll('[data-prism-stage]').length).toBeGreaterThan(0);
-    await expect(root.querySelectorAll('[data-prism-gateway]').length).toBeGreaterThan(0);
+    await expect(root.querySelectorAll('[data-wayfinder-stage]').length).toBeGreaterThan(0);
+    await expect(root.querySelectorAll('[data-wayfinder-gateway]').length).toBeGreaterThan(0);
     await expect(root.querySelector('[role="application"]')).not.toBeNull();
   },
 };
@@ -423,7 +423,7 @@ export const LargeServiceBlueprint: Story = {
   play: async ({ canvasElement }) => {
     const el = await waitForGraphReady(canvasElement);
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-stage]').length).toBe(LARGE_SERVICE_BLUEPRINT.stages.length);
+    await expect(root.querySelectorAll('[data-wayfinder-stage]').length).toBe(LARGE_SERVICE_BLUEPRINT.stages.length);
   },
 };
 
@@ -438,9 +438,9 @@ export const PlanningMigrated: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-stage]').length).toBe(4);
-    await expect(root.querySelectorAll('[data-prism-role-queue]').length).toBeGreaterThanOrEqual(1);
-    await expect(root.querySelectorAll('[data-prism-gateway-kind="Split"]').length).toBe(3);
+    await expect(root.querySelectorAll('[data-wayfinder-stage]').length).toBe(4);
+    await expect(root.querySelectorAll('[data-wayfinder-role-queue]').length).toBeGreaterThanOrEqual(1);
+    await expect(root.querySelectorAll('[data-wayfinder-gateway-kind="Split"]').length).toBe(3);
   },
 };
 
@@ -451,9 +451,9 @@ export const CommunityEnquiry: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-stage]').length).toBe(2);
-    await expect(root.querySelectorAll('[data-prism-role-queue]').length).toBeGreaterThanOrEqual(1);
-    await expect(root.querySelectorAll('[data-prism-gateway-kind="Split"]').length).toBe(1);
+    await expect(root.querySelectorAll('[data-wayfinder-stage]').length).toBe(2);
+    await expect(root.querySelectorAll('[data-wayfinder-role-queue]').length).toBeGreaterThanOrEqual(1);
+    await expect(root.querySelectorAll('[data-wayfinder-gateway-kind="Split"]').length).toBe(1);
   },
 };
 
@@ -469,10 +469,10 @@ export const InformationRequest: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-stage]').length).toBe(3);
-    await expect(root.querySelectorAll('[data-prism-role-queue]').length).toBeGreaterThanOrEqual(2);
-    await expect(root.querySelector('[data-prism-gateway-kind="Split"]')).not.toBeNull();
-    await expect(root.querySelector('[data-prism-gateway-kind="Join"]')).not.toBeNull();
+    await expect(root.querySelectorAll('[data-wayfinder-stage]').length).toBe(3);
+    await expect(root.querySelectorAll('[data-wayfinder-role-queue]').length).toBeGreaterThanOrEqual(2);
+    await expect(root.querySelector('[data-wayfinder-gateway-kind="Split"]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-gateway-kind="Join"]')).not.toBeNull();
   },
 };
 
@@ -496,9 +496,9 @@ export const MoneyModeller: Story = {
     const el = await waitForGraphReady(canvasElement);
 
     const root = el.shadowRoot!;
-    await expect(root.querySelectorAll('[data-prism-stage]').length).toBe(6);
-    await expect(root.querySelectorAll('[data-prism-gateway]').length).toBe(6);
-    await expect(root.querySelectorAll('[data-prism-role-queue]').length).toBe(2);
+    await expect(root.querySelectorAll('[data-wayfinder-stage]').length).toBe(6);
+    await expect(root.querySelectorAll('[data-wayfinder-gateway]').length).toBe(6);
+    await expect(root.querySelectorAll('[data-wayfinder-role-queue]').length).toBe(2);
 
     // Transition chips shouldn't pile up on each other or on stage/gateway
     // cards — the exact regression this fixture exists to catch. Some of
@@ -514,9 +514,9 @@ export const MoneyModeller: Story = {
     // That's a rank-assignment quirk, not a declutter regression — anything
     // beyond this measured ceiling is.
     const MAX_OVERLAP_FRACTION = 0.55;
-    const chipRects = Array.from(root.querySelectorAll<HTMLElement>('[data-prism-transition]'))
+    const chipRects = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-transition]'))
       .map(chip => chip.getBoundingClientRect());
-    const nodeRects = Array.from(root.querySelectorAll<HTMLElement>('[data-prism-stage-card], [data-prism-gateway-node]'))
+    const nodeRects = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card], [data-wayfinder-gateway-node]'))
       .map(node => node.getBoundingClientRect());
     const overlapFraction = (a: DOMRect, b: DOMRect): number => {
       const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);

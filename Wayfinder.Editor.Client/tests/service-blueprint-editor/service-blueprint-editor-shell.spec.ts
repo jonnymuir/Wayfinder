@@ -6,7 +6,7 @@ function storyUrl(storyId: string): string {
 }
 
 async function waitForServiceBlueprintLoad(page: Page, serviceBlueprintKey: string): Promise<void> {
-  await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute('data-prism-service-blueprint-loaded', serviceBlueprintKey, {
+  await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute('data-wayfinder-service-blueprint-loaded', serviceBlueprintKey, {
     timeout: 30_000,
   });
 }
@@ -24,40 +24,40 @@ test.describe('ServiceBlueprint editor shell proof', () => {
   test('service blueprint switching changes the rendered service blueprint, not just the selector state', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-shell--reference-shell'));
 
-    const shell = page.locator('[data-prism-component="service-blueprint-editor-shell"]');
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
     const selector = page.getByRole('combobox', { name: 'Select service blueprint' });
-    const editor = page.locator('prism-service-blueprint-editor');
+    const editor = page.locator('wayfinder-service-blueprint-editor');
     const editorTitle = editor.locator('.editor-title');
 
     await expect(shell).toBeVisible({ timeout: 10_000 });
     await expect(selector).toBeVisible();
 
     await waitForServiceBlueprintLoad(page, 'planning');
-    await expect(shell).toHaveAttribute('data-prism-active-service-blueprint', 'planning');
+    await expect(shell).toHaveAttribute('data-wayfinder-active-service-blueprint', 'planning');
     await expect(editorTitle).toHaveText('Planning Application');
-    await expect(editor.locator('[data-prism-stage="application-form"]')).toBeVisible();
+    await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toBeVisible();
 
     await selector.selectOption('community-enquiry');
     await waitForServiceBlueprintLoad(page, 'community-enquiry');
-    await expect(shell).toHaveAttribute('data-prism-active-service-blueprint', 'community-enquiry');
+    await expect(shell).toHaveAttribute('data-wayfinder-active-service-blueprint', 'community-enquiry');
     await expect(editorTitle).toHaveText('Community Enquiry');
-    await expect(editor.locator('[data-prism-stage="review-enquiry"]')).toBeVisible();
-    await expect(editor.locator('[data-prism-stage="application-form"]')).toHaveCount(0);
+    await expect(editor.locator('[data-wayfinder-stage="review-enquiry"]')).toBeVisible();
+    await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toHaveCount(0);
 
     await selector.selectOption('payment-demo');
     await waitForServiceBlueprintLoad(page, 'payment-demo');
-    await expect(shell).toHaveAttribute('data-prism-active-service-blueprint', 'payment-demo');
+    await expect(shell).toHaveAttribute('data-wayfinder-active-service-blueprint', 'payment-demo');
     await expect(editorTitle).toHaveText('Payment Demo');
-    await expect(editor.locator('[data-prism-stage="payment-complete"]')).toBeVisible();
-    await expect(editor.locator('[data-prism-stage="confirm-payment-received"]')).toBeVisible();
-    await expect(editor.locator('[data-prism-stage="review-enquiry"]')).toHaveCount(0);
+    await expect(editor.locator('[data-wayfinder-stage="payment-complete"]')).toBeVisible();
+    await expect(editor.locator('[data-wayfinder-stage="confirm-payment-received"]')).toBeVisible();
+    await expect(editor.locator('[data-wayfinder-stage="review-enquiry"]')).toHaveCount(0);
   });
 
   test('service blueprint switcher keeps the host-supplied serviceBlueprintSource alive while remounting the editor', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-shell--reference-shell'));
 
     const selector = page.getByRole('combobox', { name: 'Select service blueprint' });
-    const editor = page.locator('prism-service-blueprint-editor');
+    const editor = page.locator('wayfinder-service-blueprint-editor');
 
     await waitForServiceBlueprintLoad(page, 'planning');
 
@@ -87,28 +87,28 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     expect(hostWiringSurvived).toBe(true);
 
     await expect(editor.locator('.editor-title')).toHaveText('Information Request');
-    await expect(editor.locator('[data-prism-stage="review-response-pack"]')).toBeVisible();
+    await expect(editor.locator('[data-wayfinder-stage="review-response-pack"]')).toBeVisible();
   });
 
   test('payment demo uses host-provided queues, stays validation-clean, and can still save', async ({ page }) => {
     await loadPaymentDemo(page);
 
-    const editor = page.locator('prism-service-blueprint-editor');
+    const editor = page.locator('wayfinder-service-blueprint-editor');
 
     await expect(editor.locator('.editor-title')).toHaveText('Payment Demo');
-    await expect(editor.locator('[data-prism-stage="confirm-payment-received"]')).toHaveAttribute(
+    await expect(editor.locator('[data-wayfinder-stage="confirm-payment-received"]')).toHaveAttribute(
       'aria-label',
       'Confirm payment received, Payments team queue'
     );
-    await expect(editor.locator('[data-prism-save]')).toBeEnabled();
+    await expect(editor.locator('[data-wayfinder-save]')).toBeEnabled();
 
-    await editor.locator('[data-prism-save]').click();
-    await expect(editor.locator('[data-prism-toast]')).toContainText('Service blueprint saved.');
-    await expect(editor.locator('[data-prism-save]')).toBeEnabled();
+    await editor.locator('[data-wayfinder-save]').click();
+    await expect(editor.locator('[data-wayfinder-toast]')).toContainText('Service blueprint saved.');
+    await expect(editor.locator('[data-wayfinder-save]')).toBeEnabled();
 
     await page.getByRole('tab', { name: 'Validation' }).click();
-    await expect(page.locator('[data-prism-validation-issue]')).toHaveCount(0);
-    await expect(page.locator('[data-prism-save-status]')).toContainText('Service blueprint saved.');
+    await expect(page.locator('[data-wayfinder-validation-issue]')).toHaveCount(0);
+    await expect(page.locator('[data-wayfinder-save-status]')).toContainText('Service blueprint saved.');
   });
 
   test.fixme('payment demo graph keeps node copy readable without overlap', async ({ page }) => {
@@ -128,7 +128,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
       }
     }
 
-    const routeChipRects = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const routeChipRects = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const root = (graphElement as HTMLElement).shadowRoot;
       if (!root) {
         throw new Error('Graph shadow root not found');
@@ -147,7 +147,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
         bottom: rect.bottom - sceneRect.top,
       });
 
-      return Array.from(root.querySelectorAll<HTMLElement>('[data-prism-transition]'))
+      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-transition]'))
         .map(chip => ({
           label: chip.textContent?.trim() ?? '',
           ...rel(chip.getBoundingClientRect()),
@@ -163,7 +163,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
       }
     }
 
-    const textMetrics = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const textMetrics = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const root = (graphElement as HTMLElement).shadowRoot;
       if (!root) {
         throw new Error('Graph shadow root not found');
@@ -190,7 +190,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
   test('payment demo graph copy stays product-facing and drops implementation-detail gateway badges', async ({ page }) => {
     await loadPaymentDemo(page);
 
-    const graphCopy = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const graphCopy = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const root = (graphElement as HTMLElement).shadowRoot;
       if (!root) {
         throw new Error('Graph shadow root not found');
@@ -218,15 +218,15 @@ test.describe('ServiceBlueprint editor shell proof', () => {
   test('payment demo canvas removes the extra confirmation route gateway once the route shape is simplified', async ({ page }) => {
     await loadPaymentDemo(page);
 
-    const graph = page.locator('prism-service-blueprint-graph');
-    await expect(graph.locator('[data-prism-gateway]')).toHaveCount(2);
-    await expect(graph.locator('[data-prism-gateway="confirm-payment-route"]')).toHaveCount(0);
+    const graph = page.locator('wayfinder-service-blueprint-graph');
+    await expect(graph.locator('[data-wayfinder-gateway]')).toHaveCount(2);
+    await expect(graph.locator('[data-wayfinder-gateway="confirm-payment-route"]')).toHaveCount(0);
   });
 
   test('payment demo graph visual cleanup stays stable', async ({ page }) => {
     await loadPaymentDemo(page);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toHaveScreenshot('payment-demo-cleanup.png', {
       animations: 'disabled',
       maxDiffPixelRatio: 0.02,
@@ -237,15 +237,15 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     await page.setViewportSize({ width: 1280, height: 560 });
     await page.goto(storyUrl('service-blueprint-editor-editor-host--simulation-branches'));
 
-    await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const stageTops = () => page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const stageTops = () => page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const shadowRoot = (graphElement as HTMLElement).shadowRoot!;
-      return Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-prism-stage-card]'))
+      return Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
         .map(node => node.getBoundingClientRect().top);
     });
-    const canvasBox = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const canvasBox = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const rect = (graphElement as HTMLElement).shadowRoot!
         .querySelector<HTMLElement>('.graph-canvas')!.getBoundingClientRect();
       return { x: rect.left, y: rect.top, height: rect.height };
@@ -275,8 +275,8 @@ test.describe('ServiceBlueprint editor shell proof', () => {
 
     await waitForServiceBlueprintLoad(page, 'planning');
 
-    const outline = page.locator('[data-prism-service-blueprint-outline]');
-    const inspector = page.locator('[data-prism-component="step-inspector"]');
+    const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
+    const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
     const toolbar = page.locator('.editor-toolbar');
 
     await expect(outline).toBeVisible({ timeout: 10_000 });
@@ -289,7 +289,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     const toolbarBefore = await toolbar.boundingBox();
 
     // Scroll the graph-canvas
-    await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const graph = graphElement as HTMLElement;
       const shadowRoot = graph.shadowRoot;
       const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -316,16 +316,16 @@ test.describe('ServiceBlueprint editor shell proof', () => {
 
   test.fixme('outline drawer collapse/expand controls stay accessible', async ({ page }) => {
     // BEHAVIORAL HOOK REQUEST FOR ISABELLE:
-    // - [data-prism-panel-toggle="outline"] button with aria-controls + aria-expanded
-    // - [data-prism-panel="outline"] region that collapses without removing the toggle from tab order
+    // - [data-wayfinder-panel-toggle="outline"] button with aria-controls + aria-expanded
+    // - [data-wayfinder-panel="outline"] region that collapses without removing the toggle from tab order
     // - toggle should restore focus to the currently selected outline item when re-expanded
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
   });
 
   test.fixme('properties drawer collapse/expand controls stay accessible', async ({ page }) => {
     // BEHAVIORAL HOOK REQUEST FOR ISABELLE:
-    // - [data-prism-panel-toggle="properties"] button with aria-controls + aria-expanded
-    // - [data-prism-panel="properties"] region that remains labelled when collapsed
+    // - [data-wayfinder-panel-toggle="properties"] button with aria-controls + aria-expanded
+    // - [data-wayfinder-panel="properties"] region that remains labelled when collapsed
     // - Enter/Space toggles, Esc collapses when focus is inside the drawer, and focus returns to the toggle
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
   });
@@ -333,7 +333,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
   test.fixme('graph-only editor removes list workspace affordances from the shell', async ({ page }) => {
     // BEHAVIORAL HOOK REQUEST FOR ISABELLE:
     // - no toolbar button named "List view"
-    // - no [data-prism-linear-table] surface rendered
+    // - no [data-wayfinder-linear-table] surface rendered
     // - shell stays on the graph canvas while outline/properties drawers handle density
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
   });

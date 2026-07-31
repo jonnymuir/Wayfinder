@@ -1,6 +1,6 @@
 /**
  * @internal CodeMirror 6 setup for the Definition tab. Lives in its own module
- * so `prism-definition-editor.ts` can dynamically import it — keeping CM6 out
+ * so `wayfinder-definition-editor.ts` can dynamically import it — keeping CM6 out
  * of the main editor bundle until an author opens the Definition tab.
  */
 
@@ -99,7 +99,7 @@ export function createDefinitionView({
       readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
       EditorView.contentAttributes.of({
         'aria-label': 'Service blueprint definition JSON editor',
-        'data-prism-definition-editor-input': 'true',
+        'data-wayfinder-definition-editor-input': 'true',
         'spellcheck': 'false',
       }),
       updateListener,

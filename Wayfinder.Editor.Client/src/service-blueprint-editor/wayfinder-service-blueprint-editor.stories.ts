@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { expect, waitFor } from '@storybook/test';
-import './prism-service-blueprint-editor.js';
-import type { PrismServiceBlueprintEditorElement } from './prism-service-blueprint-editor.js';
+import './wayfinder-service-blueprint-editor.js';
+import type { WayfinderServiceBlueprintEditorElement } from './wayfinder-service-blueprint-editor.js';
 import { PLANNING_SERVICE_BLUEPRINT, LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT, cloneAuthoredServiceBlueprint } from './fixtures/index.js';
 import type { AuthoredServiceBlueprint } from './types.js';
 import { InMemoryServiceBlueprintSource } from './in-memory-service-blueprint-source.js';
@@ -17,8 +17,8 @@ const STORY_QUEUES: QueueDefinition[] = [
   { queueName: 'system', displayName: 'System' },
 ];
 
-function makeEditor(serviceBlueprint: AuthoredServiceBlueprint = PLANNING_SERVICE_BLUEPRINT): PrismServiceBlueprintEditorElement {
-  const el = document.createElement('prism-service-blueprint-editor') as PrismServiceBlueprintEditorElement;
+function makeEditor(serviceBlueprint: AuthoredServiceBlueprint = PLANNING_SERVICE_BLUEPRINT): WayfinderServiceBlueprintEditorElement {
+  const el = document.createElement('wayfinder-service-blueprint-editor') as WayfinderServiceBlueprintEditorElement;
   // Stories drive the editor by injecting the service blueprint directly. The Save
   // button still needs a `serviceBlueprintSource` to resolve, so wire an in-memory
   // one seeded with the same serviceBlueprint — this proves the integrator pattern.
@@ -149,7 +149,7 @@ function makeSimulationBlockerServiceBlueprint(): AuthoredServiceBlueprint {
 
 const meta: Meta = {
   title: 'Service Blueprint Editor/Editor Host',
-  component: 'prism-service-blueprint-editor',
+  component: 'wayfinder-service-blueprint-editor',
   tags: ['autodocs'],
   parameters: {
     a11y: {
@@ -172,27 +172,27 @@ type Story = StoryObj;
 export const PlanningServiceBlueprint: Story = {
   name: 'Planning ServiceBlueprint',
   play: async ({ canvasElement }) => {
-    const el = canvasElement.querySelector('prism-service-blueprint-editor') as PrismServiceBlueprintEditorElement;
+    const el = canvasElement.querySelector('wayfinder-service-blueprint-editor') as WayfinderServiceBlueprintEditorElement;
     await el.updateComplete;
 
     const root = el.shadowRoot!;
 
-    const container = root.querySelector('[data-prism-component="service-blueprint-editor"]');
+    const container = root.querySelector('[data-wayfinder-component="service-blueprint-editor"]');
     await expect(container).not.toBeNull();
 
     const title = root.querySelector('.editor-title');
     await expect(title?.textContent?.trim()).toBe('Planning Application');
 
-    const graph = root.querySelector('prism-service-blueprint-graph');
+    const graph = root.querySelector('wayfinder-service-blueprint-graph');
     await expect(graph).not.toBeNull();
 
     // The React Flow canvas mounts lazily; wait for it to signal readiness
     // rather than racing a fixed delay against the async import.
     await waitFor(() => {
-      expect(graph?.shadowRoot?.querySelectorAll('[data-prism-role-queue]').length ?? 0).toBeGreaterThan(0);
+      expect(graph?.shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]').length ?? 0).toBeGreaterThan(0);
     }, { timeout: 5000 });
 
-    const inspector = root.querySelector('prism-step-inspector');
+    const inspector = root.querySelector('wayfinder-step-inspector');
     await expect(inspector).not.toBeNull();
 
     const backdrop = root.querySelector('.modal-backdrop');
@@ -204,12 +204,12 @@ export const WithStageSelected: Story = {
   name: 'Stage Selected',
   render: () => makeEditor(),
   play: async ({ canvasElement }) => {
-    const el = canvasElement.querySelector('prism-service-blueprint-editor') as PrismServiceBlueprintEditorElement;
+    const el = canvasElement.querySelector('wayfinder-service-blueprint-editor') as WayfinderServiceBlueprintEditorElement;
     await el.updateComplete;
 
     const root = el.shadowRoot!;
-    const graph = root.querySelector('prism-service-blueprint-graph');
-    const inspector = root.querySelector('prism-step-inspector');
+    const graph = root.querySelector('wayfinder-service-blueprint-graph');
+    const inspector = root.querySelector('wayfinder-step-inspector');
     await expect(graph).not.toBeNull();
     await expect(inspector).not.toBeNull();
 
@@ -228,9 +228,9 @@ export const WithStageSelected: Story = {
     await waitFor(() =>
       expect(
         root
-          .querySelector('prism-stage-preview')
+          .querySelector('wayfinder-stage-preview')
           ?.shadowRoot
-          ?.querySelector('[data-prism-preview-stage-name]')
+          ?.querySelector('[data-wayfinder-preview-stage-name]')
           ?.textContent
           ?.trim()
       ).toBe('Declaration')
@@ -247,18 +247,18 @@ export const EmptyServiceBlueprint: Story = {
   },
   play: async ({ canvasElement }) => {
     await new Promise(r => setTimeout(r, 200));
-    const el = canvasElement.querySelector('prism-service-blueprint-editor') as PrismServiceBlueprintEditorElement;
+    const el = canvasElement.querySelector('wayfinder-service-blueprint-editor') as WayfinderServiceBlueprintEditorElement;
     await el.updateComplete;
 
     const root = el.shadowRoot!;
-    const graph = root.querySelector('prism-service-blueprint-graph');
+    const graph = root.querySelector('wayfinder-service-blueprint-graph');
     await expect(graph).not.toBeNull();
-    await expect(graph?.shadowRoot?.querySelector('[data-prism-empty-state="graph"]')).not.toBeNull();
+    await expect(graph?.shadowRoot?.querySelector('[data-wayfinder-empty-state="graph"]')).not.toBeNull();
 
-    const helpButton = root.querySelector<HTMLElement>('[data-prism-help]');
+    const helpButton = root.querySelector<HTMLElement>('[data-wayfinder-help]');
     helpButton?.click();
     await new Promise(r => setTimeout(r, 50));
-    await expect(root.querySelector('[data-prism-shortcut-dialog]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-shortcut-dialog]')).not.toBeNull();
   },
 };
 

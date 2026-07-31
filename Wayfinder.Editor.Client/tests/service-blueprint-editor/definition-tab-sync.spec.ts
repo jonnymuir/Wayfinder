@@ -12,34 +12,34 @@ function storyUrl(storyId: string): string {
 }
 
 async function openDefinitionTab(page: Page): Promise<void> {
-  const editor = page.locator('prism-service-blueprint-editor');
+  const editor = page.locator('wayfinder-service-blueprint-editor');
   await expect(editor).toBeVisible({ timeout: 10_000 });
-  await expect(editor).toHaveAttribute('data-prism-service-blueprint-loaded', /.+/, { timeout: 30_000 });
+  await expect(editor).toHaveAttribute('data-wayfinder-service-blueprint-loaded', /.+/, { timeout: 30_000 });
 
   const definitionTab = editor
-    .locator('prism-confidence-tabs')
-    .locator('button[data-prism-confidence-tab="definition"]');
+    .locator('wayfinder-confidence-tabs')
+    .locator('button[data-wayfinder-confidence-tab="definition"]');
   await definitionTab.click();
-  await expect(editor.locator('[data-prism-definition-panel]')).toBeVisible();
+  await expect(editor.locator('[data-wayfinder-definition-panel]')).toBeVisible();
   await page.waitForFunction(() => {
-    const host = document.querySelector('prism-service-blueprint-editor');
-    const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+    const host = document.querySelector('wayfinder-service-blueprint-editor');
+    const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
     return !!def?.shadowRoot?.querySelector('.cm-content');
   }, { timeout: 10_000 });
 }
 
 async function clickCanvasTab(page: Page): Promise<void> {
-  const editor = page.locator('prism-service-blueprint-editor');
+  const editor = page.locator('wayfinder-service-blueprint-editor');
   await editor
-    .locator('prism-confidence-tabs')
-    .locator('button[data-prism-confidence-tab="canvas"]')
+    .locator('wayfinder-confidence-tabs')
+    .locator('button[data-wayfinder-confidence-tab="canvas"]')
     .click();
 }
 
 async function readDefinitionText(page: Page): Promise<string> {
   return await page.evaluate(() => {
-    const editorEl = document.querySelector('prism-service-blueprint-editor') as HTMLElement | null;
-    const def = editorEl?.shadowRoot?.querySelector('prism-definition-editor') as
+    const editorEl = document.querySelector('wayfinder-service-blueprint-editor') as HTMLElement | null;
+    const def = editorEl?.shadowRoot?.querySelector('wayfinder-definition-editor') as
       (HTMLElement & { value?: string }) | null;
     return def?.value ?? '';
   });
@@ -49,8 +49,8 @@ async function readDefinitionText(page: Page): Promise<string> {
  * same code path real typing exercises (updateListener → onChange). */
 async function replaceDefinitionViaCm(page: Page, value: string): Promise<void> {
   await page.evaluate(text => {
-    const host = document.querySelector('prism-service-blueprint-editor');
-    const def = host?.shadowRoot?.querySelector('prism-definition-editor') as
+    const host = document.querySelector('wayfinder-service-blueprint-editor');
+    const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as
       (HTMLElement & { _view?: { state: { doc: { length: number } }; dispatch: (s: unknown) => void } }) | null;
     const view = def?._view;
     if (!view) {
@@ -64,7 +64,7 @@ async function replaceDefinitionViaCm(page: Page, value: string): Promise<void> 
 
 async function readInternalServiceBlueprintDisplayName(page: Page): Promise<string | null> {
   return await page.evaluate(() => {
-    const host = document.querySelector('prism-service-blueprint-editor') as
+    const host = document.querySelector('wayfinder-service-blueprint-editor') as
       (HTMLElement & { _serviceBlueprint?: { displayName?: string } | null }) | null;
     return host?._serviceBlueprint?.displayName ?? null;
   });
@@ -84,8 +84,8 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await page.waitForTimeout(350); // > 250ms debounce
     await clickCanvasTab(page);
 
-    const editor = page.locator('prism-service-blueprint-editor');
-    await expect(editor.locator('[data-prism-stage="application-form"]'))
+    const editor = page.locator('wayfinder-service-blueprint-editor');
+    await expect(editor.locator('[data-wayfinder-stage="application-form"]'))
       .toContainText('Real-Typed Form', { timeout: 2_000 });
   });
 
@@ -117,7 +117,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
 
     // Internal model should now have the extra route.
     const actionsAfter = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor') as
+      const host = document.querySelector('wayfinder-service-blueprint-editor') as
         (HTMLElement & { _serviceBlueprint?: { gateways?: Array<{ key?: string; routes?: Array<{ trigger?: string }> }> } | null }) | null;
       return host?._serviceBlueprint?.gateways
         ?.find(gateway => gateway.key === 'route-check-answers')
@@ -127,8 +127,8 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
 
     // Visual canvas should reflect the new transition.
     await clickCanvasTab(page);
-    const editor = page.locator('prism-service-blueprint-editor');
-    const graph = editor.locator('prism-service-blueprint-graph');
+    const editor = page.locator('wayfinder-service-blueprint-editor');
+    const graph = editor.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible();
     const hasRoute = await graph.evaluate(el => {
       const root = (el as HTMLElement).shadowRoot;
@@ -154,27 +154,27 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await replaceDefinitionViaCm(page, renamed.slice(0, -3));
     await page.waitForTimeout(350);
 
-    const editor = page.locator('prism-service-blueprint-editor');
-    await expect(editor.locator('[data-prism-definition-banner]')).toBeVisible();
-    await expect(editor.locator('[data-prism-definition-apply]')).toBeDisabled();
+    const editor = page.locator('wayfinder-service-blueprint-editor');
+    await expect(editor.locator('[data-wayfinder-definition-banner]')).toBeVisible();
+    await expect(editor.locator('[data-wayfinder-definition-apply]')).toBeDisabled();
 
     // Canvas should still show the last good state (renamed).
     await clickCanvasTab(page);
-    await expect(editor.locator('[data-prism-stage="application-form"]'))
+    await expect(editor.locator('[data-wayfinder-stage="application-form"]'))
       .toContainText('Pre-Invalid Form', { timeout: 2_000 });
   });
 
   test('d) Round-trip: canvas change shows in JSON, JSON edit on top shows on canvas', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
-    const editor = page.locator('prism-service-blueprint-editor');
-    await expect(editor).toHaveAttribute('data-prism-service-blueprint-loaded', /.+/, { timeout: 30_000 });
+    const editor = page.locator('wayfinder-service-blueprint-editor');
+    await expect(editor).toHaveAttribute('data-wayfinder-service-blueprint-loaded', /.+/, { timeout: 30_000 });
 
     // Canvas-side: change displayName via the standard service-blueprint-updated event.
     await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor') as
+      const host = document.querySelector('wayfinder-service-blueprint-editor') as
         (HTMLElement & { _serviceBlueprint?: unknown }) | null;
       if (!host) throw new Error('editor not mounted');
-      const graph = host.shadowRoot?.querySelector('prism-service-blueprint-graph') as HTMLElement | null;
+      const graph = host.shadowRoot?.querySelector('wayfinder-service-blueprint-graph') as HTMLElement | null;
       if (!graph) throw new Error('graph not mounted');
       const next = JSON.parse(JSON.stringify((host as { _serviceBlueprint: unknown })._serviceBlueprint));
       next.displayName = 'Canvas-Edited Display';
@@ -212,8 +212,8 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     // Switch immediately, BEFORE the 250ms debounce would naturally fire.
     await clickCanvasTab(page);
 
-    const editor = page.locator('prism-service-blueprint-editor');
-    await expect(editor.locator('[data-prism-stage="application-form"]'))
+    const editor = page.locator('wayfinder-service-blueprint-editor');
+    await expect(editor.locator('[data-wayfinder-stage="application-form"]'))
       .toContainText('Flushed-On-Switch', { timeout: 2_000 });
   });
 });

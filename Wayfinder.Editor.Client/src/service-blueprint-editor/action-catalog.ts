@@ -1,6 +1,6 @@
 /**
  * ServiceBlueprintActionCatalog — host-extensible source for the action types the
- * editor knows how to render. Prism ships a built-in catalog covering generic
+ * editor knows how to render. Wayfinder ships a built-in catalog covering generic
  * actions; hosts compose their own catalog if they ship extra action types.
  */
 
@@ -12,7 +12,7 @@ export interface ServiceBlueprintActionCatalog {
 }
 
 /**
- * Returns the generic action types Prism ships out-of-the-box.
+ * Returns the generic action types Wayfinder ships out-of-the-box.
  *
  * The catalog is hand-mirrored from the C# `BuiltInActionCatalogProvider` (see
  * `STUB_ACTION_CATALOG` in `types.ts`). Drift between the C# and TS catalogs

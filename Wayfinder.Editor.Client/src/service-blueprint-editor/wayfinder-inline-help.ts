@@ -2,10 +2,10 @@ import { LitElement, css, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor>; not part of the public API surface.
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
  */
-@customElement('prism-inline-help')
-export class PrismInlineHelpElement extends LitElement {
+@customElement('wayfinder-inline-help')
+export class WayfinderInlineHelpElement extends LitElement {
   @property({ type: String })
   label = 'More help';
 
@@ -122,6 +122,6 @@ export class PrismInlineHelpElement extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-inline-help': PrismInlineHelpElement;
+    'wayfinder-inline-help': WayfinderInlineHelpElement;
   }
 }

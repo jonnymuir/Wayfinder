@@ -58,7 +58,7 @@ export function storyUrl(storyId: string): string {
 
 /** Locator for the canvas custom element. */
 export function graphLocator(page: Page): Locator {
-  return page.locator('prism-service-blueprint-graph');
+  return page.locator('wayfinder-service-blueprint-graph');
 }
 
 /** Navigate to a story and wait until the graph has measurable layout. */
@@ -71,12 +71,12 @@ export async function gotoCanonicalScenario(
   const graph = graphLocator(page);
   await expect(graph).toBeVisible({ timeout: 10_000 });
 
-  // The React Flow canvas loads lazily and sets data-prism-graph-ready on the
+  // The React Flow canvas loads lazily and sets data-wayfinder-graph-ready on the
   // host once nodes and edges are committed to the DOM. Empty service
   // blueprints render the Lit empty state instead and never mount the canvas.
   await expect(
     page.locator(
-      'prism-service-blueprint-graph[data-prism-graph-ready="true"], prism-service-blueprint-graph [data-prism-empty-state]',
+      'wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"], wayfinder-service-blueprint-graph [data-wayfinder-empty-state]',
     ).first(),
   ).toBeAttached({ timeout: 15_000 });
 }
@@ -146,9 +146,9 @@ export async function measureGraph(page: Page): Promise<GraphGeometry> {
     });
 
     const lanes = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-prism-queue-container]'),
+      root.querySelectorAll<HTMLElement>('[data-wayfinder-queue-container]'),
     ).map((lane) => ({
-      key: lane.getAttribute('data-prism-queue-container') ?? '',
+      key: lane.getAttribute('data-wayfinder-queue-container') ?? '',
       ...rel(lane.getBoundingClientRect()),
     }));
 
@@ -173,7 +173,7 @@ export async function measureGraph(page: Page): Promise<GraphGeometry> {
       return {
         kind,
         key: shell.getAttribute(shellAttr) ?? '',
-        laneAttr: button?.getAttribute('data-prism-queue') ?? null,
+        laneAttr: button?.getAttribute('data-wayfinder-queue') ?? null,
         laneByCentre: inferLane(r.left, r.right),
         label,
         scrollWidth: labelEl?.scrollWidth ?? 0,
@@ -183,24 +183,24 @@ export async function measureGraph(page: Page): Promise<GraphGeometry> {
     };
 
     const stages = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-prism-stage-card]'),
+      root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'),
     ).map((shell) =>
-      measureNode(shell, 'stage', 'data-prism-stage-card', '[data-prism-stage]'),
+      measureNode(shell, 'stage', 'data-wayfinder-stage-card', '[data-wayfinder-stage]'),
     );
 
     const gateways = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-prism-gateway-node]'),
+      root.querySelectorAll<HTMLElement>('[data-wayfinder-gateway-node]'),
     ).map((shell) =>
       measureNode(
         shell,
         'gateway',
-        'data-prism-gateway-node',
-        '[data-prism-gateway]',
+        'data-wayfinder-gateway-node',
+        '[data-wayfinder-gateway]',
       ),
     );
 
     const routes = Array.from(
-      root.querySelectorAll<SVGPathElement>('[data-prism-route-path]'),
+      root.querySelectorAll<SVGPathElement>('[data-wayfinder-route-path]'),
     )
       .map((path) => {
         const length = (path as SVGPathElement).getTotalLength?.() ?? 0;
@@ -212,9 +212,9 @@ export async function measureGraph(page: Page): Promise<GraphGeometry> {
         const offsetX = (svgRect?.left ?? 0) - sceneRect.left;
         const offsetY = (svgRect?.top ?? 0) - sceneRect.top;
         return {
-          key: path.getAttribute('data-prism-route-path') ?? '',
-          from: path.getAttribute('data-prism-route-from') ?? '',
-          to: path.getAttribute('data-prism-route-to') ?? '',
+          key: path.getAttribute('data-wayfinder-route-path') ?? '',
+          from: path.getAttribute('data-wayfinder-route-from') ?? '',
+          to: path.getAttribute('data-wayfinder-route-to') ?? '',
           start: { x: start.x + offsetX, y: start.y + offsetY },
           end: { x: end.x + offsetX, y: end.y + offsetY },
         };

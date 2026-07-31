@@ -18,7 +18,7 @@ import {
   type ActionEditorContext,
   type ActionEditorTarget,
 } from './action-editing.js';
-import './prism-inline-help.js';
+import './wayfinder-inline-help.js';
 
 type ActionsUpdatedDetail = {
   actions: AuthoredAction[];
@@ -41,10 +41,10 @@ type DeleteActionDialogState = {
 };
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor>; not part of the public API surface.
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
  */
-@customElement('prism-stage-action-editor')
-export class PrismServiceBlueprintActionEditorElement extends LitElement {
+@customElement('wayfinder-stage-action-editor')
+export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
   @property({ attribute: false })
   actions: AuthoredAction[] = [];
 
@@ -71,13 +71,13 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
   protected updated(changed: Map<string, unknown>) {
     if (changed.has('_picker') && this._picker) {
       requestAnimationFrame(() => {
-        this.shadowRoot?.querySelector<HTMLInputElement>('[data-prism-action-picker-search]')?.focus();
+        this.shadowRoot?.querySelector<HTMLInputElement>('[data-wayfinder-action-picker-search]')?.focus();
       });
     }
 
     if (changed.has('_deleteDialog') && this._deleteDialog) {
       requestAnimationFrame(() => {
-        this.shadowRoot?.querySelector<HTMLElement>('[data-prism-delete-action-cancel]')?.focus();
+        this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-delete-action-cancel]')?.focus();
       });
     }
 
@@ -150,12 +150,12 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
   }
 
   private _focusActionEditor(index: number) {
-    const row = this.shadowRoot?.querySelector<HTMLElement>(`[data-prism-stage-action="${index}"]`);
+    const row = this.shadowRoot?.querySelector<HTMLElement>(`[data-wayfinder-stage-action="${index}"]`);
     if (!row) {
       return;
     }
 
-    const firstField = row.querySelector<HTMLElement>(`[data-prism-action-param^="${index}-"], [data-prism-stage-action-timing="${index}"]`)
+    const firstField = row.querySelector<HTMLElement>(`[data-wayfinder-action-param^="${index}-"], [data-wayfinder-stage-action-timing="${index}"]`)
       ?? row.querySelector<HTMLElement>('input, select, textarea')
       ?? row.querySelector<HTMLElement>('button:not([disabled])');
     row.scrollIntoView({ block: 'nearest' });
@@ -476,7 +476,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
           <input
             type="checkbox"
             .checked=${Boolean(value)}
-            data-prism-action-param="${index}-${definition.key}"
+            data-wayfinder-action-param="${index}-${definition.key}"
             @change=${(event: Event) => this._updateActionParam(index, definition.key, (event.currentTarget as HTMLInputElement).checked)}
           />
           <span>${definition.title}</span>
@@ -491,7 +491,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
           <textarea
             class="field-control field-textarea ${error ? 'field-control-error' : ''}"
             aria-invalid=${String(Boolean(error))}
-            data-prism-action-param="${index}-${definition.key}"
+            data-wayfinder-action-param="${index}-${definition.key}"
             .value=${typeof value === 'string' ? value : String(value ?? '')}
             @input=${(event: Event) => this._updateActionParam(index, definition.key, (event.currentTarget as HTMLTextAreaElement).value)}
           ></textarea>
@@ -508,7 +508,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
           <select
             class="field-control ${error ? 'field-control-error' : ''}"
             aria-invalid=${String(Boolean(error))}
-            data-prism-action-param="${index}-${definition.key}"
+            data-wayfinder-action-param="${index}-${definition.key}"
             @change=${(event: Event) => this._updateActionParam(index, definition.key, (event.currentTarget as HTMLSelectElement).value)}
           >
             ${definition.allowedValues?.map(option => html`
@@ -535,7 +535,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
           class="field-control ${error ? 'field-control-error' : ''}"
           aria-invalid=${String(Boolean(error))}
           type=${inputType}
-          data-prism-action-param="${index}-${definition.key}"
+          data-wayfinder-action-param="${index}-${definition.key}"
           .value=${value === undefined || value === null ? '' : String(value)}
           @input=${(event: Event) => {
             const nextValue = (event.currentTarget as HTMLInputElement).value;
@@ -560,13 +560,13 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
 
     const fields = normaliseActionFormFields(action.params?.fields);
     return html`
-      <div class="forms-editor" data-prism-action-forms-editor="${index}">
+      <div class="forms-editor" data-wayfinder-action-forms-editor="${index}">
         <div class="section-header-row">
           <h4 class="subsection-heading">Form fields</h4>
           <span class="section-meta">${fields.length}</span>
         </div>
         <p class="section-copy">Add, remove, and reorder fields. Select and radio fields require options.</p>
-        <button type="button" class="secondary-button" data-prism-add-form-field="${index}" @click=${() => this._addFormField(index)}>
+        <button type="button" class="secondary-button" data-wayfinder-add-form-field="${index}" @click=${() => this._addFormField(index)}>
           Add field
         </button>
         ${fields.length === 0
@@ -578,7 +578,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                   return html`
                     <li
                       class="form-field-item"
-                      data-prism-form-field="${index}-${fieldIndex}"
+                      data-wayfinder-form-field="${index}-${fieldIndex}"
                       tabindex="0"
                       @keydown=${(event: KeyboardEvent) => {
                         if (event.altKey && event.key === 'ArrowUp') {
@@ -597,7 +597,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                             class="field-control ${fieldErrors.fieldKey ? 'field-control-error' : ''}"
                             aria-invalid=${String(Boolean(fieldErrors.fieldKey))}
                             .value=${field.fieldKey}
-                            data-prism-form-field-key="${index}-${fieldIndex}"
+                            data-wayfinder-form-field-key="${index}-${fieldIndex}"
                             @input=${(event: Event) => this._updateFormField(index, fieldIndex, { fieldKey: (event.currentTarget as HTMLInputElement).value })}
                           />
                           ${fieldErrors.fieldKey ? html`<span class="field-error">${fieldErrors.fieldKey}</span>` : nothing}
@@ -608,7 +608,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                             class="field-control ${fieldErrors.label ? 'field-control-error' : ''}"
                             aria-invalid=${String(Boolean(fieldErrors.label))}
                             .value=${field.label}
-                            data-prism-form-field-label="${index}-${fieldIndex}"
+                            data-wayfinder-form-field-label="${index}-${fieldIndex}"
                             @input=${(event: Event) => this._updateFormField(index, fieldIndex, { label: (event.currentTarget as HTMLInputElement).value })}
                           />
                           ${fieldErrors.label ? html`<span class="field-error">${fieldErrors.label}</span>` : nothing}
@@ -618,7 +618,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                           <select
                             class="field-control ${fieldErrors.type ? 'field-control-error' : ''}"
                             aria-invalid=${String(Boolean(fieldErrors.type))}
-                            data-prism-form-field-type="${index}-${fieldIndex}"
+                            data-wayfinder-form-field-type="${index}-${fieldIndex}"
                             @change=${(event: Event) => this._updateFormField(index, fieldIndex, { type: (event.currentTarget as HTMLSelectElement).value as ActionFormFieldConfig['type'] })}
                           >
                             ${ACTION_FORM_FIELD_TYPES.map(option => html`
@@ -633,7 +633,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                             class="field-control ${fieldErrors.defaultValue ? 'field-control-error' : ''}"
                             aria-invalid=${String(Boolean(fieldErrors.defaultValue))}
                             .value=${field.defaultValue ?? ''}
-                            data-prism-form-field-default="${index}-${fieldIndex}"
+                            data-wayfinder-form-field-default="${index}-${fieldIndex}"
                             @input=${(event: Event) => this._updateFormField(index, fieldIndex, { defaultValue: (event.currentTarget as HTMLInputElement).value })}
                           />
                           ${fieldErrors.defaultValue ? html`<span class="field-error">${fieldErrors.defaultValue}</span>` : nothing}
@@ -643,10 +643,10 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                         <label class="field-block field-block-full">
                           <span class="field-label-row">
                             <span class="field-label">Help text</span>
-                            <prism-inline-help
+                            <wayfinder-inline-help
                               label="Form field help text guidance"
                               message="Use this for short, task-specific guidance that appears below the field in the authored form. Keep it instructional rather than repeating the label."
-                            ></prism-inline-help>
+                            ></wayfinder-inline-help>
                           </span>
                           <textarea
                             class="field-control field-textarea"
@@ -657,10 +657,10 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                         <label class="field-block">
                           <span class="field-label-row">
                             <span class="field-label">Validation pattern</span>
-                            <prism-inline-help
+                            <wayfinder-inline-help
                               label="Validation pattern help"
                               message="Add a regular expression only when the field needs a strict format such as a reference number or postcode. Keep patterns short and explain them in help text if they are not obvious."
-                            ></prism-inline-help>
+                            ></wayfinder-inline-help>
                           </span>
                           <input
                             class="field-control"
@@ -672,7 +672,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                           <input
                             type="checkbox"
                             .checked=${field.required}
-                            data-prism-form-field-required="${index}-${fieldIndex}"
+                            data-wayfinder-form-field-required="${index}-${fieldIndex}"
                             @change=${(event: Event) => this._updateFormField(index, fieldIndex, { required: (event.currentTarget as HTMLInputElement).checked })}
                           />
                           <span>Required</span>
@@ -683,15 +683,15 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                             <label class="field-block field-block-full">
                               <span class="field-label-row">
                                 <span class="field-label">Options</span>
-                                <prism-inline-help
+                                <wayfinder-inline-help
                                   label="Field options help"
                                   message="Enter one choice per line in the order authors should see them. Keep labels short and distinct so keyboard and screen-reader users can scan them quickly."
-                                ></prism-inline-help>
+                                ></wayfinder-inline-help>
                               </span>
                               <textarea
                                 class="field-control field-textarea ${fieldErrors.options ? 'field-control-error' : ''}"
                                 aria-invalid=${String(Boolean(fieldErrors.options))}
-                                data-prism-form-field-options="${index}-${fieldIndex}"
+                                data-wayfinder-form-field-options="${index}-${fieldIndex}"
                                 .value=${field.options.join('\n')}
                                 @input=${(event: Event) =>
                                   this._updateFormField(index, fieldIndex, {
@@ -744,7 +744,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
         ${formFieldsProperty && isFormsBackedAction(entry) ? this._renderFormsEditor(index, validation) : nothing}
         ${validation.messages.length > 0
           ? html`
-              <div class="action-validation" data-prism-action-errors="${index}">
+              <div class="action-validation" data-wayfinder-action-errors="${index}">
                 <p class="action-validation-title">Fix these action details before saving:</p>
                 <ul>
                   ${validation.messages.map(message => html`<li>${message}</li>`)}
@@ -768,7 +768,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
           role="dialog"
           aria-modal="true"
           aria-labelledby="action-picker-title"
-          data-prism-action-picker-dialog
+          data-wayfinder-action-picker-dialog
           @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closePicker())}
         >
           <div class="dialog-header">
@@ -782,7 +782,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
               <span class="dialog-label">Search</span>
               <input
                 class="dialog-control"
-                data-prism-action-picker-search
+                data-wayfinder-action-picker-search
                 .value=${this._picker.query}
                 @input=${(event: Event) => {
                   const query = (event.currentTarget as HTMLInputElement).value;
@@ -794,7 +794,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
               <span class="dialog-label">Context</span>
               <select
                 class="dialog-control"
-                data-prism-action-picker-context
+                data-wayfinder-action-picker-context
                 @change=${(event: Event) => {
                   const context = (event.currentTarget as HTMLSelectElement).value as ActionEditorContext;
                   const firstEntry = this._catalogEntries.find(entry => entry.appliesTo.includes(context)) ?? null;
@@ -812,7 +812,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
               <button
                 type="button"
                 class=${`picker-option ${this._picker?.selectedType === entry.type ? 'selected' : ''}`}
-                data-prism-action-picker-option=${entry.type}
+                data-wayfinder-action-picker-option=${entry.type}
                 @click=${() => {
                   this._picker = this._picker ? { ...this._picker, selectedType: entry.type } : null;
                 }}
@@ -827,7 +827,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
           </div>
           <div class="dialog-actions">
             <button type="button" class="dialog-button secondary" @click=${() => this._closePicker()}>Cancel</button>
-            <button type="button" class="dialog-button primary" data-prism-action-picker-add @click=${() => this._addPickedAction()} ?disabled=${this._pickerEntries.length === 0}>Add action</button>
+            <button type="button" class="dialog-button primary" data-wayfinder-action-picker-add @click=${() => this._addPickedAction()} ?disabled=${this._pickerEntries.length === 0}>Add action</button>
           </div>
         </div>
       </div>
@@ -846,7 +846,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-action-title"
-          data-prism-delete-action-dialog
+          data-wayfinder-delete-action-dialog
           @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeDeleteDialog())}
         >
           <div class="dialog-header">
@@ -857,8 +857,8 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
           </div>
           <p class="dialog-copy">This removes the action and its configuration from this ${this.subjectLabel}.</p>
           <div class="dialog-actions">
-            <button type="button" class="dialog-button secondary" data-prism-delete-action-cancel @click=${() => this._closeDeleteDialog()}>Cancel</button>
-            <button type="button" class="dialog-button danger" data-prism-delete-action-confirm @click=${() => this._confirmDeleteAction()}>Delete action</button>
+            <button type="button" class="dialog-button secondary" data-wayfinder-delete-action-cancel @click=${() => this._closeDeleteDialog()}>Cancel</button>
+            <button type="button" class="dialog-button danger" data-wayfinder-delete-action-confirm @click=${() => this._confirmDeleteAction()}>Delete action</button>
           </div>
         </div>
       </div>
@@ -877,7 +877,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                 : 'Pick transition actions and configure their parameters here.'}
             </p>
           </div>
-          <button type="button" class="secondary-button" data-prism-open-action-picker @click=${(event: Event) => this._openPicker(event.currentTarget as HTMLElement)}>
+          <button type="button" class="secondary-button" data-wayfinder-open-action-picker @click=${(event: Event) => this._openPicker(event.currentTarget as HTMLElement)}>
             Add action
           </button>
         </div>
@@ -892,8 +892,8 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                   return html`
                     <li
                       class="action-item ${isDragOver ? 'action-item-drop' : ''} ${this.selectedActionIndex === index ? 'action-item-selected' : ''}"
-                      data-prism-stage-action="${index}"
-                      data-prism-action-selected=${String(this.selectedActionIndex === index)}
+                      data-wayfinder-stage-action="${index}"
+                      data-wayfinder-action-selected=${String(this.selectedActionIndex === index)}
                       tabindex="0"
                       @click=${() => this._setSelectedAction(index)}
                       @focusin=${() => this._setSelectedAction(index)}
@@ -941,7 +941,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                                 <span class="field-label">Timing</span>
                                 <select
                                   class="field-control"
-                                  data-prism-stage-action-timing="${index}"
+                                  data-wayfinder-stage-action-timing="${index}"
                                   @change=${(event: Event) => this._updateActionTiming(index, event)}
                                 >
                                   ${contexts.map(context => html`
@@ -962,7 +962,7 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
                           <button
                             type="button"
                             class="icon-button danger-button"
-                            data-prism-stage-action-remove="${index}"
+                            data-wayfinder-stage-action-remove="${index}"
                             @click=${(event: Event) => this._openDeleteDialog(index, event.currentTarget as HTMLElement)}
                           >
                             Remove
@@ -1421,6 +1421,6 @@ export class PrismServiceBlueprintActionEditorElement extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-stage-action-editor': PrismServiceBlueprintActionEditorElement;
+    'wayfinder-stage-action-editor': WayfinderServiceBlueprintActionEditorElement;
   }
 }

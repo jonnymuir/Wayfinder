@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
 import { expect } from '@storybook/test';
-import './prism-step-inspector.js';
-import type { PrismStepInspectorElement } from './prism-step-inspector.js';
+import './wayfinder-step-inspector.js';
+import type { WayfinderStepInspectorElement } from './wayfinder-step-inspector.js';
 import { STUB_ACTION_CATALOG, STUB_SERVICE_BLUEPRINT } from './types.js';
 import type { ActionCatalogEntry, AuthoredServiceBlueprint } from './types.js';
 
@@ -12,8 +12,8 @@ type StoryArgs = {
   actionCatalog: ActionCatalogEntry[];
 };
 
-function makeElement(args: StoryArgs): PrismStepInspectorElement {
-  const el = document.createElement('prism-step-inspector') as PrismStepInspectorElement;
+function makeElement(args: StoryArgs): WayfinderStepInspectorElement {
+  const el = document.createElement('wayfinder-step-inspector') as WayfinderStepInspectorElement;
   el.serviceBlueprint = args.serviceBlueprint;
   el.selectedStageKey = args.selectedStageKey;
   el.selectedGatewayKey = args.selectedGatewayKey ?? null;
@@ -41,7 +41,7 @@ function makeElement(args: StoryArgs): PrismStepInspectorElement {
 
 const meta: Meta<StoryArgs> = {
   title: 'Service Blueprint Editor/Step Inspector',
-  component: 'prism-step-inspector',
+  component: 'wayfinder-step-inspector',
   tags: ['autodocs'],
   parameters: {
     a11y: {
@@ -68,7 +68,7 @@ type Story = StoryObj<StoryArgs>;
 export const Empty: Story = {
   play: async ({ canvasElement }) => {
     await new Promise(resolve => setTimeout(resolve, 100));
-    const el = canvasElement.querySelector('prism-step-inspector') as PrismStepInspectorElement;
+    const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
     await el.updateComplete;
     await expect(el.shadowRoot?.querySelector('.empty-state')).not.toBeNull();
   },
@@ -81,30 +81,30 @@ export const EditableStage: Story = {
   },
   play: async ({ canvasElement }) => {
     await new Promise(resolve => setTimeout(resolve, 120));
-    const el = canvasElement.querySelector('prism-step-inspector') as PrismStepInspectorElement;
+    const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
     await el.updateComplete;
 
     const root = el.shadowRoot!;
-    const title = root.querySelector<HTMLInputElement>('[data-prism-stage-title]')!;
+    const title = root.querySelector<HTMLInputElement>('[data-wayfinder-stage-title]')!;
     title.value = 'Applicant Intake';
     title.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    const lane = root.querySelector<HTMLInputElement>('[data-prism-stage-queue]')!;
+    const lane = root.querySelector<HTMLInputElement>('[data-wayfinder-stage-queue]')!;
     lane.value = 'member';
     lane.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    const stageType = root.querySelector<HTMLSelectElement>('[data-prism-stage-type]')!;
+    const stageType = root.querySelector<HTMLSelectElement>('[data-wayfinder-stage-type]')!;
     stageType.value = 'review';
     stageType.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    const actionEditor = root.querySelector('prism-stage-action-editor')!;
+    const actionEditor = root.querySelector('wayfinder-stage-action-editor')!;
     await expect(actionEditor).not.toBeNull();
-    await expect(actionEditor.shadowRoot?.querySelectorAll('[data-prism-stage-action]').length).toBe(2);
-    await expect(actionEditor.shadowRoot?.querySelector('[data-prism-action-forms-editor="1"]')).not.toBeNull();
-    await expect(root.querySelector('[data-prism-stage-detail="reviewer-assessment"]')).not.toBeNull();
+    await expect(actionEditor.shadowRoot?.querySelectorAll('[data-wayfinder-stage-action]').length).toBe(2);
+    await expect(actionEditor.shadowRoot?.querySelector('[data-wayfinder-action-forms-editor="1"]')).not.toBeNull();
+    await expect(root.querySelector('[data-wayfinder-stage-detail="reviewer-assessment"]')).not.toBeNull();
   },
 };
 
@@ -199,7 +199,7 @@ export const TransitionSelected: Story = {
 export const TransitionActionConfiguration: Story = {
   // The previous transition-action picker filter check now runs against a
   // route action editor mounted inside the gateway inspector's outgoing
-  // routes panel. The action-editor data attributes (data-prism-action-*)
+  // routes panel. The action-editor data attributes (data-wayfinder-action-*)
   // are identical so existing tests keep working.
   args: {
     serviceBlueprint: GATEWAY_ROUTE_SERVICE_BLUEPRINT,

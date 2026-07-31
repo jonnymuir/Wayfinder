@@ -7,10 +7,10 @@ import { flattenRoutes } from './route-model.js';
 import { stageQueueKey, stageQueueLabel, type QueueDefinition } from './stage-assignment.js';
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor>; not part of the public API surface.
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
  */
-@customElement('prism-service-blueprint-outline')
-export class PrismServiceBlueprintOutline extends LitElement {
+@customElement('wayfinder-service-blueprint-outline')
+export class WayfinderServiceBlueprintOutline extends LitElement {
   @property({ type: Object })
   serviceBlueprint: AuthoredServiceBlueprint | null = null;
 
@@ -161,7 +161,7 @@ export class PrismServiceBlueprintOutline extends LitElement {
 
         <div class="outline-lane-groups">
           ${laneGroups.map(group => html`
-            <section class="outline-lane-section" data-prism-outline-queue=${group.key}>
+            <section class="outline-lane-section" data-wayfinder-outline-queue=${group.key}>
               <div class="outline-lane-header">
                 <h3 class="outline-lane-title">${group.label}</h3>
                 <p class="outline-lane-meta">Read top to bottom</p>
@@ -179,7 +179,7 @@ export class PrismServiceBlueprintOutline extends LitElement {
                   class="outline-stage-button ${isSelected ? 'outline-stage-button-selected' : ''}"
                   @click=${() => this._handleStageClick(stage.stateKey)}
                   aria-current=${isSelected ? 'location' : nothing}
-                  data-prism-outline-stage="${stage.stateKey}"
+                  data-wayfinder-outline-stage="${stage.stateKey}"
                 >
                   <span class="outline-stage-title">${stage.displayName}</span>
                   <span class="outline-stage-meta">${stage.actor}</span>
@@ -197,7 +197,7 @@ export class PrismServiceBlueprintOutline extends LitElement {
                                 class="outline-gateway-button ${isGatewaySelected ? 'outline-gateway-button-selected' : ''}"
                                 @click=${() => this._handleGatewayClick(gateway.key)}
                                 aria-current=${isGatewaySelected ? 'location' : nothing}
-                                data-prism-outline-gateway="${gateway.key}"
+                                data-wayfinder-outline-gateway="${gateway.key}"
                               >
                                 <span class="outline-gateway-shape" aria-hidden="true"></span>
                                 <span class="outline-gateway-copy">
@@ -262,7 +262,7 @@ export class PrismServiceBlueprintOutline extends LitElement {
                                class="outline-gateway-button ${isGatewaySelected ? 'outline-gateway-button-selected' : ''}"
                                @click=${() => this._handleGatewayClick(gateway.key)}
                                aria-current=${isGatewaySelected ? 'location' : nothing}
-                               data-prism-outline-gateway="${gateway.key}"
+                               data-wayfinder-outline-gateway="${gateway.key}"
                              >
                                <span class="outline-gateway-shape" aria-hidden="true"></span>
                                <span class="outline-gateway-copy">
@@ -560,6 +560,6 @@ export class PrismServiceBlueprintOutline extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-service-blueprint-outline': PrismServiceBlueprintOutline;
+    'wayfinder-service-blueprint-outline': WayfinderServiceBlueprintOutline;
   }
 }

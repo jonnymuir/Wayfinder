@@ -1,5 +1,5 @@
 /**
- * ServiceBlueprintSource — the boundary contract between Prism's serviceBlueprint editor
+ * ServiceBlueprintSource — the boundary contract between Wayfinder's serviceBlueprint editor
  * (a service-design tool) and the host business application.
  *
  * Hosts implement this interface to expose their authored serviceBlueprints to the

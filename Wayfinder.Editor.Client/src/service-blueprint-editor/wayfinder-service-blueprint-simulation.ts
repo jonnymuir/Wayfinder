@@ -30,10 +30,10 @@ const STOP_COPY: Record<Exclude<ServiceBlueprintSimulationStopReason, null>, str
 };
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor>; not part of the public API surface.
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
  */
-@customElement('prism-service-blueprint-simulation')
-export class PrismServiceBlueprintSimulationElement extends LitElement {
+@customElement('wayfinder-service-blueprint-simulation')
+export class WayfinderServiceBlueprintSimulationElement extends LitElement {
   @property({ attribute: false })
   initialStage: AuthoredStage | null = null;
 
@@ -87,7 +87,7 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
     const startLabel = this.active ? 'Restart simulation' : 'Start simulation';
 
     return html`
-      <section class="simulation-panel" aria-labelledby="serviceBlueprint-simulation-title" data-prism-simulation-panel>
+      <section class="simulation-panel" aria-labelledby="serviceBlueprint-simulation-title" data-wayfinder-simulation-panel>
         <div class="simulation-header">
           <div>
             <p class="simulation-eyebrow">Preview and simulation</p>
@@ -100,7 +100,7 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
             <button
               type="button"
               class="simulation-button simulation-button-primary"
-              data-prism-simulation-start
+              data-wayfinder-simulation-start
               ?disabled=${!this.canStart}
               @click=${this._startSimulation}
             >
@@ -109,7 +109,7 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
             <button
               type="button"
               class="simulation-button"
-              data-prism-simulation-reset
+              data-wayfinder-simulation-reset
               ?disabled=${!this.active}
               @click=${this._resetSimulation}
             >
@@ -124,7 +124,7 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
           ? html`
               <p class="simulation-meta">
                 Start stage:
-                <strong data-prism-simulation-initial-stage>${this.initialStage.displayName}</strong>
+                <strong data-wayfinder-simulation-initial-stage>${this.initialStage.displayName}</strong>
               </p>
             `
           : html`
@@ -135,7 +135,7 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
 
         ${this.startBlocker
           ? html`
-              <p class="simulation-blocker" role="alert" data-prism-simulation-start-blocker>
+              <p class="simulation-blocker" role="alert" data-wayfinder-simulation-start-blocker>
                 ${this.startBlocker}
               </p>
             `
@@ -143,18 +143,18 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
 
         ${!this.active || !this.currentStage
           ? html`
-              <div class="simulation-empty" data-prism-simulation-empty>
+              <div class="simulation-empty" data-wayfinder-simulation-empty>
                 <p class="govuk-body">
                   Start the simulation to highlight the path in the graph and show the available transitions at each step.
                 </p>
               </div>
             `
           : html`
-              <article class="simulation-current-stage" data-prism-simulation-current=${this.currentStage.stateKey}>
+              <article class="simulation-current-stage" data-wayfinder-simulation-current=${this.currentStage.stateKey}>
                 <div class="simulation-current-header">
                   <div>
                     <p class="simulation-current-eyebrow">Current stage</p>
-                    <h3 class="simulation-current-title" data-prism-simulation-current-stage>
+                    <h3 class="simulation-current-title" data-wayfinder-simulation-current-stage>
                       ${this.currentStage.displayName}
                     </h3>
                   </div>
@@ -164,9 +164,9 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
 
               <div class="simulation-history">
                 <h3 class="simulation-section-title">History</h3>
-                <ol class="simulation-breadcrumbs" data-prism-simulation-history>
+                <ol class="simulation-breadcrumbs" data-wayfinder-simulation-history>
                   ${this.history.map(entry => html`
-                    <li class="simulation-breadcrumb" data-prism-simulation-breadcrumb-stage=${entry.stageKey}>
+                    <li class="simulation-breadcrumb" data-wayfinder-simulation-breadcrumb-stage=${entry.stageKey}>
                       <span class="simulation-breadcrumb-stage">${entry.stageLabel}</span>
                       ${entry.enteredByLabel
                         ? html`<span class="simulation-breadcrumb-via">via ${entry.enteredByLabel}</span>`
@@ -178,7 +178,7 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
 
               ${this.stopReason
                 ? html`
-                    <p class="simulation-stop" role="status" data-prism-simulation-stop-reason=${this.stopReason}>
+                    <p class="simulation-stop" role="status" data-wayfinder-simulation-stop-reason=${this.stopReason}>
                       ${STOP_COPY[this.stopReason]}
                     </p>
                   `
@@ -191,7 +191,7 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
                             <button
                               type="button"
                               class="simulation-transition-button"
-                              data-prism-simulation-transition=${String(option.transitionIndex)}
+                              data-wayfinder-simulation-transition=${String(option.transitionIndex)}
                               ?disabled=${option.blocked}
                               @click=${() => this._advance(option.transitionIndex)}
                             >
@@ -208,7 +208,7 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
                             </div>
                             ${option.blockerMessages.length > 0
                               ? html`
-                                  <ul class="simulation-transition-blockers" data-prism-simulation-blocker=${String(option.transitionIndex)}>
+                                  <ul class="simulation-transition-blockers" data-wayfinder-simulation-blocker=${String(option.transitionIndex)}>
                                     ${option.blockerMessages.map(message => html`<li>${message}</li>`)}
                                   </ul>
                                 `
@@ -455,6 +455,6 @@ export class PrismServiceBlueprintSimulationElement extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-service-blueprint-simulation': PrismServiceBlueprintSimulationElement;
+    'wayfinder-service-blueprint-simulation': WayfinderServiceBlueprintSimulationElement;
   }
 }

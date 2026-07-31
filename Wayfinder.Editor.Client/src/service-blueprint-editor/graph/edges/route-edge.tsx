@@ -93,10 +93,10 @@ export function RouteEdge({
         path={path}
         markerEnd={markerEnd}
         className={basePathClass}
-        data-prism-route-path={edge.key}
-        data-prism-route-from={fromKey}
-        data-prism-route-to={toKey}
-        data-prism-route-simulation-path={String(simulationPath)}
+        data-wayfinder-route-path={edge.key}
+        data-wayfinder-route-from={fromKey}
+        data-wayfinder-route-to={toKey}
+        data-wayfinder-route-simulation-path={String(simulationPath)}
       />
       {chips.map(chip => (
         <path
@@ -111,10 +111,10 @@ export function RouteEdge({
             chip.selected ? 'selected' : '',
             chip.simulationPath ? 'simulation-path' : '',
           ].filter(Boolean).join(' ')}
-          data-prism-transition-path={String(chip.index)}
-          data-prism-transition-from={chip.fromKey}
-          data-prism-transition-to={chip.toKey}
-          data-prism-transition-simulation-path={String(chip.simulationPath)}
+          data-wayfinder-transition-path={String(chip.index)}
+          data-wayfinder-transition-from={chip.fromKey}
+          data-wayfinder-transition-to={chip.toKey}
+          data-wayfinder-transition-simulation-path={String(chip.simulationPath)}
         />
       ))}
       <EdgeLabelRenderer>
@@ -129,10 +129,10 @@ export function RouteEdge({
               pointerEvents: 'all',
             }}
             aria-label={chip.ariaLabel}
-            data-prism-transition={String(chip.index)}
-            data-prism-transition-from={chip.fromKey}
-            data-prism-transition-to={chip.toKey}
-            data-prism-transition-simulation-path={String(chip.simulationPath)}
+            data-wayfinder-transition={String(chip.index)}
+            data-wayfinder-transition-from={chip.fromKey}
+            data-wayfinder-transition-to={chip.toKey}
+            data-wayfinder-transition-simulation-path={String(chip.simulationPath)}
             onClick={() => callbacks.selectTransition(chip.index)}
             onDoubleClick={() => callbacks.selectTransition(chip.index, { openInspector: true })}
             onKeyDown={event => handleChipKeyDown(event, chip)}

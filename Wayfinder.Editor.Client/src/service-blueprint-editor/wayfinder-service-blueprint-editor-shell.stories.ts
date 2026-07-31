@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/web-components';
-import './prism-service-blueprint-editor-shell.js';
-import type { PrismServiceBlueprintEditorShellElement } from './prism-service-blueprint-editor-shell.js';
+import './wayfinder-service-blueprint-editor-shell.js';
+import type { WayfinderServiceBlueprintEditorShellElement } from './wayfinder-service-blueprint-editor-shell.js';
 import { PAYMENT_DEMO_SERVICE_BLUEPRINT, PLANNING_SERVICE_BLUEPRINT, cloneAuthoredServiceBlueprint } from './fixtures/index.js';
 import type { AuthoredStage, AuthoredServiceBlueprint } from './types.js';
 import { InMemoryServiceBlueprintSource } from './in-memory-service-blueprint-source.js';
@@ -137,8 +137,8 @@ const REFERENCE_QUEUES: QueueDefinition[] = [
   { queueName: 'system', displayName: 'System' },
 ];
 
-function makeShell(): PrismServiceBlueprintEditorShellElement {
-  const element = document.createElement('prism-service-blueprint-editor-shell') as PrismServiceBlueprintEditorShellElement;
+function makeShell(): WayfinderServiceBlueprintEditorShellElement {
+  const element = document.createElement('wayfinder-service-blueprint-editor-shell') as WayfinderServiceBlueprintEditorShellElement;
   element.blueprintKey = 'planning';
   element.serviceBlueprintSource = buildShellSource();
   element.availableQueues = REFERENCE_QUEUES;
@@ -148,7 +148,7 @@ function makeShell(): PrismServiceBlueprintEditorShellElement {
 
 const meta: Meta = {
   title: 'Service Blueprint Editor/Editor Shell',
-  component: 'prism-service-blueprint-editor-shell',
+  component: 'wayfinder-service-blueprint-editor-shell',
   tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',

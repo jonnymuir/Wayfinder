@@ -13,7 +13,7 @@ test.describe('Retired stage types are no longer offered to authors', () => {
   test.fixme('author cannot pick a retired stage type (Waiting, StatusTimeline) from the list-view stage-type select', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas'));
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
     // Switch to list view to expose per-row kind selects.

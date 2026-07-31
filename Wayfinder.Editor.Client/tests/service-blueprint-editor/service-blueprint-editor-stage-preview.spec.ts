@@ -36,46 +36,46 @@ test.describe('ServiceBlueprint editor stage preview', () => {
   test('renders a read-only runtime preview for the selected planning stage', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
 
-    await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
     await openPreviewForDeclaration(page);
 
-    const preview = page.locator('[data-prism-stage-preview]');
+    const preview = page.locator('[data-wayfinder-stage-preview]');
     await expect(page.getByRole('heading', { name: 'Stage preview' })).toBeVisible();
     await expect(preview).toBeVisible();
-    await expect(preview.locator('[data-prism-preview-stage-name]')).toHaveText('Declaration');
-    await expect(preview.locator('[data-prism-preview-shell]')).toContainText('Question shell');
-    await expect(preview.locator('[data-prism-preview-readonly]')).toBeVisible();
+    await expect(preview.locator('[data-wayfinder-preview-stage-name]')).toHaveText('Declaration');
+    await expect(preview.locator('[data-wayfinder-preview-shell]')).toContainText('Question shell');
+    await expect(preview.locator('[data-wayfinder-preview-readonly]')).toBeVisible();
     await expect(preview).toContainText('Applicant name');
     await expect(preview).toContainText('Site address');
     await expect(preview.locator('.govuk-input').first()).toBeDisabled();
     await expect(preview.locator('.govuk-textarea').first()).toBeDisabled();
-    await expect(preview.locator('[data-prism-preview-action="continue"]')).toBeDisabled();
-    await expect(preview.locator('[data-prism-preview-assignment]')).toContainText('Assigned to Applicant');
-    await expect(preview.locator('[data-prism-preview-selector]')).toHaveCount(0);
+    await expect(preview.locator('[data-wayfinder-preview-action="continue"]')).toBeDisabled();
+    await expect(preview.locator('[data-wayfinder-preview-assignment]')).toContainText('Assigned to Applicant');
+    await expect(preview.locator('[data-wayfinder-preview-selector]')).toHaveCount(0);
   });
 
   test.fixme('updates the preview when stage edits change the projected runtime', async ({ page }) => {
     // slowProjectPreview intercepts fetch calls, but projection is now local and synchronous.
     // The loading state flash happens before Lit renders. Needs async projection or a different approach.
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
-    await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
 
     await slowProjectPreview(page, 1_500);
     await openPreviewForDeclaration(page);
-    await expect(page.locator('[data-prism-preview-loading]')).toContainText('Rendering preview');
-    await expect(page.locator('[data-prism-preview-stage-name]')).toHaveText('Declaration');
+    await expect(page.locator('[data-wayfinder-preview-loading]')).toContainText('Rendering preview');
+    await expect(page.locator('[data-wayfinder-preview-stage-name]')).toHaveText('Declaration');
 
     await page.getByRole('tab', { name: 'Canvas' }).click();
     const titleInput = page.getByLabel('Title');
     await titleInput.fill('Declaration preview');
     await titleInput.press('Tab');
-    const laneInput = page.locator('[data-prism-stage-queue]');
+    const laneInput = page.locator('[data-wayfinder-stage-queue]');
     await laneInput.fill('reviewer');
     await laneInput.press('Tab');
     await page.getByRole('tab', { name: 'Preview' }).click();
 
-    await expect(page.locator('[data-prism-preview-stage-name]')).toHaveText('Declaration preview');
-    await expect(page.locator('[data-prism-preview-assignment]')).toContainText('Assigned to Reviewer');
-    await expect(page.locator('[data-prism-preview-surface-panel]')).toBeVisible();
+    await expect(page.locator('[data-wayfinder-preview-stage-name]')).toHaveText('Declaration preview');
+    await expect(page.locator('[data-wayfinder-preview-assignment]')).toContainText('Assigned to Reviewer');
+    await expect(page.locator('[data-wayfinder-preview-surface-panel]')).toBeVisible();
   });
 });

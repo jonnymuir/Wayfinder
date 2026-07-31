@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test';
 // embedded by integrators in their own host pages (see
 // docs/guides/embedding-the-service-blueprint-editor.md). These specs are marked
 // fixme rather than deleted so the behavioural intent stays visible if a
-// future slice reintroduces a Prism-shipped demo shell.
+// future slice reintroduces a Wayfinder-shipped demo shell.
 //
 // TODO Slice E: reframe surviving behavioural intents (keyboard reach,
 // screen-reader landmarks, swim-lane reachability) against the
@@ -25,8 +25,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       await page.goto(shellUrl('planning'));
       
       // Wait for editor to load
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -61,26 +61,26 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       // Editor should be visually prioritized (appears first in reading order after skip link)
       const mainLandmark = page.locator('main');
       await expect(mainLandmark).toBeVisible();
-      await expect(mainLandmark.locator('prism-service-blueprint-editor')).toBeVisible();
+      await expect(mainLandmark.locator('wayfinder-service-blueprint-editor')).toBeVisible();
     });
 
     test('swim lanes are visible without excessive scrolling', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
 
       // BEHAVIORAL REQUIREMENT FOR ISABELLE:
-      // Role lanes ([data-prism-role-queue]) should be visible in the viewport
+      // Role lanes ([data-wayfinder-role-queue]) should be visible in the viewport
       // At least 2-3 swim lanes should be visible without scrolling the editor frame
       
       const graphCanvas = page.getByRole('application');
       await expect(graphCanvas).toBeVisible();
 
-      const roleLanes = page.locator('[data-prism-role-queue]');
+      const roleLanes = page.locator('[data-wayfinder-role-queue]');
       await expect(roleLanes).not.toHaveCount(0);
 
       // At least the first 2 lanes should be in viewport
@@ -94,8 +94,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('editor chrome does not block interactive stage cards', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -104,7 +104,7 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       // Stage cards must be pointer-accessible, not blocked by overlapping editor chrome
       // This was the actual CI failure in PR #75 — the "Send" button was blocked
       
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await expect(firstStage).toBeVisible();
 
       // Stage card should be clickable (not blocked by overlays)
@@ -117,8 +117,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('integration rail does not steal focus from editor workspace', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -149,8 +149,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('all swim lanes are reachable via keyboard in browser host', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -173,8 +173,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('swim lanes can be navigated with screen reader', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -183,18 +183,18 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       // Each role lane must have aria-label="Role: {role-name} lane"
       // Each stage card must have aria-label="{stage-title} stage"
       
-      const firstLane = page.locator('[data-prism-role-queue]').first();
+      const firstLane = page.locator('[data-wayfinder-role-queue]').first();
       await expect(firstLane).toHaveAttribute('aria-label', /lane/i);
 
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await expect(firstStage).toHaveAttribute('aria-label', /stage/i);
     });
 
     test('swim lane horizontal scroll does not break with browser chrome', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -221,7 +221,7 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
 
       // Editor frame should contain scrolling
       const editorScrolled = await graphCanvas.evaluate((el) => {
-        const scrollParent = el.closest('[data-prism-component="service-blueprint-graph"]');
+        const scrollParent = el.closest('[data-wayfinder-component="service-blueprint-graph"]');
         return scrollParent ? scrollParent.scrollLeft > 0 : false;
       });
       
@@ -234,19 +234,19 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('zoom and fit controls work in browser-hosted surface', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
 
       // BEHAVIORAL REQUIREMENT FOR ISABELLE:
-      // If zoom controls exist ([data-prism-zoom-in], [data-prism-zoom-out], [data-prism-fit-to-screen]),
+      // If zoom controls exist ([data-wayfinder-zoom-in], [data-wayfinder-zoom-out], [data-wayfinder-fit-to-screen]),
       // they should work without affecting browser host chrome
       
-      const zoomIn = page.locator('[data-prism-zoom-in]');
-      const zoomOut = page.locator('[data-prism-zoom-out]');
-      const fitToScreen = page.locator('[data-prism-fit-to-screen]');
+      const zoomIn = page.locator('[data-wayfinder-zoom-in]');
+      const zoomOut = page.locator('[data-wayfinder-zoom-out]');
+      const fitToScreen = page.locator('[data-wayfinder-fit-to-screen]');
 
       // If zoom controls exist, test them
       if (await zoomIn.count() > 0) {
@@ -288,8 +288,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('tab order flows logically from host chrome to editor', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -312,7 +312,7 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
 
       // Eventually focus should reach the editor toolbar or graph
       const focusedElement = page.locator(':focus');
-      const editorElement = page.locator('prism-service-blueprint-editor');
+      const editorElement = page.locator('wayfinder-service-blueprint-editor');
       
       // Focus should be within the editor
       const focusInEditor = await focusedElement.evaluate((el, editor) => {
@@ -325,8 +325,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('screen reader announces service blueprint structure in browser host', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -344,10 +344,10 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       await expect(editorHeading).toContainText('planning');
 
       // Select a stage to open inspector
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await firstStage.click();
 
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible({ timeout: 10_000 });
 
       // Inspector should have a heading for the selected stage
@@ -358,8 +358,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('focus restoration works after closing inspector in browser host', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -367,10 +367,10 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       // BEHAVIORAL REQUIREMENT FOR ISABELLE:
       // After closing inspector (Escape key), focus should return to the stage card
       
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await firstStage.click();
 
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible({ timeout: 10_000 });
 
       // Close inspector with Escape
@@ -384,8 +384,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('live regions announce structural changes in browser host', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -410,8 +410,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('can create a stage from browser-hosted editor', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -420,15 +420,15 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       // Stage creation must work from browser-hosted surface
       // Add Stage button → form → stage appears in graph
       
-      const addStageButton = page.locator('[data-prism-add-stage]');
+      const addStageButton = page.locator('[data-wayfinder-add-stage]');
       
       if (await addStageButton.count() > 0) {
-        const initialStageCount = await page.locator('[data-prism-stage]').count();
+        const initialStageCount = await page.locator('[data-wayfinder-stage]').count();
         
         await addStageButton.click();
         
         // Stage creation form should appear
-        const stageForm = page.locator('[data-prism-stage-form]');
+        const stageForm = page.locator('[data-wayfinder-stage-form]');
         await expect(stageForm).toBeVisible({ timeout: 10_000 });
         
         // Fill in stage details
@@ -436,7 +436,7 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
         await stageForm.locator('button[type="submit"]').click();
         
         // New stage should appear
-        const newStageCount = await page.locator('[data-prism-stage]').count();
+        const newStageCount = await page.locator('[data-wayfinder-stage]').count();
         expect(newStageCount).toBe(initialStageCount + 1);
       }
     });
@@ -444,8 +444,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('can edit stage properties in browser-hosted editor', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -453,10 +453,10 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       // BEHAVIORAL REQUIREMENT FOR ISABELLE:
       // Inspector editing must work from browser-hosted surface
       
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await firstStage.click();
 
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible({ timeout: 10_000 });
 
       // Inspector should show editable fields
@@ -476,8 +476,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('can save service blueprint from browser-hosted editor', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -485,14 +485,14 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       // BEHAVIORAL REQUIREMENT FOR ISABELLE:
       // Save button must be accessible and functional in browser-hosted surface
       
-      const saveButton = page.locator('[data-prism-save]');
+      const saveButton = page.locator('[data-wayfinder-save]');
       await expect(saveButton).toBeVisible();
 
       // Make a small change to enable save
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await firstStage.click();
 
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible({ timeout: 10_000 });
 
       // If we can make an edit, the save button should become enabled
@@ -503,8 +503,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('undo/redo work from browser-hosted editor', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -512,8 +512,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       // BEHAVIORAL REQUIREMENT FOR ISABELLE:
       // Undo/redo buttons must work in browser-hosted surface
       
-      const undoButton = page.locator('[data-prism-undo]');
-      const redoButton = page.locator('[data-prism-redo]');
+      const undoButton = page.locator('[data-wayfinder-undo]');
+      const redoButton = page.locator('[data-wayfinder-redo]');
 
       await expect(undoButton).toBeVisible();
       await expect(redoButton).toBeVisible();
@@ -526,8 +526,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('can switch service blueprints from browser host without losing editor state', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -543,14 +543,14 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       await launchButton.click();
 
       // Editor should reload with new service blueprint
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'information-request',
         { timeout: 30_000 }
       );
 
       // Stages should reflect the new service blueprint
-      const stages = page.locator('[data-prism-stage]');
+      const stages = page.locator('[data-wayfinder-stage]');
       await expect(stages).not.toHaveCount(0);
     });
   });
@@ -559,8 +559,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('editor remains usable after browser window resize', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -589,8 +589,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
     test('editor state persists across browser navigation', async ({ page }) => {
       await page.goto(shellUrl('planning'));
       
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -607,8 +607,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       await page.goto(url);
       
       // Editor should reload to the same service blueprint
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -622,8 +622,8 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
         document.body.style.zoom = '1.5';
       });
 
-      await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute(
-        'data-prism-service-blueprint-loaded',
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+        'data-wayfinder-service-blueprint-loaded',
         'planning',
         { timeout: 30_000 }
       );
@@ -634,7 +634,7 @@ test.describe.fixme('Browser-hosted service blueprint surface: Usability proof',
       const editorFrame = page.locator('.editor-frame');
       await expect(editorFrame).toBeVisible();
       
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await expect(firstStage).toBeVisible();
       
       // Stage should be clickable at high zoom

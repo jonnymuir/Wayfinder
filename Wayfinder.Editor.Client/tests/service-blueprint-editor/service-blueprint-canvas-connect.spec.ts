@@ -14,13 +14,13 @@ const EDITOR_STORY = '/iframe.html?id=service-blueprint-editor-editor-host--plan
 async function gotoStory(page: Page, url: string) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(url);
-  await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+  await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 }
 
 async function sourceHandleCentre(page: Page, stageKey: string) {
-  return page.locator('prism-service-blueprint-graph').evaluate((graphElement, key) => {
+  return page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement, key) => {
     const root = (graphElement as HTMLElement).shadowRoot!;
-    const handle = root.querySelector(`[data-prism-stage-card="${key}"] .react-flow__handle.source`);
+    const handle = root.querySelector(`[data-wayfinder-stage-card="${key}"] .react-flow__handle.source`);
     if (!handle) throw new Error(`no source handle for ${key}`);
     const rect = handle.getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -36,8 +36,8 @@ test.describe('ServiceBlueprint canvas — drag-to-connect', () => {
 
     // Chips are per authored route; route paths are per node pair (and this
     // connection reuses an existing pair), so assert on chips.
-    const chipsBefore = await page.locator('prism-service-blueprint-graph [data-prism-transition]').count();
-    await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const chipsBefore = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-transition]').count();
+    await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       (window as unknown as { __inspector: unknown[] }).__inspector = [];
       graphElement.addEventListener('inspector-requested', event => {
         (window as unknown as { __inspector: unknown[] }).__inspector.push(
@@ -47,14 +47,14 @@ test.describe('ServiceBlueprint canvas — drag-to-connect', () => {
     });
 
     const handle = await sourceHandleCentre(page, 'confirm-payment-received');
-    const target = await page.locator('prism-service-blueprint-graph [data-prism-gateway-node="await-payment-confirmation"]').boundingBox();
+    const target = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-gateway-node="await-payment-confirmation"]').boundingBox();
     await page.mouse.move(handle.x, handle.y);
     await page.mouse.down();
     await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, { steps: 10 });
     await page.mouse.up();
 
     await expect
-      .poll(() => page.locator('prism-service-blueprint-graph [data-prism-transition]').count())
+      .poll(() => page.locator('wayfinder-service-blueprint-graph [data-wayfinder-transition]').count())
       .toBeGreaterThan(chipsBefore);
     const inspectorEvents = await page.evaluate(() =>
       (window as unknown as { __inspector: Array<{ kind: string }> }).__inspector);
@@ -66,13 +66,13 @@ test.describe('ServiceBlueprint canvas — drag-to-connect', () => {
     await gotoStory(page, GRAPH_STORY);
     // payment-complete sits below the story host's fixed-height canvas — no
     // viewport size brings it into view, only panning the canvas itself does.
-    await page.locator('prism-service-blueprint-graph [data-prism-fit-screen]').click();
+    await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-fit-screen]').click();
     // fitView animates over 200ms.
     await page.waitForTimeout(500);
 
     const handle = await sourceHandleCentre(page, 'confirm-payment-received');
     // payment-complete sits low in the canvas — drop on its visible top band.
-    const target = await page.locator('prism-service-blueprint-graph [data-prism-stage-card="payment-complete"]').boundingBox();
+    const target = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage-card="payment-complete"]').boundingBox();
     await page.mouse.move(handle.x, handle.y);
     await page.mouse.down();
     await page.mouse.move(target!.x + target!.width / 2, target!.y + 20, { steps: 10 });
@@ -81,17 +81,17 @@ test.describe('ServiceBlueprint canvas — drag-to-connect', () => {
     // The gateway-routing invariant is preserved by construction: the new
     // stage→stage connection materialises as a Split gateway.
     await expect(
-      page.locator('prism-service-blueprint-graph [data-prism-gateway="route-from-confirm-payment-received"]')
+      page.locator('wayfinder-service-blueprint-graph [data-wayfinder-gateway="route-from-confirm-payment-received"]')
     ).toBeAttached({ timeout: 5_000 });
     await expect(
-      page.locator('prism-service-blueprint-graph [data-prism-gateway="route-from-confirm-payment-received"]')
-    ).toHaveAttribute('data-prism-gateway-kind', 'Split');
+      page.locator('wayfinder-service-blueprint-graph [data-wayfinder-gateway="route-from-confirm-payment-received"]')
+    ).toHaveAttribute('data-wayfinder-gateway-kind', 'Split');
   });
 
   test('read-only canvases expose no connectable handles', async ({ page }) => {
     await gotoStory(page, '/iframe.html?id=service-blueprint-editor-service-blueprint-graph--graph-read-only&viewMode=story');
 
-    const connectable = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const connectable = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const root = (graphElement as HTMLElement).shadowRoot!;
       return root.querySelectorAll('.react-flow__handle.connectable').length;
     });
@@ -103,10 +103,10 @@ test.describe('ServiceBlueprint canvas — marquee subgraph copy/paste', () => {
   test('shift-marquee selection copies and pastes a subgraph with remapped keys, undone in one step', async ({ page }) => {
     await gotoStory(page, EDITOR_STORY);
 
-    const stagesBefore = await page.locator('prism-service-blueprint-graph [data-prism-stage]').count();
-    const canvas = await page.locator('prism-service-blueprint-graph .graph-canvas').boundingBox();
-    const first = await page.locator('prism-service-blueprint-graph [data-prism-stage-card]').first().boundingBox();
-    const second = await page.locator('prism-service-blueprint-graph [data-prism-stage-card]').nth(1).boundingBox();
+    const stagesBefore = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').count();
+    const canvas = await page.locator('wayfinder-service-blueprint-graph .graph-canvas').boundingBox();
+    const first = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage-card]').first().boundingBox();
+    const second = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage-card]').nth(1).boundingBox();
 
     const left = Math.max(canvas!.x + 8, Math.min(first!.x, second!.x) - 50);
     const top = Math.max(canvas!.y + 8, first!.y - 30);
@@ -121,7 +121,7 @@ test.describe('ServiceBlueprint canvas — marquee subgraph copy/paste', () => {
     await page.keyboard.up('Shift');
 
     await expect
-      .poll(() => page.locator('prism-service-blueprint-graph').evaluate(graphElement =>
+      .poll(() => page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement =>
         (graphElement as HTMLElement).shadowRoot!.querySelectorAll('.react-flow__node.selected').length))
       .toBeGreaterThanOrEqual(2);
 
@@ -129,14 +129,14 @@ test.describe('ServiceBlueprint canvas — marquee subgraph copy/paste', () => {
     await page.keyboard.press('ControlOrMeta+v');
 
     await expect
-      .poll(() => page.locator('prism-service-blueprint-graph [data-prism-stage]').count())
+      .poll(() => page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').count())
       .toBeGreaterThan(stagesBefore);
-    const copies = page.locator('prism-service-blueprint-graph [data-prism-stage*="-copy"]');
+    const copies = page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage*="-copy"]');
     await expect(copies.first()).toBeAttached();
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect
-      .poll(() => page.locator('prism-service-blueprint-graph [data-prism-stage]').count(),
+      .poll(() => page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').count(),
         { message: 'one undo must remove the whole pasted subgraph' })
       .toBe(stagesBefore);
   });

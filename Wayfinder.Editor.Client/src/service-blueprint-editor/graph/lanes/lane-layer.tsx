@@ -54,11 +54,11 @@ export function LaneLayer({ lanes, height }: { lanes: LaneGeometry[]; height: nu
                 }}
                 tabIndex={0}
                 aria-labelledby={headingId}
-                data-prism-role-queue={lane.key}
-                data-prism-queue-container={lane.key}
+                data-wayfinder-role-queue={lane.key}
+                data-wayfinder-queue-container={lane.key}
                 onFocus={() => callbacks.laneFocused(lane)}
               >
-                <div className="lane-header" data-prism-queue-header={lane.key}>
+                <div className="lane-header" data-wayfinder-queue-header={lane.key}>
                   <div id={headingId} className="lane-heading">{lane.label}</div>
                   <div className="lane-meta">{lane.stageCount} stage{lane.stageCount === 1 ? '' : 's'}</div>
                 </div>

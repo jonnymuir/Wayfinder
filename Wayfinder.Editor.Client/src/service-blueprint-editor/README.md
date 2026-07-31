@@ -10,28 +10,31 @@ should not depend on it, and breaking changes there will not bump a contract.
 > bundle with no assumptions about its host — the toolkit's job is to make
 > hosting trivial anywhere, not to prescribe one hosting model. MockBusinessApp
 > is a pure business-app host with no backoffice, so it hosts the editor
-> runtime-only (`vite.serviceBlueprint-editor.config.ts` → `Wayfinder.Editor`'s
+> runtime-only (`vite.service-blueprint-editor.config.ts` → `Wayfinder.Editor`'s
 > static assets, served as a standalone page — see TestSite Razor pages, the
-> Storybook harness, and the reference shell). Prism CMS Service Blueprint's entire
-> reason for existing is the backoffice editing experience, so it mounts the
-> same components natively as a Collection + entity-actions + Workspace backoffice
-> screen instead (`vite.config.ts`'s `prism-cms-service-blueprint-manifests` entry →
-> `UmbracoPrism.Core`'s own bundle; `<prism-service-blueprint-editor>` itself is mounted by
+> Storybook harness, and the reference shell). Today's only backoffice host is
+> Umbraco.Prism's own CMS Service Blueprint feature (`UmbracoPrism.Core`),
+> whose entire reason for existing is the backoffice editing experience — it
+> mounts the same components natively as a Collection + entity-actions +
+> Workspace backoffice screen instead (`vite.config.ts`'s
+> `prism-cms-service-blueprint-tab` entry → `UmbracoPrism.Core`'s own bundle;
+> `<wayfinder-service-blueprint-editor>` itself is mounted by
 > `cms-service-blueprint-workspace-editor.element.ts` in
 > `UmbracoPrism.Client/src/backoffice/cms-service-blueprint/workspace/`, scoped to whichever
-> definitionKey the workspace route is currently editing).
+> definitionKey the workspace route is currently editing). This is expected to
+> move to a `Wayfinder.Umbraco`-native backoffice section — see the Phase 2 plan.
 
 ## Public elements
 
 | Element | Role | Bundle entry |
 |---------|------|--------------|
-| `<prism-service-blueprint-editor>` | Full authoring surface: graph + inspector + outline + validation + dialogs. | yes |
-| `<prism-service-blueprint-editor-shell>` | Host harness — serviceBlueprint picker, API base wiring, URL sync. Mounts `<prism-service-blueprint-editor>`. | yes |
-| `<prism-service-blueprint-graph>` | Vertical-queues graph. Authoring (default) or **read-only viewer** when `read-only` is set. | yes |
+| `<wayfinder-service-blueprint-editor>` | Full authoring surface: graph + inspector + outline + validation + dialogs. | yes |
+| `<wayfinder-service-blueprint-editor-shell>` | Host harness — serviceBlueprint picker, API base wiring, URL sync. Mounts `<wayfinder-service-blueprint-editor>`. | yes |
+| `<wayfinder-service-blueprint-graph>` | Vertical-queues graph. Authoring (default) or **read-only viewer** when `read-only` is set. | yes |
 
 All three are registered as `customElements` when `serviceBlueprint-editor.js` loads.
 
-`<prism-service-blueprint-graph>` is a Lit wrapper around a lazily-loaded
+`<wayfinder-service-blueprint-graph>` is a Lit wrapper around a lazily-loaded
 [React Flow](https://reactflow.dev) canvas (`graph/` module): the wrapper owns
 the element contract (properties, events, dialogs, context menu, announcer)
 while React Flow renders lanes, nodes, and edges inside the same shadow root
@@ -41,7 +44,7 @@ Kahn longest-path ranking for Y — `npm run test:graph-layout` covers it).
 
 ---
 
-### `<prism-service-blueprint-editor>`
+### `<wayfinder-service-blueprint-editor>`
 
 Full authoring experience.
 
@@ -107,26 +110,26 @@ implementation detail.
   reverses it, and the Definition tab re-renders the prior canonical text.
   While the user is typing invalid or pending text, undo stays local to
   CodeMirror's own history (intra-text).
-* **Read-only mode:** the underlying `<prism-definition-editor>` supports a
+* **Read-only mode:** the underlying `<wayfinder-definition-editor>` supports a
   `read-only` flag (used by future host-level read-only mode). Currently not
   exposed at the editor host level — that's Slice 8 territory.
-* **Test hooks:** `data-prism-confidence-tab="definition"`,
-  `data-prism-definition-panel`, `data-prism-definition-editor`,
-  `data-prism-definition-banner`, `data-prism-definition-apply`,
-  `data-prism-definition-revert`, `data-prism-definition-announcement`.
+* **Test hooks:** `data-wayfinder-confidence-tab="definition"`,
+  `data-wayfinder-definition-panel`, `data-wayfinder-definition-editor`,
+  `data-wayfinder-definition-banner`, `data-wayfinder-definition-apply`,
+  `data-wayfinder-definition-revert`, `data-wayfinder-definition-announcement`.
 
 **Data hooks (test selectors)** — see the JSDoc block at the top of
-`prism-service-blueprint-editor.ts` for the full list. The most stable ones are
-`data-prism-save`, `data-prism-validation-rail`, `data-prism-toast`,
-`data-prism-help-button`, `data-prism-history-undo`,
-`data-prism-history-redo`.
+`wayfinder-service-blueprint-editor.ts` for the full list. The most stable ones are
+`data-wayfinder-save`, `data-wayfinder-validation-rail`, `data-wayfinder-toast`,
+`data-wayfinder-help-button`, `data-wayfinder-history-undo`,
+`data-wayfinder-history-redo`.
 
 ---
 
-### `<prism-service-blueprint-editor-shell>`
+### `<wayfinder-service-blueprint-editor-shell>`
 
 Thin shell that lists available serviceBlueprints and mounts
-`<prism-service-blueprint-editor>`. Suitable for TestSite Razor pages and the reference
+`<wayfinder-service-blueprint-editor>`. Suitable for TestSite Razor pages and the reference
 shell.
 
 **Attributes**
@@ -139,13 +142,13 @@ shell.
 
 The shell forwards `serviceBlueprintSource`, `actionCatalog`, `authorContext`, and
 `availableQueues` to
-the nested `<prism-service-blueprint-editor>`. It uses `serviceBlueprintSource.list()` to
+the nested `<wayfinder-service-blueprint-editor>`. It uses `serviceBlueprintSource.list()` to
 populate its picker, and renders a developer-affordance empty state when no
 source is wired.
 
 ---
 
-### `<prism-service-blueprint-graph>`
+### `<wayfinder-service-blueprint-graph>`
 
 The vertical-queues graph. Queues are columns (intake → review → approval →
 publish, or whichever the host configures); stages and gateways sit inside the
@@ -157,7 +160,7 @@ the cards.
 | Attribute | Type | Default | Notes |
 |-----------|------|---------|-------|
 | `read-only` | boolean | `false` | Viewer mode — hides Add stage / Add gateway HUD buttons, all dialogs, and the canvas context menu. Selection and zoom remain available. Reflected to the DOM, so CSS can target `[read-only]`. |
-| `service-blueprint-json` | string | `null` | Declarative form of the `serviceBlueprint` property. Parsed in `updated()` and assigned to `serviceBlueprint`. Invalid JSON is logged via `console.error`. Lets Razor / static HTML embed a graph with no JS wiring: `<prism-service-blueprint-graph read-only service-blueprint-json='...'>`. |
+| `service-blueprint-json` | string | `null` | Declarative form of the `serviceBlueprint` property. Parsed in `updated()` and assigned to `serviceBlueprint`. Invalid JSON is logged via `console.error`. Lets Razor / static HTML embed a graph with no JS wiring: `<wayfinder-service-blueprint-graph read-only service-blueprint-json='...'>`. |
 
 **JS-only properties**
 
@@ -197,29 +200,29 @@ When `read-only` is set:
 A typical read-only embed:
 
 ```html
-<prism-service-blueprint-graph
+<wayfinder-service-blueprint-graph
   read-only
   service-blueprint-json='{"blueprintKey":"planning","stages":[...],"transitions":[...],"gateways":[...]}'>
-</prism-service-blueprint-graph>
+</wayfinder-service-blueprint-graph>
 ```
 
 ---
 
 ## Internal composition (do not import)
 
-The remaining elements are composition details of `<prism-service-blueprint-editor>` and
+The remaining elements are composition details of `<wayfinder-service-blueprint-editor>` and
 are tagged with `@internal` JSDoc. They may move, merge, or disappear without
 notice:
 
-* `<prism-step-inspector>`
-* `<prism-confidence-tabs>`
-* `<prism-help-panel>`
-* `<prism-stage-preview>`
-* `<prism-service-blueprint-simulation>`
-* `<prism-service-blueprint-outline>`
-* `<prism-stage-action-editor>`
-* `<prism-inline-help>`
-* `<prism-definition-editor>` — JSON twin-pane for the Definition tab
+* `<wayfinder-step-inspector>`
+* `<wayfinder-confidence-tabs>`
+* `<wayfinder-help-panel>`
+* `<wayfinder-stage-preview>`
+* `<wayfinder-service-blueprint-simulation>`
+* `<wayfinder-service-blueprint-outline>`
+* `<wayfinder-stage-action-editor>`
+* `<wayfinder-inline-help>`
+* `<wayfinder-definition-editor>` — JSON twin-pane for the Definition tab
 
 If a host needs functionality that one of these provides, raise a Squad
 decision — we'd rather promote a stable element than have callers reach past
@@ -229,12 +232,12 @@ the public surface.
 
 ## Bundle reference
 
-Built artefacts land in `src/Wayfinder.Editor/wwwroot/dist/`:
+Built artefacts land in `Wayfinder.Editor/wwwroot/dist/`:
 
-* `serviceBlueprint-editor.js` — Lit bundle that registers the three public elements.
-* `serviceBlueprint-editor.html` — host harness used by TestSite Razor pages.
+* `service-blueprint-editor.js` — Lit bundle that registers the three public elements.
+* `service-blueprint-editor.html` — host harness used by TestSite Razor pages.
 
-Build with `npm run build` from `src/UmbracoPrism.Client/`.
+Build with `npm run build` from `Wayfinder.Editor.Client/`.
 
 ---
 
@@ -262,17 +265,17 @@ remove or rename without updating the suite in the same commit.**
 
 | Attribute | Purpose |
 |---|---|
-| `data-prism-component="serviceBlueprint-graph"` | Graph root marker. |
-| `data-prism-mode="graph"` | Workspace mode. |
-| `data-prism-read-only="true|false"` | Read-only viewer marker. |
-| `data-prism-graph-ready="true"` | Set on the host element once the React Flow canvas has committed nodes/edges — test probes wait on this. |
-| `data-prism-queue-container=<queueKey>` | Lane bounding box for fit/overlap/arrow specs. |
-| `data-prism-role-queue=<queueKey>` | Synonym kept for backwards compat. |
-| `data-prism-queue-header=<queueKey>` | Lane header (pans with the canvas; not sticky). |
-| `data-prism-stage-card=<stageKey>` | Stage bounding box. |
-| `data-prism-stage=<stageKey>` | Stage click target + label container. |
-| `data-prism-gateway-node=<gatewayKey>` | Gateway bounding box. |
-| `data-prism-gateway=<gatewayKey>` | Gateway click target + label container. |
-| `data-prism-route-path=<key>` | SVG route path (endpoint assertion). |
-| `data-prism-route-from=<key>` / `data-prism-route-to=<key>` | Route endpoint mapping. |
-| `data-prism-auto-arrange` | Tidy layout HUD button — rewrites every node's position back to the automatic arrangement in one undoable commit. |
+| `data-wayfinder-component="serviceBlueprint-graph"` | Graph root marker. |
+| `data-wayfinder-mode="graph"` | Workspace mode. |
+| `data-wayfinder-read-only="true|false"` | Read-only viewer marker. |
+| `data-wayfinder-graph-ready="true"` | Set on the host element once the React Flow canvas has committed nodes/edges — test probes wait on this. |
+| `data-wayfinder-queue-container=<queueKey>` | Lane bounding box for fit/overlap/arrow specs. |
+| `data-wayfinder-role-queue=<queueKey>` | Synonym kept for backwards compat. |
+| `data-wayfinder-queue-header=<queueKey>` | Lane header (pans with the canvas; not sticky). |
+| `data-wayfinder-stage-card=<stageKey>` | Stage bounding box. |
+| `data-wayfinder-stage=<stageKey>` | Stage click target + label container. |
+| `data-wayfinder-gateway-node=<gatewayKey>` | Gateway bounding box. |
+| `data-wayfinder-gateway=<gatewayKey>` | Gateway click target + label container. |
+| `data-wayfinder-route-path=<key>` | SVG route path (endpoint assertion). |
+| `data-wayfinder-route-from=<key>` / `data-wayfinder-route-to=<key>` | Route endpoint mapping. |
+| `data-wayfinder-auto-arrange` | Tidy layout HUD button — rewrites every node's position back to the automatic arrangement in one undoable commit. |

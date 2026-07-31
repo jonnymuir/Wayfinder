@@ -22,27 +22,27 @@ test.describe('Inspector "+ Add route" affordance', () => {
   test('(a) stage with no gateway: "+ Add route" creates a gateway and shows a blank route row', async ({ page }) => {
     await page.goto(inspectorStoryUrl('add-route-no-gateway'));
 
-    const inspector = page.locator('prism-step-inspector');
+    const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible({ timeout: 10_000 });
 
     // Inspector is showing the stage (applicant-amendments), which has no gateway yet.
-    await expect(inspector.locator('[data-prism-stage-detail="applicant-amendments"]')).toBeVisible();
+    await expect(inspector.locator('[data-wayfinder-stage-detail="applicant-amendments"]')).toBeVisible();
 
     // The "+ Add route" button must be visible in the stage's Outgoing routes section.
-    const addBtn = inspector.locator('[data-prism-add-route]');
+    const addBtn = inspector.locator('[data-wayfinder-add-route]');
     await expect(addBtn).toBeVisible();
     await expect(addBtn).toHaveText('+ Add route');
 
     // Clicking creates the gateway and switches the inspector to gateway view.
     await addBtn.click();
-    await inspector.locator('[data-prism-inspector-kind="gateway"]').waitFor({ state: 'visible', timeout: 5_000 });
+    await inspector.locator('[data-wayfinder-inspector-kind="gateway"]').waitFor({ state: 'visible', timeout: 5_000 });
 
-    // A blank route row must now appear (no toStage → data-prism-route-target="").
-    const newRouteRow = inspector.locator('[data-prism-route-target=""]');
+    // A blank route row must now appear (no toStage → data-wayfinder-route-target="").
+    const newRouteRow = inspector.locator('[data-wayfinder-route-target=""]');
     await expect(newRouteRow).toBeVisible();
 
     // The gateway's outgoing-routes summary should now mention 1 route.
-    const summary = inspector.locator('[data-prism-gateway-routes-summary]');
+    const summary = inspector.locator('[data-wayfinder-gateway-routes-summary]');
     await expect(summary).toBeVisible();
     await expect(summary).toContainText('1 route');
   });
@@ -53,28 +53,28 @@ test.describe('Inspector "+ Add route" affordance', () => {
   test('(b) gateway with existing route: "+ Add route" appends a second route row', async ({ page }) => {
     await page.goto(inspectorStoryUrl('add-route-existing-gateway'));
 
-    const inspector = page.locator('prism-step-inspector');
+    const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible({ timeout: 10_000 });
 
     // Inspector shows the review-split gateway which already has 1 route.
-    await expect(inspector.locator('[data-prism-gateway-detail="review-split"]')).toBeVisible();
+    await expect(inspector.locator('[data-wayfinder-gateway-detail="review-split"]')).toBeVisible();
 
-    const initialRouteSummary = inspector.locator('[data-prism-gateway-routes-summary]');
+    const initialRouteSummary = inspector.locator('[data-wayfinder-gateway-routes-summary]');
     await expect(initialRouteSummary).toContainText('1 route');
 
     // The "+ Add route" button must be visible.
-    const addBtn = inspector.locator('[data-prism-add-route]');
+    const addBtn = inspector.locator('[data-wayfinder-add-route]');
     await expect(addBtn).toBeVisible();
 
     // Click — a second route row should appear and the summary updates.
     await addBtn.click();
     await page.waitForTimeout(200); // allow Lit re-render
 
-    const updatedSummary = inspector.locator('[data-prism-gateway-routes-summary]');
+    const updatedSummary = inspector.locator('[data-wayfinder-gateway-routes-summary]');
     await expect(updatedSummary).toContainText('2 routes');
 
     // The new blank-route row (target="") should be present.
-    const blankRow = inspector.locator('[data-prism-route-target=""]');
+    const blankRow = inspector.locator('[data-wayfinder-route-target=""]');
     await expect(blankRow).toBeVisible();
   });
 
@@ -84,10 +84,10 @@ test.describe('Inspector "+ Add route" affordance', () => {
   test('(c) focus moves to the new route\'s Target picker after "+ Add route" is clicked', async ({ page }) => {
     await page.goto(inspectorStoryUrl('add-route-existing-gateway'));
 
-    const inspector = page.locator('prism-step-inspector');
+    const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible({ timeout: 10_000 });
 
-    const addBtn = inspector.locator('[data-prism-add-route]');
+    const addBtn = inspector.locator('[data-wayfinder-add-route]');
     await addBtn.click();
 
     // Give Lit + requestAnimationFrame time to settle.
@@ -95,9 +95,9 @@ test.describe('Inspector "+ Add route" affordance', () => {
 
     // The Target picker for the new blank route should be focused.
     const focused = await page.evaluate(() => {
-      const el = document.querySelector('prism-step-inspector') as HTMLElement & { shadowRoot: ShadowRoot };
+      const el = document.querySelector('wayfinder-step-inspector') as HTMLElement & { shadowRoot: ShadowRoot };
       const active = el.shadowRoot?.activeElement;
-      return active?.getAttribute('data-prism-route-target-select') !== null && active?.tagName === 'SELECT';
+      return active?.getAttribute('data-wayfinder-route-target-select') !== null && active?.tagName === 'SELECT';
     });
     expect(focused).toBe(true);
   });
@@ -108,20 +108,20 @@ test.describe('Inspector "+ Add route" affordance', () => {
   test('(d) inline warning appears for empty Target and disappears once a destination is chosen', async ({ page }) => {
     await page.goto(inspectorStoryUrl('add-route-existing-gateway'));
 
-    const inspector = page.locator('prism-step-inspector');
+    const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible({ timeout: 10_000 });
 
     // Create a blank route.
-    await inspector.locator('[data-prism-add-route]').click();
+    await inspector.locator('[data-wayfinder-add-route]').click();
     await page.waitForTimeout(200);
 
     // The inline "Choose a destination" warning should be visible.
-    const warning = inspector.locator('[data-prism-route-target-warning]').last();
+    const warning = inspector.locator('[data-wayfinder-route-target-warning]').last();
     await expect(warning).toBeVisible();
     await expect(warning).toContainText('Choose a destination');
 
     // The Target select should carry aria-invalid="true".
-    const targetSelect = inspector.locator('[data-prism-route-target-select]').last();
+    const targetSelect = inspector.locator('[data-wayfinder-route-target-select]').last();
     await expect(targetSelect).toHaveAttribute('aria-invalid', 'true');
 
     // Choose a destination — pick the first non-empty option.
@@ -139,16 +139,16 @@ test.describe('Inspector "+ Add route" affordance', () => {
   test('(e) keyboard-only: Tab to "+ Add route", Enter to activate, Tab to Target picker', async ({ page }) => {
     await page.goto(inspectorStoryUrl('add-route-existing-gateway'));
 
-    const inspector = page.locator('prism-step-inspector');
+    const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible({ timeout: 10_000 });
 
     // Focus the inspector root and navigate to the "+ Add route" button via Tab.
-    await inspector.locator('[data-prism-component="step-inspector"]').focus();
+    await inspector.locator('[data-wayfinder-component="step-inspector"]').focus();
 
     // Tab through to find the add-route button. The gateway inspector has a
     // number of focusable fields before it, so we use the button's locator
     // directly and trigger it via keyboard once focused.
-    const addBtn = inspector.locator('[data-prism-add-route]');
+    const addBtn = inspector.locator('[data-wayfinder-add-route]');
     await addBtn.focus();
     await expect(addBtn).toBeFocused();
 
@@ -158,9 +158,9 @@ test.describe('Inspector "+ Add route" affordance', () => {
 
     // After creation the Target picker for the new route should be focused.
     const focused = await page.evaluate(() => {
-      const el = document.querySelector('prism-step-inspector') as HTMLElement & { shadowRoot: ShadowRoot };
+      const el = document.querySelector('wayfinder-step-inspector') as HTMLElement & { shadowRoot: ShadowRoot };
       const active = el.shadowRoot?.activeElement;
-      return active?.tagName === 'SELECT' && active?.hasAttribute('data-prism-route-target-select');
+      return active?.tagName === 'SELECT' && active?.hasAttribute('data-wayfinder-route-target-select');
     });
     expect(focused).toBe(true);
   });

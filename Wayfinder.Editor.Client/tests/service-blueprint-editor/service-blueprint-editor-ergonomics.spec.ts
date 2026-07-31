@@ -18,20 +18,20 @@ function storyUrl(storyId: string): string {
 async function gotoEditor(page: Page): Promise<void> {
   await page.setViewportSize({ ...VISUAL_VIEWPORT });
   await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
-  const editor = page.locator('prism-service-blueprint-editor');
+  const editor = page.locator('wayfinder-service-blueprint-editor');
   await expect(editor).toBeVisible({ timeout: 10_000 });
-  await expect(editor).toHaveAttribute('data-prism-service-blueprint-loaded', /.+/, { timeout: 30_000 });
+  await expect(editor).toHaveAttribute('data-wayfinder-service-blueprint-loaded', /.+/, { timeout: 30_000 });
   await page.waitForLoadState('networkidle');
 }
 
 function graphShadow(page: Page) {
-  return page.locator('prism-service-blueprint-graph');
+  return page.locator('wayfinder-service-blueprint-graph');
 }
 
 async function countStages(page: Page): Promise<number> {
   return graphShadow(page).evaluate((el) => {
     const root = (el as HTMLElement).shadowRoot;
-    return root ? root.querySelectorAll('[data-prism-stage]').length : 0;
+    return root ? root.querySelectorAll('[data-wayfinder-stage]').length : 0;
   });
 }
 
@@ -39,9 +39,9 @@ async function selectedStageKey(page: Page): Promise<string | null> {
   return graphShadow(page).evaluate((el) => {
     const root = (el as HTMLElement).shadowRoot;
     const selected = root?.querySelector<HTMLElement>(
-      '[data-prism-stage][aria-pressed="true"]',
+      '[data-wayfinder-stage][aria-pressed="true"]',
     );
-    return selected?.getAttribute('data-prism-stage') ?? null;
+    return selected?.getAttribute('data-wayfinder-stage') ?? null;
   });
 }
 
@@ -56,7 +56,7 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
     // Action 1: open create-stage dialog from the canvas HUD.
     await graphShadow(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      const button = root.querySelector<HTMLButtonElement>('[data-prism-add-stage]');
+      const button = root.querySelector<HTMLButtonElement>('[data-wayfinder-add-stage]');
       if (!button) throw new Error('Add stage button not found on canvas HUD');
       button.click();
     });
@@ -64,7 +64,7 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
     await expect
       .poll(async () =>
         graphShadow(page).evaluate(
-          (el) => !!(el as HTMLElement).shadowRoot?.querySelector('[data-prism-create-stage-dialog]'),
+          (el) => !!(el as HTMLElement).shadowRoot?.querySelector('[data-wayfinder-create-stage-dialog]'),
         ),
       )
       .toBe(true);
@@ -74,7 +74,7 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
     // new stage.
     await graphShadow(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      const titleInput = root.querySelector<HTMLInputElement>('[data-prism-create-stage-title]')!;
+      const titleInput = root.querySelector<HTMLInputElement>('[data-wayfinder-create-stage-title]')!;
       titleInput.value = 'Reviewer follow-up';
       titleInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     });
@@ -82,7 +82,7 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
     // Action 3: submit.
     await graphShadow(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      const submit = root.querySelector<HTMLButtonElement>('[data-prism-create-stage-submit]')!;
+      const submit = root.querySelector<HTMLButtonElement>('[data-wayfinder-create-stage-submit]')!;
       submit.click();
     });
 
@@ -96,22 +96,22 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
     // so we exercise the same selection path an author uses.
     const firstStageKey = await graphShadow(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      const first = root.querySelector<HTMLButtonElement>('[data-prism-stage]');
+      const first = root.querySelector<HTMLButtonElement>('[data-wayfinder-stage]');
       if (!first) throw new Error('No stage rendered to select');
       first.click();
-      return first.getAttribute('data-prism-stage');
+      return first.getAttribute('data-wayfinder-stage');
     });
     expect(firstStageKey).not.toBeNull();
 
     await expect.poll(() => selectedStageKey(page)).toBe(firstStageKey);
 
     // Switch to Definition tab.
-    const editor = page.locator('prism-service-blueprint-editor');
-    await editor.locator('prism-confidence-tabs').locator('button[data-prism-confidence-tab="definition"]').click();
-    await expect(editor.locator('[data-prism-definition-panel]')).toBeVisible();
+    const editor = page.locator('wayfinder-service-blueprint-editor');
+    await editor.locator('wayfinder-confidence-tabs').locator('button[data-wayfinder-confidence-tab="definition"]').click();
+    await expect(editor.locator('[data-wayfinder-definition-panel]')).toBeVisible();
 
     // Switch back to Canvas.
-    await editor.locator('prism-confidence-tabs').locator('button[data-prism-confidence-tab="canvas"]').click();
+    await editor.locator('wayfinder-confidence-tabs').locator('button[data-wayfinder-confidence-tab="canvas"]').click();
     await expect(graphShadow(page)).toBeVisible();
 
     // The previously selected stage must still read as selected — the
@@ -127,7 +127,7 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
     // assert that pressing Tab from there reaches a stage button.
     await graphShadow(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      const first = root.querySelector<HTMLButtonElement>('[data-prism-stage]');
+      const first = root.querySelector<HTMLButtonElement>('[data-wayfinder-stage]');
       if (!first) throw new Error('No stage rendered');
       first.focus();
     });
@@ -137,7 +137,7 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
       const active = root.activeElement as HTMLElement | null;
       return {
         tag: active?.tagName ?? null,
-        stageKey: active?.getAttribute('data-prism-stage') ?? null,
+        stageKey: active?.getAttribute('data-wayfinder-stage') ?? null,
       };
     });
 

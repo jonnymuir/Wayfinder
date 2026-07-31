@@ -18,7 +18,7 @@ function storyUrl(storyId: string): string {
 }
 
 async function waitForServiceBlueprintLoad(page: Page, serviceBlueprintKey: string): Promise<void> {
-  await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute('data-prism-service-blueprint-loaded', serviceBlueprintKey, {
+  await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute('data-wayfinder-service-blueprint-loaded', serviceBlueprintKey, {
     timeout: 30_000,
   });
 }
@@ -30,16 +30,16 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await page.setViewportSize({ width: 1280, height: 480 });
       await page.goto(storyUrl('service-blueprint-editor-editor-host--simulation-branches'));
 
-      await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
       // The React Flow canvas pans instead of scrolling: tall content proves
       // itself by extending past the canvas bounds at the default zoom.
-      const measurement = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const measurement = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const shadowRoot = (graphElement as HTMLElement).shadowRoot!;
         const canvas = shadowRoot.querySelector<HTMLElement>('.graph-canvas')!;
         const canvasRect = canvas.getBoundingClientRect();
-        const stageBottoms = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-prism-stage-card]'))
+        const stageBottoms = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
           .map(node => node.getBoundingClientRect().bottom);
         return {
           canvasBottom: canvasRect.bottom,
@@ -59,18 +59,18 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await page.setViewportSize({ width: 1280, height: 560 });
       await page.goto(storyUrl('service-blueprint-editor-editor-host--simulation-branches'));
 
-      await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
       const initialWindowScrollY = await page.evaluate(() => window.scrollY);
       expect(initialWindowScrollY).toBe(0);
 
-      const stageTops = () => page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const stageTops = () => page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const shadowRoot = (graphElement as HTMLElement).shadowRoot!;
-        return Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-prism-stage-card]'))
+        return Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
           .map(node => node.getBoundingClientRect().top);
       });
-      const canvasBox = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const canvasBox = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const rect = (graphElement as HTMLElement).shadowRoot!
           .querySelector<HTMLElement>('.graph-canvas')!.getBoundingClientRect();
         return { x: rect.left, y: rect.top, height: rect.height };
@@ -102,7 +102,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await page.goto(storyUrl('service-blueprint-editor-editor-shell--reference-shell'));
 
       await waitForServiceBlueprintLoad(page, 'planning');
-      await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
       // BEHAVIORAL HOOK REQUEST FOR ISABELLE:
       // - When tabbing through stages in a tall service blueprint, the focused stage should scroll into view
@@ -110,10 +110,10 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       // - This may require scrollIntoView() calls when focus changes programmatically
       
       // Verify that lanes are focusable and keyboard navigation works
-      const laneAccessibility = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const laneAccessibility = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const g = graphElement as HTMLElement;
         const shadowRoot = g.shadowRoot;
-        const lanes = Array.from(shadowRoot?.querySelectorAll('[data-prism-role-queue]') ?? []);
+        const lanes = Array.from(shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]') ?? []);
         
         return {
           laneCount: lanes.length,
@@ -136,14 +136,14 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await page.setViewportSize({ width: 640, height: 720 });
       await page.goto(storyUrl('service-blueprint-editor-editor-host--simulation-branches'));
 
-      await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
       // BEHAVIORAL HOOK REQUEST FOR ISABELLE:
       // - .graph-canvas should have overflow: auto (both axes scrollable)
       // - With vertical lane layout, horizontal overflow occurs when many lanes exist
       // - Each lane is ~280px wide with gaps, so 4+ lanes exceed most viewports
-      const scrollCapability = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const scrollCapability = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -183,7 +183,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       await waitForServiceBlueprintLoad(page, 'planning');
 
-      const outline = page.locator('[data-prism-service-blueprint-outline]');
+      const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
       await expect(outline).toBeVisible({ timeout: 10_000 });
 
       // Capture initial outline position
@@ -191,7 +191,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       expect(outlineBefore).not.toBeNull();
 
       // Scroll the graph-canvas vertically
-      await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -214,14 +214,14 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       await waitForServiceBlueprintLoad(page, 'planning');
 
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible({ timeout: 10_000 });
 
       const inspectorBefore = await inspector.boundingBox();
       expect(inspectorBefore).not.toBeNull();
 
       // Scroll the graph-canvas
-      await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -250,7 +250,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       expect(toolbarBefore).not.toBeNull();
 
       // Scroll the graph-canvas
-      await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -272,8 +272,8 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       await waitForServiceBlueprintLoad(page, 'planning');
 
-      const outline = page.locator('[data-prism-service-blueprint-outline]');
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       const toolbar = page.locator('.editor-toolbar');
 
       await expect(outline).toBeVisible({ timeout: 10_000 });
@@ -288,7 +288,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       };
 
       // Scroll the graph-canvas significantly
-      await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -322,8 +322,8 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await waitForServiceBlueprintLoad(page, 'planning');
 
       // Verify drawers are collapsed or stacked appropriately
-      const outline = page.locator('[data-prism-service-blueprint-outline]');
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       
       // Both should exist but might be visually hidden or in collapsed state
       await expect(outline).toBeAttached();
@@ -358,8 +358,8 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await waitForServiceBlueprintLoad(page, 'planning');
 
       // Find drawer toggle buttons
-      const outlineToggle = page.locator('[data-prism-panel-toggle="outline"]');
-      const propertiesToggle = page.locator('[data-prism-panel-toggle="properties"]');
+      const outlineToggle = page.locator('[data-wayfinder-panel-toggle="outline"]');
+      const propertiesToggle = page.locator('[data-wayfinder-panel-toggle="properties"]');
 
       // These should exist and be keyboard accessible
       if (await outlineToggle.isVisible()) {
@@ -376,7 +376,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       await waitForServiceBlueprintLoad(page, 'planning');
 
-      const graphCanvas = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const graphCanvas = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -403,14 +403,14 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await page.setViewportSize({ width: 1280, height: 560 });
       await page.goto(storyUrl('service-blueprint-editor-editor-host--simulation-branches'));
 
-      await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
       // Verify role lanes exist and are focusable
-      const laneStructure = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const laneStructure = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
-        const lanes = Array.from(shadowRoot?.querySelectorAll('[data-prism-role-queue]') ?? []);
+        const lanes = Array.from(shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]') ?? []);
         
         return {
           laneCount: lanes.length,
@@ -429,7 +429,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       });
 
       // Scroll and verify lanes are still structured correctly
-      await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -438,10 +438,10 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
         }
       });
 
-      const laneStructureAfterScroll = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const laneStructureAfterScroll = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
-        const lanes = Array.from(shadowRoot?.querySelectorAll('[data-prism-role-queue]') ?? []);
+        const lanes = Array.from(shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]') ?? []);
         return lanes.length;
       });
 
@@ -456,7 +456,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await waitForServiceBlueprintLoad(page, 'planning');
 
       // Scroll the canvas
-      await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -466,14 +466,14 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       });
 
       // Verify stages are still clickable/interactive
-      const stageElement = page.locator('[data-prism-stage="application-form"]');
+      const stageElement = page.locator('[data-wayfinder-stage="application-form"]');
       await expect(stageElement).toBeVisible();
       
       // Click the stage to select it
       await stageElement.click();
       
       // Stage should emit selection event (verified by inspector panel showing stage details)
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible();
       
       // Verify the inspector is showing content (has some heading structure)
@@ -487,19 +487,19 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await page.setViewportSize({ width: 1280, height: 560 });
       await page.goto(storyUrl('service-blueprint-editor-editor-host--simulation-branches'));
 
-      await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
       // BEHAVIORAL HOOK REQUEST FOR ISABELLE:
       // - Transition paths should render within .graph-canvas's scroll container
       // - When canvas scrolls, transitions should remain visually connected to stages
       // - SVG paths should not clip unexpectedly at canvas boundaries
-      const transitionRendering = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+      const transitionRendering = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
         const svg = shadowRoot?.querySelector('svg');
-        const paths = Array.from(shadowRoot?.querySelectorAll('[data-prism-transition]') ?? []);
+        const paths = Array.from(shadowRoot?.querySelectorAll('[data-wayfinder-transition]') ?? []);
 
         return {
           hasSvg: !!svg,

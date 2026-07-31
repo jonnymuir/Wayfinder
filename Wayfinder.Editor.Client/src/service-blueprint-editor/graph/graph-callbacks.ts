@@ -4,7 +4,7 @@ import type { QueueDefinition } from '../stage-assignment.js';
 
 /**
  * Props snapshot pushed from the Lit wrapper into the React canvas on every
- * Lit update. Mirrors the public properties of <prism-service-blueprint-graph>.
+ * Lit update. Mirrors the public properties of <wayfinder-service-blueprint-graph>.
  */
 export type GraphProps = {
   serviceBlueprint: AuthoredServiceBlueprint | null;

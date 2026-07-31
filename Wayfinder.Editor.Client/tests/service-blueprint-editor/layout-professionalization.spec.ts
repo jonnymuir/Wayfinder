@@ -16,7 +16,7 @@ const EDITOR_URL = 'http://localhost:5167/service-blueprint-editor.html?service 
 test.describe.fixme('Layout Professionalization', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(EDITOR_URL);
-    await expect(page.locator('prism-service-blueprint-editor')).toHaveAttribute('data-prism-service-blueprint-loaded', /.+/, {
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute('data-wayfinder-service-blueprint-loaded', /.+/, {
       timeout: 30_000,
     });
   });
@@ -143,9 +143,9 @@ test.describe.fixme('Layout Professionalization', () => {
       //
       // Target: Switching service blueprints feels like switching tabs, not launching apps
       
-      const serviceBlueprintSelector = page.locator('[data-prism-service-blueprint-selector]');
+      const serviceBlueprintSelector = page.locator('[data-wayfinder-service-blueprint-selector]');
       
-      // OPTIONAL SEMANTIC HOOK: [data-prism-service-blueprint-selector]
+      // OPTIONAL SEMANTIC HOOK: [data-wayfinder-service-blueprint-selector]
       // If Isabelle keeps service blueprint selection visible, she should add this hook
       // so tests can verify it's present and accessible
       
@@ -196,10 +196,10 @@ test.describe.fixme('Layout Professionalization', () => {
       // - Skip link target should jump to editor canvas, not a shell container
       
       const main = page.locator('main');
-      const editorElement = page.locator('prism-service-blueprint-editor');
+      const editorElement = page.locator('wayfinder-service-blueprint-editor');
       
       // Main should contain the editor as its primary child
-      await expect(main.locator('prism-service-blueprint-editor')).toBeVisible();
+      await expect(main.locator('wayfinder-service-blueprint-editor')).toBeVisible();
       
       // Main should not have large competing siblings (integration rail, etc.)
       const mainSiblings = page.locator('main ~ aside, main ~ section');
@@ -276,7 +276,7 @@ test.describe.fixme('Layout Professionalization', () => {
           tagName: el?.tagName,
           role: el?.getAttribute('role'),
           ariaLabel: el?.getAttribute('aria-label'),
-          dataPrism: el?.getAttribute('data-prism-component'),
+          dataWayfinder: el?.getAttribute('data-wayfinder-component'),
         };
       });
       
@@ -285,7 +285,7 @@ test.describe.fixme('Layout Professionalization', () => {
       while (tabCount < 5) {
         const currentFocus = await page.evaluate(() => {
           const el = document.activeElement;
-          return el?.closest('[data-prism-service-blueprint-outline], [data-prism-component="service-blueprint-graph"]') !== null;
+          return el?.closest('[data-wayfinder-service-blueprint-outline], [data-wayfinder-component="service-blueprint-graph"]') !== null;
         });
         
         if (currentFocus) {
@@ -312,13 +312,13 @@ test.describe.fixme('Layout Professionalization', () => {
       await expect(graphCanvas).toBeVisible();
       
       // Focus a stage
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await firstStage.focus();
       
       // Press 'e' to open inspector
       await firstStage.press('e');
       
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible({ timeout: 5_000 });
     });
 
@@ -351,11 +351,11 @@ test.describe.fixme('Layout Professionalization', () => {
       // BEHAVIORAL HOOK VERIFIED:
       // The persistent left-side outline should remain visible and functional
       
-      const outline = page.locator('[data-prism-service-blueprint-outline]');
+      const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
       await expect(outline).toBeVisible();
       
       // Outline should have stage items
-      const outlineStages = outline.locator('[data-prism-outline-stage]');
+      const outlineStages = outline.locator('[data-wayfinder-outline-stage]');
       await expect(outlineStages).not.toHaveCount(0);
       
       // Click an outline stage
@@ -374,14 +374,14 @@ test.describe.fixme('Layout Professionalization', () => {
       await expect(graphCanvas).toBeVisible();
       
       // Toggle to list view
-      const listToggle = page.locator('prism-service-blueprint-graph').getByRole('button', { name: 'List view' });
+      const listToggle = page.locator('wayfinder-service-blueprint-graph').getByRole('button', { name: 'List view' });
       await listToggle.click();
       
-      const listTable = page.locator('[data-prism-linear-table]');
+      const listTable = page.locator('[data-wayfinder-linear-table]');
       await expect(listTable).toBeVisible({ timeout: 5_000 });
       
       // Toggle back to graph
-      const graphToggle = page.locator('prism-service-blueprint-graph').getByRole('button', { name: 'Graph view' });
+      const graphToggle = page.locator('wayfinder-service-blueprint-graph').getByRole('button', { name: 'Graph view' });
       await graphToggle.click();
       
       await expect(graphCanvas).toBeVisible({ timeout: 5_000 });
@@ -391,11 +391,11 @@ test.describe.fixme('Layout Professionalization', () => {
       // BEHAVIORAL HOOK VERIFIED:
       // Selecting a stage should open the inspector
       
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await firstStage.focus();
       await firstStage.press('e');
       
-      const inspector = page.locator('[data-prism-component="step-inspector"]');
+      const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible({ timeout: 5_000 });
     });
 
@@ -403,22 +403,22 @@ test.describe.fixme('Layout Professionalization', () => {
       // BEHAVIORAL HOOK VERIFIED:
       // The tabbed confidence surfaces should remain visible and functional
       
-      const confidenceTabs = page.locator('[data-prism-confidence-tabs]');
+      const confidenceTabs = page.locator('[data-wayfinder-confidence-tabs]');
       await expect(confidenceTabs).toBeVisible();
       
       // Validation tab
-      await confidenceTabs.locator('[data-prism-confidence-tab="validation"]').click();
-      const validationPanel = page.locator('[data-prism-confidence-panel="validation"]');
+      await confidenceTabs.locator('[data-wayfinder-confidence-tab="validation"]').click();
+      const validationPanel = page.locator('[data-wayfinder-confidence-panel="validation"]');
       await expect(validationPanel).toBeVisible({ timeout: 5_000 });
       
       // Preview tab
-      await confidenceTabs.locator('[data-prism-confidence-tab="preview"]').click();
-      const previewPanel = page.locator('[data-prism-confidence-panel="preview"]');
+      await confidenceTabs.locator('[data-wayfinder-confidence-tab="preview"]').click();
+      const previewPanel = page.locator('[data-wayfinder-confidence-panel="preview"]');
       await expect(previewPanel).toBeVisible({ timeout: 5_000 });
       
       // Simulation tab
-      await confidenceTabs.locator('[data-prism-confidence-tab="simulation"]').click();
-      const simulationPanel = page.locator('[data-prism-confidence-panel="simulation"]');
+      await confidenceTabs.locator('[data-wayfinder-confidence-tab="simulation"]').click();
+      const simulationPanel = page.locator('[data-wayfinder-confidence-panel="simulation"]');
       await expect(simulationPanel).toBeVisible({ timeout: 5_000 });
     });
 
@@ -429,7 +429,7 @@ test.describe.fixme('Layout Professionalization', () => {
       const graphCanvas = page.getByRole('application');
       await expect(graphCanvas).toHaveAttribute('aria-roledescription', /role-first/i);
       
-      const roleLanes = page.locator('[data-prism-role-queue]');
+      const roleLanes = page.locator('[data-wayfinder-role-queue]');
       await expect(roleLanes).not.toHaveCount(0);
       
       // At least 2 lanes should be visible in viewport
@@ -449,7 +449,7 @@ test.describe.fixme('Layout Professionalization', () => {
       //
       // This test proves that stage cards are not blocked by overlapping chrome.
       
-      const firstStage = page.locator('[data-prism-stage]').first();
+      const firstStage = page.locator('[data-wayfinder-stage]').first();
       await expect(firstStage).toBeVisible();
       
       // Stage should be clickable (not pointer-blocked)

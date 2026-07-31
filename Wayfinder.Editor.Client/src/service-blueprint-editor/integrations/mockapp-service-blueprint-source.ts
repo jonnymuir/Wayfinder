@@ -1,4 +1,4 @@
-// Host integration EXAMPLE — not part of the `@umbraco-prism/client` boundary
+// Host integration EXAMPLE — not part of the `@wayfinder/editor-client` boundary
 // surface. The reference MockBusinessApp uses this implementation to wire its
 // `/mockapp/service-blueprints/*` endpoints into the editor's `ServiceBlueprintSource` contract.
 // Real downstream apps fork/copy this file into their own bundle.
@@ -28,7 +28,7 @@ type ProblemDetailsPayload = {
   };
 };
 
-// The shape UmbracoPrism.ProcessManager.Services.ServiceBlueprintSaveOutcome serializes to — returned
+// The shape Wayfinder.Engine.Services.ServiceBlueprintSaveOutcome serializes to — returned
 // by both /mockapp/service-blueprints/{key} and /prism/service-blueprint-authoring/blueprints/{key} on a version
 // conflict (409). Not a ProblemDetails payload, so it's parsed separately.
 type ServiceBlueprintSaveOutcomePayload = {

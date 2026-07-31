@@ -37,9 +37,9 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
   return (
     <div
       className={`gateway-node-shell ${shapeClass}`}
-      data-prism-gateway-node={gateway.key}
-      data-prism-gateway-shape={isPill ? 'pill' : 'diamond'}
-      data-prism-row-rank={String(rowRank)}
+      data-wayfinder-gateway-node={gateway.key}
+      data-wayfinder-gateway-shape={isPill ? 'pill' : 'diamond'}
+      data-wayfinder-row-rank={String(rowRank)}
     >
       <HandleFan handles={targetHandles} type="target" readOnly={readOnly} />
       <button
@@ -49,10 +49,10 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
         aria-label={isPill
           ? `${gateway.displayName}, single-route gateway via “${triggerLabel}”, ${node.queueLabel} queue`
           : `${gateway.displayName}, ${gateway.gatewayType} gateway, ${node.queueLabel} queue`}
-        data-prism-gateway={gateway.key}
-        data-prism-gateway-kind={gateway.gatewayType}
-        data-prism-gateway-route-count={String(routeCount)}
-        data-prism-queue={node.queueKey}
+        data-wayfinder-gateway={gateway.key}
+        data-wayfinder-gateway-kind={gateway.gatewayType}
+        data-wayfinder-gateway-route-count={String(routeCount)}
+        data-wayfinder-queue={node.queueKey}
         onClick={() => callbacks.selectGateway(gateway.key)}
         onDoubleClick={() => callbacks.selectGateway(gateway.key, { openInspector: true })}
         onKeyDown={handleKeyDown}

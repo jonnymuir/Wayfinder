@@ -14,26 +14,26 @@ test.describe('Gateway-first route editing', () => {
   test("author editing a gateway's outgoing route can set the condition that fires it from the gateway inspector", async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--gateway-representation'));
 
-    const editor = page.locator('prism-service-blueprint-editor');
+    const editor = page.locator('wayfinder-service-blueprint-editor');
     await expect(editor).toBeVisible({ timeout: 10_000 });
 
-    const outline = editor.locator('prism-service-blueprint-outline');
-    await outline.locator('[data-prism-outline-gateway="review-split"]').click();
+    const outline = editor.locator('wayfinder-service-blueprint-outline');
+    await outline.locator('[data-wayfinder-outline-gateway="review-split"]').click();
 
-    const inspector = editor.locator('prism-step-inspector');
-    await expect(inspector.locator('[data-prism-gateway-detail="review-split"]')).toBeVisible();
+    const inspector = editor.locator('wayfinder-step-inspector');
+    await expect(inspector.locator('[data-wayfinder-gateway-detail="review-split"]')).toBeVisible();
 
-    const routeBlock = inspector.locator('[data-prism-route-target="reviewer-assessment"]');
+    const routeBlock = inspector.locator('[data-wayfinder-route-target="reviewer-assessment"]');
     await expect(routeBlock).toBeVisible();
 
-    await routeBlock.locator('[data-prism-route-condition-mode]').selectOption('guard');
-    const conditionInput = routeBlock.locator('[data-prism-route-condition-value]');
+    await routeBlock.locator('[data-wayfinder-route-condition-mode]').selectOption('guard');
+    const conditionInput = routeBlock.locator('[data-wayfinder-route-condition-value]');
     await conditionInput.fill('application.readyForReview == true');
     await conditionInput.press('Enter');
     await conditionInput.blur();
 
     // (a) Inspector reflects the updated condition value.
-    await expect(routeBlock.locator('[data-prism-route-condition-value]'))
+    await expect(routeBlock.locator('[data-wayfinder-route-condition-value]'))
       .toHaveValue('application.readyForReview == true');
 
     // (b) Underlying route condition is updated in the service blueprint model.

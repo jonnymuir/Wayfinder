@@ -9,22 +9,22 @@ test.describe('ServiceBlueprint graph behavioural rendering', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas'));
 
-    const storyEl = page.locator('prism-service-blueprint-graph');
+    const storyEl = page.locator('wayfinder-service-blueprint-graph');
     await expect(storyEl).toBeVisible({ timeout: 10_000 });
     await page.waitForLoadState('networkidle');
     await storyEl.evaluate(async element => {
       await (element as { updateComplete?: Promise<unknown> }).updateComplete;
     });
 
-    const lanes = storyEl.locator('[data-prism-role-queue]');
+    const lanes = storyEl.locator('[data-wayfinder-role-queue]');
     await expect(lanes.first()).toBeVisible();
     expect(await lanes.count()).toBeGreaterThan(0);
 
-    const stages = storyEl.locator('[data-prism-stage]');
+    const stages = storyEl.locator('[data-wayfinder-stage]');
     await expect(stages.first()).toBeVisible();
     expect(await stages.count()).toBeGreaterThan(0);
 
-    const transitions = storyEl.locator('[data-prism-transition]');
+    const transitions = storyEl.locator('[data-wayfinder-transition]');
     expect(await transitions.count()).toBeGreaterThan(0);
 
     await expect(storyEl.locator('.lane-header').first()).toBeVisible();
@@ -38,24 +38,24 @@ test.describe('ServiceBlueprint graph behavioural rendering', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas'));
 
-    const storyEl = page.locator('prism-service-blueprint-graph');
+    const storyEl = page.locator('wayfinder-service-blueprint-graph');
     await expect(storyEl).toBeVisible({ timeout: 10_000 });
     await page.waitForLoadState('networkidle');
     await storyEl.evaluate(async element => {
       await (element as { updateComplete?: Promise<unknown> }).updateComplete;
     });
 
-    const pills = storyEl.locator('[data-prism-gateway-shape="pill"]');
-    const diamonds = storyEl.locator('[data-prism-gateway-shape="diamond"]');
+    const pills = storyEl.locator('[data-wayfinder-gateway-shape="pill"]');
+    const diamonds = storyEl.locator('[data-wayfinder-gateway-shape="diamond"]');
     // Every gateway is one shape or the other.
-    const totalGateways = await storyEl.locator('[data-prism-gateway]').count();
+    const totalGateways = await storyEl.locator('[data-wayfinder-gateway]').count();
     expect((await pills.count()) + (await diamonds.count())).toBe(totalGateways);
 
     if (await pills.count()) {
       // Pill keyboard nav: every pill must expose a focusable button with an
       // accessible label and the gateway data-attributes preserved.
       const firstPill = pills.first();
-      await expect(firstPill).toHaveAttribute('data-prism-gateway-node', /.+/);
+      await expect(firstPill).toHaveAttribute('data-wayfinder-gateway-node', /.+/);
       await expect(firstPill.locator('button')).toHaveAttribute('aria-label', /single-route gateway/);
     }
   });
@@ -69,13 +69,13 @@ test.describe('ServiceBlueprint graph behavioural rendering', () => {
     // Fallback covered above — the canonical 5-gateway story id may not be
     // mounted in every storybook configuration; this test still asserts the
     // pill/diamond split is rendered.
-    const storyEl = page.locator('prism-service-blueprint-graph');
+    const storyEl = page.locator('wayfinder-service-blueprint-graph');
     if (!(await storyEl.isVisible({ timeout: 5_000 }).catch(() => false))) {
       test.skip(true, 'gateway-representation story not present');
     }
 
-    const diamondCount = await storyEl.locator('[data-prism-gateway-shape="diamond"]').count();
-    const pillCount = await storyEl.locator('[data-prism-gateway-shape="pill"]').count();
+    const diamondCount = await storyEl.locator('[data-wayfinder-gateway-shape="diamond"]').count();
+    const pillCount = await storyEl.locator('[data-wayfinder-gateway-shape="pill"]').count();
     // At least one of either shape must be present somewhere in any
     // gateway-heavy story.
     expect(diamondCount + pillCount).toBeGreaterThan(0);

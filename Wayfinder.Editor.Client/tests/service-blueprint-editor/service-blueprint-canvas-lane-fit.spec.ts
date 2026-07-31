@@ -28,7 +28,7 @@ test.describe('ServiceBlueprint canvas — lane fit invariant', () => {
       expect(geometry.nodes.length, 'at least one node must render').toBeGreaterThan(0);
 
       for (const node of geometry.nodes) {
-        // Prefer the explicit data-prism-queue attribute when present
+        // Prefer the explicit data-wayfinder-queue attribute when present
         // (gateways carry it because they are not DOM children of the queue
         // column they belong to — see Slice 5 history note).
         const expectedLaneKey = node.laneAttr ?? node.laneByCentre;

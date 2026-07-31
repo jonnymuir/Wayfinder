@@ -22,25 +22,25 @@ import { availableContexts, contextForTiming, timingForContext, updateActionSumm
 import { isTerminalStage, validateServiceBlueprint, type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
 import { flattenRoutes, newRouteId } from './route-model.js';
 import { findServiceBlueprintShortcut, matchesShortcut, SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
-import './prism-service-blueprint-graph.js';
-import './prism-step-inspector.js';
-import './prism-stage-preview.js';
-import './prism-service-blueprint-simulation.js';
-import './prism-service-blueprint-outline.js';
-import './prism-confidence-tabs.js';
-import './prism-help-panel.js';
+import './wayfinder-service-blueprint-graph.js';
+import './wayfinder-step-inspector.js';
+import './wayfinder-stage-preview.js';
+import './wayfinder-service-blueprint-simulation.js';
+import './wayfinder-service-blueprint-outline.js';
+import './wayfinder-confidence-tabs.js';
+import './wayfinder-help-panel.js';
 import { serializeAuthoredServiceBlueprint, authoredServiceBlueprintJsonEquals } from './service-blueprint-canonical-json.js';
 import {
   coerceParsedAuthoredServiceBlueprint,
   lintAuthoredServiceBlueprintDocument,
   type DefinitionLint,
 } from './service-blueprint-lint.js';
-import type { ConfidenceTab } from './prism-confidence-tabs.js';
+import type { ConfidenceTab } from './wayfinder-confidence-tabs.js';
 import type {
   ServiceBlueprintSimulationHistoryEntry,
   ServiceBlueprintSimulationStopReason,
   ServiceBlueprintSimulationTransitionOption,
-} from './prism-service-blueprint-simulation.js';
+} from './wayfinder-service-blueprint-simulation.js';
 import type { ProjectServiceBlueprintResult, ProjectedServiceBlueprintState, ProjectedServiceBlueprintTransition } from './service-request-runtime-projection.js';
 
 type ServiceBlueprintSelection =
@@ -131,20 +131,20 @@ function makeCopiedStageKey(baseStageKey: string, serviceBlueprint: AuthoredServ
  * Top-level editor host page composing the four V1 serviceBlueprint editor components.
  *
  * Layout:
- *   Left  — prism-service-blueprint-graph (with title bar + mode toggle)
- *   Right — prism-step-inspector
+ *   Left  — wayfinder-service-blueprint-graph (with title bar + mode toggle)
+ *   Right — wayfinder-step-inspector
  *
  * URL param: ?serviceBlueprint=<key>  (default: "planning")
  * Prop: initialServiceBlueprint — set directly for Storybook / offline use; skips API fetch.
  *
  * Test hooks:
- *   data-prism-component="service-blueprint-editor"
- *   data-prism-service-blueprint-loaded="{key}" (reflected on the custom-element host once ready)
- *   data-prism-toast  (on the toast confirmation banner)
- *   data-prism-save-error (on the persistent save error surface)
+ *   data-wayfinder-component="service-blueprint-editor"
+ *   data-wayfinder-service-blueprint-loaded="{key}" (reflected on the custom-element host once ready)
+ *   data-wayfinder-toast  (on the toast confirmation banner)
+ *   data-wayfinder-save-error (on the persistent save error surface)
  */
-@customElement('prism-service-blueprint-editor')
-export class PrismServiceBlueprintEditorElement extends LitElement {
+@customElement('wayfinder-service-blueprint-editor')
+export class WayfinderServiceBlueprintEditorElement extends LitElement {
   /** ServiceBlueprint key — read from ?serviceBlueprint= URL param or set directly. No implicit default: a
    * host must supply one (directly, or via the shell's own serviceBlueprint list/auto-select) — there
    * is no single serviceBlueprint name that's a sensible fallback across every possible host. */
@@ -161,7 +161,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
 
   /**
    * Host-supplied catalog of action types the editor can render. Falls back
-   * to Prism's built-in catalog when the host does not extend it.
+   * to Wayfinder's built-in catalog when the host does not extend it.
    */
   @property({ attribute: false })
   actionCatalog?: ServiceBlueprintActionCatalog;
@@ -277,7 +277,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
     this._refreshDefinitionTextFromServiceBlueprint();
     if (_changedProperties.has('_saveError') && this._saveError) {
       this.updateComplete.then(() => {
-        this.shadowRoot?.querySelector<HTMLElement>('[data-prism-save-error]')?.focus();
+        this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-save-error]')?.focus();
       });
     }
   }
@@ -365,11 +365,11 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
   private _reflectServiceBlueprintLoadedState() {
     const loadedKey = this.blueprintKey?.trim() || this._serviceBlueprint?.definitionKey?.trim();
     if (loadedKey) {
-      this.setAttribute('data-prism-service-blueprint-loaded', loadedKey);
+      this.setAttribute('data-wayfinder-service-blueprint-loaded', loadedKey);
       return;
     }
 
-    this.removeAttribute('data-prism-service-blueprint-loaded');
+    this.removeAttribute('data-wayfinder-service-blueprint-loaded');
   }
 
   private get _selectedStage(): AuthoredStage | null {
@@ -588,7 +588,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
       this._selectedTransitionIndex = null;
       return;
     }
-    // prism-step-inspector has no standalone "route" view — a transition is
+    // wayfinder-step-inspector has no standalone "route" view — a transition is
     // only ever shown nested inside the stage or gateway whose routes[]
     // array actually owns it (mapRouteView sets fromGateway when the owner
     // is a gateway; fromStage always holds the owner's key either way).
@@ -637,7 +637,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
 
     this._versionPollTimer = window.setTimeout(() => {
       void this._pollServiceBlueprintVersion();
-    }, PrismServiceBlueprintEditorElement.VERSION_POLL_INTERVAL_MS);
+    }, WayfinderServiceBlueprintEditorElement.VERSION_POLL_INTERVAL_MS);
   }
 
   /**
@@ -1094,7 +1094,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
     this._helpReturnTarget = activator ?? null;
     this._helpOpen = true;
     requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLElement>('[data-prism-help-close]')?.focus();
+      this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-help-close]')?.focus();
     });
   }
 
@@ -1185,7 +1185,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
   private _handleInspectorRequested() {
     this._inspectorCollapsed = false;
     requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLElement>('prism-step-inspector')?.focus();
+      this.shadowRoot?.querySelector<HTMLElement>('wayfinder-step-inspector')?.focus();
     });
   }
 
@@ -1223,7 +1223,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
     if (this._definitionEditorLoaded) {
       return;
     }
-    await import('./prism-definition-editor.js');
+    await import('./wayfinder-definition-editor.js');
     this._definitionEditorLoaded = true;
   }
 
@@ -1575,7 +1575,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
     const actionLocation = issue.location.kind === 'action' ? issue.location : null;
     this._inspectorCollapsed = false;
     requestAnimationFrame(() => {
-      const inspector = this.shadowRoot?.querySelector<HTMLElement>('prism-step-inspector');
+      const inspector = this.shadowRoot?.querySelector<HTMLElement>('wayfinder-step-inspector');
       inspector?.focus();
 
       if (!actionLocation) {
@@ -1583,12 +1583,12 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
       }
 
       requestAnimationFrame(() => {
-        const actionEditor = inspector?.shadowRoot?.querySelector<HTMLElement>('prism-stage-action-editor');
+        const actionEditor = inspector?.shadowRoot?.querySelector<HTMLElement>('wayfinder-stage-action-editor');
         const selector = actionLocation.fieldKey && actionLocation.fieldKey !== 'fields'
-          ? `[data-prism-action-param="${actionLocation.actionIndex}-${actionLocation.fieldKey}"]`
+          ? `[data-wayfinder-action-param="${actionLocation.actionIndex}-${actionLocation.fieldKey}"]`
           : typeof actionLocation.formFieldIndex === 'number'
-            ? `[data-prism-form-field-key="${actionLocation.actionIndex}-${actionLocation.formFieldIndex}"]`
-            : `[data-prism-stage-action="${actionLocation.actionIndex}"]`;
+            ? `[data-wayfinder-form-field-key="${actionLocation.actionIndex}-${actionLocation.formFieldIndex}"]`
+            : `[data-wayfinder-stage-action="${actionLocation.actionIndex}"]`;
         actionEditor?.shadowRoot?.querySelector<HTMLElement>(selector)?.focus();
       });
     });
@@ -1765,7 +1765,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
       // Fall through to manual copy support below.
     }
 
-    const copyField = this.shadowRoot?.querySelector<HTMLTextAreaElement>('[data-prism-save-error-details]');
+    const copyField = this.shadowRoot?.querySelector<HTMLTextAreaElement>('[data-wayfinder-save-error-details]');
     copyField?.focus();
     copyField?.select();
     this._saveErrorCopyStatus = 'Clipboard access is unavailable. Select and copy the details manually.';
@@ -1836,7 +1836,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
 
   private _renderSimulationPanel() {
     return html`
-      <prism-service-blueprint-simulation
+      <wayfinder-service-blueprint-simulation
         .initialStage=${this._initialSimulationStage}
         .currentStage=${this._simulationCurrentStage}
         .history=${this._simulation?.history ?? []}
@@ -1849,7 +1849,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
         @simulation-started=${this._startSimulation}
         @simulation-reset=${() => this._resetSimulation('Simulation cleared.')}
         @simulation-transition-selected=${this._handleSimulationTransitionSelected}
-      ></prism-service-blueprint-simulation>
+      ></wayfinder-service-blueprint-simulation>
     `;
   }
 
@@ -1863,19 +1863,19 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
     const warningCount = this._warningValidationIssues.length;
 
     return html`
-      <section class="validation-panel" aria-labelledby="service-blueprint-validation-panel-title" data-prism-validation-rail>
+      <section class="validation-panel" aria-labelledby="service-blueprint-validation-panel-title" data-wayfinder-validation-rail>
         <div class="validation-panel-header">
           <div>
             <h2 id="service-blueprint-validation-panel-title" class="validation-panel-title">Service Blueprint validation</h2>
             <p class="validation-panel-summary">${this._validationStatusSummary}</p>
           </div>
           <div class="validation-panel-meta">
-            <span class="validation-count validation-count-error" data-prism-validation-errors>${errorCount} errors</span>
-            <span class="validation-count validation-count-warning" data-prism-validation-warnings>${warningCount} warnings</span>
+            <span class="validation-count validation-count-error" data-wayfinder-validation-errors>${errorCount} errors</span>
+            <span class="validation-count validation-count-warning" data-wayfinder-validation-warnings>${warningCount} warnings</span>
           </div>
         </div>
 
-        <div class="validation-panel-save-status" data-prism-save-status>
+        <div class="validation-panel-save-status" data-wayfinder-save-status>
           <span class="validation-save-label">Save status</span>
           <span>${this._saveStatusSummary}</span>
         </div>
@@ -1889,7 +1889,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                     <button
                       type="button"
                       class="validation-issue-link"
-                      data-prism-validation-issue=${issue.id}
+                      data-wayfinder-validation-issue=${issue.id}
                       @click=${() => this._jumpToValidationIssue(issue)}
                     >
                       <span class=${`validation-issue-badge validation-issue-badge-${issue.severity}`}>
@@ -1907,7 +1907,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
 
   private _renderDefinitionPanel() {
     if (!this._serviceBlueprint) {
-      return html`<div class="definition-empty" data-prism-definition-empty>
+      return html`<div class="definition-empty" data-wayfinder-definition-empty>
         Loading the service blueprint definition…
       </div>`;
     }
@@ -1917,7 +1917,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
     const gatewayCount = this._serviceBlueprint.metadata?.gateways?.length ?? 0;
 
     return html`
-      <div class="definition-panel" data-prism-definition-panel>
+      <div class="definition-panel" data-wayfinder-definition-panel>
         <div class="definition-header">
           <div class="definition-header-copy">
             <h2 class="definition-title">Definition</h2>
@@ -1933,18 +1933,18 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
         <div class="definition-editor-frame">
           ${this._definitionEditorLoaded
             ? html`
-                <prism-definition-editor
-                  data-prism-definition-editor
+                <wayfinder-definition-editor
+                  data-wayfinder-definition-editor
                   .value=${this._definitionText}
                   .diagnostics=${this._definitionDiagnostics}
                   @definition-input=${this._handleDefinitionInput}
-                ></prism-definition-editor>
+                ></wayfinder-definition-editor>
               `
-            : html`<p class="definition-loading" role="status" data-prism-definition-tab-loading>
+            : html`<p class="definition-loading" role="status" data-wayfinder-definition-tab-loading>
                 Preparing the JSON editor…
               </p>`}
         </div>
-        <div class="sr-only" role="status" aria-live="polite" data-prism-definition-announcement>
+        <div class="sr-only" role="status" aria-live="polite" data-wayfinder-definition-announcement>
           ${this._definitionAnnouncement}
         </div>
       </div>
@@ -1968,7 +1968,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
       <div
         class="definition-banner"
         role="alert"
-        data-prism-definition-banner
+        data-wayfinder-definition-banner
       >
         <p class="definition-banner-summary">
           <strong>Definition can't be applied:</strong> ${summary}
@@ -1978,7 +1978,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
           <button
             type="button"
             class="govuk-button"
-            data-prism-definition-apply
+            data-wayfinder-definition-apply
             disabled
             aria-disabled="true"
           >
@@ -1987,7 +1987,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
           <button
             type="button"
             class="govuk-button govuk-button--secondary"
-            data-prism-definition-revert
+            data-wayfinder-definition-revert
             @click=${this._revertDefinitionText}
           >
             Revert to current
@@ -2018,7 +2018,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
           aria-modal="true"
           aria-labelledby="service-blueprint-shortcut-title"
           aria-describedby="service-blueprint-shortcut-copy"
-          data-prism-shortcut-dialog
+          data-wayfinder-shortcut-dialog
           @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeShortcutGuide())}
         >
           <div class="shortcut-dialog-header">
@@ -2032,7 +2032,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
             <button
               type="button"
               class="toolbar-btn shortcut-dialog-close"
-              data-prism-help-close
+              data-wayfinder-help-close
               @click=${() => this._closeShortcutGuide()}
             >
               Close
@@ -2041,11 +2041,11 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
 
           <div class="shortcut-groups">
             ${SERVICE_BLUEPRINT_SHORTCUT_GROUPS.map(group => html`
-              <section class="shortcut-group" data-prism-shortcut-group=${group.id}>
+              <section class="shortcut-group" data-wayfinder-shortcut-group=${group.id}>
                 <h3 class="shortcut-group-title">${group.title}</h3>
                 <ol class="shortcut-list">
                   ${group.shortcuts.map(shortcut => html`
-                    <li class="shortcut-item" data-prism-shortcut=${shortcut.id}>
+                    <li class="shortcut-item" data-wayfinder-shortcut=${shortcut.id}>
                       <div class="shortcut-copy">
                         <p class="shortcut-command">${shortcut.command}</p>
                         <p class="shortcut-description">${shortcut.description}</p>
@@ -2072,13 +2072,13 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
   private _renderStagePreview() {
     const selectedStage = this._selectedStage;
     return html`
-      <prism-stage-preview
+      <wayfinder-stage-preview
         .stage=${selectedStage}
         .projectedState=${this._previewedStage}
         .outgoingTransitions=${this._previewedTransitions}
         .previewState=${this._stagePreviewState}
         .errorMessage=${this._stagePreviewError ?? ''}
-      ></prism-stage-preview>
+      ></wayfinder-stage-preview>
     `;
   }
 
@@ -2097,8 +2097,8 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
   render() {
     return html`
       <div
-        data-prism-component="service-blueprint-editor"
-        data-prism-service-blueprint-loaded="${this.blueprintKey || this._serviceBlueprint?.definitionKey || ''}"
+        data-wayfinder-component="service-blueprint-editor"
+        data-wayfinder-service-blueprint-loaded="${this.blueprintKey || this._serviceBlueprint?.definitionKey || ''}"
         class="editor-root"
       >
         ${this._renderToast()}
@@ -2110,7 +2110,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
         <!-- Tab-based navigation -->
         <div class="editor-content-wrapper">
         ${this._renderStaleServiceBlueprintOverlay()}
-        <prism-confidence-tabs
+        <wayfinder-confidence-tabs
           class="editor-tabs"
           active-tab="${this._activeConfidenceTab}"
           error-count="${this._blockingValidationIssues.length}"
@@ -2140,7 +2140,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                   <button
                     type="button"
                     class="panel-toggle"
-                    data-prism-outline-toggle
+                    data-wayfinder-outline-toggle
                     aria-controls="service-blueprint-editor-outline-panel"
                     aria-expanded=${String(!this._outlineCollapsed)}
                     aria-label=${this._outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
@@ -2155,9 +2155,9 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                   class="panel-body"
                   ?hidden=${this._outlineCollapsed}
                 >
-                  <prism-service-blueprint-outline
+                  <wayfinder-service-blueprint-outline
                     class="editor-outline"
-                    data-prism-service-blueprint-outline
+                    data-wayfinder-service-blueprint-outline
                     .serviceBlueprint=${this._serviceBlueprint}
                     .availableQueues=${this.availableQueues}
                     .selectedStageKey=${this._selectedStageKey}
@@ -2167,7 +2167,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                     @outline-stage-selected=${this._handleOutlineStageSelected}
                     @outline-gateway-selected=${this._handleOutlineGatewaySelected}
                     @outline-transition-selected=${this._handleOutlineTransitionSelected}
-                  ></prism-service-blueprint-outline>
+                  ></wayfinder-service-blueprint-outline>
                 </div>
               </section>
 
@@ -2180,7 +2180,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                   <div class="editor-toolbar" role="toolbar" aria-label="ServiceBlueprint editor tools">
                     <button
                       class="toolbar-btn govuk-button"
-                      data-prism-save
+                      data-wayfinder-save
                       ?disabled=${!this._canSave}
                       title=${!this._canSaveByContext ? 'Saving is disabled for the current author.' : nothing}
                       aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
@@ -2190,7 +2190,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                     </button>
                     <button
                       class="toolbar-btn govuk-button govuk-button--secondary"
-                      data-prism-undo
+                      data-wayfinder-undo
                       ?disabled=${!this._canUndo}
                       aria-keyshortcuts=${UNDO_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${this._undo}
@@ -2199,7 +2199,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                     </button>
                     <button
                       class="toolbar-btn govuk-button govuk-button--secondary"
-                      data-prism-redo
+                      data-wayfinder-redo
                       ?disabled=${!this._canRedo}
                       aria-keyshortcuts=${REDO_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${this._redo}
@@ -2208,7 +2208,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                     </button>
                     <button
                       class="toolbar-btn govuk-button govuk-button--secondary"
-                      data-prism-copy
+                      data-wayfinder-copy
                       ?disabled=${!this._canCopy}
                       aria-keyshortcuts=${COPY_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${() => this._copySelection()}
@@ -2217,7 +2217,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                     </button>
                     <button
                       class="toolbar-btn govuk-button govuk-button--secondary"
-                      data-prism-paste
+                      data-wayfinder-paste
                       ?disabled=${!this._canPaste}
                       aria-keyshortcuts=${PASTE_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${() => this._pasteClipboard()}
@@ -2226,16 +2226,16 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                     </button>
                     <button
                       class="toolbar-btn govuk-button govuk-button--secondary"
-                      data-prism-help
+                      data-wayfinder-help
                       aria-keyshortcuts=${HELP_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${(event: Event) => this._openShortcutGuide(event.currentTarget as HTMLElement)}
                     >
                       Help
                     </button>
-                    <span class="clipboard-chip" data-prism-clipboard-state>${this._clipboardSummary}</span>
+                    <span class="clipboard-chip" data-wayfinder-clipboard-state>${this._clipboardSummary}</span>
                   </div>
                 </div>
-                <div class="editor-statusbar" data-prism-history-status>
+                <div class="editor-statusbar" data-wayfinder-history-status>
                   <span class="status-chip">${this._dirtyStateSummary}</span>
                   <span class="status-chip">${this._canUndo ? 'Undo ready' : 'Undo idle'}</span>
                   <span class="status-chip">${this._canRedo ? 'Redo ready' : 'Redo idle'}</span>
@@ -2256,14 +2256,14 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                   return html`
                     <div
                       class=${`canvas-health-hint ${errorCount > 0 ? 'is-error' : 'is-warning'}`}
-                      data-prism-canvas-health-hint
+                      data-wayfinder-canvas-health-hint
                       role="status"
                     >
                       <span class="canvas-health-summary">${summary}</span>
                       <button
                         type="button"
                         class="canvas-health-action"
-                        data-prism-open-validation
+                        data-wayfinder-open-validation
                         @click=${() => { this._activeConfidenceTab = 'validation'; }}
                       >Open Validation</button>
                     </div>
@@ -2271,7 +2271,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                 })()}
                 <div class="sr-only" role="status" aria-live="polite">${this._historyAnnouncement}</div>
 
-                <prism-service-blueprint-graph
+                <wayfinder-service-blueprint-graph
                   class="graph-panel"
                   .serviceBlueprint=${this._serviceBlueprint}
                   .availableQueues=${this.availableQueues}
@@ -2289,7 +2289,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                   @graph-multi-selection="${(event: CustomEvent<{ nodeIds: string[] }>) => {
                     this._graphMultiSelection = event.detail.nodeIds;
                   }}"
-                ></prism-service-blueprint-graph>
+                ></wayfinder-service-blueprint-graph>
               </div>
 
               <!-- Right: inspector -->
@@ -2304,7 +2304,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                   <button
                     type="button"
                     class="panel-toggle"
-                    data-prism-inspector-toggle
+                    data-wayfinder-inspector-toggle
                     aria-controls="service-blueprint-editor-inspector-panel"
                     aria-expanded=${String(!this._inspectorCollapsed)}
                     aria-label=${this._inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}
@@ -2319,7 +2319,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                   class="panel-body"
                   ?hidden=${this._inspectorCollapsed}
                 >
-                  <prism-step-inspector
+                  <wayfinder-step-inspector
                     class="inspector-panel"
                     tabindex="0"
                     .serviceBlueprint=${this._serviceBlueprint}
@@ -2331,7 +2331,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                     .actionCatalog=${this._actionCatalog}
                     @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
                     @action-selected=${this._handleActionSelected}
-                  ></prism-step-inspector>
+                  ></wayfinder-step-inspector>
                 </div>
               </section>
             </div>
@@ -2342,8 +2342,8 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
           <div slot="preview">${this._renderStagePreview()}</div>
           <div slot="simulation">${this._renderSimulationPanel()}</div>
           <div slot="definition">${this._renderDefinitionPanel()}</div>
-          <prism-help-panel slot="help"></prism-help-panel>
-        </prism-confidence-tabs>
+          <wayfinder-help-panel slot="help"></wayfinder-help-panel>
+        </wayfinder-confidence-tabs>
         </div>
 
         ${this._renderShortcutGuide()}
@@ -2358,7 +2358,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
         class="toast-banner"
         role="status"
         aria-live="assertive"
-        data-prism-toast
+        data-wayfinder-toast
       >
         ${this._toastMessage}
       </div>
@@ -2382,7 +2382,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
         class="stale-service-blueprint-banner"
         aria-labelledby="service-blueprint-stale-title"
         tabindex="-1"
-        data-prism-stale-service-blueprint-banner
+        data-wayfinder-stale-service-blueprint-banner
       >
         <div class="stale-service-blueprint-header">
           <p class="stale-service-blueprint-eyebrow">Changed elsewhere</p>
@@ -2399,7 +2399,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
           <button
             type="button"
             class="toolbar-btn govuk-button"
-            data-prism-reload-after-conflict
+            data-wayfinder-reload-after-conflict
             @click=${this._handleReloadAfterConflict}
           >
             Reload latest version
@@ -2408,7 +2408,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
             type="button"
             class="toolbar-btn govuk-button govuk-button--secondary"
             aria-label="Dismiss — I just want to look at my changes first"
-            data-prism-dismiss-stale-banner
+            data-wayfinder-dismiss-stale-banner
             @click=${() => { this._staleBannerDismissed = true; }}
           >
             Dismiss
@@ -2431,13 +2431,13 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
     }
 
     return html`
-      <div class="stale-service-blueprint-overlay" data-prism-stale-service-blueprint-overlay>
+      <div class="stale-service-blueprint-overlay" data-wayfinder-stale-service-blueprint-overlay>
         <div class="stale-service-blueprint-overlay-ribbon" role="status">
           <span>Read-only — this service blueprint changed elsewhere.</span>
           <button
             type="button"
             class="toolbar-btn govuk-button stale-service-blueprint-overlay-reload"
-            data-prism-reload-after-conflict-overlay
+            data-wayfinder-reload-after-conflict-overlay
             @click=${this._handleReloadAfterConflict}
           >
             Reload latest version
@@ -2457,7 +2457,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
         class="save-error-surface"
         aria-labelledby="service-blueprint-save-error-title"
         tabindex="-1"
-        data-prism-save-error
+        data-wayfinder-save-error
       >
         <div class="save-error-header">
           <p class="save-error-eyebrow">Save problem</p>
@@ -2468,7 +2468,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                   <button
                     type="button"
                     class="save-error-detail-link"
-                    data-prism-save-error-jump
+                    data-wayfinder-save-error-jump
                     @click=${() => this._jumpToStage(this._saveError!.summaryStageKey!)}
                   >
                     ${this._saveError.summary}
@@ -2489,7 +2489,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
                           <button
                             type="button"
                             class="save-error-detail-link"
-                            data-prism-save-error-jump
+                            data-wayfinder-save-error-jump
                             @click=${() => this._jumpToStage(detail.stageKey!)}
                           >
                             ${detail.message}
@@ -2514,14 +2514,14 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
           readonly
           rows="6"
           .value=${this._saveError.copyText}
-          data-prism-save-error-details
+          data-wayfinder-save-error-details
         ></textarea>
 
         <div class="save-error-actions">
           <button
             type="button"
             class="toolbar-btn govuk-button govuk-button--secondary save-error-copy-button"
-            data-prism-copy-save-error
+            data-wayfinder-copy-save-error
             @click=${this._copySaveErrorDetails}
           >
             Copy details
@@ -2530,12 +2530,12 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
             type="button"
             class="toolbar-btn govuk-button govuk-button--secondary"
             aria-label="Dismiss save error"
-            data-prism-dismiss-save-error
+            data-wayfinder-dismiss-save-error
             @click=${() => { this._saveError = null; this._saveErrorCopyStatus = null; }}
           >
             Dismiss
           </button>
-          <p class="save-error-copy-status" role="status" aria-live="polite" data-prism-save-error-copy-status>
+          <p class="save-error-copy-status" role="status" aria-live="polite" data-wayfinder-save-error-copy-status>
             ${this._saveErrorCopyStatus ?? ''}
           </p>
         </div>
@@ -3487,7 +3487,7 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
       padding: 0 1.25rem 1.25rem;
     }
 
-    .definition-editor-frame prism-definition-editor {
+    .definition-editor-frame wayfinder-definition-editor {
       flex: 1;
       min-height: 0;
       border: 1px solid #b1b4b6;
@@ -3506,6 +3506,6 @@ export class PrismServiceBlueprintEditorElement extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-service-blueprint-editor': PrismServiceBlueprintEditorElement;
+    'wayfinder-service-blueprint-editor': WayfinderServiceBlueprintEditorElement;
   }
 }

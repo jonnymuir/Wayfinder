@@ -13,17 +13,17 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const storyEl = page.locator('prism-service-blueprint-graph');
+    const storyEl = page.locator('wayfinder-service-blueprint-graph');
     await expect(storyEl).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const splitGateway = storyEl.locator('[data-prism-gateway-kind="Split"][data-prism-gateway="review-split"]');
-    const joinGateway = storyEl.locator('[data-prism-gateway-kind="Join"][data-prism-gateway="decision-join"]');
+    const splitGateway = storyEl.locator('[data-wayfinder-gateway-kind="Split"][data-wayfinder-gateway="review-split"]');
+    const joinGateway = storyEl.locator('[data-wayfinder-gateway-kind="Join"][data-wayfinder-gateway="decision-join"]');
 
     await expect(splitGateway).toBeVisible();
     await expect(joinGateway).toBeVisible();
-    await expect(splitGateway).toHaveAttribute('data-prism-queue', 'applicant');
-    await expect(joinGateway).toHaveAttribute('data-prism-queue', 'applicant');
+    await expect(splitGateway).toHaveAttribute('data-wayfinder-queue', 'applicant');
+    await expect(joinGateway).toHaveAttribute('data-wayfinder-queue', 'applicant');
     await expect(splitGateway).toContainText('Review split');
     await expect(joinGateway).toContainText('Decision join');
   });
@@ -32,26 +32,26 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const storyEl = page.locator('prism-service-blueprint-graph');
+    const storyEl = page.locator('wayfinder-service-blueprint-graph');
     await expect(storyEl).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
     // The Review split fans out into three branches; the Decision join is fed
     // by three incoming routes. Both source-Split and target-Join edges carry
     // the appropriate branch/merge styling classes.
-    expect(await storyEl.locator('.edge-path[data-prism-transition-from="review-split"]').count()).toBeGreaterThanOrEqual(3);
-    expect(await storyEl.locator('.edge-path[data-prism-transition-to="decision-join"]').count()).toBeGreaterThanOrEqual(3);
+    expect(await storyEl.locator('.edge-path[data-wayfinder-transition-from="review-split"]').count()).toBeGreaterThanOrEqual(3);
+    expect(await storyEl.locator('.edge-path[data-wayfinder-transition-to="decision-join"]').count()).toBeGreaterThanOrEqual(3);
     expect(await storyEl.locator('.edge-path.branch-path').count()).toBeGreaterThanOrEqual(3);
     expect(await storyEl.locator('.edge-path.merge-path').count()).toBeGreaterThanOrEqual(3);
-    await expect(storyEl.locator('[data-prism-stage="start-request"]')).toBeVisible();
-    await expect(storyEl.locator('[data-prism-stage="decision-confirmed"]')).toBeVisible();
+    await expect(storyEl.locator('[data-wayfinder-stage="start-request"]')).toBeVisible();
+    await expect(storyEl.locator('[data-wayfinder-stage="decision-confirmed"]')).toBeVisible();
   });
 
   test('supports keyboard selection for gateway nodes', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const splitGateway = page.locator('[data-prism-gateway="review-split"]');
+    const splitGateway = page.locator('[data-wayfinder-gateway="review-split"]');
     await splitGateway.focus();
     await expect(splitGateway).toBeFocused();
     await splitGateway.press('Enter');
@@ -62,19 +62,19 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(editorStoryUrl());
 
-    await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
 
-    const splitGateway = page.locator('[data-prism-gateway="review-split"]');
+    const splitGateway = page.locator('[data-wayfinder-gateway="review-split"]');
     await splitGateway.click();
     await splitGateway.press('e');
 
-    const inspector = page.locator('prism-step-inspector');
+    const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible();
-    await expect(inspector.locator('[data-prism-inspector-kind="gateway"]')).toBeVisible();
-    await expect(inspector.locator('[data-prism-inspector-heading]')).toHaveText('Review split');
-    await expect(inspector.locator('[data-prism-field="kind"]')).toContainText('Split gateway');
+    await expect(inspector.locator('[data-wayfinder-inspector-kind="gateway"]')).toBeVisible();
+    await expect(inspector.locator('[data-wayfinder-inspector-heading]')).toHaveText('Review split');
+    await expect(inspector.locator('[data-wayfinder-field="kind"]')).toContainText('Split gateway');
     await expect(page.getByRole('tab', { name: 'Canvas' })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('[data-prism-preview-stage-name]')).toHaveCount(0);
+    await expect(page.locator('[data-wayfinder-preview-stage-name]')).toHaveCount(0);
   });
 
   test('surfaces gateways as gateway nodes in the canvas matrix', async ({ page }) => {
@@ -86,13 +86,13 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const storyEl = page.locator('prism-service-blueprint-graph');
+    const storyEl = page.locator('wayfinder-service-blueprint-graph');
     await expect(storyEl).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    await expect(storyEl.locator('[data-prism-gateway]')).toHaveCount(2);
-    await expect(storyEl.locator('[data-prism-gateway-kind="Split"]')).toHaveCount(1);
-    await expect(storyEl.locator('[data-prism-gateway-kind="Join"]')).toHaveCount(1);
+    await expect(storyEl.locator('[data-wayfinder-gateway]')).toHaveCount(2);
+    await expect(storyEl.locator('[data-wayfinder-gateway-kind="Split"]')).toHaveCount(1);
+    await expect(storyEl.locator('[data-wayfinder-gateway-kind="Join"]')).toHaveCount(1);
   });
 
   // ─── #84: Join gateways carry waiting information ─────────────────────────
@@ -104,16 +104,16 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(editorStoryUrl());
 
-    await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
 
-    const joinGateway = page.locator('[data-prism-gateway="decision-join"]');
+    const joinGateway = page.locator('[data-wayfinder-gateway="decision-join"]');
     await joinGateway.click();
     await joinGateway.press('e');
 
-    const inspector = page.locator('prism-step-inspector');
+    const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible();
-    await expect(inspector.locator('[data-prism-inspector-kind="gateway"]')).toBeVisible();
-    await expect(inspector.locator('[data-prism-field="kind"]')).toContainText('Join gateway',
+    await expect(inspector.locator('[data-wayfinder-inspector-kind="gateway"]')).toBeVisible();
+    await expect(inspector.locator('[data-wayfinder-field="kind"]')).toContainText('Join gateway',
       { timeout: 5_000 });
   });
 
@@ -123,20 +123,20 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(editorStoryUrl());
 
-    await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
 
-    const splitGateway = page.locator('[data-prism-gateway="review-split"]');
+    const splitGateway = page.locator('[data-wayfinder-gateway="review-split"]');
     await splitGateway.click();
     await splitGateway.press('e');
 
-    const inspector = page.locator('prism-step-inspector');
+    const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible();
-    await expect(inspector.locator('[data-prism-inspector-kind="gateway"]')).toBeVisible();
+    await expect(inspector.locator('[data-wayfinder-inspector-kind="gateway"]')).toBeVisible();
 
     // A split gateway routes — it must not expose waiting copy fields to authors
-    await expect(inspector.locator('[data-prism-field="waitingCopy"]')).toHaveCount(0,
+    await expect(inspector.locator('[data-wayfinder-field="waitingCopy"]')).toHaveCount(0,
       { timeout: 3_000 });
-    await expect(inspector.locator('[data-prism-field="waitingInstructions"]')).toHaveCount(0,
+    await expect(inspector.locator('[data-wayfinder-field="waitingInstructions"]')).toHaveCount(0,
       { timeout: 3_000 });
   });
 
@@ -149,13 +149,13 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(editorStoryUrl());
 
-    await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
 
-    const joinGateway = page.locator('[data-prism-gateway="decision-join"]');
+    const joinGateway = page.locator('[data-wayfinder-gateway="decision-join"]');
     await joinGateway.click();
     await joinGateway.press('e');
 
-    const inspector = page.locator('prism-step-inspector');
-    await expect(inspector.locator('[data-prism-field="waitingCopy"]')).toBeVisible();
+    const inspector = page.locator('wayfinder-step-inspector');
+    await expect(inspector.locator('[data-wayfinder-field="waitingCopy"]')).toBeVisible();
   });
 });

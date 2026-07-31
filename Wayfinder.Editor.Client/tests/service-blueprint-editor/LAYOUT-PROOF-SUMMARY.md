@@ -123,7 +123,7 @@ After zoom:  scrollWidth=834px (unchanged)
 ## Validation Commands (All Passed)
 
 ```bash
-cd src/UmbracoPrism.Client
+cd Wayfinder.Editor.Client
 
 # Build (TypeScript compilation)
 npm run build ✅ GREEN

@@ -19,7 +19,7 @@ test.use({ viewport: { ...VISUAL_VIEWPORT } });
 async function nodeScreenTops(page: import('@playwright/test').Page): Promise<number[]> {
   return graphLocator(page).evaluate((el) => {
     const root = (el as HTMLElement).shadowRoot!;
-    return Array.from(root.querySelectorAll<HTMLElement>('[data-prism-stage-card]'))
+    return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
       .map(shell => shell.getBoundingClientRect().top);
   });
 }
@@ -50,7 +50,7 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     const rect = await canvasRect(page);
     const boxes = await graphLocator(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      return Array.from(root.querySelectorAll<HTMLElement>('[data-prism-stage-card]'))
+      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
         .map(shell => {
           const box = shell.getBoundingClientRect();
           return { top: box.top, bottom: box.bottom, left: box.left, right: box.right };
@@ -84,7 +84,7 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     await gotoCanonicalScenario(page, scenario);
 
     const headerTop = () => graphLocator(page).evaluate((el) => {
-      const header = (el as HTMLElement).shadowRoot!.querySelector<HTMLElement>('[data-prism-queue-header]');
+      const header = (el as HTMLElement).shadowRoot!.querySelector<HTMLElement>('[data-wayfinder-queue-header]');
       if (!header) return null;
       return { top: header.getBoundingClientRect().top, position: getComputedStyle(header).position };
     });
@@ -107,7 +107,7 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     const scenario = CANONICAL_SCENARIOS.find((s) => s.id === 'LARGE_SERVICE_BLUEPRINT')!;
     await gotoCanonicalScenario(page, scenario);
 
-    await graphLocator(page).locator('[data-prism-fit-screen]').click();
+    await graphLocator(page).locator('[data-wayfinder-fit-screen]').click();
     // fitView animates over 200ms.
     await page.waitForTimeout(500);
 
@@ -129,7 +129,7 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     const rect = await canvasRect(page);
     const lanesRight = await graphLocator(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      return Array.from(root.querySelectorAll<HTMLElement>('[data-prism-queue-container]'))
+      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-queue-container]'))
         .map(lane => lane.getBoundingClientRect().right);
     });
     expect(lanesRight.length).toBeGreaterThan(0);

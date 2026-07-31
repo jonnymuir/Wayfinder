@@ -1,5 +1,5 @@
 /**
- * Client-side serviceBlueprint definition types aligned with Prism's queue-only
+ * Client-side serviceBlueprint definition types aligned with Wayfinder's queue-only
  * authored contract. Canonical JSON serialises top-level queues plus routes
  * owned by stages and gateways.
  */
@@ -46,7 +46,8 @@ export interface ServiceBlueprintNodePosition {
 /**
  * The definition's declarative calculations block (tables + fields + series).
  * The editor does not author this yet — it must round-trip it untouched; the
- * authoritative schema lives in UmbracoPrism.Shared (ServiceBlueprintCalculationSet).
+ * authoritative schema lives in Wayfinder.Models.ServiceDesign.Calculations
+ * (ServiceBlueprintCalculationSet).
  */
 export interface ServiceBlueprintCalculationsBlock {
   tables?: Record<string, { interpolate?: string; values: Record<string, number> }>;

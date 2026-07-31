@@ -28,10 +28,10 @@ function assignmentCopy(projectedState: ProjectedServiceBlueprintState): string 
 }
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor>; not part of the public API surface.
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
  */
-@customElement('prism-stage-preview')
-export class PrismStagePreviewElement extends LitElement {
+@customElement('wayfinder-stage-preview')
+export class WayfinderStagePreviewElement extends LitElement {
   @property({ attribute: false })
   stage: AuthoredStage | null = null;
 
@@ -53,7 +53,7 @@ export class PrismStagePreviewElement extends LitElement {
     const loading = this.previewState === 'loading';
 
     return html`
-      <section class="preview-shell" aria-labelledby="serviceBlueprint-stage-preview-title" data-prism-stage-preview>
+      <section class="preview-shell" aria-labelledby="serviceBlueprint-stage-preview-title" data-wayfinder-stage-preview>
         <div class="preview-header">
           <div>
             <p class="preview-eyebrow">Preview and runtime format</p>
@@ -69,7 +69,7 @@ export class PrismStagePreviewElement extends LitElement {
 
         ${!stage
           ? html`
-              <div class="preview-empty" data-prism-preview-empty>
+              <div class="preview-empty" data-wayfinder-preview-empty>
                 <p class="govuk-body">Choose a stage in the workspace to preview the runtime shell, form fields, and next-step actions.</p>
               </div>
             `
@@ -77,7 +77,7 @@ export class PrismStagePreviewElement extends LitElement {
 
         ${loading
           ? html`
-              <div class="preview-loading" role="status" aria-live="polite" data-prism-preview-loading>
+              <div class="preview-loading" role="status" aria-live="polite" data-wayfinder-preview-loading>
                 ${projectedState ? 'Updating preview…' : 'Rendering preview…'}
               </div>
             `
@@ -85,7 +85,7 @@ export class PrismStagePreviewElement extends LitElement {
 
         ${this.previewState === 'error' && !projectedState
           ? html`
-              <div class="preview-error" role="alert" data-prism-preview-error>
+              <div class="preview-error" role="alert" data-wayfinder-preview-error>
                 ${this.errorMessage || 'The runtime preview could not be rendered.'}
               </div>
             `
@@ -104,21 +104,21 @@ export class PrismStagePreviewElement extends LitElement {
     const previewAssignment = assignmentCopy(projectedState);
 
     return html`
-      <article class="preview-surface" data-prism-preview-surface-panel>
+      <article class="preview-surface" data-wayfinder-preview-surface-panel>
         <div class="preview-surface-header">
           <div>
-            <p class="preview-surface-copy" data-prism-preview-assignment>${previewAssignment}</p>
-            <h3 class="preview-stage-name" data-prism-preview-stage-name>${projectedState.displayName}</h3>
+            <p class="preview-surface-copy" data-wayfinder-preview-assignment>${previewAssignment}</p>
+            <h3 class="preview-stage-name" data-wayfinder-preview-stage-name>${projectedState.displayName}</h3>
             ${projectedState.metadata?.description
               ? html`<p class="preview-stage-description">${projectedState.metadata.description}</p>`
               : nothing}
           </div>
           <div class="preview-meta">
-            <span class="preview-chip" data-prism-preview-shell>${shellLabel}</span>
+            <span class="preview-chip" data-wayfinder-preview-shell>${shellLabel}</span>
             ${formsEngine
               ? html`<span class="preview-chip preview-chip-muted">Forms engine</span>`
               : nothing}
-            <span class="preview-chip preview-chip-muted" data-prism-preview-readonly>Read-only</span>
+            <span class="preview-chip preview-chip-muted" data-wayfinder-preview-readonly>Read-only</span>
           </div>
         </div>
 
@@ -277,7 +277,7 @@ export class PrismStagePreviewElement extends LitElement {
           <button
             type="button"
             class="govuk-button govuk-button--secondary"
-            data-prism-preview-action=${transition.trigger}
+            data-wayfinder-preview-action=${transition.trigger}
             disabled
             title=${transitionSummary(transition)}
           >
@@ -588,6 +588,6 @@ function transitionSummary(route?: ProjectedServiceBlueprintTransition): string 
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-stage-preview': PrismStagePreviewElement;
+    'wayfinder-stage-preview': WayfinderStagePreviewElement;
   }
 }

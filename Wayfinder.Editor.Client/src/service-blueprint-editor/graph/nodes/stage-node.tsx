@@ -61,8 +61,8 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
   return (
     <div
       className="stage-node-shell"
-      data-prism-stage-card={stage.stateKey}
-      data-prism-row-rank={String(rowRank)}
+      data-wayfinder-stage-card={stage.stateKey}
+      data-wayfinder-row-rank={String(rowRank)}
     >
       <HandleFan handles={targetHandles} type="target" readOnly={readOnly} />
       <button
@@ -70,10 +70,10 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
         className={className}
         aria-pressed={selected}
         aria-label={`${stage.displayName}, ${node.queueLabel} queue`}
-        data-prism-stage={stage.stateKey}
-        data-prism-queue={node.queueKey}
-        data-prism-stage-simulation-path={String(simulationPath)}
-        data-prism-stage-simulation-current={String(simulationCurrent)}
+        data-wayfinder-stage={stage.stateKey}
+        data-wayfinder-queue={node.queueKey}
+        data-wayfinder-stage-simulation-path={String(simulationPath)}
+        data-wayfinder-stage-simulation-current={String(simulationCurrent)}
         onClick={() => callbacks.selectStage(stage.stateKey)}
         onDoubleClick={() => callbacks.selectStage(stage.stateKey, { openInspector: true })}
         onKeyDown={handleKeyDown}

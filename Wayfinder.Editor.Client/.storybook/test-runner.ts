@@ -14,8 +14,8 @@ const config: TestRunnerConfig = {
     }
 
     await page.evaluate(() => {
-      if (!window.__PRISM_A11Y__) {
-        window.__PRISM_A11Y__ = { running: false };
+      if (!window.__WAYFINDER_A11Y__) {
+        window.__WAYFINDER_A11Y__ = { running: false };
       }
     });
 
@@ -27,10 +27,10 @@ const config: TestRunnerConfig = {
       ...(storyContext.parameters?.a11y?.config ?? {})
     });
 
-    await page.waitForFunction(() => !window.__PRISM_A11Y__?.running);
+    await page.waitForFunction(() => !window.__WAYFINDER_A11Y__?.running);
     await page.evaluate(() => {
-      if (window.__PRISM_A11Y__) {
-        window.__PRISM_A11Y__.running = true;
+      if (window.__WAYFINDER_A11Y__) {
+        window.__WAYFINDER_A11Y__.running = true;
       }
     });
 
@@ -41,8 +41,8 @@ const config: TestRunnerConfig = {
       });
     } finally {
       await page.evaluate(() => {
-        if (window.__PRISM_A11Y__) {
-          window.__PRISM_A11Y__.running = false;
+        if (window.__WAYFINDER_A11Y__) {
+          window.__WAYFINDER_A11Y__.running = false;
         }
       });
     }

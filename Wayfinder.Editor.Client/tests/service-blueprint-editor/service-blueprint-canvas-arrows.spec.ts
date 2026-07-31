@@ -84,7 +84,7 @@ test.describe('ServiceBlueprint canvas — canonical screenshot baselines', () =
       // Wait one extra frame after measurement so any reflow from the
       // measurement pass has settled.
       await page.waitForLoadState('networkidle');
-      const graph = page.locator('prism-service-blueprint-graph');
+      const graph = page.locator('wayfinder-service-blueprint-graph');
       await expect(graph).toHaveScreenshot(`${scenario.id}.png`, {
         animations: 'disabled',
         maxDiffPixelRatio: 0.02,

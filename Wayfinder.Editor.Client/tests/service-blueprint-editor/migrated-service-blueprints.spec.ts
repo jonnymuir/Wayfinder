@@ -23,10 +23,10 @@ test.describe('Planning service blueprint — migrated format', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const stages = graph.locator('[data-prism-stage]');
+    const stages = graph.locator('[data-wayfinder-stage]');
     await expect(stages.first()).toBeVisible({ timeout: 5_000 });
     expect(await stages.count()).toBe(4);
   });
@@ -35,18 +35,18 @@ test.describe('Planning service blueprint — migrated format', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const lanes = graph.locator('[data-prism-role-queue]');
+    const lanes = graph.locator('[data-wayfinder-role-queue]');
     await expect(lanes.first()).toBeVisible({ timeout: 5_000 });
     expect(await lanes.count()).toBeGreaterThanOrEqual(1);
 
-    // All stages must carry data-prism-queue and resolve to the applicant queue.
-    const stages = graph.locator('[data-prism-stage]');
+    // All stages must carry data-wayfinder-queue and resolve to the applicant queue.
+    const stages = graph.locator('[data-wayfinder-stage]');
     await expect(stages.first()).toBeVisible({ timeout: 5_000 });
     const laneAttrs = await stages.evaluateAll(els =>
-      els.map(el => el.getAttribute('data-prism-queue'))
+      els.map(el => el.getAttribute('data-wayfinder-queue'))
     );
     expect(laneAttrs.every(attr => attr === 'applicant')).toBe(true);
   });
@@ -55,10 +55,10 @@ test.describe('Planning service blueprint — migrated format', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const gateways = graph.locator('[data-prism-gateway-kind="Split"]');
+    const gateways = graph.locator('[data-wayfinder-gateway-kind="Split"]');
     await expect(gateways.first()).toBeVisible({ timeout: 5_000 });
     expect(await gateways.count()).toBe(3);
   });
@@ -67,11 +67,11 @@ test.describe('Planning service blueprint — migrated format', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(graph.locator('[data-prism-stage]').first()).toBeVisible({ timeout: 5_000 });
+    await expect(graph.locator('[data-wayfinder-stage]').first()).toBeVisible({ timeout: 5_000 });
 
-    const tops = await graph.locator('[data-prism-stage]').evaluateAll(
+    const tops = await graph.locator('[data-wayfinder-stage]').evaluateAll(
       els => els.map(el => el.getBoundingClientRect().top)
     );
     const uniqueTops = new Set(tops.map(t => Math.round(t)));
@@ -82,9 +82,9 @@ test.describe('Planning service blueprint — migrated format', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(graph.locator('[data-prism-stage]').first()).toBeVisible({ timeout: 5_000 });
+    await expect(graph.locator('[data-wayfinder-stage]').first()).toBeVisible({ timeout: 5_000 });
 
     const edges = graph.locator('.edge-path');
     expect(await edges.count()).toBeGreaterThan(0);
@@ -100,10 +100,10 @@ test.describe('Community Enquiry service blueprint — migrated format', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const stages = graph.locator('[data-prism-stage]');
+    const stages = graph.locator('[data-wayfinder-stage]');
     await expect(stages.first()).toBeVisible({ timeout: 5_000 });
     expect(await stages.count()).toBe(2);
   });
@@ -112,10 +112,10 @@ test.describe('Community Enquiry service blueprint — migrated format', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const lanes = graph.locator('[data-prism-role-queue]');
+    const lanes = graph.locator('[data-wayfinder-role-queue]');
     await expect(lanes.first()).toBeVisible({ timeout: 5_000 });
     expect(await lanes.count()).toBeGreaterThanOrEqual(1);
   });
@@ -124,24 +124,24 @@ test.describe('Community Enquiry service blueprint — migrated format', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const splitGateway = graph.locator('[data-prism-gateway="route-submitted"]');
+    const splitGateway = graph.locator('[data-wayfinder-gateway="route-submitted"]');
     await expect(splitGateway).toBeVisible({ timeout: 5_000 });
-    await expect(splitGateway).toHaveAttribute('data-prism-gateway-kind', 'Split');
+    await expect(splitGateway).toHaveAttribute('data-wayfinder-gateway-kind', 'Split');
   });
 
   test('gateway title is correctly hydrated from title field', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
     // Single-route Split gateways render as pills (showing the trigger label as text).
     // The displayName ("Route to submitted") is surfaced via aria-label for accessibility.
-    const gateway = graph.locator('[data-prism-gateway="route-submitted"]');
+    const gateway = graph.locator('[data-wayfinder-gateway="route-submitted"]');
     await expect(gateway).toBeVisible({ timeout: 5_000 });
     await expect(gateway).toHaveAttribute('aria-label', /Route to submitted/);
   });
@@ -156,10 +156,10 @@ test.describe('Information Request service blueprint — migrated format', () =>
     await page.setViewportSize({ width: 1440, height: 1080 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const stages = graph.locator('[data-prism-stage]');
+    const stages = graph.locator('[data-wayfinder-stage]');
     await expect(stages.first()).toBeVisible({ timeout: 5_000 });
     expect(await stages.count()).toBe(3);
   });
@@ -168,10 +168,10 @@ test.describe('Information Request service blueprint — migrated format', () =>
     await page.setViewportSize({ width: 1440, height: 1080 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const lanes = graph.locator('[data-prism-role-queue]');
+    const lanes = graph.locator('[data-wayfinder-role-queue]');
     await expect(lanes.first()).toBeVisible({ timeout: 5_000 });
     expect(await lanes.count()).toBeGreaterThanOrEqual(2);
   });
@@ -180,54 +180,54 @@ test.describe('Information Request service blueprint — migrated format', () =>
     await page.setViewportSize({ width: 1440, height: 1080 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    await expect(graph.locator('[data-prism-gateway-kind="Split"]').first()).toBeVisible({ timeout: 5_000 });
-    await expect(graph.locator('[data-prism-gateway-kind="Join"]').first()).toBeVisible({ timeout: 5_000 });
+    await expect(graph.locator('[data-wayfinder-gateway-kind="Split"]').first()).toBeVisible({ timeout: 5_000 });
+    await expect(graph.locator('[data-wayfinder-gateway-kind="Join"]').first()).toBeVisible({ timeout: 5_000 });
   });
 
   test('Join gateway key is review-complete and is correctly typed', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1080 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
 
-    const joinGateway = graph.locator('[data-prism-gateway="review-complete"]');
+    const joinGateway = graph.locator('[data-wayfinder-gateway="review-complete"]');
     await expect(joinGateway).toBeVisible({ timeout: 5_000 });
-    await expect(joinGateway).toHaveAttribute('data-prism-gateway-kind', 'Join');
+    await expect(joinGateway).toHaveAttribute('data-wayfinder-gateway-kind', 'Join');
   });
 
   test('caseworker stage is in the caseworker lane, not the applicant lane', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1080 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(graph.locator('[data-prism-stage]').first()).toBeVisible({ timeout: 5_000 });
+    await expect(graph.locator('[data-wayfinder-stage]').first()).toBeVisible({ timeout: 5_000 });
 
-    // data-prism-queue on stages was added by Blathers (prism-service-blueprint-graph.ts).
+    // data-wayfinder-queue on stages was added by Blathers (wayfinder-service-blueprint-graph.ts).
     // Verify caseworker-review stage resolves to the caseworker queue lane.
-    const caseworkerStage = graph.locator('[data-prism-stage="caseworker-review"]');
+    const caseworkerStage = graph.locator('[data-wayfinder-stage="caseworker-review"]');
     await expect(caseworkerStage).toBeVisible();
-    await expect(caseworkerStage).toHaveAttribute('data-prism-queue', 'caseworker');
+    await expect(caseworkerStage).toHaveAttribute('data-wayfinder-queue', 'caseworker');
 
-    // The caseworker-route gateway also carries data-prism-queue="caseworker".
-    const caseworkerGateway = graph.locator('[data-prism-gateway="caseworker-route"]');
+    // The caseworker-route gateway also carries data-wayfinder-queue="caseworker".
+    const caseworkerGateway = graph.locator('[data-wayfinder-gateway="caseworker-route"]');
     await expect(caseworkerGateway).toBeVisible();
-    await expect(caseworkerGateway).toHaveAttribute('data-prism-queue', 'caseworker');
+    await expect(caseworkerGateway).toHaveAttribute('data-wayfinder-queue', 'caseworker');
   });
 
   test('stages have distinct Y positions — Join gateway DAG flows top-to-bottom', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1080 });
     await page.goto(storyUrl);
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(graph.locator('[data-prism-stage]').first()).toBeVisible({ timeout: 5_000 });
+    await expect(graph.locator('[data-wayfinder-stage]').first()).toBeVisible({ timeout: 5_000 });
 
-    const tops = await graph.locator('[data-prism-stage]').evaluateAll(
+    const tops = await graph.locator('[data-wayfinder-stage]').evaluateAll(
       els => els.map(el => el.getBoundingClientRect().top)
     );
     const uniqueTops = new Set(tops.map(t => Math.round(t)));

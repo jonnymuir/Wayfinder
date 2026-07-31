@@ -4,10 +4,10 @@ import { customElement, property } from 'lit/decorators.js';
 export type ConfidenceTab = 'canvas' | 'validation' | 'preview' | 'simulation' | 'definition' | 'help';
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor>; not part of the public API surface.
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
  */
-@customElement('prism-confidence-tabs')
-export class PrismConfidenceTabs extends LitElement {
+@customElement('wayfinder-confidence-tabs')
+export class WayfinderConfidenceTabs extends LitElement {
   @property({ attribute: 'active-tab' })
   activeTab: ConfidenceTab = 'canvas';
 
@@ -32,7 +32,7 @@ export class PrismConfidenceTabs extends LitElement {
   }
 
   private _moveTabFocus(currentTab: ConfidenceTab, direction: -1 | 1) {
-    const tabs = PrismConfidenceTabs._tabs;
+    const tabs = WayfinderConfidenceTabs._tabs;
     const currentIndex = tabs.indexOf(currentTab);
     const nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
     const nextTab = tabs[nextIndex];
@@ -78,7 +78,7 @@ export class PrismConfidenceTabs extends LitElement {
   private _renderTabButton(tab: ConfidenceTab, label: string, badge?: number) {
     const isActive = this.activeTab === tab;
     const badgeHtml = typeof badge === 'number' && badge > 0
-      ? html`<span class="tab-badge" data-prism-tab-badge="${tab}">${badge}</span>`
+      ? html`<span class="tab-badge" data-wayfinder-tab-badge="${tab}">${badge}</span>`
       : nothing;
 
     return html`
@@ -90,7 +90,7 @@ export class PrismConfidenceTabs extends LitElement {
         aria-controls="confidence-panel-${tab}"
         id="confidence-tab-${tab}"
         tabindex=${isActive ? '0' : '-1'}
-        data-prism-confidence-tab="${tab}"
+        data-wayfinder-confidence-tab="${tab}"
         @click=${() => this._handleTabClick(tab)}
         @keydown=${(event: KeyboardEvent) => this._handleTabKeydown(event, tab)}
       >
@@ -104,7 +104,7 @@ export class PrismConfidenceTabs extends LitElement {
     const validationBadge = this.errorCount + this.warningCount;
 
     return html`
-      <div class="tabs-root" data-prism-confidence-tabs>
+      <div class="tabs-root" data-wayfinder-confidence-tabs>
         <div class="tab-bar" role="tablist" aria-label="Editor tools">
           ${this._renderTabButton('canvas', 'Canvas')}
           ${this._renderTabButton('validation', 'Validation', validationBadge)}
@@ -120,7 +120,7 @@ export class PrismConfidenceTabs extends LitElement {
             class="tab-panel tab-panel-canvas ${this.activeTab === 'canvas' ? 'tab-panel-active' : ''}"
             role="tabpanel"
             aria-labelledby="confidence-tab-canvas"
-            data-prism-confidence-panel="canvas"
+            data-wayfinder-confidence-panel="canvas"
             ?hidden=${this.activeTab !== 'canvas'}
           >
             <slot name="canvas"></slot>
@@ -131,7 +131,7 @@ export class PrismConfidenceTabs extends LitElement {
             class="tab-panel ${this.activeTab === 'validation' ? 'tab-panel-active' : ''}"
             role="tabpanel"
             aria-labelledby="confidence-tab-validation"
-            data-prism-confidence-panel="validation"
+            data-wayfinder-confidence-panel="validation"
             ?hidden=${this.activeTab !== 'validation'}
           >
             <slot name="validation"></slot>
@@ -142,7 +142,7 @@ export class PrismConfidenceTabs extends LitElement {
             class="tab-panel ${this.activeTab === 'preview' ? 'tab-panel-active' : ''}"
             role="tabpanel"
             aria-labelledby="confidence-tab-preview"
-            data-prism-confidence-panel="preview"
+            data-wayfinder-confidence-panel="preview"
             ?hidden=${this.activeTab !== 'preview'}
           >
             <slot name="preview"></slot>
@@ -153,7 +153,7 @@ export class PrismConfidenceTabs extends LitElement {
             class="tab-panel ${this.activeTab === 'simulation' ? 'tab-panel-active' : ''}"
             role="tabpanel"
             aria-labelledby="confidence-tab-simulation"
-            data-prism-confidence-panel="simulation"
+            data-wayfinder-confidence-panel="simulation"
             ?hidden=${this.activeTab !== 'simulation'}
           >
             <slot name="simulation"></slot>
@@ -164,7 +164,7 @@ export class PrismConfidenceTabs extends LitElement {
             class="tab-panel tab-panel-definition ${this.activeTab === 'definition' ? 'tab-panel-active' : ''}"
             role="tabpanel"
             aria-labelledby="confidence-tab-definition"
-            data-prism-confidence-panel="definition"
+            data-wayfinder-confidence-panel="definition"
             ?hidden=${this.activeTab !== 'definition'}
           >
             <slot name="definition"></slot>
@@ -175,7 +175,7 @@ export class PrismConfidenceTabs extends LitElement {
             class="tab-panel ${this.activeTab === 'help' ? 'tab-panel-active' : ''}"
             role="tabpanel"
             aria-labelledby="confidence-tab-help"
-            data-prism-confidence-panel="help"
+            data-wayfinder-confidence-panel="help"
             ?hidden=${this.activeTab !== 'help'}
           >
             <slot name="help"></slot>
@@ -308,6 +308,6 @@ export class PrismConfidenceTabs extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-confidence-tabs': PrismConfidenceTabs;
+    'wayfinder-confidence-tabs': WayfinderConfidenceTabs;
   }
 }

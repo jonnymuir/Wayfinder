@@ -12,9 +12,9 @@ test.describe('ServiceBlueprint graph workspace', () => {
   test('graph mode supports keyboard selection and the inspector shortcut', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
 
-    await expect(page.locator('prism-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
 
-    const declarationStage = page.locator('[data-prism-stage="declaration"]');
+    const declarationStage = page.locator('[data-wayfinder-stage="declaration"]');
     await declarationStage.focus();
     await expect(declarationStage).toBeFocused();
 
@@ -22,46 +22,46 @@ test.describe('ServiceBlueprint graph workspace', () => {
     await expect(declarationStage).toHaveAttribute('aria-pressed', 'true');
 
     await declarationStage.press('e');
-    await expect(page.locator('prism-step-inspector')).toBeFocused();
-    await expect(page.locator('[data-prism-stage-detail="declaration"]')).toBeVisible();
+    await expect(page.locator('wayfinder-step-inspector')).toBeFocused();
+    await expect(page.locator('[data-wayfinder-stage-detail="declaration"]')).toBeVisible();
   });
 
   test('create stage dialog validates input and creates a stage from graph mode', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas'));
 
-    await expect(page.locator('prism-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Add stage' }).click();
 
-    const dialog = page.locator('[data-prism-create-stage-dialog]');
+    const dialog = page.locator('[data-wayfinder-create-stage-dialog]');
     await expect(dialog).toBeVisible();
 
-    const keyInput = dialog.locator('[data-prism-create-stage-key]');
+    const keyInput = dialog.locator('[data-wayfinder-create-stage-key]');
     await keyInput.fill('');
     await dialog.getByRole('button', { name: 'Create stage' }).click();
-    await expect(page.locator('[data-prism-create-stage-error]')).toContainText(/stage key is required/i);
+    await expect(page.locator('[data-wayfinder-create-stage-error]')).toContainText(/stage key is required/i);
 
-    await dialog.locator('[data-prism-create-stage-title]').fill('Site visit');
+    await dialog.locator('[data-wayfinder-create-stage-title]').fill('Site visit');
     await keyInput.fill('site-visit');
-    await dialog.locator('[data-prism-create-stage-queue]').fill('reviewer');
-    await dialog.locator('[data-prism-create-stage-type]').selectOption('review');
+    await dialog.locator('[data-wayfinder-create-stage-queue]').fill('reviewer');
+    await dialog.locator('[data-wayfinder-create-stage-type]').selectOption('review');
     await dialog.getByRole('button', { name: 'Create stage' }).click();
 
     await expect(dialog).toBeHidden();
-    await expect(page.locator('[data-prism-stage="site-visit"]')).toBeVisible();
+    await expect(page.locator('[data-wayfinder-stage="site-visit"]')).toBeVisible();
   });
 
   test('delete stage confirmation can be opened from a graph stage by keyboard', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas'));
 
-    await expect(page.locator('prism-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
 
-    const stage = page.locator('[data-prism-stage="reviewer-assessment"]');
+    const stage = page.locator('[data-wayfinder-stage="reviewer-assessment"]');
     await stage.focus();
     await stage.press('Delete');
 
-    const dialog = page.locator('[data-prism-delete-stage-dialog]');
+    const dialog = page.locator('[data-wayfinder-delete-stage-dialog]');
     await expect(dialog).toBeVisible();
-    expect(await dialog.locator('[data-prism-delete-stage-transitions] li').count()).toBeGreaterThan(0);
+    expect(await dialog.locator('[data-wayfinder-delete-stage-transitions] li').count()).toBeGreaterThan(0);
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toBeHidden();
   });
@@ -69,9 +69,9 @@ test.describe('ServiceBlueprint graph workspace', () => {
   test('role lanes are structurally visible and keyboard-accessible (vertical orientation)', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas'));
 
-    await expect(page.locator('prism-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
 
-    const lanes = page.locator('[data-prism-role-queue]');
+    const lanes = page.locator('[data-wayfinder-role-queue]');
     await expect(lanes).not.toHaveCount(0);
 
     const firstLane = lanes.first();
@@ -88,13 +88,13 @@ test.describe('ServiceBlueprint graph workspace', () => {
   test('keyboard navigation moves between lanes and stages (vertical orientation)', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas'));
 
-    await expect(page.locator('prism-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
 
-    const firstLane = page.locator('[data-prism-role-queue]').first();
+    const firstLane = page.locator('[data-wayfinder-role-queue]').first();
     await firstLane.focus();
 
     await page.keyboard.press('Tab');
-    const firstStage = page.locator('[data-prism-stage]').first();
+    const firstStage = page.locator('[data-wayfinder-stage]').first();
 
     await firstStage.press('Enter');
     await expect(firstStage).toHaveAttribute('aria-pressed', 'true');

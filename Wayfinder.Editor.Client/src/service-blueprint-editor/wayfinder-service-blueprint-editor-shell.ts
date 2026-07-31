@@ -2,21 +2,21 @@ import { LitElement, css, html, nothing } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { live } from 'lit/directives/live.js';
 import { customElement, property, state } from 'lit/decorators.js';
-import './prism-service-blueprint-editor.js';
+import './wayfinder-service-blueprint-editor.js';
 import type { ServiceBlueprintSource, ServiceBlueprintSummary } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
 
-@customElement('prism-service-blueprint-editor-shell')
-export class PrismServiceBlueprintEditorShellElement extends LitElement {
+@customElement('wayfinder-service-blueprint-editor-shell')
+export class WayfinderServiceBlueprintEditorShellElement extends LitElement {
   @property({ type: String, attribute: 'blueprint-key' })
   blueprintKey = 'planning';
 
   /**
    * Host-supplied source of authored serviceBlueprints. The shell lists serviceBlueprints
    * via `source.list()` and forwards the selected serviceBlueprint to
-   * `<prism-service-blueprint-editor>`.
+   * `<wayfinder-service-blueprint-editor>`.
    */
   @property({ attribute: false })
   serviceBlueprintSource?: ServiceBlueprintSource;
@@ -110,14 +110,14 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
   private _renderEditorOrPlaceholder() {
     if (!this.serviceBlueprintSource) {
       // Developer affordance — fail loudly when a host forgot to wire a source.
-      // Storybook stories that drive `<prism-service-blueprint-editor>` directly via
+      // Storybook stories that drive `<wayfinder-service-blueprint-editor>` directly via
       // `initialServiceBlueprint` should not be using the shell.
       return html`
-        <div class="empty-state" role="status" data-prism-shell-empty="no-source">
+        <div class="empty-state" role="status" data-wayfinder-shell-empty="no-source">
           <h2>No serviceBlueprint source configured</h2>
           <p>
             Set <code>element.serviceBlueprintSource</code> on
-            <code>&lt;prism-service-blueprint-editor-shell&gt;</code> to a
+            <code>&lt;wayfinder-service-blueprint-editor-shell&gt;</code> to a
             <code>ServiceBlueprintSource</code> implementation. The in-memory reference
             implementation lives in <code>in-memory-service-blueprint-source.ts</code>.
           </p>
@@ -127,7 +127,7 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
 
     if (this._sourceError) {
       return html`
-        <div class="empty-state" role="alert" data-prism-shell-empty="source-error">
+        <div class="empty-state" role="alert" data-wayfinder-shell-empty="source-error">
           <h2>Service Blueprint source unavailable</h2>
           <p>${this._sourceError}</p>
         </div>
@@ -137,13 +137,13 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
     return keyed(
       this.blueprintKey,
       html`
-        <prism-service-blueprint-editor
+        <wayfinder-service-blueprint-editor
           blueprint-key="${this.blueprintKey}"
           .serviceBlueprintSource=${this.serviceBlueprintSource}
           .actionCatalog=${this.actionCatalog}
           .authorContext=${this.authorContext}
           .availableQueues=${this.availableQueues}
-        ></prism-service-blueprint-editor>
+        ></wayfinder-service-blueprint-editor>
       `
     );
   }
@@ -154,8 +154,8 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
 
       <div
         class="shell"
-        data-prism-component="service-blueprint-editor-shell"
-        data-prism-active-service-blueprint="${this.blueprintKey}"
+        data-wayfinder-component="service-blueprint-editor-shell"
+        data-wayfinder-active-service-blueprint="${this.blueprintKey}"
       >
         <header class="topbar">
           <div class="topbar-content">
@@ -198,9 +198,9 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
        neither the shell nor the outer page can reach it. */
     :host {
       display: block;
-      height: var(--prism-service-blueprint-editor-height, 100vh);
-      min-height: var(--prism-service-blueprint-editor-min-height, 100vh);
-      overflow: var(--prism-service-blueprint-editor-overflow, hidden);
+      height: var(--wayfinder-service-blueprint-editor-height, 100vh);
+      min-height: var(--wayfinder-service-blueprint-editor-min-height, 100vh);
+      overflow: var(--wayfinder-service-blueprint-editor-overflow, hidden);
       color: #0b0c0c;
       background: #f3f2f1;
       font-family: "GDS Transport", arial, sans-serif;
@@ -212,7 +212,7 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
 
     /* Hides itself via clipping to a 1px box, not via a negative offset relying on an
        ancestor's overflow:hidden to clip it — some hosts (e.g. the Umbraco backoffice)
-       override --prism-service-blueprint-editor-overflow to "visible" to fix page scrolling, which
+       override --wayfinder-service-blueprint-editor-overflow to "visible" to fix page scrolling, which
        would otherwise leave this rendered on-screen at all times instead of only on focus. */
     .skip-link {
       position: absolute;
@@ -245,7 +245,7 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
       display: flex;
       flex-direction: column;
       height: 100%;
-      min-height: var(--prism-service-blueprint-editor-shell-min-height, 0);
+      min-height: var(--wayfinder-service-blueprint-editor-shell-min-height, 0);
       overflow: hidden;
     }
 
@@ -315,7 +315,7 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
       overflow: hidden;
     }
 
-    prism-service-blueprint-editor {
+    wayfinder-service-blueprint-editor {
       display: block;
       height: 100%;
       width: 100%;
@@ -365,6 +365,6 @@ export class PrismServiceBlueprintEditorShellElement extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-service-blueprint-editor-shell': PrismServiceBlueprintEditorShellElement;
+    'wayfinder-service-blueprint-editor-shell': WayfinderServiceBlueprintEditorShellElement;
   }
 }

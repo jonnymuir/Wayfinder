@@ -23,11 +23,11 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const lanes = graph.locator('[data-prism-role-queue]');
+    const lanes = graph.locator('[data-wayfinder-role-queue]');
     const laneCount = await lanes.count();
     expect(laneCount).toBeGreaterThanOrEqual(2,
       { message: 'A multi-lane service blueprint must show at least two lanes simultaneously' });
@@ -39,22 +39,22 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
     // Each lane column must contain at least one stage
-    const laneCols = graph.locator('[data-prism-role-queue]');
+    const laneCols = graph.locator('[data-wayfinder-role-queue]');
     const laneCount = await laneCols.count();
     expect(laneCount).toBeGreaterThanOrEqual(2);
 
     const stageKeysPerLane: string[][] = [];
     for (let i = 0; i < laneCount; i++) {
-      const laneStages = laneCols.nth(i).locator('[data-prism-stage]');
+      const laneStages = laneCols.nth(i).locator('[data-wayfinder-stage]');
       const count = await laneStages.count();
       const keys: string[] = [];
       for (let j = 0; j < count; j++) {
-        const key = await laneStages.nth(j).getAttribute('data-prism-stage');
+        const key = await laneStages.nth(j).getAttribute('data-wayfinder-stage');
         if (key) keys.push(key);
       }
       stageKeysPerLane.push(keys);
@@ -73,15 +73,15 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const splitGateway = graph.locator('[data-prism-gateway-kind="Split"]');
+    const splitGateway = graph.locator('[data-wayfinder-gateway-kind="Split"]');
     await expect(splitGateway).toBeVisible();
 
     // The split gateway has exactly one lane — the one that owns the branching decision
-    const laneAttr = await splitGateway.first().getAttribute('data-prism-queue');
+    const laneAttr = await splitGateway.first().getAttribute('data-wayfinder-queue');
     expect(laneAttr).toBeTruthy();
     expect(laneAttr).not.toContain(',');
   });
@@ -92,14 +92,14 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const joinGateway = graph.locator('[data-prism-gateway-kind="Join"]');
+    const joinGateway = graph.locator('[data-wayfinder-gateway-kind="Join"]');
     await expect(joinGateway).toBeVisible();
 
-    const laneAttr = await joinGateway.first().getAttribute('data-prism-queue');
+    const laneAttr = await joinGateway.first().getAttribute('data-wayfinder-queue');
     expect(laneAttr).toBeTruthy();
     expect(laneAttr).not.toContain(',');
   });
@@ -112,22 +112,22 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
     // Record lane column headings before selection
-    const laneCols = graph.locator('[data-prism-role-queue]');
+    const laneCols = graph.locator('[data-wayfinder-role-queue]');
     const laneCount = await laneCols.count();
     expect(laneCount).toBeGreaterThanOrEqual(2);
 
     // Select any stage in the graph — the first lane column may only hold a gateway node
-    const anyStage = graph.locator('[data-prism-stage]').first();
+    const anyStage = graph.locator('[data-wayfinder-stage]').first();
     await expect(anyStage).toBeVisible();
     await anyStage.click();
 
     // All lane columns must still be present after selection.
-    // Gateway nodes carry a data-prism-queue attribute but are rendered as graph siblings —
+    // Gateway nodes carry a data-wayfinder-queue attribute but are rendered as graph siblings —
     // they are not DOM children of the lane column containers.
     await expect(laneCols).toHaveCount(laneCount,
       { timeout: 3_000 });
@@ -137,17 +137,17 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
 
   test('gateway nodes and stage nodes are visually distinguishable in the graph', async ({ page }) => {
     // Authors must be able to tell stages (action-bearing) from gateways (routing) at a glance.
-    // Stages use [data-prism-stage]; gateways use [data-prism-gateway].
+    // Stages use [data-wayfinder-stage]; gateways use [data-wayfinder-gateway].
     // These selectors must not overlap — an element cannot be both a stage and a gateway.
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(graphStoryUrl());
 
-    const graph = page.locator('prism-service-blueprint-graph');
+    const graph = page.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const stages = graph.locator('[data-prism-stage]');
-    const gateways = graph.locator('[data-prism-gateway]');
+    const stages = graph.locator('[data-wayfinder-stage]');
+    const gateways = graph.locator('[data-wayfinder-gateway]');
 
     await expect(stages.first()).toBeVisible({ timeout: 5_000 });
     await expect(gateways.first()).toBeVisible({ timeout: 5_000 });
@@ -155,8 +155,8 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     expect(await stages.count()).toBeGreaterThan(0);
     expect(await gateways.count()).toBeGreaterThan(0);
 
-    // No element should carry BOTH data-prism-stage and data-prism-gateway — they are distinct kinds
-    const ambiguousNodes = graph.locator('[data-prism-stage][data-prism-gateway]');
+    // No element should carry BOTH data-wayfinder-stage and data-wayfinder-gateway — they are distinct kinds
+    const ambiguousNodes = graph.locator('[data-wayfinder-stage][data-wayfinder-gateway]');
     await expect(ambiguousNodes).toHaveCount(0);
   });
 
@@ -167,7 +167,7 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     // cursor positions — one per lane — rather than one global "current stage."
     // This proves independent cursors are tracked without one overwriting the other.
     await page.goto(editorStoryUrl());
-    // TODO: use simulation tab, fire the split, assert two [data-prism-simulation-cursor] elements
+    // TODO: use simulation tab, fire the split, assert two [data-wayfinder-simulation-cursor] elements
   });
 
   test.skip('the runtime join gateway only releases after both required lanes have arrived', async ({ page }) => {

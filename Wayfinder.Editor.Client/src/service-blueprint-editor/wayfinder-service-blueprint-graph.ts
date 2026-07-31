@@ -95,8 +95,8 @@ const EDGE_LABEL_HEIGHT = 22;
  *  - inspector-requested CustomEvent<GraphSelectionDetail>
  *  - service-blueprint-updated CustomEvent<ServiceBlueprintUpdatedDetail>
  */
-@customElement('prism-service-blueprint-graph')
-export class PrismServiceBlueprintGraphElement extends LitElement {
+@customElement('wayfinder-service-blueprint-graph')
+export class WayfinderServiceBlueprintGraphElement extends LitElement {
   @property({ attribute: false })
   serviceBlueprint: AuthoredServiceBlueprint | null = null;
 
@@ -114,7 +114,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
   /**
    * Declarative JSON form of {@link serviceBlueprint}. Lets the element be initialised
    * from HTML/Razor markup without JS wiring — Razor authors can write
-   * `<prism-service-blueprint-graph read-only service-blueprint-json='...'>` and skip the prop
+   * `<wayfinder-service-blueprint-graph read-only service-blueprint-json='...'>` and skip the prop
    * assignment. When set, this attribute is parsed and assigned to `serviceBlueprint`.
    */
   @property({ type: String, attribute: 'service-blueprint-json' })
@@ -189,7 +189,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
         const parsed = JSON.parse(this.serviceBlueprintJson) as AuthoredServiceBlueprint;
         this.serviceBlueprint = parsed;
       } catch (error) {
-        console.error('prism-service-blueprint-graph: service-blueprint-json could not be parsed.', error);
+        console.error('wayfinder-service-blueprint-graph: service-blueprint-json could not be parsed.', error);
       }
     }
 
@@ -303,7 +303,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
       zoomChanged: zoom => {
         this._zoom = Number(zoom.toFixed(2));
       },
-      ready: () => this.setAttribute('data-prism-graph-ready', 'true'),
+      ready: () => this.setAttribute('data-wayfinder-graph-ready', 'true'),
     };
   }
 
@@ -364,7 +364,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
     this._bridge?.unmount();
     this._bridge = null;
     this._bridgeHost = null;
-    this.removeAttribute('data-prism-graph-ready');
+    this.removeAttribute('data-wayfinder-graph-ready');
   }
 
   private _currentSelectionDetail(): GraphSelectionDetail | null {
@@ -689,7 +689,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
     this._dismissContextMenu(false);
     requestAnimationFrame(() => {
       this.shadowRoot
-        ?.querySelector<HTMLInputElement>('[data-prism-create-stage-title]')
+        ?.querySelector<HTMLInputElement>('[data-wayfinder-create-stage-title]')
         ?.focus();
     });
   }
@@ -837,7 +837,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
       error: null,
     };
     requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLInputElement>('[data-prism-create-gateway-title]')?.focus();
+      this.shadowRoot?.querySelector<HTMLInputElement>('[data-wayfinder-create-gateway-title]')?.focus();
     });
   }
 
@@ -912,7 +912,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
     this._dismissContextMenu(false);
     requestAnimationFrame(() => {
       this.shadowRoot
-        ?.querySelector<HTMLButtonElement>('[data-prism-delete-stage-cancel]')
+        ?.querySelector<HTMLButtonElement>('[data-wayfinder-delete-stage-cancel]')
         ?.focus();
     });
   }
@@ -1041,7 +1041,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
 
     requestAnimationFrame(() => {
       this.shadowRoot
-        ?.querySelector<HTMLButtonElement>('[data-prism-context-menu] button')
+        ?.querySelector<HTMLButtonElement>('[data-wayfinder-context-menu] button')
         ?.focus();
     });
   }
@@ -1115,7 +1115,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
         style=${`left:${target.x}px;top:${target.y}px;`}
         role="menu"
         aria-label="Graph workspace actions"
-        data-prism-context-menu
+        data-wayfinder-context-menu
         @keydown=${(event: KeyboardEvent) => {
           if (event.key === 'Escape') {
             event.preventDefault();
@@ -1213,7 +1213,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           aria-modal="true"
           aria-labelledby="create-stage-dialog-title"
           aria-describedby="create-stage-dialog-copy"
-          data-prism-create-stage-dialog
+          data-wayfinder-create-stage-dialog
           @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeCreateStageDialog())}
         >
           <div class="dialog-header">
@@ -1225,13 +1225,13 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           <p id="create-stage-dialog-copy" class="dialog-copy">
             Name the stage, choose its key, queue, and type, then continue editing in the inspector.
           </p>
-          ${dialog.error ? html`<p class="dialog-error" data-prism-create-stage-error>${dialog.error}</p>` : nothing}
+          ${dialog.error ? html`<p class="dialog-error" data-wayfinder-create-stage-error>${dialog.error}</p>` : nothing}
           <div class="dialog-grid">
             <label class="dialog-field">
               <span class="dialog-label">Name</span>
               <input
                 class="dialog-control"
-                data-prism-create-stage-title
+                data-wayfinder-create-stage-title
                 .value=${dialog.title}
                 @input=${(event: Event) => this._updateCreateStageTitle((event.currentTarget as HTMLInputElement).value)}
               />
@@ -1240,7 +1240,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
               <span class="dialog-label">Key</span>
               <input
                 class="dialog-control"
-                data-prism-create-stage-key
+                data-wayfinder-create-stage-key
                 .value=${dialog.stageKey}
                 @input=${(event: Event) => this._updateCreateStageKey((event.currentTarget as HTMLInputElement).value)}
               />
@@ -1249,7 +1249,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
               <span class="dialog-label">Queue</span>
               <input
                 class="dialog-control"
-                data-prism-create-stage-queue
+                data-wayfinder-create-stage-queue
                 .value=${dialog.queueKey}
                 list="create-stage-queue-options"
                 placeholder="planning"
@@ -1265,7 +1265,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
               <span class="dialog-label">Type</span>
               <select
                 class="dialog-control"
-                data-prism-create-stage-type
+                data-wayfinder-create-stage-type
                 @change=${(event: Event) => {
                   const stageType = (event.currentTarget as HTMLSelectElement).value as EditorStageType;
                   this._createStageDialog = this._createStageDialog
@@ -1282,7 +1282,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           </div>
           <div class="dialog-actions">
             <button type="button" class="dialog-button secondary" @click=${this._closeCreateStageDialog}>Cancel</button>
-            <button type="button" class="dialog-button primary" data-prism-create-stage-submit @click=${this._submitCreateStage}>Create stage</button>
+            <button type="button" class="dialog-button primary" data-wayfinder-create-stage-submit @click=${this._submitCreateStage}>Create stage</button>
           </div>
         </div>
       </div>
@@ -1304,7 +1304,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           aria-modal="true"
           aria-labelledby="delete-stage-dialog-title"
           aria-describedby="delete-stage-dialog-copy"
-          data-prism-delete-stage-dialog
+          data-wayfinder-delete-stage-dialog
           @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeDeleteStageDialog())}
         >
           <div class="dialog-header">
@@ -1316,7 +1316,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           <p id="delete-stage-dialog-copy" class="dialog-copy">
             This removes the stage and every transition connected to it.
           </p>
-          <div class="delete-impact" data-prism-delete-stage-transitions>
+          <div class="delete-impact" data-wayfinder-delete-stage-transitions>
             ${dialog.affectedTransitions.length === 0
               ? html`<p>No transitions will be removed.</p>`
               : html`
@@ -1329,8 +1329,8 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
                 `}
           </div>
           <div class="dialog-actions">
-            <button type="button" class="dialog-button secondary" data-prism-delete-stage-cancel @click=${this._closeDeleteStageDialog}>Cancel</button>
-            <button type="button" class="dialog-button danger" data-prism-delete-stage-confirm @click=${this._confirmDeleteStage}>Delete stage</button>
+            <button type="button" class="dialog-button secondary" data-wayfinder-delete-stage-cancel @click=${this._closeDeleteStageDialog}>Cancel</button>
+            <button type="button" class="dialog-button danger" data-wayfinder-delete-stage-confirm @click=${this._confirmDeleteStage}>Delete stage</button>
           </div>
         </div>
       </div>
@@ -1352,7 +1352,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           aria-modal="true"
           aria-labelledby="create-gateway-dialog-title"
           aria-describedby="create-gateway-dialog-copy"
-          data-prism-create-gateway-dialog
+          data-wayfinder-create-gateway-dialog
           @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeCreateGatewayDialog())}
         >
           <div class="dialog-header">
@@ -1364,13 +1364,13 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           <p id="create-gateway-dialog-copy" class="dialog-copy">
             Add a Split or Join gateway to the workspace. Continue editing in the inspector after creation.
           </p>
-          ${dialog.error ? html`<p class="dialog-error" data-prism-create-gateway-error>${dialog.error}</p>` : nothing}
+          ${dialog.error ? html`<p class="dialog-error" data-wayfinder-create-gateway-error>${dialog.error}</p>` : nothing}
           <div class="dialog-grid">
             <label class="dialog-field">
               <span class="dialog-label">Name</span>
               <input
                 class="dialog-control"
-                data-prism-create-gateway-title
+                data-wayfinder-create-gateway-title
                 .value=${dialog.title}
                 @input=${(event: Event) => {
                   const title = (event.currentTarget as HTMLInputElement).value;
@@ -1387,7 +1387,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
               <span class="dialog-label">Key</span>
               <input
                 class="dialog-control"
-                data-prism-create-gateway-key
+                data-wayfinder-create-gateway-key
                 .value=${dialog.gatewayKey}
                 @input=${(event: Event) => {
                   const gatewayKey = (event.currentTarget as HTMLInputElement).value;
@@ -1401,7 +1401,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
               <span class="dialog-label">Kind</span>
               <select
                 class="dialog-control"
-                data-prism-create-gateway-kind
+                data-wayfinder-create-gateway-kind
                 @change=${(event: Event) => {
                   const kind = (event.currentTarget as HTMLSelectElement).value as 'Split' | 'Join';
                   this._createGatewayDialog = this._createGatewayDialog
@@ -1417,7 +1417,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
               <span class="dialog-label">Queue</span>
               <input
                 class="dialog-control"
-                data-prism-create-gateway-queue
+                data-wayfinder-create-gateway-queue
                 .value=${dialog.queueKey}
                 list="create-gateway-queue-options"
                 placeholder="applicant"
@@ -1437,7 +1437,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           </div>
           <div class="dialog-actions">
             <button type="button" class="dialog-button secondary" @click=${this._closeCreateGatewayDialog}>Cancel</button>
-            <button type="button" class="dialog-button primary" data-prism-create-gateway-submit @click=${this._submitCreateGateway}>Create gateway</button>
+            <button type="button" class="dialog-button primary" data-wayfinder-create-gateway-submit @click=${this._submitCreateGateway}>Create gateway</button>
           </div>
         </div>
       </div>
@@ -1458,7 +1458,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
                 <button
                   type="button"
                   class="hud-button"
-                  data-prism-add-stage
+                  data-wayfinder-add-stage
                   @click=${(event: Event) => {
                     const selectedStage = this.serviceBlueprint?.stages.find(stage => stage.stateKey === this._selectedStageKey) ?? null;
                     this._openCreateStageDialog(
@@ -1474,7 +1474,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
                 <button
                   type="button"
                   class="hud-button"
-                  data-prism-add-gateway
+                  data-wayfinder-add-gateway
                   @click=${(event: Event) => this._openCreateGatewayDialog(event.currentTarget as HTMLElement)}
                 >
                   Add gateway
@@ -1482,7 +1482,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
                 <button
                   type="button"
                   class="hud-button"
-                  data-prism-auto-arrange
+                  data-wayfinder-auto-arrange
                   @click=${() => this._tidyLayout()}
                 >
                   Tidy layout
@@ -1493,11 +1493,11 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
           <button type="button" class="hud-button" aria-label="Zoom out" @click=${() => this._bridge?.zoomOut()}>
             −
           </button>
-          <span class="zoom-indicator" data-prism-zoom>${Math.round(this._zoom * 100)}%</span>
+          <span class="zoom-indicator" data-wayfinder-zoom>${Math.round(this._zoom * 100)}%</span>
           <button type="button" class="hud-button" aria-label="Zoom in" @click=${() => this._bridge?.zoomIn()}>
             +
           </button>
-          <button type="button" class="hud-button" data-prism-fit-screen @click=${() => this._fitToScreen()}>
+          <button type="button" class="hud-button" data-wayfinder-fit-screen @click=${() => this._fitToScreen()}>
             Fit
           </button>
         </div>
@@ -1519,7 +1519,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
             aria-roledescription=${this.readOnly ? 'Service blueprint graph viewer' : 'Service blueprint graph editor'}
             @click=${() => this._dismissContextMenu(false)}
           >
-            <div class="graph-react-host" data-prism-component="service-blueprint-graph" data-prism-mode="graph"></div>
+            <div class="graph-react-host" data-wayfinder-component="service-blueprint-graph" data-wayfinder-mode="graph"></div>
           </div>`}
     `;
   }
@@ -1531,7 +1531,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
 
   private _renderWorkspaceEmptyState() {
     return html`
-      <section class="workspace-empty-state" role="status" data-prism-empty-state="graph">
+      <section class="workspace-empty-state" role="status" data-wayfinder-empty-state="graph">
         <h2 class="workspace-empty-title">${this.readOnly ? 'No stages to display' : 'Start building your service blueprint'}</h2>
         <p class="workspace-empty-copy">
           ${this.readOnly
@@ -1550,7 +1550,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
                 <button
                   type="button"
                   class="hud-button"
-                  data-prism-empty-add-stage
+                  data-wayfinder-empty-add-stage
                   @click=${(event: Event) => this._openCreateStageDialog('front-stage', 'append', null, event.currentTarget as HTMLElement)}
                 >
                   Add first stage
@@ -1564,7 +1564,7 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
 
   render() {
     return html`
-      <div class="service-blueprint-graph-root" data-prism-component="service-blueprint-graph" data-prism-mode="graph" data-prism-read-only=${String(this.readOnly)}>
+      <div class="service-blueprint-graph-root" data-wayfinder-component="service-blueprint-graph" data-wayfinder-mode="graph" data-wayfinder-read-only=${String(this.readOnly)}>
         <div class="toolbar">
           <div class="toolbar-title-block">
             <span class="service-blueprint-title">${this.serviceBlueprint?.displayName ?? 'No service blueprint loaded'}</span>
@@ -2720,6 +2720,6 @@ export class PrismServiceBlueprintGraphElement extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-service-blueprint-graph': PrismServiceBlueprintGraphElement;
+    'wayfinder-service-blueprint-graph': WayfinderServiceBlueprintGraphElement;
   }
 }

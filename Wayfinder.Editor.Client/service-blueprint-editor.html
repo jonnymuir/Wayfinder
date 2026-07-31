@@ -24,16 +24,16 @@
         background: #f3f2f1;
       }
 
-      prism-service-blueprint-editor-shell {
+      wayfinder-service-blueprint-editor-shell {
         display: block;
         min-height: 100vh;
       }
     </style>
     <script type="module">
-      import './src/service-blueprint-editor/prism-service-blueprint-editor-shell.ts';
+      import './src/service-blueprint-editor/wayfinder-service-blueprint-editor-shell.ts';
       import { MockBusinessAppServiceBlueprintSource } from './src/service-blueprint-editor/integrations/mockapp-service-blueprint-source.ts';
 
-      const shell = document.querySelector('prism-service-blueprint-editor-shell');
+      const shell = document.querySelector('wayfinder-service-blueprint-editor-shell');
       if (shell) {
         shell.serviceBlueprintSource = new MockBusinessAppServiceBlueprintSource();
         shell.availableQueues = [
@@ -46,6 +46,6 @@
     </script>
   </head>
   <body>
-    <prism-service-blueprint-editor-shell blueprint-key="planning"></prism-service-blueprint-editor-shell>
+    <wayfinder-service-blueprint-editor-shell blueprint-key="planning"></wayfinder-service-blueprint-editor-shell>
   </body>
 </html>

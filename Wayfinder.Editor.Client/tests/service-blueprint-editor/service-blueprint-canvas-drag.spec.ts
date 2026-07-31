@@ -25,11 +25,11 @@ declare global {
 async function gotoGraphStory(page: Page, url: string) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(url);
-  await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+  await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 }
 
 async function recordServiceBlueprintUpdates(page: Page) {
-  await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+  await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
     window.__layoutUpdates = [];
     graphElement.addEventListener('service-blueprint-updated', event => {
       const serviceBlueprint = (event as CustomEvent<{ serviceBlueprint: {
@@ -47,7 +47,7 @@ async function recordServiceBlueprintUpdates(page: Page) {
 }
 
 async function dragBy(page: Page, selector: string, dx: number, dy: number) {
-  const box = await page.locator(`prism-service-blueprint-graph ${selector}`).boundingBox();
+  const box = await page.locator(`wayfinder-service-blueprint-graph ${selector}`).boundingBox();
   if (!box) throw new Error(`no bounding box for ${selector}`);
   const startX = box.x + box.width / 2;
   const startY = box.y + box.height / 2;
@@ -63,9 +63,9 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
     await gotoGraphStory(page, GRAPH_STORY);
     await recordServiceBlueprintUpdates(page);
 
-    const stage = page.locator('prism-service-blueprint-graph [data-prism-stage="enter-details"]');
+    const stage = page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage="enter-details"]');
     const before = await stage.boundingBox();
-    await dragBy(page, '[data-prism-stage="enter-details"]', 0, 120);
+    await dragBy(page, '[data-wayfinder-stage="enter-details"]', 0, 120);
     const after = await stage.boundingBox();
 
     expect(after!.y - before!.y, 'the stage must follow the drag').toBeGreaterThan(80);
@@ -79,22 +79,22 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
     await gotoGraphStory(page, GRAPH_STORY);
     await recordServiceBlueprintUpdates(page);
 
-    const lanes = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const lanes = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const root = (graphElement as HTMLElement).shadowRoot!;
-      return Array.from(root.querySelectorAll<HTMLElement>('[data-prism-role-queue]')).map(lane => {
+      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-role-queue]')).map(lane => {
         const rect = lane.getBoundingClientRect();
-        return { key: lane.getAttribute('data-prism-role-queue') ?? '', centerX: rect.left + rect.width / 2 };
+        return { key: lane.getAttribute('data-wayfinder-role-queue') ?? '', centerX: rect.left + rect.width / 2 };
       });
     });
     expect(lanes.length).toBeGreaterThanOrEqual(2);
 
-    const stage = page.locator('prism-service-blueprint-graph [data-prism-stage="enter-details"]');
-    await expect(stage).toHaveAttribute('data-prism-queue', lanes[0].key);
+    const stage = page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage="enter-details"]');
+    await expect(stage).toHaveAttribute('data-wayfinder-queue', lanes[0].key);
 
     const box = await stage.boundingBox();
-    await dragBy(page, '[data-prism-stage="enter-details"]', lanes[1].centerX - (box!.x + box!.width / 2), 40);
+    await dragBy(page, '[data-wayfinder-stage="enter-details"]', lanes[1].centerX - (box!.x + box!.width / 2), 40);
 
-    await expect(stage).toHaveAttribute('data-prism-queue', lanes[1].key);
+    await expect(stage).toHaveAttribute('data-wayfinder-queue', lanes[1].key);
 
     const updates = await page.evaluate(() => window.__layoutUpdates!);
     expect(updates, 'position + queue reassignment land as a single undoable commit').toHaveLength(1);
@@ -104,15 +104,15 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
   test('Tidy layout writes explicit positions for every node in one commit', async ({ page }) => {
     await gotoGraphStory(page, GRAPH_STORY);
 
-    const nodeCount = await page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+    const nodeCount = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
       const root = (graphElement as HTMLElement).shadowRoot!;
       return root.querySelectorAll('.react-flow__node').length;
     });
 
-    await dragBy(page, '[data-prism-stage="enter-details"]', 0, 140);
+    await dragBy(page, '[data-wayfinder-stage="enter-details"]', 0, 140);
     await recordServiceBlueprintUpdates(page);
 
-    await page.locator('prism-service-blueprint-graph [data-prism-auto-arrange]').click();
+    await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-auto-arrange]').click();
     await page.waitForTimeout(500);
 
     const updates = await page.evaluate(() => window.__layoutUpdates!);
@@ -123,14 +123,14 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
   test('undo restores a dragged stage to its previous position', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(EDITOR_STORY);
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const stageKey = await page.locator('prism-service-blueprint-graph [data-prism-stage]').first()
-      .getAttribute('data-prism-stage');
-    const stage = page.locator(`prism-service-blueprint-graph [data-prism-stage="${stageKey}"]`);
+    const stageKey = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').first()
+      .getAttribute('data-wayfinder-stage');
+    const stage = page.locator(`wayfinder-service-blueprint-graph [data-wayfinder-stage="${stageKey}"]`);
 
     const before = await stage.boundingBox();
-    await dragBy(page, `[data-prism-stage="${stageKey}"]`, 0, 140);
+    await dragBy(page, `[data-wayfinder-stage="${stageKey}"]`, 0, 140);
     const moved = await stage.boundingBox();
     expect(moved!.y - before!.y).toBeGreaterThan(100);
 
@@ -149,12 +149,12 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
     // Dragging a node in a read-only canvas falls through to a viewport pan,
     // so screen coordinates move — but the node must not move relative to its
     // lane, and the service blueprint document must not change.
-    const stage = page.locator('prism-service-blueprint-graph [data-prism-stage]').first();
-    const lane = page.locator('prism-service-blueprint-graph [data-prism-role-queue]').first();
+    const stage = page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').first();
+    const lane = page.locator('wayfinder-service-blueprint-graph [data-wayfinder-role-queue]').first();
     const stageBefore = await stage.boundingBox();
     const laneBefore = await lane.boundingBox();
 
-    const selector = `[data-prism-stage="${await stage.getAttribute('data-prism-stage')}"]`;
+    const selector = `[data-wayfinder-stage="${await stage.getAttribute('data-wayfinder-stage')}"]`;
     await dragBy(page, selector, 0, 120);
 
     const stageAfter = await stage.boundingBox();

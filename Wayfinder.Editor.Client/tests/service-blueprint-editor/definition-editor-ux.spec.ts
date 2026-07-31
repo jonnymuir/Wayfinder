@@ -10,26 +10,26 @@ function storyUrl(storyId: string): string {
 }
 
 async function openDefinitionTab(page: Page): Promise<void> {
-  const editor = page.locator('prism-service-blueprint-editor');
+  const editor = page.locator('wayfinder-service-blueprint-editor');
   await expect(editor).toBeVisible({ timeout: 10_000 });
-  await expect(editor).toHaveAttribute('data-prism-service-blueprint-loaded', /.+/, { timeout: 30_000 });
+  await expect(editor).toHaveAttribute('data-wayfinder-service-blueprint-loaded', /.+/, { timeout: 30_000 });
 
   const definitionTab = editor
-    .locator('prism-confidence-tabs')
-    .locator('button[data-prism-confidence-tab="definition"]');
+    .locator('wayfinder-confidence-tabs')
+    .locator('button[data-wayfinder-confidence-tab="definition"]');
   await definitionTab.click();
-  await expect(editor.locator('[data-prism-definition-panel]')).toBeVisible();
+  await expect(editor.locator('[data-wayfinder-definition-panel]')).toBeVisible();
   await page.waitForFunction(() => {
-    const host = document.querySelector('prism-service-blueprint-editor');
-    const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+    const host = document.querySelector('wayfinder-service-blueprint-editor');
+    const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
     return !!def?.shadowRoot?.querySelector('.cm-content');
   }, { timeout: 10_000 });
 }
 
 async function focusDefinitionEditor(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const host = document.querySelector('prism-service-blueprint-editor');
-    const def = host?.shadowRoot?.querySelector('prism-definition-editor') as HTMLElement | null;
+    const host = document.querySelector('wayfinder-service-blueprint-editor');
+    const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as HTMLElement | null;
     const content = def?.shadowRoot?.querySelector('.cm-content') as HTMLElement | null;
     content?.focus();
   });
@@ -42,10 +42,10 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
 
     // Verify the parent doesn't have overflow:hidden (which was the original bug).
     const parentOverflow = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor') as HTMLElement | null;
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as HTMLElement | null;
       if (!def) {
-        throw new Error('prism-definition-editor not found');
+        throw new Error('wayfinder-definition-editor not found');
       }
       const style = window.getComputedStyle(def);
       return style.overflow;
@@ -56,8 +56,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
 
     // Verify the CodeMirror scroller has overflow: auto (allowing scrolling).
     const { scrollerOverflow, isActuallyScrollable, clientHeight, scrollHeight } = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
       const scroller = def?.shadowRoot?.querySelector('.cm-scroller') as HTMLElement | null;
       if (!scroller) {
         throw new Error('CodeMirror scroller not found');
@@ -80,8 +80,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
 
     // Verify scrolling actually works by programmatically scrolling.
     const scrollWorked = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
       const scroller = def?.shadowRoot?.querySelector('.cm-scroller') as HTMLElement | null;
       if (!scroller) {
         return false;
@@ -102,8 +102,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
 
     // The search panel should not be visible initially.
     const panelBefore = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
       return !!def?.shadowRoot?.querySelector('.cm-search');
     });
     expect(panelBefore).toBe(false);
@@ -118,16 +118,16 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     await page.waitForTimeout(100);
 
     const panelAfter = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
       return !!def?.shadowRoot?.querySelector('.cm-search');
     });
     expect(panelAfter).toBe(true);
 
     // The search panel should have an input field.
     const hasInput = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
       return !!def?.shadowRoot?.querySelector('.cm-search input');
     });
     expect(hasInput).toBe(true);
@@ -148,8 +148,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     await page.waitForTimeout(100);
 
     const panelOpen = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
       return !!def?.shadowRoot?.querySelector('.cm-search');
     });
     expect(panelOpen).toBe(true);
@@ -159,8 +159,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     await page.waitForTimeout(100);
 
     const panelClosed = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
       return !!def?.shadowRoot?.querySelector('.cm-search');
     });
     expect(panelClosed).toBe(false);
@@ -171,8 +171,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     await openDefinitionTab(page);
 
     const hasLineNumbers = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor');
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
       return !!def?.shadowRoot?.querySelector('.cm-lineNumbers');
     });
     expect(hasLineNumbers).toBe(true);
@@ -184,8 +184,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     await focusDefinitionEditor(page);
 
     const docLength = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor') as
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as
         (HTMLElement & { _view?: { state: { doc: { length: number } } } }) | null;
       return def?._view?.state.doc.length ?? 0;
     });
@@ -201,8 +201,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     await page.waitForTimeout(100);
 
     const selectionLength = await page.evaluate(() => {
-      const host = document.querySelector('prism-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('prism-definition-editor') as
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as
         (HTMLElement & { _view?: { state: { selection: { main: { from: number; to: number } } } } }) | null;
       const sel = def?._view?.state.selection.main;
       return sel ? sel.to - sel.from : 0;

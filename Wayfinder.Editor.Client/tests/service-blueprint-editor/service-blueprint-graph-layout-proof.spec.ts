@@ -42,7 +42,7 @@ type MeasuredGraph = {
 };
 
 async function measureGraph(page: Page): Promise<MeasuredGraph> {
-  return page.locator('prism-service-blueprint-graph').evaluate(graphElement => {
+  return page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
     const graph = graphElement as HTMLElement;
     const shadowRoot = graph.shadowRoot;
     if (!shadowRoot) {
@@ -55,10 +55,10 @@ async function measureGraph(page: Page): Promise<MeasuredGraph> {
     }
 
     const sceneRect = scene.getBoundingClientRect();
-    const lanes = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-prism-role-queue]')).map(lane => {
+    const lanes = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-role-queue]')).map(lane => {
       const rect = lane.getBoundingClientRect();
       return {
-        key: lane.getAttribute('data-prism-role-queue') ?? '',
+        key: lane.getAttribute('data-wayfinder-role-queue') ?? '',
         left: rect.left - sceneRect.left,
         right: rect.right - sceneRect.left,
         top: rect.top - sceneRect.top,
@@ -71,12 +71,12 @@ async function measureGraph(page: Page): Promise<MeasuredGraph> {
       return lanes.find(lane => centre >= lane.left && centre <= lane.right)?.key ?? '';
     };
 
-    const stageNodes = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-prism-stage]')).map(stage => {
+    const stageNodes = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage]')).map(stage => {
       const rect = stage.getBoundingClientRect();
       const left = rect.left - sceneRect.left;
       const right = rect.right - sceneRect.left;
       return {
-        key: stage.getAttribute('data-prism-stage') ?? '',
+        key: stage.getAttribute('data-wayfinder-stage') ?? '',
         kind: 'stage' as const,
         gatewayKind: null,
         label: stage.querySelector('.node-label')?.textContent?.trim() ?? '',
@@ -90,14 +90,14 @@ async function measureGraph(page: Page): Promise<MeasuredGraph> {
       };
     });
 
-    const gatewayNodes = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-prism-gateway]')).map(gateway => {
+    const gatewayNodes = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-gateway]')).map(gateway => {
       const rect = gateway.getBoundingClientRect();
       return {
-        key: gateway.getAttribute('data-prism-gateway') ?? '',
+        key: gateway.getAttribute('data-wayfinder-gateway') ?? '',
         kind: 'gateway' as const,
-        gatewayKind: gateway.getAttribute('data-prism-gateway-kind'),
+        gatewayKind: gateway.getAttribute('data-wayfinder-gateway-kind'),
         label: gateway.querySelector('.node-label')?.textContent?.trim() ?? '',
-        lane: gateway.getAttribute('data-prism-queue') ?? '',
+        lane: gateway.getAttribute('data-wayfinder-queue') ?? '',
         left: rect.left - sceneRect.left,
         right: rect.right - sceneRect.left,
         top: rect.top - sceneRect.top,
@@ -107,10 +107,10 @@ async function measureGraph(page: Page): Promise<MeasuredGraph> {
       };
     });
 
-    const routes = Array.from(shadowRoot.querySelectorAll<SVGPathElement>('[data-prism-route-path]')).map(path => ({
-      key: path.getAttribute('data-prism-route-path') ?? '',
-      from: path.getAttribute('data-prism-route-from') ?? '',
-      to: path.getAttribute('data-prism-route-to') ?? '',
+    const routes = Array.from(shadowRoot.querySelectorAll<SVGPathElement>('[data-wayfinder-route-path]')).map(path => ({
+      key: path.getAttribute('data-wayfinder-route-path') ?? '',
+      from: path.getAttribute('data-wayfinder-route-from') ?? '',
+      to: path.getAttribute('data-wayfinder-route-to') ?? '',
       d: path.getAttribute('d') ?? '',
     }));
 
@@ -174,9 +174,9 @@ test.describe('ServiceBlueprint canvas slot-matrix layout proof', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--gateway-representation'));
 
-    const graphElement = page.locator('prism-service-blueprint-graph');
+    const graphElement = page.locator('wayfinder-service-blueprint-graph');
     await expect(graphElement).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
     const graph = await measureGraph(page);
     expect(graph.lanes.length).toBeGreaterThanOrEqual(2);
@@ -218,9 +218,9 @@ test.describe('ServiceBlueprint canvas slot-matrix layout proof', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--same-lane-fan-out'));
 
-    const graphElement = page.locator('prism-service-blueprint-graph');
+    const graphElement = page.locator('wayfinder-service-blueprint-graph');
     await expect(graphElement).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
     const graph = await measureGraph(page);
     const draft = findNode(graph, 'draft');
@@ -254,9 +254,9 @@ test.describe('ServiceBlueprint canvas slot-matrix layout proof', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--gateway-representation'));
 
-    const graphElement = page.locator('prism-service-blueprint-graph');
+    const graphElement = page.locator('wayfinder-service-blueprint-graph');
     await expect(graphElement).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
     const graph = await measureGraph(page);
     const start = findNode(graph, 'start-request');
@@ -297,9 +297,9 @@ test.describe('ServiceBlueprint canvas slot-matrix layout proof', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--payment-demo-graph'));
 
-    const graphElement = page.locator('prism-service-blueprint-graph');
+    const graphElement = page.locator('wayfinder-service-blueprint-graph');
     await expect(graphElement).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
     const graph = await measureGraph(page);
 
@@ -343,13 +343,13 @@ test.describe('ServiceBlueprint canvas slot-matrix layout proof', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
 
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--gateway-representation'));
-    await expect(page.locator('prism-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
     assertNoNodeOverlaps(await measureGraph(page), 'cross-lane canvas');
 
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--same-lane-fan-out'));
-    await expect(page.locator('prism-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
     assertNoNodeOverlaps(await measureGraph(page), 'same-lane canvas');
   });
 
@@ -357,9 +357,9 @@ test.describe('ServiceBlueprint canvas slot-matrix layout proof', () => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--gateway-representation'));
 
-    const graphElement = page.locator('prism-service-blueprint-graph');
+    const graphElement = page.locator('wayfinder-service-blueprint-graph');
     await expect(graphElement).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('prism-service-blueprint-graph[data-prism-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
+    await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
     const graph = await measureGraph(page);
     for (const node of graph.nodes) {

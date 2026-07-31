@@ -3,7 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { Diagnostic } from '@codemirror/lint';
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor> — the JSON twin-pane
+ * @internal Composition detail of <wayfinder-service-blueprint-editor> — the JSON twin-pane
  * Definition tab editor. Loads CodeMirror 6 lazily on first connection so the
  * main editor bundle stays slim for authors who never open this tab.
  *
@@ -17,8 +17,8 @@ import type { Diagnostic } from '@codemirror/lint';
  *   `definition-input` { value: string }  — fires after every user-visible
  *     change. The host owns debounce + parse + apply.
  */
-@customElement('prism-definition-editor')
-export class PrismDefinitionEditorElement extends LitElement {
+@customElement('wayfinder-definition-editor')
+export class WayfinderDefinitionEditorElement extends LitElement {
   /** The canonical JSON text shown in the editor. */
   @property({ type: String })
   value = '';
@@ -35,7 +35,7 @@ export class PrismDefinitionEditorElement extends LitElement {
   @state() private _loadError: string | null = null;
 
   private _view: import('@codemirror/view').EditorView | null = null;
-  private _modules: typeof import('./prism-definition-editor-codemirror.js') | null = null;
+  private _modules: typeof import('./wayfinder-definition-editor-codemirror.js') | null = null;
   private _suppressInputEvent = false;
 
   connectedCallback() {
@@ -54,7 +54,7 @@ export class PrismDefinitionEditorElement extends LitElement {
       return;
     }
     try {
-      this._modules = await import('./prism-definition-editor-codemirror.js');
+      this._modules = await import('./wayfinder-definition-editor-codemirror.js');
       this._ready = true;
       // Wait one frame so the host element is available, then mount.
       await this.updateComplete;
@@ -65,7 +65,7 @@ export class PrismDefinitionEditorElement extends LitElement {
   }
 
   private _hostDiv(): HTMLDivElement | null {
-    return this.renderRoot?.querySelector?.('[data-prism-definition-editor-host]') as HTMLDivElement | null;
+    return this.renderRoot?.querySelector?.('[data-wayfinder-definition-editor-host]') as HTMLDivElement | null;
   }
 
   private _mountView() {
@@ -149,14 +149,14 @@ export class PrismDefinitionEditorElement extends LitElement {
     return html`
       <div
         class="editor-host"
-        data-prism-definition-editor-host
+        data-wayfinder-definition-editor-host
       ></div>
       ${this._loadError
-        ? html`<p class="load-error" role="alert" data-prism-definition-load-error>
+        ? html`<p class="load-error" role="alert" data-wayfinder-definition-load-error>
             Couldn't load the JSON editor: ${this._loadError}
           </p>`
         : !this._ready
-          ? html`<p class="loading" role="status" data-prism-definition-loading>
+          ? html`<p class="loading" role="status" data-wayfinder-definition-loading>
               Loading the JSON editor…
             </p>`
           : ''}
@@ -245,6 +245,6 @@ export class PrismDefinitionEditorElement extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-definition-editor': PrismDefinitionEditorElement;
+    'wayfinder-definition-editor': WayfinderDefinitionEditorElement;
   }
 }

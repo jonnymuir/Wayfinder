@@ -14,27 +14,27 @@ test.describe('Outline + gateway-first inspector accessibility', () => {
   test.fixme("author can pick a join gateway from a stage's outgoing route and the change is announced", async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--gateway-representation'));
 
-    const editor = page.locator('prism-service-blueprint-editor');
+    const editor = page.locator('wayfinder-service-blueprint-editor');
     await expect(editor).toBeVisible({ timeout: 10_000 });
 
     // Open the join gateway from the canvas (only split gateways live in the
     // outline). Click and press 'e' to open the inspector — same affordance
     // the existing gateway spec uses.
-    const joinGateway = page.locator('[data-prism-gateway="decision-join"]');
+    const joinGateway = page.locator('[data-wayfinder-gateway="decision-join"]');
     await joinGateway.click();
     await joinGateway.press('e');
 
-    const inspector = editor.locator('prism-step-inspector');
-    await expect(inspector.locator('[data-prism-gateway-detail="decision-join"]')).toBeVisible();
+    const inspector = editor.locator('wayfinder-step-inspector');
+    await expect(inspector.locator('[data-wayfinder-gateway-detail="decision-join"]')).toBeVisible();
 
     // The Arrive through selects on the join's incoming routes are how an
     // author picks/changes the join. Two routes feed decision-join in this
     // fixture (applicant + reviewer branches). Clear the applicant-branch
     // route's join — this drives _updateRouteToGateway end-to-end.
-    const routeBlocks = inspector.locator('[data-prism-route-target="decision-confirmed"]');
+    const routeBlocks = inspector.locator('[data-wayfinder-route-target="decision-confirmed"]');
     await expect(routeBlocks).toHaveCount(2);
     const firstBlock = routeBlocks.first();
-    const joinSelect = firstBlock.locator('[data-prism-route-to-gateway]');
+    const joinSelect = firstBlock.locator('[data-wayfinder-route-to-gateway]');
 
     // Sanity: select currently shows the join gateway by display name and the
     // raw key is the option value.
@@ -70,17 +70,17 @@ test.describe('Outline + gateway-first inspector accessibility', () => {
   test.fixme('screen reader user reading a transition in the outline hears the gateway name, not the gateway key', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--gateway-representation'));
 
-    const editor = page.locator('prism-service-blueprint-editor');
+    const editor = page.locator('wayfinder-service-blueprint-editor');
     await expect(editor).toBeVisible({ timeout: 10_000 });
 
-    const outline = editor.locator('prism-service-blueprint-outline');
+    const outline = editor.locator('wayfinder-service-blueprint-outline');
     await expect(outline).toBeVisible();
 
     // Grab the visible/accessible text rendered for the Draft stage's
     // outgoing transition rows (these were the rows that leaked raw keys).
     const transitionText = await outline.evaluate(node => {
       const root = (node as HTMLElement).shadowRoot;
-      const stageItem = root?.querySelector('[data-prism-outline-stage="draft"]')?.closest('.outline-stage-item');
+      const stageItem = root?.querySelector('[data-wayfinder-outline-stage="draft"]')?.closest('.outline-stage-item');
       const targets = stageItem?.querySelectorAll('.outline-transition-target') ?? [];
       return Array.from(targets).map(el => el.textContent?.replace(/\s+/g, ' ').trim() ?? '').join(' | ');
     });

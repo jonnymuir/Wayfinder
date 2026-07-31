@@ -77,8 +77,8 @@ import {
   serviceBlueprintUnreachableStages,
 } from './service-blueprint-validation.js';
 import { addRoute, deleteRoute, findOrCreateSplitGateway, flattenRoutes, newRouteId, updateRoute } from './route-model.js';
-import './prism-stage-action-editor.js';
-import './prism-inline-help.js';
+import './wayfinder-stage-action-editor.js';
+import './wayfinder-inline-help.js';
 
 const STAGE_TYPE_OPTIONS: Array<{ value: EditorStageType; label: string }> = [
   { value: 'form', label: 'Form' },
@@ -109,10 +109,10 @@ type ActionSelectedDetail = {
 };
 
 /**
- * @internal Composition detail of <prism-service-blueprint-editor>; not part of the public API surface.
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
  */
-@customElement('prism-step-inspector')
-export class PrismStepInspectorElement extends LitElement {
+@customElement('wayfinder-step-inspector')
+export class WayfinderStepInspectorElement extends LitElement {
   @property({ attribute: false })
   serviceBlueprint: AuthoredServiceBlueprint | null = null;
 
@@ -168,8 +168,8 @@ export class PrismStepInspectorElement extends LitElement {
       const routeId = this._newlyAddedRouteId;
       this._newlyAddedRouteId = null;
       requestAnimationFrame(() => {
-        const container = this.shadowRoot?.querySelector<HTMLElement>(`[data-prism-route-id="${routeId}"]`);
-        const targetPicker = container?.querySelector<HTMLElement>('[data-prism-route-target-select]');
+        const container = this.shadowRoot?.querySelector<HTMLElement>(`[data-wayfinder-route-id="${routeId}"]`);
+        const targetPicker = container?.querySelector<HTMLElement>('[data-wayfinder-route-target-select]');
         if (container) {
           container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
@@ -356,7 +356,7 @@ export class PrismStepInspectorElement extends LitElement {
       return;
     }
     const target = event.currentTarget as HTMLElement | null;
-    const idxAttr = target?.dataset.prismRouteIndex;
+    const idxAttr = target?.dataset.wayfinderRouteIndex;
     const transitionIndex = idxAttr ? Number(idxAttr) : NaN;
     if (!Number.isInteger(transitionIndex)) {
       return;
@@ -374,7 +374,7 @@ export class PrismStepInspectorElement extends LitElement {
   private _handleRouteActionSelected(event: CustomEvent<ActionSelectedDetail>) {
     event.stopPropagation();
     const target = event.currentTarget as HTMLElement | null;
-    const idxAttr = target?.dataset.prismRouteIndex;
+    const idxAttr = target?.dataset.wayfinderRouteIndex;
     const transitionIndex = idxAttr ? Number(idxAttr) : NaN;
     const detail: ActionSelectedDetail = {
       ...event.detail,
@@ -496,7 +496,7 @@ export class PrismStepInspectorElement extends LitElement {
 
   private _routeIndexFromEvent(event: Event): number | null {
     const target = event.currentTarget as HTMLElement | null;
-    const raw = target?.dataset.prismRouteIndex;
+    const raw = target?.dataset.wayfinderRouteIndex;
     const index = raw ? Number(raw) : NaN;
     return Number.isInteger(index) ? index : null;
   }
@@ -654,7 +654,7 @@ export class PrismStepInspectorElement extends LitElement {
             <button
               type="button"
               class="secondary-button"
-              data-prism-add-route
+              data-wayfinder-add-route
               aria-label="Add route from ${sourceStageLabel}"
               @click=${this._handleAddRoute}
             >+ Add route</button>
@@ -662,12 +662,12 @@ export class PrismStepInspectorElement extends LitElement {
         </div>
         ${indices.length === 0
           ? html`
-              <p class="empty-section" data-prism-gateway-routes-empty>
+              <p class="empty-section" data-wayfinder-gateway-routes-empty>
                 No routes yet. Use <strong>+ Add route</strong> above to send this stage to its next destination.
               </p>
             `
           : html`
-              <p class="action-summary" data-prism-gateway-routes-summary>
+              <p class="action-summary" data-wayfinder-gateway-routes-summary>
                 ${indices.length} ${indices.length === 1 ? 'route' : 'routes'} ${isJoin ? 'feed into' : 'leave'} this gateway.
               </p>
               <ul class="gateway-route-list" role="list">
@@ -677,9 +677,9 @@ export class PrismStepInspectorElement extends LitElement {
                   return html`
                     <li
                       class="gateway-route-item"
-                      data-prism-gateway-route="${transitionIndex}"
-                      data-prism-route-target="${transition.toStage}"
-                      data-prism-route-id="${transition.routeId}"
+                      data-wayfinder-gateway-route="${transitionIndex}"
+                      data-wayfinder-route-target="${transition.toStage}"
+                      data-wayfinder-route-id="${transition.routeId}"
                     >
                       ${this._renderRouteEditor(transition, transitionIndex)}
                     </li>
@@ -704,11 +704,11 @@ export class PrismStepInspectorElement extends LitElement {
       <article
         class="gateway-route-editor"
         aria-labelledby="${ariaId}"
-        data-prism-route-detail="${transition.fromStage}-${transition.action}-${transition.toStage}"
+        data-wayfinder-route-detail="${transition.fromStage}-${transition.action}-${transition.toStage}"
       >
         <header class="gateway-route-editor-header">
           <h4 id="${ariaId}" class="gateway-route-title">${transition.action}</h4>
-          <p class="action-summary gateway-routing-hint" data-prism-route-descriptor>
+          <p class="action-summary gateway-routing-hint" data-wayfinder-route-descriptor>
             ${this._routeDescriptor(transition)}
           </p>
         </header>
@@ -718,8 +718,8 @@ export class PrismStepInspectorElement extends LitElement {
             <span class="field-label">Route label</span>
             <input
               class="field-control"
-              data-prism-route-label
-              data-prism-route-index="${idx}"
+              data-wayfinder-route-label
+              data-wayfinder-route-index="${idx}"
               .value=${transition.action}
               @change=${this._updateRouteLabel}
             />
@@ -728,8 +728,8 @@ export class PrismStepInspectorElement extends LitElement {
             <span class="field-label">Route preset</span>
             <select
               class="field-control"
-              data-prism-route-action
-              data-prism-route-index="${idx}"
+              data-wayfinder-route-action
+              data-wayfinder-route-index="${idx}"
               @change=${this._updateRouteActionPreset}
             >
               ${TRANSITION_ACTION_OPTIONS.map(option => html`
@@ -742,8 +742,8 @@ export class PrismStepInspectorElement extends LitElement {
             <span class="field-label">Target stage</span>
             <select
               class="field-control ${targetEmpty ? 'field-control-error' : ''}"
-              data-prism-route-target-select
-              data-prism-route-index="${idx}"
+              data-wayfinder-route-target-select
+              data-wayfinder-route-index="${idx}"
               aria-invalid=${String(targetEmpty)}
               aria-describedby=${targetEmpty ? targetWarningId : ''}
               @change=${this._updateRouteTarget}
@@ -754,15 +754,15 @@ export class PrismStepInspectorElement extends LitElement {
               `)}
             </select>
             ${targetEmpty
-              ? html`<span id="${targetWarningId}" class="field-error" data-prism-route-target-warning>Choose a destination</span>`
+              ? html`<span id="${targetWarningId}" class="field-error" data-wayfinder-route-target-warning>Choose a destination</span>`
               : nothing}
           </label>
           <label class="field-block">
             <span class="field-label">Arrive through</span>
             <select
               class="field-control"
-              data-prism-route-to-gateway
-              data-prism-route-index="${idx}"
+              data-wayfinder-route-to-gateway
+              data-wayfinder-route-index="${idx}"
               @change=${this._updateRouteToGateway}
             >
               <option value="">No join gateway</option>
@@ -774,15 +774,15 @@ export class PrismStepInspectorElement extends LitElement {
           <label class="field-block">
             <span class="field-label-row">
               <span class="field-label">Role guard</span>
-              <prism-inline-help
+              <wayfinder-inline-help
                 label="Role guard help"
                 message="Add a role only when this route should be limited to a specific actor such as reviewer or caseworker. Leave it blank when everyone on the route can use it."
-              ></prism-inline-help>
+              ></wayfinder-inline-help>
             </span>
             <input
               class="field-control"
-              data-prism-route-role
-              data-prism-route-index="${idx}"
+              data-wayfinder-route-role
+              data-wayfinder-route-index="${idx}"
               .value=${transition.requiresRole ?? ''}
               placeholder="reviewer"
               @change=${this._updateRouteRole}
@@ -794,15 +794,15 @@ export class PrismStepInspectorElement extends LitElement {
           <label class="field-block">
             <span class="field-label-row">
               <span class="field-label">Condition type</span>
-              <prism-inline-help
+              <wayfinder-inline-help
                 label="Condition type help"
                 message="Choose Always available for a standard route, Event for named service blueprint triggers, or Guard expression when runtime data decides whether this route can run."
-              ></prism-inline-help>
+              ></wayfinder-inline-help>
             </span>
             <select
               class="field-control"
-              data-prism-route-condition-mode
-              data-prism-route-index="${idx}"
+              data-wayfinder-route-condition-mode
+              data-wayfinder-route-index="${idx}"
               @change=${this._updateRouteConditionMode}
             >
               <option value="always" ?selected=${condition.mode === 'always'}>Always available</option>
@@ -813,17 +813,17 @@ export class PrismStepInspectorElement extends LitElement {
           <label class="field-block ${condition.mode === 'always' ? 'field-block-disabled' : ''}">
             <span class="field-label-row">
               <span class="field-label">${condition.mode === 'event' ? 'Event name' : 'Condition value'}</span>
-              <prism-inline-help
+              <wayfinder-inline-help
                 label="Condition value help"
                 message=${condition.mode === 'event'
                   ? 'Use the exact event name your runtime emits, for example submit-clicked.'
                   : 'Use a concise guard expression that explains when this route should unlock, for example application.isComplete == true.'}
-              ></prism-inline-help>
+              ></wayfinder-inline-help>
             </span>
             <input
               class="field-control"
-              data-prism-route-condition-value
-              data-prism-route-index="${idx}"
+              data-wayfinder-route-condition-value
+              data-wayfinder-route-index="${idx}"
               .value=${condition.value}
               ?disabled=${condition.mode === 'always'}
               placeholder=${condition.mode === 'event' ? 'submit-clicked' : 'application.isComplete == true'}
@@ -836,8 +836,8 @@ export class PrismStepInspectorElement extends LitElement {
           <button
             type="button"
             class="icon-button danger-button"
-            data-prism-route-delete
-            data-prism-route-index="${idx}"
+            data-wayfinder-route-delete
+            data-wayfinder-route-index="${idx}"
             @click=${this._deleteRoute}
           >
             Delete route
@@ -849,8 +849,8 @@ export class PrismStepInspectorElement extends LitElement {
             <h5 id="section-route-actions-${idx}" class="section-heading">Route actions</h5>
             <span class="section-meta">${transition.actions?.length ?? 0} configured</span>
           </div>
-          <prism-stage-action-editor
-            data-prism-route-index="${idx}"
+          <wayfinder-stage-action-editor
+            data-wayfinder-route-index="${idx}"
             .actions=${transition.actions ?? []}
             .actionCatalog=${this.actionCatalog}
             .selectedActionIndex=${this.selectedActionTransitionIndex === transitionIndex ? this.selectedActionIndex : null}
@@ -858,7 +858,7 @@ export class PrismStepInspectorElement extends LitElement {
             subject-label="transition"
             @actions-updated=${this._updateRouteActions}
             @action-selected=${this._handleRouteActionSelected}
-          ></prism-stage-action-editor>
+          ></wayfinder-stage-action-editor>
         </section>
       </article>
     `;
@@ -1038,16 +1038,16 @@ export class PrismStepInspectorElement extends LitElement {
     return html`
       <article
         class="inspector-panel"
-        data-prism-gateway-detail="${gateway.key}"
-        data-prism-inspector-kind="gateway"
+        data-wayfinder-gateway-detail="${gateway.key}"
+        data-wayfinder-inspector-kind="gateway"
         aria-labelledby="inspector-gateway-title"
       >
         <div class="inspector-header">
           <div>
             <p class="eyebrow">${queueLabel} queue</p>
-            <h2 id="inspector-gateway-title" class="stage-title" data-prism-inspector-heading>${gateway.displayName}</h2>
+            <h2 id="inspector-gateway-title" class="stage-title" data-wayfinder-inspector-heading>${gateway.displayName}</h2>
           </div>
-          <span class="stage-kind-badge transition-badge" data-prism-field="kind">${gateway.kind} gateway</span>
+          <span class="stage-kind-badge transition-badge" data-wayfinder-field="kind">${gateway.kind} gateway</span>
         </div>
 
         <section class="inspector-section" aria-labelledby="gateway-basics-heading">
@@ -1057,7 +1057,7 @@ export class PrismStepInspectorElement extends LitElement {
               <span class="field-label">Name</span>
               <input
                 class="field-control"
-                data-prism-gateway-name
+                data-wayfinder-gateway-name
                 .value=${gateway.displayName}
                 @change=${this._updateGatewayDisplayName}
               />
@@ -1065,34 +1065,34 @@ export class PrismStepInspectorElement extends LitElement {
             <label class="field-block">
               <span class="field-label-row">
                 <span class="field-label">Key</span>
-                <prism-inline-help
+                <wayfinder-inline-help
                   label="Gateway key help"
                   message="A stable, unique identifier for this gateway. Must not clash with any stage key or other gateway key. Route bindings reference this key."
-                ></prism-inline-help>
+                ></wayfinder-inline-help>
               </span>
               <input
                 class="field-control ${this._gatewayKeyError ? 'field-control-error' : ''}"
-                data-prism-gateway-key
+                data-wayfinder-gateway-key
                 aria-invalid=${String(Boolean(this._gatewayKeyError))}
                 .value=${gateway.key}
                 @input=${() => { this._gatewayKeyError = null; }}
                 @change=${this._updateGatewayKey}
               />
               ${this._gatewayKeyError
-                ? html`<span class="field-error" data-prism-gateway-key-error>${this._gatewayKeyError}</span>`
+                ? html`<span class="field-error" data-wayfinder-gateway-key-error>${this._gatewayKeyError}</span>`
                 : nothing}
             </label>
             <label class="field-block">
               <span class="field-label-row">
                 <span class="field-label">Queue</span>
-                <prism-inline-help
+                <wayfinder-inline-help
                   label="Queue help"
                   message="The queue that owns this gateway. For a join gateway, the owning queue is where waiting information is shown to users."
-                ></prism-inline-help>
+                ></wayfinder-inline-help>
               </span>
               <input
                 class="field-control"
-                data-prism-gateway-queue
+                data-wayfinder-gateway-queue
                 .value=${queueKey}
                 list=${queueOptionsId}
                 placeholder="applicant"
@@ -1115,7 +1115,7 @@ export class PrismStepInspectorElement extends LitElement {
             <span class="field-label">Description</span>
             <textarea
               class="field-control field-textarea"
-              data-prism-gateway-description
+              data-wayfinder-gateway-description
               .value=${gateway.description ?? ''}
               placeholder="Explain what this ${gateway.kind === 'Split' ? 'split' : 'join'} point does and why it exists."
               @change=${this._updateGatewayDescription}
@@ -1154,17 +1154,17 @@ export class PrismStepInspectorElement extends LitElement {
               <section class="inspector-section" aria-labelledby="gateway-waiting-heading">
                 <div class="section-header-row">
                   <h3 id="gateway-waiting-heading" class="section-heading">Waiting information</h3>
-                  <prism-inline-help
+                  <wayfinder-inline-help
                     label="Waiting information help"
                     message="Join gateways own the waiting story for their queue. This message is shown to users in the owning queue while they wait for other queues to arrive. Authors set it here rather than on a separate waiting stage."
-                  ></prism-inline-help>
+                  ></wayfinder-inline-help>
                 </div>
                 <div class="field-grid">
                   <label class="field-block field-block-full">
                     <span class="field-label">Waiting message</span>
                     <textarea
                       class="field-control field-textarea"
-                      data-prism-gateway-waiting-content
+                      data-wayfinder-gateway-waiting-content
                       .value=${waiting?.content ?? ''}
                       placeholder="Explain what users in this queue are waiting for, for example: Your application is under review by the planning team."
                       @change=${this._updateJoinWaitingContent}
@@ -1173,15 +1173,15 @@ export class PrismStepInspectorElement extends LitElement {
                   <label class="field-block">
                     <span class="field-label-row">
                       <span class="field-label">Expected wait (seconds)</span>
-                      <prism-inline-help
+                      <wayfinder-inline-help
                         label="Expected wait help"
                         message="An approximate maximum wait in seconds. Used by the runtime to set a progress indicator. Leave blank if the wait is open-ended."
-                      ></prism-inline-help>
+                      ></wayfinder-inline-help>
                     </span>
                     <input
                       type="number"
                       class="field-control"
-                      data-prism-gateway-waiting-seconds
+                      data-wayfinder-gateway-waiting-seconds
                       min="0"
                       .value=${String(waiting?.expectedWaitSeconds ?? '')}
                       placeholder="3600"
@@ -1193,7 +1193,7 @@ export class PrismStepInspectorElement extends LitElement {
                     <label class="checkbox-row">
                       <input
                         type="checkbox"
-                        data-prism-gateway-waiting-allow-defer
+                        data-wayfinder-gateway-waiting-allow-defer
                         ?checked=${waiting?.allowDefer ?? false}
                         @change=${this._updateJoinWaitingAllowDefer}
                       />
@@ -1206,7 +1206,7 @@ export class PrismStepInspectorElement extends LitElement {
                           <span class="field-label">Defer message</span>
                           <input
                             class="field-control"
-                            data-prism-gateway-waiting-defer-message
+                            data-wayfinder-gateway-waiting-defer-message
                             .value=${waiting.deferMessage ?? ''}
                             placeholder="You can return to this step when the other team has finished."
                             @change=${this._updateJoinWaitingDeferMessage}
@@ -1227,7 +1227,7 @@ export class PrismStepInspectorElement extends LitElement {
             <button
               type="button"
               class="icon-button danger-button"
-              data-prism-gateway-delete
+              data-wayfinder-gateway-delete
               @click=${this._deleteSelectedGateway}
             >
               Delete gateway
@@ -1250,7 +1250,7 @@ export class PrismStepInspectorElement extends LitElement {
             aria-checked=${name === selected}
             aria-label=${name}
             title=${name}
-            data-prism-icon-option=${name}
+            data-wayfinder-icon-option=${name}
             @click=${() => onPick(name)}
           >
             ${renderNodeIconSvg(NODE_ICONS[name])}
@@ -1290,8 +1290,8 @@ export class PrismStepInspectorElement extends LitElement {
     return html`
       <article
         class="inspector-panel"
-        data-prism-stage-detail="${stage.stateKey}"
-        data-prism-inspector-kind="stage"
+        data-wayfinder-stage-detail="${stage.stateKey}"
+        data-wayfinder-inspector-kind="stage"
         aria-labelledby="inspector-stage-title"
       >
         <div class="inspector-header">
@@ -1320,7 +1320,7 @@ export class PrismStepInspectorElement extends LitElement {
               <span class="field-label">Title</span>
               <input
                 class="field-control"
-                data-prism-stage-title
+                data-wayfinder-stage-title
                 .value=${stage.displayName}
                 @change=${this._updateStageTitle}
               />
@@ -1328,14 +1328,14 @@ export class PrismStepInspectorElement extends LitElement {
             <label class="field-block">
               <span class="field-label-row">
                 <span class="field-label">Key</span>
-                <prism-inline-help
+                <wayfinder-inline-help
                   label="Stage key help"
                   message="Use a stable, machine-friendly key. Transitions, validation links, and saved service blueprint JSON all depend on this value staying predictable."
-                ></prism-inline-help>
+                ></wayfinder-inline-help>
               </span>
               <input
                 class="field-control ${this._stageKeyError ? 'field-control-error' : ''}"
-                data-prism-stage-key
+                data-wayfinder-stage-key
                 aria-invalid=${String(Boolean(this._stageKeyError))}
                 .value=${stage.stateKey}
                 @input=${() => {
@@ -1344,20 +1344,20 @@ export class PrismStepInspectorElement extends LitElement {
                 @change=${this._updateStageKey}
               />
               ${this._stageKeyError
-                ? html`<span class="field-error" data-prism-stage-key-error>${this._stageKeyError}</span>`
+                ? html`<span class="field-error" data-wayfinder-stage-key-error>${this._stageKeyError}</span>`
                 : nothing}
             </label>
             <label class="field-block">
               <span class="field-label-row">
                 <span class="field-label">Queue</span>
-                <prism-inline-help
+                <wayfinder-inline-help
                   label="Queue help"
                   message="Use the queue name that owns this work, for example applicant, reviewer, finance, or planning. The editor keeps the internal actor and role-gate fields aligned from this queue value."
-                ></prism-inline-help>
+                ></wayfinder-inline-help>
               </span>
               <input
                 class="field-control"
-                data-prism-stage-queue
+                data-wayfinder-stage-queue
                 .value=${queueKey}
                 list=${queueOptionsId}
                 placeholder="planning-officer"
@@ -1371,7 +1371,7 @@ export class PrismStepInspectorElement extends LitElement {
             </label>
             <label class="field-block">
               <span class="field-label">Type</span>
-              <select class="field-control" data-prism-stage-type @change=${this._updateStageType}>
+              <select class="field-control" data-wayfinder-stage-type @change=${this._updateStageType}>
                 ${STAGE_TYPE_OPTIONS.map(option => html`
                   <option value=${option.value} ?selected=${stageType === option.value}>${option.label}</option>
                 `)}
@@ -1388,7 +1388,7 @@ export class PrismStepInspectorElement extends LitElement {
             <span class="field-label">Description</span>
             <textarea
               class="field-control field-textarea"
-              data-prism-stage-description
+              data-wayfinder-stage-description
               .value=${stage.description ?? ''}
               @change=${this._updateStageDescription}
             ></textarea>
@@ -1400,7 +1400,7 @@ export class PrismStepInspectorElement extends LitElement {
             <h3 id="stage-actions-heading" class="section-heading">Actions</h3>
             <span class="section-meta">${actions.length} configured</span>
           </div>
-          <prism-stage-action-editor
+          <wayfinder-stage-action-editor
             .actions=${actions}
             .actionCatalog=${this.actionCatalog}
             .selectedActionIndex=${this.selectedActionIndex}
@@ -1408,7 +1408,7 @@ export class PrismStepInspectorElement extends LitElement {
             subject-label="stage"
             @actions-updated=${this._updateSelectedStageActions}
             @action-selected=${this._handleActionSelected}
-          ></prism-stage-action-editor>
+          ></wayfinder-stage-action-editor>
         </section>
 
         <section class="inspector-section" aria-labelledby="stage-transitions-heading">
@@ -1417,7 +1417,7 @@ export class PrismStepInspectorElement extends LitElement {
             <button
               type="button"
               class="secondary-button"
-              data-prism-add-route
+              data-wayfinder-add-route
               aria-label="Add route from ${stage.displayName}"
               @click=${this._handleAddRoute}
             >+ Add route</button>
@@ -1467,7 +1467,7 @@ export class PrismStepInspectorElement extends LitElement {
     const stage = gateway ? null : this._selectedStage;
 
     return html`
-      <div class="step-inspector-root" data-prism-component="step-inspector" tabindex="0">
+      <div class="step-inspector-root" data-wayfinder-component="step-inspector" tabindex="0">
         <div id="inspector-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true">${this._statusMessage ?? ''}</div>
         ${gateway
           ? this._renderGateway(gateway)
@@ -1936,6 +1936,6 @@ export class PrismStepInspectorElement extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'prism-step-inspector': PrismStepInspectorElement;
+    'wayfinder-step-inspector': WayfinderStepInspectorElement;
   }
 }
