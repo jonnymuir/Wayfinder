@@ -27,6 +27,8 @@ export type {
   ServiceBlueprintCalculationsBlock,
   ServiceBlueprintDefinitionMetadata,
 } from './service-blueprint-editor/types.js';
+export { hydrateServiceBlueprintDefinition } from './service-blueprint-editor/types.js';
+export { serializeAuthoredServiceBlueprint } from './service-blueprint-editor/service-blueprint-canonical-json.js';
 
 export type {
   ServiceBlueprintSource,
