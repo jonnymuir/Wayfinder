@@ -83,6 +83,10 @@ jobs:
         working-directory: Wayfinder.Editor.Client
         run: npm run build
 
+      - name: Library build check (@wayfinder/editor-client)
+        working-directory: Wayfinder.Editor.Client
+        run: npm run build:lib
+
       - name: Graph layout tests
         working-directory: Wayfinder.Editor.Client
         run: npm run test:graph-layout
