@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build --config vite.service-blueprint-editor.config.ts",
+    "build": "tsc && vite build --config vite.service-blueprint-editor.config.ts && vite build --config vite.wayfinder-elements.config.ts",
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",

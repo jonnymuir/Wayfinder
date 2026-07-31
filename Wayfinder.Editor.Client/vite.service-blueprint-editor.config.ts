@@ -13,15 +13,10 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: {
-        // Standalone service blueprint editor host page (V1 planning walkthrough)
+        // Standalone service blueprint editor host page (V1 planning walkthrough).
+        // wayfinder-elements.js (the other public bundle, src/index.ts) is NOT built here —
+        // see vite.wayfinder-elements.config.ts for why it needs its own build step.
         'service-blueprint-editor': 'service-blueprint-editor.html',
-        // Self-contained ES module registering the three public custom elements
-        // (no HTML wrapper) — for hosts that embed the editor into their own page,
-        // e.g. an Umbraco backoffice extension manifest loading it by URL the same
-        // way Umbraco loads any other extension bundle. React/Lit/@xyflow ship
-        // bundled in, same as the standalone page above — there's no host bundler
-        // here to dedupe against, just a browser loading a URL.
-        'wayfinder-elements': 'src/index.ts',
       },
       output: {
         format: 'es',
