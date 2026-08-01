@@ -1,8 +1,8 @@
 namespace Wayfinder.Engine.Abstractions;
 
 /// <summary>
-/// Host-implemented extension point declaring which PrismComponent "type" discriminators
-/// (see <c>PrismComponentTypeCatalog</c>) a queue's host application can actually render.
+/// Host-implemented extension point declaring which Component "type" discriminators
+/// (see <c>ComponentTypeCatalog</c>) a queue's host application can actually render.
 /// Optional at the toolkit level (see <see cref="Services.ServiceBlueprintAuthoringService"/>'s
 /// nullable constructor param) — a host that doesn't care about this simply never registers
 /// one, and the capability check is skipped entirely.

@@ -17,7 +17,7 @@ public static class ServiceBlueprintAuthoringResources
     [McpServerResource(
         Name = "calculation-language",
         UriTemplate = "service-blueprint-docs://calculation-language",
-        Title = "Prism Calculation Expression Language",
+        Title = "Wayfinder Calculation Expression Language",
         MimeType = "text/markdown")]
     [System.ComponentModel.Description(
         "Grammar, function reference (if/min/max/clamp/abs/floor/round/pow/lookup), tables/series " +
@@ -29,7 +29,7 @@ public static class ServiceBlueprintAuthoringResources
     [McpServerResource(
         Name = "authoring-guide",
         UriTemplate = "service-blueprint-docs://authoring-guide",
-        Title = "Prism Blueprint Authoring Contract",
+        Title = "Wayfinder Blueprint Authoring Contract",
         MimeType = "text/markdown")]
     [System.ComponentModel.Description(
         "The full ServiceBlueprint JSON contract: stages, routes, gateways and the gateway " +
@@ -54,7 +54,7 @@ public static class ServiceBlueprintAuthoringResources
         Title = "AI-Ready Blueprint Authoring — Integrator Guide",
         MimeType = "text/markdown")]
     [System.ComponentModel.Description(
-        "How a host app wires this MCP surface into its own pipeline (MapPrismServiceBlueprintAuthoringMcp, " +
+        "How a host app wires this MCP surface into its own pipeline (MapServiceBlueprintAuthoringMcp, " +
         "IServiceBlueprintSourceStore, auth). For an integrator setting this up, not for an agent authoring a " +
         "blueprint — that agent wants authoring-guide, calculation-language, or service-design-principles " +
         "instead.")]

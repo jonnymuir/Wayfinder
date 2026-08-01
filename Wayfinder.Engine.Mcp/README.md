@@ -5,17 +5,17 @@ Exposes Wayfinder's service blueprint authoring — list, read, validate, save, 
 the official [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk)'s HTTP
 transport (`ModelContextProtocol.AspNetCore`).
 
-This is a library, not a standalone process. A host adds `MapPrismServiceBlueprintAuthoringMcp()`
+This is a library, not a standalone process. A host adds `MapServiceBlueprintAuthoringMcp()`
 to its own ASP.NET Core pipeline, alongside
-[`MapPrismServiceBlueprintAuthoringApi()`](../Wayfinder.Engine.Api) — both hit the
+[`MapServiceBlueprintAuthoringApi()`](../Wayfinder.Engine.Api) — both hit the
 same live `ServiceBlueprintAuthoringService`/`IServiceBlueprintSourceStore`, in-process. That matters: an
 MCP server can't run *inside* an externally-spawned stdio process and still see an app's
 live state, but hosted this way, a `save_service_blueprint` call reaches the running engine
 immediately — no restart, no separate process to keep track of.
 
 [`UmbracoPrism.MockBusinessApp`](../UmbracoPrism.MockBusinessApp) is the reference
-implementation — it calls both `MapPrismServiceBlueprintAuthoringApi()` and
-`MapPrismServiceBlueprintAuthoringMcp()` against its own live store, demonstrating what a real
+implementation — it calls both `MapServiceBlueprintAuthoringApi()` and
+`MapServiceBlueprintAuthoringMcp()` against its own live store, demonstrating what a real
 host app does to expose this surface.
 
 ## Tools
@@ -37,7 +37,7 @@ MCP client with no repo checkout:
 
 | Resource URI | Content |
 |---|---|
-| `service-blueprint-docs://calculation-language` | [The Prism Calculation Language](../../docs/guides/calculation-language.md) — grammar, functions, tables/series, `showWhen`. |
+| `service-blueprint-docs://calculation-language` | [The Wayfinder Calculation Language](../../docs/guides/calculation-language.md) — grammar, functions, tables/series, `showWhen`. |
 | `service-blueprint-docs://authoring-guide` | [Reference Service Blueprint Contract](../../docs/guides/reference-service-blueprint-contract.md) — the full `ServiceBlueprint` JSON shape. |
 | `service-blueprint-docs://service-design-principles` | [Service Design Principles](../../docs/guides/service-design-principles.md) — Double Diamond, the GOV.UK Service Standard, and Lou Downe's 15 principles of good services, industry-agnostic. |
 | `service-blueprint-docs://ai-service-blueprint-authoring` | [AI-Ready Service Blueprint Authoring — Integrator Guide](../../docs/guides/ai-service-blueprint-authoring.md) — how a host app wires this MCP surface into its own pipeline. |
@@ -49,7 +49,7 @@ dashboard — `MockBusinessApp`'s row has a labeled **"Service Blueprint Authori
 link), then:
 
 ```
-claude mcp add --transport http prism-service-blueprint http://localhost:<port>/prism/service-blueprint-authoring/mcp
+claude mcp add --transport http prism-service-blueprint http://localhost:<port>/wayfinder/service-blueprint-authoring/mcp
 ```
 
 Use the **HTTP** URL, not HTTPS. There's also a plain "Service Blueprint Authoring MCP" link on
@@ -61,8 +61,8 @@ this uses the modern Streamable HTTP transport.
 ## Auth
 
 If the host's authoring endpoints require authentication (a real host should add its own
-— see `MapPrismServiceBlueprintAuthoringMcp()`, whose return value chains `.RequireAuthorization()`
-the same way `MapPrismServiceBlueprintAuthoringApi()`'s does), pass credentials at registration:
+— see `MapServiceBlueprintAuthoringMcp()`, whose return value chains `.RequireAuthorization()`
+the same way `MapServiceBlueprintAuthoringApi()`'s does), pass credentials at registration:
 
 ```
 claude mcp add --transport http prism-service-blueprint <url> --header "Authorization: Bearer <token>"

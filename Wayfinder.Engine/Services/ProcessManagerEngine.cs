@@ -14,7 +14,7 @@ using Wayfinder.Engine.Stores;
 namespace Wayfinder.Engine.Services;
 
 /// <summary>
-/// Generic in-memory runtime engine that executes Prism service blueprints.
+/// Generic in-memory runtime engine that executes Wayfinder service blueprints.
 /// </summary>
 public class ProcessManagerEngine : IProcessManager
 {
@@ -177,7 +177,7 @@ public class ProcessManagerEngine : IProcessManager
                         {
                             StepType = currentStage?.Components.InferStepType() ?? "question",
                             StateDisplayName = currentStage?.DisplayName ?? definition.DisplayName,
-                            Components = Array.Empty<PrismComponentRenderPayload>(),
+                            Components = Array.Empty<ComponentRenderPayload>(),
                             AvailableActions = Array.Empty<ServiceRequestAction>()
                         }
                     };
@@ -212,7 +212,7 @@ public class ProcessManagerEngine : IProcessManager
         // "single" means at most one instance per user for this blueprint, full stop — once it
         // reaches a terminal stage it keeps being shown on every subsequent visit (the community
         // enquiry demo depends on this: a member returning to the page sees "Thank you", not a
-        // silently-reset blank form). PrismServiceRequestPageController's PRG redirect after a POST
+        // silently-reset blank form). ServiceRequestPageController's PRG redirect after a POST
         // relies on this same fallthrough to show the confirmation page for the visit that just
         // submitted it.
         return BuildEnvelope(existingInstance, definition, accessProfile, false);
@@ -276,7 +276,7 @@ public class ProcessManagerEngine : IProcessManager
 
             // FindAccessibleWorkItems (called by BuildEnvelope below) renders from instance.Cursors,
             // not instance.CurrentStage, the moment ANY cursor exists — which happens for every
-            // blueprint that's passed through a gateway, i.e. effectively all of them, since Prism
+            // blueprint that's passed through a gateway, i.e. effectively all of them, since Wayfinder
             // requires stage routes to always target a gateway. Updating only CurrentStage left a
             // "change:" jump a silent no-op past the first stage: the render kept coming from the
             // stale cursor position and the user landed right back where they started (confirmed
@@ -1253,8 +1253,8 @@ public class ProcessManagerEngine : IProcessManager
         }
     }
 
-    private PrismComponentRenderPayload[] BuildComponents(
-        IReadOnlyList<PrismComponent> componentDefinitions,
+    private ComponentRenderPayload[] BuildComponents(
+        IReadOnlyList<Component> componentDefinitions,
         Dictionary<string, object?> savedValues,
         CalculationRenderContext? calc = null)
     {
@@ -1264,7 +1264,7 @@ public class ProcessManagerEngine : IProcessManager
             ? savedValues
             : new Dictionary<string, object?>(calc.DisplayValues, StringComparer.Ordinal);
 
-        var result = new List<PrismComponentRenderPayload>();
+        var result = new List<ComponentRenderPayload>();
 
         foreach (var component in componentDefinitions)
         {
@@ -1280,7 +1280,7 @@ public class ProcessManagerEngine : IProcessManager
                         continue;
                     }
 
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "fieldset",
                         Legend = fieldset.Legend,
@@ -1299,7 +1299,7 @@ public class ProcessManagerEngine : IProcessManager
                         continue;
                     }
 
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "summary-list",
                         Title = summary.Title,
@@ -1312,7 +1312,7 @@ public class ProcessManagerEngine : IProcessManager
                 case AccordionComponent accordion:
                 {
                     var sections = accordion.Sections
-                        .Select(section => new PrismAccordionSectionPayload
+                        .Select(section => new AccordionSectionPayload
                         {
                             Heading = section.Heading,
                             Summary = section.Summary,
@@ -1320,7 +1320,7 @@ public class ProcessManagerEngine : IProcessManager
                         })
                         .ToArray();
 
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "accordion",
                         AccordionSections = sections
@@ -1329,7 +1329,7 @@ public class ProcessManagerEngine : IProcessManager
                 }
 
                 case WaitingComponent waiting:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "waiting",
                         Content = _sanitizer.Sanitize(waiting.Content),
@@ -1341,11 +1341,11 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case PanelComponent panel:
-                    result.Add(new PrismComponentRenderPayload { Type = "panel", Heading = panel.Heading });
+                    result.Add(new ComponentRenderPayload { Type = "panel", Heading = panel.Heading });
                     break;
 
                 case BodyComponent body:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "body",
                         Content = _sanitizer.Sanitize(body.Content)
@@ -1353,7 +1353,7 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case HeadingComponent heading:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "heading",
                         Content = heading.Content,
@@ -1362,7 +1362,7 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case InsetTextComponent inset:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "inset-text",
                         Content = _sanitizer.Sanitize(inset.Content)
@@ -1370,7 +1370,7 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case WarningTextComponent warning:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "warning-text",
                         Content = _sanitizer.Sanitize(warning.Content)
@@ -1378,7 +1378,7 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case DetailsComponent details:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "details",
                         Heading = details.Heading,
@@ -1387,7 +1387,7 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case NotificationBannerComponent banner:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "notification-banner",
                         Heading = banner.Heading,
@@ -1397,13 +1397,13 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case TaskListComponent taskList:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "task-list",
-                        TaskSections = taskList.Sections?.Select(section => new PrismTaskSection
+                        TaskSections = taskList.Sections?.Select(section => new TaskSectionPayload
                         {
                             Heading = section.Heading,
-                            Tasks = section.Tasks.Select(task => new PrismTaskItem
+                            Tasks = section.Tasks.Select(task => new TaskItemPayload
                             {
                                 Label = task.Label,
                                 Href = task.Href ?? task.StageKey,
@@ -1414,11 +1414,11 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case StatGroupComponent statGroup:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "stat-group",
                         Title = statGroup.Title,
-                        Stats = statGroup.Items.Select(item => new PrismStatItem
+                        Stats = statGroup.Items.Select(item => new StatItem
                         {
                             Label = item.Label,
                             FieldKey = item.FieldKey,
@@ -1432,7 +1432,7 @@ public class ProcessManagerEngine : IProcessManager
                     break;
 
                 case ChartComponent chart:
-                    result.Add(new PrismComponentRenderPayload
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "chart",
                         Heading = chart.Title,
@@ -1442,8 +1442,8 @@ public class ProcessManagerEngine : IProcessManager
 
                 case InputComponent input:
                 {
-                    var fields = BuildFields(new[] { (PrismComponent)input }, displayValues, calc);
-                    result.Add(new PrismComponentRenderPayload
+                    var fields = BuildFields(new[] { (Component)input }, displayValues, calc);
+                    result.Add(new ComponentRenderPayload
                     {
                         Type = "fieldset",
                         Fields = fields
@@ -1505,7 +1505,7 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     private static FieldRenderPayload[] BuildFields(
-        IEnumerable<PrismComponent> children,
+        IEnumerable<Component> children,
         Dictionary<string, object?> savedValues,
         CalculationRenderContext? calc = null)
     {
@@ -1984,7 +1984,7 @@ public class ProcessManagerEngine : IProcessManager
             StateDisplayName = joinGateway.DisplayName,
             Components =
             [
-                new PrismComponentRenderPayload
+                new ComponentRenderPayload
                 {
                     Type = "waiting",
                     Content = statusContent,

@@ -1,6 +1,6 @@
 # Service Design Principles
 
-Prism's business is good service design — the general discipline, not any one
+Wayfinder's business is good service design — the general discipline, not any one
 industry's rulebook. This document grounds whoever is authoring a service blueprint (human or
 AI agent) in three widely-recognised, public frameworks before they draft a single
 `ServiceBlueprint`, so the result is judged against "is this a good service?"
@@ -9,9 +9,9 @@ and not just "is this valid JSON?"
 It is deliberately industry-agnostic. It does not cover sector regulation or
 domain best practice — FCA Consumer Duty, PASA pensions administration standards,
 NHS clinical safety, and the like. That knowledge belongs to whoever is authoring
-the service, not to Prism: bring it yourself, alongside this document, as your own
+the service, not to Wayfinder: bring it yourself, alongside this document, as your own
 reference material — a skill document, a style guide, a compliance handbook,
-whatever your AI tooling supports as supplementary context. Prism's job is the
+whatever your AI tooling supports as supplementary context. Wayfinder's job is the
 general discipline of service design; the domain expertise is yours.
 
 This document is also exposed as an MCP resource
@@ -38,7 +38,7 @@ Discovering a deeper problem partway through is normal and can send you back a
 phase — it's a loop, not a line. Nothing is ever permanently "finished"; contexts
 change and services need to change with them.
 
-**In Prism terms:** Discover and Define happen before you touch the editor or
+**In Wayfinder terms:** Discover and Define happen before you touch the editor or
 `save_service_blueprint` at all — they're conversations and research, not JSON. Develop is
 where you sketch competing shapes for the queues/stages/gateways, ideally more than
 one. Deliver is `validate_service_blueprint` and `simulate_service_blueprint`'s job: dry-run a
@@ -46,7 +46,7 @@ candidate through the real engine before anything reaches a live user.
 
 ## 2. The GOV.UK Service Standard — the bar
 
-Fourteen points a service should meet. Not all of them are Prism's to enforce —
+Fourteen points a service should meet. Not all of them are Wayfinder's to enforce —
 some are organisational, not structural — but each should shape how a service blueprint
 gets authored:
 
@@ -62,26 +62,26 @@ gets authored:
 5. **Make sure everyone can use the service** — see
    [Using GDS Design System Components](./service-blueprint-gds-components.md) for the
    accessible component catalogue.
-6. **Have a multidisciplinary team** — outside Prism's scope; an organisational
+6. **Have a multidisciplinary team** — outside Wayfinder's scope; an organisational
    commitment, not a service blueprint property.
-7. **Use agile ways of working** — outside Prism's scope; a team practice.
+7. **Use agile ways of working** — outside Wayfinder's scope; a team practice.
 8. **Iterate and improve frequently** — the author loop (`list_service_blueprints` →
    `read_service_blueprint` → draft → `validate_service_blueprint` → `simulate_service_blueprint` →
    `save_service_blueprint`) exists precisely so a service blueprint can be cheaply revised, not
    just cheaply built once.
-9. **Create a secure service which protects users' privacy** — Prism doesn't ship
+9. **Create a secure service which protects users' privacy** — Wayfinder doesn't ship
    an auth story for the authoring surface; see
    [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md#auth) — the host's
    responsibility.
 10. **Define what success looks like and publish performance data** — outside
-    Prism's scope today; worth naming explicitly in a service blueprint's own
+    Wayfinder's scope today; worth naming explicitly in a service blueprint's own
     documentation as you author it.
 11. **Choose the right tools and technology** — not structurally applicable to
     service blueprint authoring itself.
 12. **Make new source code open** — an organisational choice, not a service blueprint
     property.
 13. **Use and contribute to open standards, common components and patterns** —
-    this is what Prism's component catalog *is*: reach for an existing generic
+    this is what Wayfinder's component catalog *is*: reach for an existing generic
     component (`stat-group`, `summary-list`, `chart`, `showWhen`) before inventing
     a bespoke one — see the
     [Money Modeller pattern](../../CLAUDE.md#declarative-calculations--live-stages-money-modeller-pattern).

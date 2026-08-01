@@ -75,7 +75,7 @@ public record StepContent
     /// <summary>
     /// Gets the GDS components to render at this step.
     /// </summary>
-    public required IReadOnlyList<PrismComponentRenderPayload> Components { get; init; }
+    public required IReadOnlyList<ComponentRenderPayload> Components { get; init; }
 
     /// <summary>
     /// Gets the available actions the user can take.
@@ -94,7 +94,7 @@ public record StepContent
 /// Runtime representation of a GDS component, with field values pre-populated from the service request.
 /// Sent from the engine to the Core controller, which passes it to the view.
 /// </summary>
-public record PrismComponentRenderPayload
+public record ComponentRenderPayload
 {
     /// <summary>The GDS component type (e.g. "fieldset", "summary-list", "panel", "body", "heading").</summary>
     public string Type { get; init; } = "fieldset";
@@ -128,15 +128,15 @@ public record PrismComponentRenderPayload
 
     // Task list
     /// <summary>Task sections for task-list components.</summary>
-    public IReadOnlyList<PrismTaskSection>? TaskSections { get; init; }
+    public IReadOnlyList<TaskSectionPayload>? TaskSections { get; init; }
 
     // Accordion
     /// <summary>Accordion sections for accordion components.</summary>
-    public IReadOnlyList<PrismAccordionSectionPayload>? AccordionSections { get; init; }
+    public IReadOnlyList<AccordionSectionPayload>? AccordionSections { get; init; }
 
     // Stat group
     /// <summary>Resolved statistic tiles for "stat-group" components.</summary>
-    public IReadOnlyList<PrismStatItem>? Stats { get; init; }
+    public IReadOnlyList<StatItem>? Stats { get; init; }
 
     // Chart
     /// <summary>Resolved chart model JSON for "chart" components: kind, x, bands, rows.</summary>
@@ -174,7 +174,7 @@ public record PrismComponentRenderPayload
 }
 
 /// <summary>A resolved statistic tile within a rendered stat-group component.</summary>
-public record PrismStatItem
+public record StatItem
 {
     /// <summary>Short label above the value (e.g. "DB pension").</summary>
     public string Label { get; init; } = "";
@@ -189,16 +189,16 @@ public record PrismStatItem
 }
 
 /// <summary>A section within a rendered task-list component.</summary>
-public record PrismTaskSection
+public record TaskSectionPayload
 {
     /// <summary>The task section heading.</summary>
     public string Heading { get; init; } = "";
     /// <summary>The tasks within this section.</summary>
-    public IReadOnlyList<PrismTaskItem> Tasks { get; init; } = Array.Empty<PrismTaskItem>();
+    public IReadOnlyList<TaskItemPayload> Tasks { get; init; } = Array.Empty<TaskItemPayload>();
 }
 
 /// <summary>A single rendered task item within a task-list section.</summary>
-public record PrismTaskItem
+public record TaskItemPayload
 {
     /// <summary>The task label shown to the user.</summary>
     public string Label { get; init; } = "";
@@ -209,7 +209,7 @@ public record PrismTaskItem
 }
 
 /// <summary>A rendered accordion section with populated fields.</summary>
-public record PrismAccordionSectionPayload
+public record AccordionSectionPayload
 {
     /// <summary>The accordion section heading.</summary>
     public string Heading { get; init; } = "";
@@ -341,7 +341,7 @@ public record FieldRenderPayload
 
     /// <summary>
     /// For a summary-list row: the stage key this row's own "Change" link navigates back to,
-    /// overriding the parent summary-list's <see cref="PrismComponentRenderPayload.SourceStateKey"/>.
+    /// overriding the parent summary-list's <see cref="ComponentRenderPayload.SourceStateKey"/>.
     /// Null outside a summary-list context.
     /// </summary>
     public string? ChangeStateKey { get; init; }
@@ -354,7 +354,7 @@ public record FieldRenderPayload
 
     /// <summary>
     /// Maximum upload size in bytes for a <c>file-upload</c> field, enforced server-side on
-    /// POST. Null falls back to <c>PrismServiceRequestPageController.DefaultMaxFileSizeBytes</c>.
+    /// POST. Null falls back to <c>ServiceRequestPageController.DefaultMaxFileSizeBytes</c>.
     /// </summary>
     public long? MaxSizeBytes { get; init; }
 

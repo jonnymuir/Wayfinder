@@ -3,16 +3,16 @@ using Wayfinder.Models.ServiceDesign.Components;
 namespace Wayfinder.Extensions;
 
 /// <summary>
-/// Tree-walking helpers for the v2.0 polymorphic <see cref="PrismComponent"/> hierarchy.
+/// Tree-walking helpers for the v2.0 polymorphic <see cref="Component"/> hierarchy.
 /// </summary>
-public static class PrismComponentExtensions
+public static class ComponentExtensions
 {
     /// <summary>
     /// Recursively walks the component tree and yields every component, including
     /// descendants nested inside fieldsets, accordion sections and conditional children
     /// of radios/checkboxes.
     /// </summary>
-    public static IEnumerable<PrismComponent> Flatten(this IEnumerable<PrismComponent> components)
+    public static IEnumerable<Component> Flatten(this IEnumerable<Component> components)
     {
         foreach (var component in components)
         {
@@ -49,7 +49,7 @@ public static class PrismComponentExtensions
     /// <summary>
     /// Returns every <see cref="InputComponent"/> in the tree, regardless of nesting depth.
     /// </summary>
-    public static IEnumerable<InputComponent> GetAllInputs(this IEnumerable<PrismComponent> components)
+    public static IEnumerable<InputComponent> GetAllInputs(this IEnumerable<Component> components)
         => components.Flatten().OfType<InputComponent>();
 
     /// <summary>
@@ -58,8 +58,8 @@ public static class PrismComponentExtensions
     /// at <paramref name="basePath"/>, for callers that need to address a specific component in
     /// diagnostics.
     /// </summary>
-    public static IEnumerable<(PrismComponent Component, string Path)> FlattenWithPaths(
-        this IEnumerable<PrismComponent> components, string basePath)
+    public static IEnumerable<(Component Component, string Path)> FlattenWithPaths(
+        this IEnumerable<Component> components, string basePath)
     {
         var index = 0;
         foreach (var component in components)
@@ -106,16 +106,16 @@ public static class PrismComponentExtensions
     /// <summary>
     /// Returns the first descendant of type <typeparamref name="T"/> in the tree, or null if none exists.
     /// </summary>
-    public static T? FindFirst<T>(this IEnumerable<PrismComponent> components) where T : PrismComponent
+    public static T? FindFirst<T>(this IEnumerable<Component> components) where T : Component
         => components.Flatten().OfType<T>().FirstOrDefault();
 
     /// <summary>
     /// Infers the GDS step type for a stage based on the components it contains.
     /// Replaces the V1 <c>EffectiveStepType</c> property which lived on the stage record.
     /// </summary>
-    public static string InferStepType(this IEnumerable<PrismComponent> components)
+    public static string InferStepType(this IEnumerable<Component> components)
     {
-        var list = components as IReadOnlyCollection<PrismComponent> ?? components.ToArray();
+        var list = components as IReadOnlyCollection<Component> ?? components.ToArray();
 
         if (list.OfType<WaitingComponent>().Any())
             return "status-timeline";

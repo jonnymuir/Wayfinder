@@ -34,7 +34,7 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 [JsonDerivedType(typeof(SliderComponent), typeDiscriminator: "slider")]
 [JsonDerivedType(typeof(StatGroupComponent), typeDiscriminator: "stat-group")]
 [JsonDerivedType(typeof(ChartComponent), typeDiscriminator: "chart")]
-public abstract record PrismComponent
+public abstract record Component
 {
     /// <summary>
     /// Optional visibility expression evaluated against the blueprint's calculation scope

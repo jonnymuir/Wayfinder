@@ -8,17 +8,17 @@ using Wayfinder.Engine.Services;
 namespace Wayfinder.Engine.Api;
 
 /// <summary>
-/// Maps the Prism service blueprint authoring toolkit's HTTP surface — list/read/validate/save/simulate —
+/// Maps the Wayfinder service blueprint authoring toolkit's HTTP surface — list/read/validate/save/simulate —
 /// onto <see cref="ServiceBlueprintAuthoringService"/>. The returned <see cref="RouteGroupBuilder"/> lets
 /// the host chain its own policy, e.g. <c>.RequireAuthorization()</c>; this extension applies none.
 /// The host must have already registered <c>ServiceBlueprintAuthoringService</c> (see
-/// <c>AddPrismServiceBlueprintAuthoring()</c>) and its own <c>IServiceBlueprintSourceStore</c>.
+/// <c>AddServiceBlueprintAuthoring()</c>) and its own <c>IServiceBlueprintSourceStore</c>.
 /// </summary>
-public static class PrismServiceBlueprintAuthoringApiExtensions
+public static class ServiceBlueprintAuthoringApiExtensions
 {
-    public static RouteGroupBuilder MapPrismServiceBlueprintAuthoringApi(
+    public static RouteGroupBuilder MapServiceBlueprintAuthoringApi(
         this IEndpointRouteBuilder endpoints,
-        string prefix = "/prism/service-blueprint-authoring")
+        string prefix = "/wayfinder/service-blueprint-authoring")
     {
         var group = endpoints.MapGroup(prefix);
 

@@ -40,7 +40,7 @@ public sealed class LenientDefaultValueConverter : JsonConverter<string?>
 /// <summary>
 /// Abstract base for all input field components, carrying common field properties.
 /// </summary>
-public abstract record InputComponent : PrismComponent
+public abstract record InputComponent : Component
 {
     /// <summary>Unique identifier for this field (e.g., "full-name").</summary>
     public string FieldKey { get; init; } = "";
@@ -157,7 +157,7 @@ public sealed record RadiosComponent : InputComponent
     /// Optional conditional child components revealed when specific options are selected.
     /// Key is the option value; value is the list of components shown when that option is active.
     /// </summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<PrismComponent>>? ConditionalChildren { get; init; }
+    public IReadOnlyDictionary<string, IReadOnlyList<Component>>? ConditionalChildren { get; init; }
 }
 
 /// <summary>
@@ -172,7 +172,7 @@ public sealed record CheckboxesComponent : InputComponent
     /// Optional conditional child components revealed when specific options are selected.
     /// Key is the option value; value is the list of components shown when that option is active.
     /// </summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<PrismComponent>>? ConditionalChildren { get; init; }
+    public IReadOnlyDictionary<string, IReadOnlyList<Component>>? ConditionalChildren { get; init; }
 }
 
 /// <summary>

@@ -3,10 +3,10 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 /// <summary>
 /// GDS fieldset component: groups related fields with an optional legend.
 /// </summary>
-public sealed record FieldsetComponent : PrismComponent
+public sealed record FieldsetComponent : Component
 {
     /// <summary>Child components rendered within this fieldset.</summary>
-    public IReadOnlyList<PrismComponent> Children { get; init; } = Array.Empty<PrismComponent>();
+    public IReadOnlyList<Component> Children { get; init; } = Array.Empty<Component>();
 
     /// <summary>Legend text displayed above the fieldset.</summary>
     public string? Legend { get; init; }
@@ -18,7 +18,7 @@ public sealed record FieldsetComponent : PrismComponent
 /// <summary>
 /// GDS accordion component: collapsible sections, each with their own child components.
 /// </summary>
-public sealed record AccordionComponent : PrismComponent
+public sealed record AccordionComponent : Component
 {
     /// <summary>Sections within this accordion.</summary>
     public IReadOnlyList<AccordionSection> Sections { get; init; } = Array.Empty<AccordionSection>();
@@ -36,13 +36,13 @@ public sealed record AccordionSection
     public string? Summary { get; init; }
 
     /// <summary>Child components rendered within this section.</summary>
-    public IReadOnlyList<PrismComponent> Children { get; init; } = Array.Empty<PrismComponent>();
+    public IReadOnlyList<Component> Children { get; init; } = Array.Empty<Component>();
 }
 
 /// <summary>
 /// GDS panel component: typically used for confirmation messages.
 /// </summary>
-public sealed record PanelComponent : PrismComponent
+public sealed record PanelComponent : Component
 {
     /// <summary>Panel heading (title).</summary>
     public string Heading { get; init; } = "";

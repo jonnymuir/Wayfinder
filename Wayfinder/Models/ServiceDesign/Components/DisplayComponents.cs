@@ -5,7 +5,7 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 /// Values are resolved at render time from instance field values via each item's FieldKey,
 /// so the host application controls the figures shown.
 /// </summary>
-public sealed record StatGroupComponent : PrismComponent
+public sealed record StatGroupComponent : Component
 {
     /// <summary>Optional heading rendered above the tiles.</summary>
     public string? Title { get; init; }
@@ -37,7 +37,7 @@ public sealed record StatItemDefinition
 /// (bars, legend and an accessible data table); the live-form runtime re-renders it
 /// as inputs change. Currently supported kind: "stacked-bar".
 /// </summary>
-public sealed record ChartComponent : PrismComponent
+public sealed record ChartComponent : Component
 {
     /// <summary>Chart heading shown above the plot.</summary>
     public string? Title { get; init; }

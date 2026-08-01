@@ -508,7 +508,7 @@ public record ServiceBlueprint
     /// <summary>
     /// The only <see cref="StageDefinition.StageType"/> values any authoring surface
     /// recognises. StageType has no runtime meaning on its own — actual step-shell rendering
-    /// is inferred from the stage's components (see <c>PrismComponentExtensions.InferStepType</c>)
+    /// is inferred from the stage's components (see <c>ComponentExtensions.InferStepType</c>)
     /// — but an unrecognised value passes every other check here and only surfaces later as an
     /// editor-only rejection when someone opens the blueprint in the backoffice Definition tab,
     /// after it's already been saved by another authoring surface (MCP, REST). Kept in sync by
@@ -649,7 +649,7 @@ public record StageDefinition
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ActionDefinition>? Actions { get; init; }
 
-    public IReadOnlyList<PrismComponent> Components { get; init; } = Array.Empty<PrismComponent>();
+    public IReadOnlyList<Component> Components { get; init; } = Array.Empty<Component>();
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ServiceBlueprintRouteDefinition>? Routes

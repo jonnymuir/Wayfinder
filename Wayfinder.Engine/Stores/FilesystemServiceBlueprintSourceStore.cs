@@ -23,7 +23,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
     private static readonly JsonSerializerOptions ReadOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        // PrismComponent is a [JsonPolymorphic] type; not every seed file's components have
+        // Component is a [JsonPolymorphic] type; not every seed file's components have
         // "type" written first (e.g. information-request.json), so this must be relaxed —
         // matches ReferenceWorkflowRepository's production JsonOptions.
         AllowOutOfOrderMetadataProperties = true
@@ -59,7 +59,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
         foreach (var path in Directory.EnumerateFiles(basePath, "*.json"))
         {
             // Deserialize from a fully-read string, not DeserializeAsync(stream, ...) — System.Text.Json's
-            // streaming reader can fail to resolve PrismComponent's [JsonDerivedType] polymorphism on
+            // streaming reader can fail to resolve Component's [JsonDerivedType] polymorphism on
             // some buffer boundaries. The sync string overload (used throughout the rest of the codebase,
             // e.g. FilesystemServiceBlueprintStore) doesn't have this issue.
             var json = await File.ReadAllTextAsync(path, ct);

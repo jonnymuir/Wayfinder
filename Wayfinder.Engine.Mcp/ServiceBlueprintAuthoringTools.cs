@@ -16,7 +16,7 @@ namespace Wayfinder.Engine.Mcp;
 [McpServerToolType]
 public static class ServiceBlueprintAuthoringTools
 {
-    // ServiceBlueprint.Stages[].Components is a [JsonPolymorphic] PrismComponent
+    // ServiceBlueprint.Stages[].Components is a [JsonPolymorphic] Component
     // hierarchy. The MCP SDK's own tool-argument binding doesn't set
     // AllowOutOfOrderMetadataProperties (github.com/modelcontextprotocol/csharp-sdk#795 —
     // no supported hook to configure it), so it fails whenever a component's "type"
@@ -65,7 +65,7 @@ public static class ServiceBlueprintAuthoringTools
     [McpServerTool(Name = "list_queue_capabilities")]
     [Description(
         "List every queue this host has explicitly declared render capabilities for, " +
-        "and which PrismComponent \"type\" discriminators (e.g. \"text\", \"summary-list\", " +
+        "and which Component \"type\" discriminators (e.g. \"text\", \"summary-list\", " +
         "\"panel\") are supported for each. A queue key NOT present in this result is " +
         "unrestricted from this toolkit's point of view — not a declared concern of this host " +
         "(e.g. served by a different downstream app). Check this before drafting a stage for a " +

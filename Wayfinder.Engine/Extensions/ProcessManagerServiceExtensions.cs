@@ -7,12 +7,12 @@ namespace Wayfinder.Engine.Extensions;
 
 public static class ProcessManagerServiceExtensions
 {
-    public static IServiceCollection AddPrismProcessManager(
+    public static IServiceCollection AddProcessManager(
         this IServiceCollection services,
         string blueprintSeedPath) =>
-        services.AddPrismProcessManager<ProcessManagerEngine>(blueprintSeedPath);
+        services.AddProcessManager<ProcessManagerEngine>(blueprintSeedPath);
 
-    public static IServiceCollection AddPrismProcessManager<TEngine>(
+    public static IServiceCollection AddProcessManager<TEngine>(
         this IServiceCollection services,
         string blueprintSeedPath)
         where TEngine : class, IProcessManager
@@ -32,7 +32,7 @@ public static class ProcessManagerServiceExtensions
     /// Registers <see cref="ServiceBlueprintAuthoringService"/>. The host must already have an
     /// <see cref="Abstractions.IServiceBlueprintSourceStore"/> registered — this does not provide one.
     /// </summary>
-    public static IServiceCollection AddPrismServiceBlueprintAuthoring(this IServiceCollection services)
+    public static IServiceCollection AddServiceBlueprintAuthoring(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 

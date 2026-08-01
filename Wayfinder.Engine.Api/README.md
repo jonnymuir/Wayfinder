@@ -2,7 +2,7 @@
 
 Exposes Wayfinder's service blueprint authoring — list, read, validate, save, simulate — as
 REST endpoints. This is a library, not a standalone service: a host calls
-`MapPrismServiceBlueprintAuthoringApi()` from its own ASP.NET Core pipeline. See the
+`MapServiceBlueprintAuthoringApi()` from its own ASP.NET Core pipeline. See the
 [AI-Ready Service Blueprint Authoring guide](../../docs/guides/ai-service-blueprint-authoring.md)
 for the full integrator recipe, including the companion
 [`Wayfinder.Engine.Mcp`](../Wayfinder.Engine.Mcp) package, which exposes the same
@@ -12,13 +12,13 @@ operations as MCP tools.
 
 ```csharp
 builder.Services.AddSingleton<IServiceBlueprintSourceStore, YourServiceBlueprintSourceStore>();
-builder.Services.AddPrismServiceBlueprintAuthoring(); // Wayfinder.Engine.Extensions
+builder.Services.AddServiceBlueprintAuthoring(); // Wayfinder.Engine.Extensions
 
 var app = builder.Build();
-app.MapPrismServiceBlueprintAuthoringApi(); // defaults to prefix "/prism/service-blueprint-authoring"
+app.MapServiceBlueprintAuthoringApi(); // defaults to prefix "/wayfinder/service-blueprint-authoring"
 ```
 
-`MapPrismServiceBlueprintAuthoringApi()` returns a `RouteGroupBuilder` — chain
+`MapServiceBlueprintAuthoringApi()` returns a `RouteGroupBuilder` — chain
 `.RequireAuthorization()` (or any other ASP.NET Core policy) the same way you would for
 any other endpoint group. This extension applies none itself.
 

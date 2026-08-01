@@ -3,7 +3,7 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 /// <summary>
 /// Waiting component: displays a message while the blueprint is paused pending external processing.
 /// </summary>
-public sealed record WaitingComponent : PrismComponent
+public sealed record WaitingComponent : Component
 {
     /// <summary>The main message displayed to the user while waiting.</summary>
     public string Content { get; init; } = "";
@@ -24,14 +24,14 @@ public sealed record WaitingComponent : PrismComponent
 /// <summary>
 /// GDS summary list component: displays a list of field values with optional change links.
 /// </summary>
-public sealed record SummaryListComponent : PrismComponent
+public sealed record SummaryListComponent : Component
 {
     /// <summary>
     /// Inline polymorphic input definitions to summarise. The summary-list carries its
     /// own field schemas (label, type, options, conditional reveals) so the engine can
     /// render payloads directly without resolving keys against another stage.
     /// </summary>
-    public IReadOnlyList<PrismComponent> Children { get; init; } = Array.Empty<PrismComponent>();
+    public IReadOnlyList<Component> Children { get; init; } = Array.Empty<Component>();
 
     /// <summary>The stage key the "Change" links navigate to.</summary>
     public string? ChangeStateKey { get; init; }
@@ -43,7 +43,7 @@ public sealed record SummaryListComponent : PrismComponent
 /// <summary>
 /// GDS task list component: displays a list of blueprint tasks grouped by section.
 /// </summary>
-public sealed record TaskListComponent : PrismComponent
+public sealed record TaskListComponent : Component
 {
     /// <summary>
     /// Task sections. If null or empty, the engine auto-generates sections from blueprint stages.

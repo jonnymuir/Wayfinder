@@ -5,7 +5,7 @@ namespace Wayfinder.Builders;
 
 /// <summary>
 /// Fluent builder for creating v2.0 service blueprints in code with full IntelliSense support.
-/// Emits the polymorphic <see cref="PrismComponent"/> hierarchy (text input, radios, fieldset, panel, etc.)
+/// Emits the polymorphic <see cref="Component"/> hierarchy (text input, radios, fieldset, panel, etc.)
 /// rather than the legacy V1 <c>FieldFile</c>-based shape.
 /// </summary>
 /// <example>
@@ -100,12 +100,12 @@ public class ServiceBlueprintBuilder
 /// </summary>
 public abstract class ComponentCollectionBuilder<TSelf> where TSelf : ComponentCollectionBuilder<TSelf>
 {
-    protected readonly List<PrismComponent> Components = new();
+    protected readonly List<Component> Components = new();
 
     protected abstract TSelf Self { get; }
 
-    /// <summary>Appends an arbitrary <see cref="PrismComponent"/> to this collection.</summary>
-    public TSelf Add(PrismComponent component)
+    /// <summary>Appends an arbitrary <see cref="Component"/> to this collection.</summary>
+    public TSelf Add(Component component)
     {
         Components.Add(component);
         return Self;
@@ -202,7 +202,7 @@ public abstract class ComponentCollectionBuilder<TSelf> where TSelf : ComponentC
         Action<ConditionalChildrenBuilder>? conditional = null,
         string? conditionalOn = null, string? visibleWhen = null)
     {
-        IReadOnlyDictionary<string, IReadOnlyList<PrismComponent>>? children = null;
+        IReadOnlyDictionary<string, IReadOnlyList<Component>>? children = null;
         if (conditional is not null)
         {
             var b = new ConditionalChildrenBuilder();
@@ -225,7 +225,7 @@ public abstract class ComponentCollectionBuilder<TSelf> where TSelf : ComponentC
         Action<ConditionalChildrenBuilder>? conditional = null,
         string? conditionalOn = null, string? visibleWhen = null)
     {
-        IReadOnlyDictionary<string, IReadOnlyList<PrismComponent>>? children = null;
+        IReadOnlyDictionary<string, IReadOnlyList<Component>>? children = null;
         if (conditional is not null)
         {
             var b = new ConditionalChildrenBuilder();
@@ -368,7 +368,7 @@ public abstract class ComponentCollectionBuilder<TSelf> where TSelf : ComponentC
     }
 }
 
-/// <summary>Builder for a blueprint stage's <see cref="PrismComponent"/> tree.</summary>
+/// <summary>Builder for a blueprint stage's <see cref="Component"/> tree.</summary>
 public sealed class StateBuilder : ComponentCollectionBuilder<StateBuilder>
 {
     private readonly string _stateKey;
@@ -420,7 +420,7 @@ public sealed class FieldsetBuilder : ComponentCollectionBuilder<FieldsetBuilder
 /// </summary>
 public sealed class ConditionalChildrenBuilder
 {
-    private readonly Dictionary<string, IReadOnlyList<PrismComponent>> _map = new();
+    private readonly Dictionary<string, IReadOnlyList<Component>> _map = new();
 
     /// <summary>
     /// Registers child components revealed when <paramref name="optionValue"/> is selected.
@@ -433,19 +433,19 @@ public sealed class ConditionalChildrenBuilder
         return this;
     }
 
-    internal IReadOnlyDictionary<string, IReadOnlyList<PrismComponent>>? Build()
+    internal IReadOnlyDictionary<string, IReadOnlyList<Component>>? Build()
         => _map.Count == 0 ? null : _map;
 }
 
 /// <summary>
-/// Plain bag of <see cref="PrismComponent"/>s for contexts that aren't a fieldset or stage
+/// Plain bag of <see cref="Component"/>s for contexts that aren't a fieldset or stage
 /// (e.g., conditional children of a radio option).
 /// </summary>
 public sealed class ChildrenBuilder : ComponentCollectionBuilder<ChildrenBuilder>
 {
     protected override ChildrenBuilder Self => this;
 
-    internal IReadOnlyList<PrismComponent> BuildChildren() => Components.ToArray();
+    internal IReadOnlyList<Component> BuildChildren() => Components.ToArray();
 }
 
 /// <summary>Builder for a <see cref="SummaryListComponent"/>.</summary>

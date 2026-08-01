@@ -16,8 +16,8 @@ implementation Prism itself uses.
 |---|---|
 | `Wayfinder` | Core domain models (`ServiceBlueprint`, `ServiceRequestResponseEnvelope`, etc.), the declarative calculation engine, and the sanitizer interface. Zero framework dependency. |
 | `Wayfinder.Engine` | The service blueprint state-machine engine — queue routing, gateway evaluation, request persistence. |
-| `Wayfinder.Engine.Api` | REST toolkit (`MapPrismServiceBlueprintAuthoringApi()`) exposing service blueprint authoring — list/read/validate/save/simulate — over HTTP for any ASP.NET Core host. |
-| `Wayfinder.Engine.Mcp` | MCP-over-HTTP toolkit (`MapPrismServiceBlueprintAuthoringMcp()`) — the same authoring surface as MCP tools for AI agents. |
+| `Wayfinder.Engine.Api` | REST toolkit (`MapServiceBlueprintAuthoringApi()`) exposing service blueprint authoring — list/read/validate/save/simulate — over HTTP for any ASP.NET Core host. |
+| `Wayfinder.Engine.Mcp` | MCP-over-HTTP toolkit (`MapServiceBlueprintAuthoringMcp()`) — the same authoring surface as MCP tools for AI agents. |
 
 ## The service blueprint model
 
