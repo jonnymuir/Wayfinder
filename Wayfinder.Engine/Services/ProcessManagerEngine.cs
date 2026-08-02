@@ -958,15 +958,6 @@ public class ProcessManagerEngine : IProcessManager
                 .ToArray();
         }
 
-        var declaredTransitions = definition.Transitions
-            ?.Where(transition => string.Equals(transition.FromState, sourceKey, StringComparison.Ordinal))
-            .ToArray();
-
-        if (declaredTransitions is { Length: > 0 })
-        {
-            return declaredTransitions;
-        }
-
         var sourceGateway = GetGateways(definition)
             .Where(candidate =>
                 string.Equals(candidate.Source, sourceKey, StringComparison.Ordinal))

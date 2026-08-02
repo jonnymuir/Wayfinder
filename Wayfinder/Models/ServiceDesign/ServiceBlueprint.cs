@@ -545,7 +545,6 @@ public record ServiceBlueprint
     }
 
     private IReadOnlyList<QueueDefinition>? _queues;
-    private IReadOnlyList<RouteFile>? _transitions;
 
     public string DefinitionKey { get; init; } = "";
 
@@ -605,18 +604,6 @@ public record ServiceBlueprint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ServiceBlueprintMetadata? Metadata { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<RouteFile>? Transitions
-    {
-        get => _transitions;
-        init => _transitions = value;
-    }
-
-    [JsonIgnore]
-    public IReadOnlyList<RouteFile>? LegacyTransitions
-    {
-        init => _transitions = value;
-    }
 }
 
 public record StageDefinition
