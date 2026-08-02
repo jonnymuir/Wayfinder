@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Mcp</PackageId>
     <Title>Umbraco Prism Blueprint Authoring MCP</Title>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Umbraco Prism</Company>
     <Description>ASP.NET Core MCP-over-HTTP endpoint mapping that exposes Umbraco Prism service blueprint authoring (list/read/validate/save/simulate) as MCP tools — a single MapPrismServiceBlueprintAuthoringMcp() call any host adds to its own pipeline, alongside MapPrismServiceBlueprintAuthoringApi(), inheriting its own auth.</Description>
@@ -18,7 +18,7 @@
     <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <PackageIcon>assets/logo-vertical-lockup.png</PackageIcon>
+    <PackageIcon>assets/icon-wayfinder-engine-mcp.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
@@ -42,7 +42,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="../assets/logo-vertical-lockup.png" Pack="true" PackagePath="assets/" />
+    <None Include="../assets/icon-wayfinder-engine-mcp.png" Pack="true" PackagePath="assets/" />
     <None Include="../LICENSE" Pack="true" PackagePath="/" />
     <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
