@@ -4,14 +4,19 @@ A total, side-effect-free expression language for the maths behind a service blu
 pension quotes, eligibility thresholds, banded tax calculations, whatever a stage
 needs to compute. It's the **only** place business maths should live: don't
 hand-write it in a host service or a client component (see
-[CLAUDE.md](../../CLAUDE.md#declarative-calculations--live-stages-money-modeller-pattern)).
-Two runtimes implement this exact grammar with matching semantics — C#
-(`Wayfinder/Services/Calculations`, authoritative) and TypeScript
-(`src/UmbracoPrism.Client/src/calculations/calculation-engine.ts`, indicative,
-re-evaluates the same definitions client-side between form submits). Both are
-checked against one conformance suite,
-[`calculation-golden.json`](../../src/Wayfinder/calculation-fixtures/calculation-golden.json)
-— if you're unsure whether something is legal syntax, that file is the ground truth.
+[Umbraco.Prism's CLAUDE.md](https://github.com/jonnymuir/Umbraco.Prism/blob/main/CLAUDE.md#declarative-calculations--live-stages-money-modeller-pattern),
+which documents this convention for that host).
+`Wayfinder` itself ships one runtime for this grammar — C# (`Wayfinder/Services/Calculations`,
+authoritative), checked against one conformance suite,
+[`calculation-golden.json`](../../Wayfinder/calculation-fixtures/calculation-golden.json)
+— if you're unsure whether something is legal syntax, that file is the ground truth. A host
+that wants the same expressions re-evaluated client-side between form submits (for instant
+`showWhen`/chart updates with no round-trip) has to build that itself: Wayfinder doesn't ship
+a client-side runtime. [Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism) is the one
+real example — its own
+[`calculation-engine.ts`](https://github.com/jonnymuir/Umbraco.Prism/blob/main/src/UmbracoPrism.Client/src/calculations/calculation-engine.ts)
+mirrors this exact grammar in TypeScript with matching semantics, checked against the same
+golden fixture.
 
 This document is also exposed as an MCP resource (`service-blueprint-docs://calculation-language`)
 so an AI agent authoring service blueprints through the MCP toolkit can fetch it directly, without
@@ -170,7 +175,8 @@ to the series name, and its `x`/band keys to columns declared in `values`.
 Any component (not just inputs — headings, warning banners, whole fieldsets) may
 carry a `showWhen` string in this same expression language, evaluated against the
 same scope as `calculations` (inputs, service inputs, calculated fields). A few real
-examples from `money-modeller.json`:
+examples from [`money-modeller.json`](https://github.com/jonnymuir/Umbraco.Prism/blob/main/src/UmbracoPrism.MockBusinessApp/service-blueprints/money-modeller.json)
+(Umbraco.Prism's worked example, see below):
 
 ```json
 { "type": "warning-text", "showWhen": "not quoteMode and retireAge < npa", "content": "..." }
@@ -194,8 +200,8 @@ application*, not computed:
 
 The host implements `ProcessManagerEngine.ResolveServiceInputs(...)` to supply it
 (e.g. a member record fetched from a system of record) — see
-`BusinessAppProcessManager.ResolveServiceInputs` in `UmbracoPrism.MockBusinessApp` for
-the real example backing `money-modeller.json`'s `member` field. A service field with
+[`BusinessAppProcessManager.ResolveServiceInputs`](https://github.com/jonnymuir/Umbraco.Prism/blob/main/src/UmbracoPrism.MockBusinessApp/Services/BusinessAppProcessManager.cs)
+in Umbraco.Prism for the real example backing `money-modeller.json`'s `member` field. A service field with
 no value supplied is a `CalculationException` when evaluated for real; the
 `validate_service_blueprint`/`simulate_service_blueprint` MCP tools have specific, non-fatal handling
 for this case — see [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md).
@@ -236,8 +242,11 @@ service blueprint to discover a broken expression — see
 
 ## Worked example: `money-modeller.json`
 
-The one seed service blueprint that exercises the full language end-to-end is
-[`money-modeller.json`](../../src/UmbracoPrism.MockBusinessApp/service-blueprints/money-modeller.json)
+Wayfinder's own repo doesn't ship a calculation-heavy demo blueprint — the reference app
+in this repo (see [Reference App](./reference-app.md)) is deliberately kept simple. The
+fullest worked example of this language lives in a real deployed consumer,
+[Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism):
+[`money-modeller.json`](https://github.com/jonnymuir/Umbraco.Prism/blob/main/src/UmbracoPrism.MockBusinessApp/service-blueprints/money-modeller.json)
 — a pension modeller. Its field chain is worth reading top-to-bottom as a model for
 how to structure a non-trivial calculation set: each field builds on the last, so
 the dependency order *is* the declaration order.

@@ -256,9 +256,9 @@ set of `[JsonDerivedType]` discriminators — since that assembly is shared by
 every Wayfinder host, `ComponentTypeCatalog.AllDiscriminators` is a
 ready-made, honest declaration of "I'm a stock Wayfinder web host", provable
 locally with no dependency on any other app actually running. A host with
-bespoke rendering (like `UmbracoPrism.MockBusinessApp`'s admin surface)
-declares its own smaller, hand-maintained list instead, matching exactly what
-it implements.
+bespoke rendering (like Umbraco.Prism's `UmbracoPrism.MockBusinessApp` admin
+surface, or this repo's own `Wayfinder.ReferenceApp`) declares its own
+smaller, hand-maintained list instead, matching exactly what it implements.
 
 **Known limitation:** there is no mechanism today for a host to extend the
 component catalog itself with genuinely new types beyond what
@@ -285,16 +285,24 @@ its first save — not what a new one should start at) and get
 protocol, including how a host implements the atomic compare-and-swap this depends
 on.
 
-**Note:** in the current demo/dev phase, service blueprint saves against the seed-file-backed
-stores in this repo (`UmbracoPrism.MockBusinessApp`) are memory-only — a save reaches
-the live engine immediately, but a process restart reloads from the seed files on
-disk. This is intentional for now, not a bug; a production host's `IServiceBlueprintSourceStore`
-would back this with real persistence.
+**Note:** in this repo's own reference host (`Wayfinder.ReferenceApp`), service blueprint
+saves against the seed-file-backed store are memory-only — a save reaches the live engine
+immediately, but a process restart reloads from the JSON seed files on disk. This is
+intentional, not a bug — see [the reference app guide](./reference-app.md) for exactly how
+and why. A production host's `IServiceBlueprintSourceStore` backs this with real
+persistence instead — `Wayfinder.Umbraco`'s implementation is a real example, database-backed
+with full uSync export/import portability, also covered in that guide.
 
 ## Worked examples
 
-`src/UmbracoPrism.MockBusinessApp/service-blueprints/` has six real service blueprints to read as
-reference, in roughly increasing order of complexity:
+This repo's own reference blueprint — `Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`,
+a single-queue-pair applicant/caseworker flow with Split gateways only — is the simplest
+starting point; see [the reference app guide](./reference-app.md).
+
+For richer examples,
+[`UmbracoPrism.MockBusinessApp/service-blueprints/`](https://github.com/jonnymuir/Umbraco.Prism/tree/main/src/UmbracoPrism.MockBusinessApp/service-blueprints)
+in the real deployed consumer [Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism) has
+six service blueprints to read as reference, in roughly increasing order of complexity:
 
 - **`planning.json`** — single-queue, linear applicant flow.
 - **`planning-notification.json`** — a planning variant.
@@ -311,7 +319,8 @@ reference, in roughly increasing order of complexity:
 
 - [The Wayfinder Calculation Language](./calculation-language.md) — grammar, functions, `showWhen`
 - [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md) — the MCP/REST toolkit, the author loop, saving/conflicts
-- [Reference Business App README](../../src/UmbracoPrism.MockBusinessApp/README.md) — configuration and setup
+- [The Wayfinder Reference App](./reference-app.md) — this repo's own runnable example
+- [Umbraco.Prism's MockBusinessApp README](https://github.com/jonnymuir/Umbraco.Prism/blob/main/src/UmbracoPrism.MockBusinessApp/README.md) — configuration and setup for the richer worked examples above
 
 ---
 
