@@ -26,9 +26,10 @@ server can't run *inside* an externally-spawned stdio process and still see your
 live state, but hosted this way, a `save_service_blueprint` tool call reaches your running engine
 immediately — no restart, no separate process to keep track of, no proxying.
 
-`UmbracoPrism.MockBusinessApp` is the reference implementation — see
-[`Program.cs`](../../src/UmbracoPrism.MockBusinessApp/Program.cs) for exactly how it wires
-both surfaces to its own `IServiceBlueprintSourceStore`.
+`Wayfinder.ReferenceApp` (in this repo) is the reference implementation — see
+[`Program.cs`](../../Wayfinder.ReferenceApp/Program.cs) for exactly how it wires
+both surfaces to its own `IServiceBlueprintSourceStore`, and
+[the reference app guide](./reference-app.md) for the full picture.
 
 ## What You Write
 
@@ -43,12 +44,13 @@ public interface IServiceBlueprintSourceStore
 }
 ```
 
-Two ready-made implementations already exist in `Wayfinder.Engine.Stores`:
-`FilesystemServiceBlueprintSourceStore` (one JSON file per service blueprint) and, in
-`MockBusinessApp`, `InMemoryRuntimePublishedServiceBlueprintStore` — the pattern to copy if you
-want a save to update your live runtime engine immediately (it calls
-`engine.UpdateDefinition(...)` inside `SaveAsync`). A real app would usually back this
-with a database.
+`Wayfinder.Engine.Stores` already ships `FilesystemServiceBlueprintSourceStore` (one JSON
+file per service blueprint). `Wayfinder.ReferenceApp`'s own
+[`InMemoryRuntimeServiceBlueprintSourceStore`](../../Wayfinder.ReferenceApp/Services/InMemoryRuntimeServiceBlueprintSourceStore.cs)
+is the pattern to copy if you want a save to update your live runtime engine immediately (it
+calls `engine.UpdateDefinition(...)` inside `SaveAsync`) — note it's intentionally in-memory
+only, for a test/demo host; a real app would back this with a database, the way
+`Wayfinder.Umbraco`'s `UmbracoServiceBlueprintStore` does.
 
 ### `SaveAsync` must be an atomic compare-and-swap
 
@@ -89,12 +91,12 @@ Both `Map...` calls return a chainable endpoint builder — chain `.RequireAutho
 (or any other ASP.NET Core policy) the same way you would for any other endpoint. Wayfinder
 doesn't ship an auth story for this surface, the same way it doesn't enforce queue-level
 access control for the runtime engine — that's always been the host's responsibility.
-`MockBusinessApp` leaves both unauthenticated intentionally, to prove the boundary works
-without inheriting an authoring policy.
+`Wayfinder.ReferenceApp` leaves both unauthenticated intentionally, to prove the boundary
+works without inheriting an authoring policy.
 
 ## Connect Claude Code
 
-Find your app's URL (under Aspire, `MockBusinessApp`'s dashboard row has a labeled
+Find your app's URL (under Aspire, `Wayfinder.ReferenceApp`'s dashboard row has a labeled
 "Service Blueprint Authoring MCP (HTTP)" link — use the HTTP one, not HTTPS: most MCP HTTP clients,
 including Claude Code's, won't trust a local ASP.NET Core dev certificate), then:
 
@@ -108,8 +110,8 @@ If your endpoint requires auth, pass it at registration:
 claude mcp add --transport http wayfinder-service-blueprint <url> --header "Authorization: Bearer <token>"
 ```
 
-`UmbracoPrism.MockBusinessApp` (in the `Umbraco.Prism` repo, this toolkit's reference consumer)
-leaves its endpoint unauthenticated intentionally, to prove the toolkit's auth boundary is real
+`Wayfinder.ReferenceApp` (in this repo, this toolkit's reference consumer) leaves its
+endpoint unauthenticated intentionally, to prove the toolkit's auth boundary is real
 without inheriting a policy. Add `.RequireAuthorization()` (or any other ASP.NET Core policy) to
 your own `Map...` calls per the "Wiring it up" section above if you want an authed example —
 that's a decision for your own host to make, not something this toolkit prescribes.
@@ -183,10 +185,10 @@ in it — the MCP tools stay reachable over HTTP regardless of working directory
 
 1. **Implement `IServiceBlueprintSourceStore`** for your business app's real persistence.
 2. **Add the two `Map...` calls** to your `Program.cs`, with whatever `.RequireAuthorization()` policy you need.
-3. **Read the reference implementation** at `src/UmbracoPrism.MockBusinessApp/Program.cs`.
+3. **Read the reference implementation** at [`Wayfinder.ReferenceApp/Program.cs`](../../Wayfinder.ReferenceApp/Program.cs), or the guided tour at [`reference-app.md`](./reference-app.md).
 4. **Read the toolkit projects' own READMEs** for the full wire contract:
-   [`Wayfinder.Engine.Api`](../../src/Wayfinder.Engine.Api/README.md),
-   [`Wayfinder.Engine.Mcp`](../../src/Wayfinder.Engine.Mcp/README.md).
+   [`Wayfinder.Engine.Api`](../../Wayfinder.Engine.Api/README.md),
+   [`Wayfinder.Engine.Mcp`](../../Wayfinder.Engine.Mcp/README.md).
 
 ---
 

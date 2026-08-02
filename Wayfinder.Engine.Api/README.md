@@ -56,16 +56,20 @@ A stale version returns `409 Conflict` with a `ServiceBlueprintSaveOutcome`-shap
 there now, reapply your change on top of it, and `PUT` again with the fresh `version`.
 
 Every `IServiceBlueprintSourceStore` implementation must perform this compare-and-write
-atomically. The reference implementations (`FilesystemServiceBlueprintSourceStore`,
-`FilesystemServiceBlueprintStore`, `InMemoryRuntimePublishedServiceBlueprintStore`) use an
-in-process lock — correct for a single-process app, but **a real database-backed store
-should use an atomic `UPDATE ... WHERE Version = @expectedVersion`** (the `WHERE` clause
-*is* the atomic compare) rather than a separate read-then-compare-then-write, which
-races under concurrent writers.
+atomically. The in-repo reference implementations (`FilesystemServiceBlueprintSourceStore`,
+`FilesystemServiceBlueprintStore`, `Wayfinder.ReferenceApp`'s
+`InMemoryRuntimeServiceBlueprintSourceStore`) use an in-process lock — correct for a
+single-process app, but **a real database-backed store should use an atomic
+`UPDATE ... WHERE Version = @expectedVersion`** (the `WHERE` clause *is* the atomic
+compare) rather than a separate read-then-compare-then-write, which races under
+concurrent writers — see `Wayfinder.Umbraco`'s `UmbracoServiceBlueprintStore` for a real
+example of that pattern against a database.
 
 ## Reference implementation
 
-`UmbracoPrism.MockBusinessApp` wires this to `InMemoryRuntimePublishedServiceBlueprintStore` —
-see [`Program.cs`](../UmbracoPrism.MockBusinessApp/Program.cs). That store's `SaveAsync`
+`Wayfinder.ReferenceApp` (in this repo) wires this to `InMemoryRuntimeServiceBlueprintSourceStore` —
+see [`Program.cs`](../Wayfinder.ReferenceApp/Program.cs). That store's `SaveAsync`
 calls `engine.UpdateDefinition(...)`, so a save through this API is visible to the live
-running engine immediately — no restart.
+running engine immediately — no restart. See
+[the reference app guide](../docs/guides/reference-app.md) for the full picture, including
+why nothing here touches disk.

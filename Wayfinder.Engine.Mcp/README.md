@@ -13,10 +13,11 @@ MCP server can't run *inside* an externally-spawned stdio process and still see 
 live state, but hosted this way, a `save_service_blueprint` call reaches the running engine
 immediately — no restart, no separate process to keep track of.
 
-[`UmbracoPrism.MockBusinessApp`](../UmbracoPrism.MockBusinessApp) is the reference
+[`Wayfinder.ReferenceApp`](../Wayfinder.ReferenceApp) (in this repo) is the reference
 implementation — it calls both `MapServiceBlueprintAuthoringApi()` and
 `MapServiceBlueprintAuthoringMcp()` against its own live store, demonstrating what a real
-host app does to expose this surface.
+host app does to expose this surface. See [the reference app guide](../docs/guides/reference-app.md)
+for the full picture.
 
 ## Tools
 
@@ -45,11 +46,11 @@ MCP client with no repo checkout:
 ## Connect it to Claude Code
 
 Start the app you want to author service blueprints against, find its URL (via the Aspire
-dashboard — `MockBusinessApp`'s row has a labeled **"Service Blueprint Authoring MCP (HTTP)"**
+dashboard — `Wayfinder.ReferenceApp`'s row has a labeled **"Service Blueprint Authoring MCP (HTTP)"**
 link), then:
 
 ```
-claude mcp add --transport http prism-service-blueprint http://localhost:<port>/wayfinder/service-blueprint-authoring/mcp
+claude mcp add --transport http wayfinder-service-blueprint http://localhost:<port>/wayfinder/service-blueprint-authoring/mcp
 ```
 
 Use the **HTTP** URL, not HTTPS. There's also a plain "Service Blueprint Authoring MCP" link on
@@ -65,15 +66,15 @@ If the host's authoring endpoints require authentication (a real host should add
 the same way `MapServiceBlueprintAuthoringApi()`'s does), pass credentials at registration:
 
 ```
-claude mcp add --transport http prism-service-blueprint <url> --header "Authorization: Bearer <token>"
+claude mcp add --transport http wayfinder-service-blueprint <url> --header "Authorization: Bearer <token>"
 ```
 
-The reference app (`MockBusinessApp`) doesn't require this — its endpoints are
+The reference app (`Wayfinder.ReferenceApp`) doesn't require this — its endpoints are
 intentionally unauthenticated, same as its existing editor endpoints.
 
 ## A note on tool selection
 
-If you're running Claude Code from within a checkout of the Prism repo itself (or any
+If you're running Claude Code from within a checkout of this repo itself (or any
 repo that happens to contain the same seed/source files the connected app was built
 from), the agent has ordinary file tools available alongside these MCP tools — nothing
 stops it from finding and editing a seed JSON file directly instead of calling

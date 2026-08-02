@@ -19,6 +19,18 @@ Umbraco-based or otherwise — layers its own tenancy, auth, and rendering opini
 [`Wayfinder.Umbraco`](https://github.com/jonnymuir/Wayfinder.Umbraco) is the Umbraco-hosted
 implementation Prism itself uses.
 
+## See it running
+
+`Wayfinder.AppHost` + `Wayfinder.ReferenceApp` is a small, self-contained .NET Aspire host in
+this repo — every package wired together, real GOV.UK Design System rendering, a demo login,
+and a seeded "apply for a licence to hold a juggling event" journey. It's the fastest way to
+see what a working Wayfinder host actually looks like, and exactly how little wiring a real
+host (like `Wayfinder.Umbraco`) collapses into. Run it with
+`dotnet run --project Wayfinder.AppHost`, or the "C#: Aspire (Full Stack)" launch config in
+VS Code. See [`docs/guides/reference-app.md`](docs/guides/reference-app.md) for what it
+implements, how the demo blueprint is seeded from JSON and only saved in memory, and what a
+real host does differently.
+
 ## Packages
 
 | Package | Purpose |
