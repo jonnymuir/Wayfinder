@@ -1,0 +1,36 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Editor client: build",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}/Wayfinder.Editor.Client"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dotnet: build AppHost",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/Wayfinder.AppHost/Wayfinder.AppHost.csproj"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "dotnet: build ReferenceApp",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/Wayfinder.ReferenceApp/Wayfinder.ReferenceApp.csproj"],
+      "dependsOn": ["Editor client: build"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Reference host: prepare AppHost",
+      "dependsOn": ["Editor client: build", "dotnet: build AppHost"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@wayfinder/reference-app-assets",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Source of the real GOV.UK Design System (govuk-frontend) static assets vendored into wwwroot/govuk-frontend for the reference app's hand-rolled server-rendered pages.",
+  "dependencies": {
+    "govuk-frontend": "6.4.0"
+  }
+}

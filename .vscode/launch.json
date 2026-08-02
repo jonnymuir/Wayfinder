@@ -1,0 +1,47 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C#: Aspire (Full Stack)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "Reference host: prepare AppHost",
+      "program": "${workspaceFolder}/Wayfinder.AppHost/bin/Debug/net10.0/Wayfinder.AppHost.dll",
+      "cwd": "${workspaceFolder}/Wayfinder.AppHost",
+      "console": "internalConsole",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "https://localhost:17285;http://localhost:15185",
+        "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21285",
+        "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22285",
+        // Local dev only: skips the dashboard's browser-token login prompt so VS Code's
+        // serverReadyAction can open it straight to the URL below. Never set this outside a
+        // local debug session — it disables the dashboard's own auth entirely.
+        "DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS": "true"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Distributed application started\\.",
+        "uriFormat": "https://localhost:17285"
+      }
+    },
+    {
+      "name": "C#: Wayfinder.ReferenceApp (standalone)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "dotnet: build ReferenceApp",
+      "program": "${workspaceFolder}/Wayfinder.ReferenceApp/bin/Debug/net10.0/Wayfinder.ReferenceApp.dll",
+      "cwd": "${workspaceFolder}/Wayfinder.ReferenceApp",
+      "console": "internalConsole",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Now listening on:\\s+(https?://\\S+)",
+        "uriFormat": "%s"
+      }
+    }
+  ]
+}

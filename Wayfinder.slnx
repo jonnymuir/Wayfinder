@@ -1,8 +1,11 @@
 <Solution>
+  <Project Path="Wayfinder.AppHost/Wayfinder.AppHost.csproj" />
   <Project Path="Wayfinder.Editor/Wayfinder.Editor.csproj" />
   <Project Path="Wayfinder.Engine.Api/Wayfinder.Engine.Api.csproj" />
   <Project Path="Wayfinder.Engine.Mcp/Wayfinder.Engine.Mcp.csproj" />
   <Project Path="Wayfinder.Engine/Wayfinder.Engine.csproj" />
+  <Project Path="Wayfinder.ReferenceApp/Wayfinder.ReferenceApp.csproj" />
+  <Project Path="Wayfinder.ServiceDefaults/Wayfinder.ServiceDefaults.csproj" />
   <Project Path="Wayfinder.Tests/Wayfinder.Tests.csproj" />
   <Project Path="Wayfinder/Wayfinder.csproj" />
 </Solution>

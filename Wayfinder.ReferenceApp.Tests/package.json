@@ -1,0 +1,13 @@
+{
+  "name": "@wayfinder/reference-app-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end Playwright suite against the transient Wayfinder.ReferenceApp — doubles as narrated documentation of the citizen/caseworker journeys and the authoring surface.",
+  "scripts": {
+    "test:playwright": "playwright test",
+    "test:playwright:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.46.1"
+  }
+}
