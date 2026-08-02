@@ -1,4 +1,13 @@
-# Wayfinder
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/wordmark-dark.png">
+  <img src="assets/wordmark-light.png" alt="Wayfinder" height="56">
+</picture>
+
+[![CI](https://github.com/jonnymuir/Wayfinder/actions/workflows/ci.yml/badge.svg)](https://github.com/jonnymuir/Wayfinder/actions/workflows/ci.yml)
+[![Wayfinder](https://img.shields.io/nuget/v/Wayfinder.svg?label=Wayfinder)](https://www.nuget.org/packages/Wayfinder)
+[![Wayfinder.Engine](https://img.shields.io/nuget/v/Wayfinder.Engine.svg?label=Wayfinder.Engine)](https://www.nuget.org/packages/Wayfinder.Engine)
+[![Wayfinder.Editor](https://img.shields.io/nuget/v/Wayfinder.Editor.svg?label=Wayfinder.Editor)](https://www.nuget.org/packages/Wayfinder.Editor)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A GDS-style service blueprint / service-design engine — domain model, calculation engine,
 state-machine engine, and a compiled visual editor web component. Framework-agnostic: no
