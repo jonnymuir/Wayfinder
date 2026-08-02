@@ -16,4 +16,10 @@
     <ProjectReference Include="../Wayfinder.ServiceDefaults/Wayfinder.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="service-blueprints\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

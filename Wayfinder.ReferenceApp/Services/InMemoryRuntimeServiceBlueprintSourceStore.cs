@@ -4,13 +4,13 @@ using Wayfinder.Models.ServiceDesign;
 namespace Wayfinder.ReferenceApp.Services;
 
 /// <summary>
-/// The authoring-surface (editor / REST / MCP) counterpart to <see cref="InMemoryServiceBlueprintStore"/>'s
-/// seed data: layers save-time overrides over whatever's live in the running
+/// The authoring-surface (editor / REST / MCP) counterpart to the JSON seed files in
+/// service-blueprints/: layers save-time overrides over whatever's live in the running
 /// <see cref="IProcessManager"/>, so a save from any authoring surface calls
 /// <see cref="IProcessManager.UpdateDefinition"/> and is immediately visible to the next
 /// request — no restart, nothing written to disk. Never persists anywhere else; a process
-/// restart forgets every override and returns to the seed definitions, which is the point —
-/// this host is completely transient.
+/// restart forgets every override and returns to the seed files, which is the point — this
+/// host is completely transient.
 /// </summary>
 public sealed class InMemoryRuntimeServiceBlueprintSourceStore(IProcessManager engine) : IServiceBlueprintSourceStore
 {

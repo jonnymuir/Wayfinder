@@ -1,0 +1,454 @@
+{
+  "definitionKey": "juggling-licence",
+  "displayName": "Apply for a licence to hold a juggling event",
+  "version": 1,
+  "description": "GOV.UK Service Manual's own teaching exemplar, used here to demonstrate a two-actor service blueprint: an applicant's frontstage journey and a caseworker's backstage review queue.",
+  "initialStage": "your-details",
+  "requestPolicy": "single",
+  "stages": [
+    {
+      "stageKey": "your-details",
+      "displayName": "Your details",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "fieldset",
+          "children": [
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "applicantName",
+              "label": "Full name",
+              "hint": null,
+              "required": true,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "email",
+              "pattern": null,
+              "fieldKey": "applicantEmail",
+              "label": "Email address",
+              "hint": null,
+              "required": true,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            }
+          ],
+          "legend": "Your details",
+          "legendSize": null
+        }
+      ],
+      "routes": [
+        {
+          "id": "your-details--continue--to-event-details",
+          "target": "to-event-details",
+          "trigger": "continue",
+          "label": "Continue",
+          "style": "primary"
+        }
+      ]
+    },
+    {
+      "stageKey": "event-details",
+      "displayName": "About the event",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "fieldset",
+          "children": [
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "eventName",
+              "label": "Name of the event",
+              "hint": null,
+              "required": true,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "date",
+              "fieldKey": "eventDate",
+              "label": "Date of the event",
+              "hint": null,
+              "required": true,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "number",
+              "min": 1,
+              "max": null,
+              "prefix": null,
+              "fieldKey": "jugglerCount",
+              "label": "Number of jugglers taking part",
+              "hint": null,
+              "required": true,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            }
+          ],
+          "legend": "About the event",
+          "legendSize": null
+        }
+      ],
+      "routes": [
+        {
+          "id": "event-details--continue--to-declaration",
+          "target": "to-declaration",
+          "trigger": "continue",
+          "label": "Continue",
+          "style": "primary"
+        }
+      ]
+    },
+    {
+      "stageKey": "declaration",
+      "displayName": "Check your answers and declare",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "summary-list",
+          "children": [
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "applicantName",
+              "label": "Full name",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "email",
+              "pattern": null,
+              "fieldKey": "applicantEmail",
+              "label": "Email address",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "eventName",
+              "label": "Name of the event",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "date",
+              "fieldKey": "eventDate",
+              "label": "Date of the event",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "number",
+              "min": null,
+              "max": null,
+              "prefix": null,
+              "fieldKey": "jugglerCount",
+              "label": "Number of jugglers taking part",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            }
+          ],
+          "changeStateKey": null,
+          "title": "Application details"
+        },
+        {
+          "type": "boolean",
+          "fieldKey": "declarationConfirmed",
+          "label": "I confirm the details above are correct",
+          "hint": null,
+          "required": true,
+          "conditionalOn": null,
+          "visibleWhen": null,
+          "default": null,
+          "defaultFrom": null,
+          "changeStateKey": null
+        }
+      ],
+      "routes": [
+        {
+          "id": "declaration--submit--to-under-review",
+          "target": "to-under-review",
+          "trigger": "submit",
+          "label": "Submit application",
+          "style": "primary"
+        }
+      ]
+    },
+    {
+      "stageKey": "under-review",
+      "displayName": "Application under review",
+      "queueKey": "caseworker",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Application under review"
+        },
+        {
+          "type": "body",
+          "content": "A caseworker will review this application and record a decision below."
+        },
+        {
+          "type": "summary-list",
+          "children": [
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "applicantName",
+              "label": "Full name",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "email",
+              "pattern": null,
+              "fieldKey": "applicantEmail",
+              "label": "Email address",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "eventName",
+              "label": "Name of the event",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "date",
+              "fieldKey": "eventDate",
+              "label": "Date of the event",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "number",
+              "min": null,
+              "max": null,
+              "prefix": null,
+              "fieldKey": "jugglerCount",
+              "label": "Number of jugglers taking part",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            }
+          ],
+          "changeStateKey": null,
+          "title": "Application details"
+        }
+      ],
+      "routes": [
+        {
+          "id": "under-review--approve--to-approved",
+          "target": "to-approved",
+          "trigger": "approve",
+          "label": "Approve",
+          "style": "primary"
+        },
+        {
+          "id": "under-review--reject--to-rejected",
+          "target": "to-rejected",
+          "trigger": "reject",
+          "label": "Reject",
+          "style": "destructive"
+        }
+      ]
+    },
+    {
+      "stageKey": "approved",
+      "displayName": "Licence granted",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Licence granted"
+        },
+        {
+          "type": "body",
+          "content": "Your licence to hold a juggling event has been granted. Keep this confirmation for your records."
+        }
+      ]
+    },
+    {
+      "stageKey": "rejected",
+      "displayName": "Application not approved",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Application not approved"
+        },
+        {
+          "type": "body",
+          "content": "Your application was not approved this time. Contact the licensing team for more information."
+        }
+      ]
+    }
+  ],
+  "queues": [
+    {
+      "key": "citizen",
+      "displayName": "Applicant",
+      "actor": "citizen"
+    },
+    {
+      "key": "caseworker",
+      "displayName": "Caseworker",
+      "actor": "caseworker"
+    }
+  ],
+  "gateways": [
+    {
+      "key": "to-event-details",
+      "displayName": "Continue to event details",
+      "gatewayType": "Split",
+      "queueKey": "citizen",
+      "routes": [
+        {
+          "id": "to-event-details--continue--event-details",
+          "target": "event-details",
+          "trigger": "continue"
+        }
+      ]
+    },
+    {
+      "key": "to-declaration",
+      "displayName": "Continue to declaration",
+      "gatewayType": "Split",
+      "queueKey": "citizen",
+      "routes": [
+        {
+          "id": "to-declaration--continue--declaration",
+          "target": "declaration",
+          "trigger": "continue"
+        }
+      ]
+    },
+    {
+      "key": "to-under-review",
+      "displayName": "Hand off to caseworker",
+      "gatewayType": "Split",
+      "queueKey": "citizen",
+      "routes": [
+        {
+          "id": "to-under-review--continue--under-review",
+          "target": "under-review",
+          "trigger": "continue"
+        }
+      ]
+    },
+    {
+      "key": "to-approved",
+      "displayName": "Application approved",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        {
+          "id": "to-approved--continue--approved",
+          "target": "approved",
+          "trigger": "continue"
+        }
+      ]
+    },
+    {
+      "key": "to-rejected",
+      "displayName": "Application rejected",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        {
+          "id": "to-rejected--continue--rejected",
+          "target": "rejected",
+          "trigger": "continue"
+        }
+      ]
+    }
+  ]
+}

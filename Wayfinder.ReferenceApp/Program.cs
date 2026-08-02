@@ -8,9 +8,13 @@ using Wayfinder.Engine.Api;
 using Wayfinder.Engine.Extensions;
 using Wayfinder.Engine.Mcp;
 using Wayfinder.Engine.Services;
+using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.ReferenceApp.Services;
 using Wayfinder.Services.Sanitization;
+
+// The one seeded demo blueprint's key — see service-blueprints/juggling-licence.json.
+const string JugglingLicenceDefinitionKey = "juggling-licence";
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,12 +37,14 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Caseworker", policy => policy.RequireRole(DemoUsers.CaseworkerRole));
 });
 
-// ── Wayfinder wiring: every store below is in-memory, nothing touches disk (see
-// InMemoryServiceBlueprintStore / InMemoryRuntimeServiceBlueprintSourceStore) — this host is
-// completely transient by design, so it boots instantly and Playwright can reset it between
-// tests via DELETE /api/test/reset instead of restarting the process.
+// ── Wayfinder wiring: the seed blueprint is a plain JSON file on disk (service-blueprints/) —
+// the same FilesystemServiceBlueprintStore any real host uses, loaded once at startup. Runtime
+// *instance* state stays in-memory (see InMemoryRuntimeServiceBlueprintSourceStore's remarks),
+// so this host is still transient — Playwright resets it between tests via
+// DELETE /api/test/reset instead of restarting the process.
 builder.Services.AddSingleton<IServiceContentSanitizer, PassthroughSanitizer>();
-builder.Services.AddSingleton<IServiceBlueprintStore>(_ => new InMemoryServiceBlueprintStore(JugglingLicenceBlueprint.Build()));
+builder.Services.AddSingleton<IServiceBlueprintStore>(
+    _ => new FilesystemServiceBlueprintStore(Path.Combine(builder.Environment.ContentRootPath, "service-blueprints")));
 builder.Services.AddSingleton<IQueueCapabilitiesProvider>(ReferenceActors.CapabilitiesProvider());
 
 builder.Services.AddSingleton(sp => new ProcessManagerEngine(
@@ -87,7 +93,7 @@ app.UseAuthorization();
 app.MapGet("/service-blueprint-editor", (HttpRequest request) =>
 {
     var key = request.Query["serviceBlueprint"].ToString();
-    var target = string.IsNullOrWhiteSpace(key) ? JugglingLicenceBlueprint.DefinitionKey : key;
+    var target = string.IsNullOrWhiteSpace(key) ? JugglingLicenceDefinitionKey : key;
     return Results.Redirect($"/service-blueprint-editor.html?serviceBlueprint={Uri.EscapeDataString(target)}");
 });
 
@@ -203,7 +209,7 @@ var citizenGroup = app.MapGroup("/apply").RequireAuthorization("Applicant");
 citizenGroup.MapGet("/", (HttpContext ctx, IProcessManager engine) =>
 {
     var envelope = engine.GetCurrent(
-        JugglingLicenceBlueprint.DefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CitizenProfile());
+        JugglingLicenceDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CitizenProfile());
     return Results.Content(PageShell.Render("Apply for a juggling licence", RenderJourneyBody(envelope, "/apply"), ctx.User), "text/html");
 });
 
@@ -211,7 +217,7 @@ citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine) =>
 {
     var userId = GetUserId(ctx.User);
     var profile = ReferenceActors.CitizenProfile();
-    var current = engine.GetCurrent(JugglingLicenceBlueprint.DefinitionKey, ReferenceActors.TenantId, userId, profile);
+    var current = engine.GetCurrent(JugglingLicenceDefinitionKey, ReferenceActors.TenantId, userId, profile);
 
     var form = await ctx.Request.ReadFormAsync();
     var action = form["action"].ToString();
@@ -267,7 +273,7 @@ caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
 caseworkerGroup.MapGet("/queue/{instanceId}", (string instanceId, HttpContext ctx, IProcessManager engine) =>
 {
     var envelope = engine.GetCurrent(
-        JugglingLicenceBlueprint.DefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
+        JugglingLicenceDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
     return Results.Content(
         PageShell.Render("Review application", RenderJourneyBody(envelope, $"/caseworker/queue/{instanceId}/advance"), ctx.User), "text/html");
 });
@@ -276,7 +282,7 @@ caseworkerGroup.MapPost("/queue/{instanceId}/advance", async (string instanceId,
 {
     var userId = GetUserId(ctx.User);
     var profile = ReferenceActors.CaseworkerProfile();
-    var current = engine.GetCurrent(JugglingLicenceBlueprint.DefinitionKey, ReferenceActors.TenantId, userId, profile, instanceId);
+    var current = engine.GetCurrent(JugglingLicenceDefinitionKey, ReferenceActors.TenantId, userId, profile, instanceId);
 
     var form = await ctx.Request.ReadFormAsync();
     var action = form["action"].ToString();
