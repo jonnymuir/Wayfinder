@@ -224,7 +224,17 @@ citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine) =>
     var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
     var fieldValues = CoerceFieldValues(form, current.Render);
 
-    engine.Advance(current.InstanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
+    var result = engine.Advance(current.InstanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
+
+    // A rejected submission (missing/invalid field values, or a field key that isn't even
+    // declared on this stage — see ProcessManagerEngine.Advance's server-side validation)
+    // never changes instance state, so stateVersion is still current — safe to render this
+    // response directly rather than redirect, unlike a genuine advance below.
+    if (result.Problems.Count > 0 && result.Render is not null)
+    {
+        return Results.Content(
+            PageShell.Render("Apply for a juggling licence", RenderJourneyBody(result, "/apply"), ctx.User), "text/html");
+    }
 
     // Redirect rather than render the result directly (POST-redirect-GET): rendering at the
     // POST URL leaves that response in browser history, so reloading it — or a caseworker
@@ -289,7 +299,14 @@ caseworkerGroup.MapPost("/queue/{instanceId}/advance", async (string instanceId,
     var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
     var fieldValues = CoerceFieldValues(form, current.Render);
 
-    engine.Advance(instanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
+    var result = engine.Advance(instanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
+
+    if (result.Problems.Count > 0 && result.Render is not null)
+    {
+        return Results.Content(
+            PageShell.Render("Review application", RenderJourneyBody(result, $"/caseworker/queue/{instanceId}/advance"), ctx.User), "text/html");
+    }
+
     return Results.Redirect("/caseworker/queue");
 });
 

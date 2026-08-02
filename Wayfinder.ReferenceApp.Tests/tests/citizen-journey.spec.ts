@@ -61,4 +61,50 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page.getByRole('heading', { name: 'Your details' })).toBeVisible();
   });
+
+  // The above test proves the client-side guard. This one proves the server doesn't just trust
+  // it — posting directly via page.request bypasses the browser entirely (no HTML5 `required`,
+  // no form at all involved), the same as a tampered/scripted submission would.
+  test('the server rejects a tampered submission even when the browser is bypassed entirely', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.applicant);
+    await expect(page.getByRole('heading', { name: 'Your details' })).toBeVisible();
+    const stateVersion = await page.locator('input[name="stateVersion"]').inputValue();
+
+    await test.step('a missing required field is rejected server-side, not just client-side', async () => {
+      const response = await page.request.post('/apply', {
+        form: { action: 'continue', stateVersion, 'field:applicantEmail': 'alex@example.test' },
+      });
+      expect(response.ok()).toBeTruthy();
+      const body = await response.text();
+      expect(body).toContain('Your details');
+      expect(body).toContain('Full name is required.');
+    });
+
+    // Posting a value the browser's own type="email" input could never have submitted in the
+    // first place — real proof this is checked server-side, not just relying on the browser.
+    // (Field-key injection — submitting a value for a field the current stage never declared —
+    // is proven directly against the engine in ProcessManagerEngineValidationTests instead:
+    // this host's own CoerceFieldValues already only ever reads known declared keys off the
+    // form, so an injected key can never reach this endpoint to demonstrate the engine's own
+    // allowlist independently.)
+    await test.step('a malformed value for a real field is rejected server-side, not just client-side', async () => {
+      const response = await page.request.post('/apply', {
+        form: {
+          action: 'continue',
+          stateVersion,
+          'field:applicantName': 'Alex Applicant',
+          'field:applicantEmail': 'not-an-email-address',
+        },
+      });
+      expect(response.ok()).toBeTruthy();
+      const body = await response.text();
+      expect(body).toContain('Your details');
+      expect(body).toContain('must be a valid email address');
+    });
+
+    await test.step('the instance is still on the same stage afterwards, unchanged', async () => {
+      await page.goto('/apply');
+      await expect(page.getByRole('heading', { name: 'Your details' })).toBeVisible();
+    });
+  });
 });

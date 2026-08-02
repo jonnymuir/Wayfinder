@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Wayfinder/Wayfinder.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine/Wayfinder.Engine.csproj" />
   </ItemGroup>
 
 </Project>

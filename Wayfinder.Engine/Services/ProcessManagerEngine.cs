@@ -7,6 +7,7 @@ using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Services.Sanitization;
+using Wayfinder.Services.Validation;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Stores;
@@ -326,6 +327,35 @@ public class ProcessManagerEngine : IProcessManager
             return ErrorEnvelope(
                 $"Action '{action}' is not valid from stage '{visibleWorkItem.StageKey}'.",
                 "INVALID_TRANSITION");
+        }
+
+        // Never trust the client: whatever fieldValues arrived here — from a legitimate form
+        // post or a tampered one — is validated against the CURRENT stage's own authoritative
+        // field declarations before anything else touches instance state. Reuses the exact same
+        // methods rendering already calls for this stage, so validation can never drift from
+        // what was actually rendered, and needs no per-host wiring to be enforced.
+        var currentStage = definition.Stages.FirstOrDefault(s => s.StageKey == visibleWorkItem.StageKey);
+        if (currentStage is not null)
+        {
+            var currentCalc = EvaluateDefinitionCalculations(instance, definition, currentStage);
+            var currentComponents = BuildComponents(currentStage.Components, instance.FieldValues, currentCalc);
+            var authoritativeFields = currentComponents.SelectMany(c => c.Fields).ToArray();
+            var hiddenFieldKeys = currentComponents
+                .Where(c => c.Hidden)
+                .SelectMany(c => c.Fields)
+                .Select(f => f.FieldKey)
+                .ToHashSet(StringComparer.Ordinal);
+            var submittedStrings = (fieldValues ?? new Dictionary<string, object?>())
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value?.ToString() ?? string.Empty, StringComparer.Ordinal);
+
+            var validation = FieldValueValidator.Validate(authoritativeFields, submittedStrings, hiddenFieldKeys);
+            if (!validation.IsValid)
+            {
+                var problems = validation.Errors
+                    .Select(e => new ServiceRequestProblem { FieldKey = e.Key, Message = e.Value, Code = "VALIDATION_ERROR" })
+                    .ToArray();
+                return BuildEnvelope(instance, definition, accessProfile, allowFallbackWhenHidden: true) with { Problems = problems };
+            }
         }
 
         if (ValidateAdvance(instance, definition, fieldValues) is { } validationEnvelope)
