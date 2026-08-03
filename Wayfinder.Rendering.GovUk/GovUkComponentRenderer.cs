@@ -67,7 +67,9 @@ public sealed class GovUkComponentRenderer
             sb.Append("</ul></div></div></div>");
         }
 
-        sb.Append($"<form method=\"post\" action=\"{GovUk.Esc(formAction)}\">");
+        // multipart/form-data unconditionally, not only when a file-upload field is present —
+        // simpler than detecting it, and file-free submissions work identically either way.
+        sb.Append($"<form method=\"post\" action=\"{GovUk.Esc(formAction)}\" enctype=\"multipart/form-data\">");
         sb.Append($"<input type=\"hidden\" name=\"stateVersion\" value=\"{stateVersion}\" />");
 
         foreach (var component in render.Components)
@@ -98,9 +100,21 @@ public sealed class GovUkComponentRenderer
 
     private string RenderComponent(ComponentRenderPayload component, Func<FieldRenderPayload, string> renderField)
     {
+        // This host renders server-side only, with no client-side runtime to flip `required`
+        // back on if showWhen later evaluates true — so a hidden component's fields must never
+        // carry `required` in the markup at all, or the browser's own HTML5 constraint
+        // validation silently blocks the whole form's submission (invisible, unreachable
+        // required fields, but the browser still counts them). Server-side validation already
+        // treats a hidden field's Required as inapplicable (see FieldValueValidator's
+        // hiddenFieldKeys) — this keeps the client-side guard consistent with that, rather than
+        // stricter than the server it's meant to merely mirror.
+        var effectiveRenderField = component.Hidden
+            ? (Func<FieldRenderPayload, string>)(field => renderField(field with { Required = false }))
+            : renderField;
+
         var inner = _componentOverrides.TryGetValue(component.Type, out var overridden)
-            ? overridden(component, renderField)
-            : GovUkComponents.Render(component, renderField);
+            ? overridden(component, effectiveRenderField)
+            : GovUkComponents.Render(component, effectiveRenderField);
 
         // Live visibility: wrap whatever rendered (built-in or overridden) in the showWhen data
         // attribute a client-side runtime can re-evaluate, plus the server-evaluated hidden

@@ -61,7 +61,16 @@ public static class CalculationScopeBuilder
                 continue; // absent and no default — expressions referencing it will error clearly
             }
 
-            scope[fieldKey] = type == "number" ? ParseNumeric(raw, fieldKey) : raw;
+            // A "string"-typed input (everything non-numeric, including boolean checkboxes —
+            // DescribeInputs doesn't carry a distinct "boolean" bucket, to avoid touching the
+            // number/string type vocabulary the live-model client contract ships) round-trips
+            // as the literal "True"/"False" once a submitted C# bool is .ToString()'d above.
+            // CalculationEvaluator.ToBool requires a real bool, not that string, so a bare
+            // boolean reference in showWhen/calculations would otherwise always throw and fall
+            // back to "visible" — parse it back to a real bool here instead.
+            scope[fieldKey] = type == "number"
+                ? ParseNumeric(raw, fieldKey)
+                : bool.TryParse(raw, out var boolValue) ? boolValue : raw;
         }
 
         foreach (var (key, value) in serviceInputs ?? new Dictionary<string, object?>())
