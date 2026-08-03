@@ -38,22 +38,72 @@ public sealed class GovUkComponentRenderer
     /// itself an &lt;h1&gt;) — the caller should skip rendering a separate page heading.</summary>
     public static bool HasPanel(StepContent render) => render.Components.Any(c => c.Type == "panel");
 
+    /// <summary>Builds a <c>FieldKey → message</c> lookup from a raw <see cref="ServiceRequestProblem"/>
+    /// list — the shape every render method here takes, and what a host with its own error-summary
+    /// rendering (e.g. Wayfinder.Umbraco's own tag helpers) needs to build once per request.</summary>
+    public static IReadOnlyDictionary<string, string> BuildErrorLookup(IReadOnlyList<ServiceRequestProblem> problems) =>
+        problems
+            .Where(p => !string.IsNullOrWhiteSpace(p.FieldKey))
+            .GroupBy(p => p.FieldKey, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Message, StringComparer.Ordinal);
+
+    /// <summary>Renders a single field — an editable input, or (for content-only types like
+    /// <c>body</c>/<c>warning-text</c> nested inside a fieldset) inline content. The primitive a
+    /// host with its own surrounding form chrome (its own stage-form/error-summary rendering)
+    /// calls directly per field, without needing <see cref="RenderForm"/>'s whole-page shape.</summary>
+    public string RenderField(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors) =>
+        _fieldOverrides.TryGetValue(field.FieldType, out var overridden)
+            ? overridden(field, errors)
+            : GovUkFields.Render(field, errors);
+
+    /// <summary>Renders a single top-level component, including its own nested fields (via
+    /// <see cref="RenderField"/>, so overrides apply consistently) and the showWhen/Hidden
+    /// wrapping. The primitive a host with its own surrounding form chrome calls directly per
+    /// component, without needing <see cref="RenderForm"/>'s whole-page shape.</summary>
+    public string RenderComponent(ComponentRenderPayload component, IReadOnlyDictionary<string, string> errors)
+    {
+        // This host renders server-side only, with no client-side runtime to flip `required`
+        // back on if showWhen later evaluates true — so a hidden component's fields must never
+        // carry `required` in the markup at all, or the browser's own HTML5 constraint
+        // validation silently blocks the whole form's submission (invisible, unreachable
+        // required fields, but the browser still counts them). Server-side validation already
+        // treats a hidden field's Required as inapplicable (see FieldValueValidator's
+        // hiddenFieldKeys) — this keeps the client-side guard consistent with that, rather than
+        // stricter than the server it's meant to merely mirror. A host with its own live-form
+        // runtime that re-enables `required` client-side once showWhen flips true (Wayfinder.Umbraco
+        // has one) isn't undermined by this — it can only ever make an already-permissive
+        // attribute stricter at runtime, never bypass a constraint that was already there.
+        string RenderFieldEffective(FieldRenderPayload field) =>
+            RenderField(component.Hidden ? field with { Required = false } : field, errors);
+
+        var inner = _componentOverrides.TryGetValue(component.Type, out var overridden)
+            ? overridden(component, RenderFieldEffective)
+            : GovUkComponents.Render(component, RenderFieldEffective);
+
+        // Live visibility: wrap whatever rendered (built-in or overridden) in the showWhen data
+        // attribute a client-side runtime can re-evaluate, plus the server-evaluated hidden
+        // state — the same trick regardless of which renderer produced the inner markup.
+        if (string.IsNullOrEmpty(component.ShowWhen))
+        {
+            return inner;
+        }
+
+        var hiddenAttr = component.Hidden ? " hidden" : "";
+        return $"""<div data-wayfinder-show-when="{GovUk.Esc(component.ShowWhen)}"{hiddenAttr}>{inner}</div>""";
+    }
+
+    /// <summary>Renders a complete stage as a standalone GOV.UK page body — error summary, a
+    /// <c>&lt;form&gt;</c> wrapping every component, and the action buttons. For a host with no
+    /// surrounding form chrome of its own (a minimal-API host, say); a host that already has its
+    /// own (Wayfinder.Umbraco's <c>StageFormTagHelper</c>/<c>ErrorSummaryTagHelper</c>, for
+    /// example) calls <see cref="RenderComponent"/>/<see cref="RenderField"/> directly instead.</summary>
     public string RenderForm(
         StepContent render,
         IReadOnlyList<ServiceRequestProblem> problems,
         string formAction,
         int stateVersion)
     {
-        var errors = problems
-            .Where(p => !string.IsNullOrWhiteSpace(p.FieldKey))
-            .GroupBy(p => p.FieldKey, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.First().Message, StringComparer.Ordinal);
-
-        string RenderFieldLocal(FieldRenderPayload field) =>
-            _fieldOverrides.TryGetValue(field.FieldType, out var overridden)
-                ? overridden(field, errors)
-                : GovUkFields.Render(field, errors);
-
+        var errors = BuildErrorLookup(problems);
         var sb = new StringBuilder();
 
         if (problems.Count > 0)
@@ -74,7 +124,7 @@ public sealed class GovUkComponentRenderer
 
         foreach (var component in render.Components)
         {
-            sb.Append(RenderComponent(component, RenderFieldLocal));
+            sb.Append(RenderComponent(component, errors));
         }
 
         if (render.AvailableActions.Count > 0)
@@ -96,35 +146,5 @@ public sealed class GovUkComponentRenderer
 
         sb.Append("</form>");
         return sb.ToString();
-    }
-
-    private string RenderComponent(ComponentRenderPayload component, Func<FieldRenderPayload, string> renderField)
-    {
-        // This host renders server-side only, with no client-side runtime to flip `required`
-        // back on if showWhen later evaluates true — so a hidden component's fields must never
-        // carry `required` in the markup at all, or the browser's own HTML5 constraint
-        // validation silently blocks the whole form's submission (invisible, unreachable
-        // required fields, but the browser still counts them). Server-side validation already
-        // treats a hidden field's Required as inapplicable (see FieldValueValidator's
-        // hiddenFieldKeys) — this keeps the client-side guard consistent with that, rather than
-        // stricter than the server it's meant to merely mirror.
-        var effectiveRenderField = component.Hidden
-            ? (Func<FieldRenderPayload, string>)(field => renderField(field with { Required = false }))
-            : renderField;
-
-        var inner = _componentOverrides.TryGetValue(component.Type, out var overridden)
-            ? overridden(component, effectiveRenderField)
-            : GovUkComponents.Render(component, effectiveRenderField);
-
-        // Live visibility: wrap whatever rendered (built-in or overridden) in the showWhen data
-        // attribute a client-side runtime can re-evaluate, plus the server-evaluated hidden
-        // state — the same trick regardless of which renderer produced the inner markup.
-        if (string.IsNullOrEmpty(component.ShowWhen))
-        {
-            return inner;
-        }
-
-        var hiddenAttr = component.Hidden ? " hidden" : "";
-        return $"""<div data-wayfinder-show-when="{GovUk.Esc(component.ShowWhen)}"{hiddenAttr}>{inner}</div>""";
     }
 }
