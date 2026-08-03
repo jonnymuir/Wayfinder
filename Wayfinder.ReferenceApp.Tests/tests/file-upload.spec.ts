@@ -38,7 +38,10 @@ test.describe('File upload: risk assessment for dangerous props', () => {
 
     await page.getByLabel('I confirm the details above are correct').check();
     await page.getByRole('button', { name: 'Submit application' }).click();
-    await expect(page.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+    // The applicant waits at their own Join gateway cursor — see citizen-journey.spec.ts for
+    // why this is a genuine "please wait" status, not ACCESS_DENIED or the caseworker's own
+    // stage content.
+    await expect(page.getByText('A caseworker is reviewing your application.')).toBeVisible();
   });
 
   test('answering yes reveals the upload and requires it before submitting', async ({ page }) => {
@@ -64,7 +67,10 @@ test.describe('File upload: risk assessment for dangerous props', () => {
     });
     await page.getByLabel('I confirm the details above are correct').check();
     await page.getByRole('button', { name: 'Submit application' }).click();
-    await expect(page.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+    // The applicant waits at their own Join gateway cursor — see citizen-journey.spec.ts for
+    // why this is a genuine "please wait" status, not ACCESS_DENIED or the caseworker's own
+    // stage content.
+    await expect(page.getByText('A caseworker is reviewing your application.')).toBeVisible();
   });
 
   test('an oversized file is rejected server-side, with a field-scoped error', async ({ page }) => {

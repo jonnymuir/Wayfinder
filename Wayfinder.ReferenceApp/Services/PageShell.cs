@@ -22,6 +22,22 @@ public static class PageShell
         initAll()
         """;
 
+    // A join gateway's waiting stage (RenderWaiting in GovUkComponents.cs) carries its own
+    // authored poll interval as data-wayfinder-poll-interval-ms. This host is hand-rolled,
+    // server-rendered HTML with no client-side router, so "poll" here just means reload the
+    // page after that interval — the server re-evaluates the request's cursor state on every
+    // request, so a still-waiting applicant gets the same page back (with a fresh timer) and
+    // one whose case has moved on gets the next stage automatically, with no manual refresh.
+    private const string PollScript = """
+        var pollTarget = document.querySelector('[data-wayfinder-poll-interval-ms]');
+        if (pollTarget) {
+          var intervalMs = Number(pollTarget.getAttribute('data-wayfinder-poll-interval-ms'));
+          if (intervalMs > 0) {
+            setTimeout(function () { location.reload(); }, intervalMs);
+          }
+        }
+        """;
+
     public static string Render(string title, string bodyHtml, ClaimsPrincipal? user)
     {
         var esc = GovUk.Esc;
@@ -80,6 +96,7 @@ public static class PageShell
 
               <script type="module" src="/govuk-frontend/govuk-frontend.min.js"></script>
               <script type="module">{InitScript}</script>
+              <script>{PollScript}</script>
             </body>
             </html>
             """;

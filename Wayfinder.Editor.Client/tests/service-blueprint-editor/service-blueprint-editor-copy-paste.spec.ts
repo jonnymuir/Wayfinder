@@ -56,7 +56,7 @@ test.describe('ServiceBlueprint editor copy and paste', () => {
     await expect(originalAction).toHaveAttribute('data-wayfinder-action-selected', 'true');
 
     await page.locator('[data-wayfinder-copy]').click();
-    await expect(page.locator('[data-wayfinder-clipboard-state]')).toContainText('action “Load the declaration form.” ready to paste');
+    await expect(page.locator('[data-wayfinder-toast]')).toContainText('Copied action Load the declaration form.');
 
     await pressEditorShortcut(page, 'v');
     await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(2);

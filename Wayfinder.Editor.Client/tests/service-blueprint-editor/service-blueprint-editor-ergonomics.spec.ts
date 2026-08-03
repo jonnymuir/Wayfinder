@@ -53,11 +53,11 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
     const baseline = await countStages(page);
     expect(baseline).toBeGreaterThan(0);
 
-    // Action 1: open create-stage dialog from the canvas HUD.
-    await graphShadow(page).evaluate((el) => {
+    // Action 1: open create-stage dialog from the editor's consolidated toolbar.
+    await page.locator('wayfinder-service-blueprint-editor').evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
       const button = root.querySelector<HTMLButtonElement>('[data-wayfinder-add-stage]');
-      if (!button) throw new Error('Add stage button not found on canvas HUD');
+      if (!button) throw new Error('Add stage button not found in editor toolbar');
       button.click();
     });
 

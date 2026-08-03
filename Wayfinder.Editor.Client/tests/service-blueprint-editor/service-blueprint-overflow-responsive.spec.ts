@@ -183,6 +183,11 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       await waitForServiceBlueprintLoad(page, 'planning');
 
+      // The outline panel starts collapsed by default — open it before checking its anchored
+      // position, since this test is about whether an open panel stays put during scroll, not
+      // about the default-collapsed state itself.
+      await page.getByRole('button', { name: 'Expand outline panel' }).click();
+
       const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
       await expect(outline).toBeVisible({ timeout: 10_000 });
 
@@ -213,6 +218,10 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await page.goto(storyUrl('service-blueprint-editor-editor-shell--reference-shell'));
 
       await waitForServiceBlueprintLoad(page, 'planning');
+
+      // The properties drawer starts collapsed by default — open it before checking its
+      // anchored position (see the outline test above for why).
+      await page.getByRole('button', { name: 'Expand properties drawer' }).click();
 
       const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible({ timeout: 10_000 });
@@ -271,6 +280,11 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await page.goto(storyUrl('service-blueprint-editor-editor-shell--reference-shell'));
 
       await waitForServiceBlueprintLoad(page, 'planning');
+
+      // Both panels start collapsed by default — open them before checking their anchored
+      // position (see the outline test above for why).
+      await page.getByRole('button', { name: 'Expand outline panel' }).click();
+      await page.getByRole('button', { name: 'Expand properties drawer' }).click();
 
       const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
       const inspector = page.locator('[data-wayfinder-component="step-inspector"]');

@@ -96,7 +96,7 @@ public class ProcessManagerEngine : IProcessManager
             }
 
             Logger.LogInformation("Resuming specific instance {Id}", instanceId);
-            return BuildEnvelope(specificInstance, definition, accessProfile, false);
+            return BuildEnvelope(specificInstance, definition, accessProfile);
         }
 
         var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey);
@@ -124,7 +124,7 @@ public class ProcessManagerEngine : IProcessManager
             if (existingInstance is not null)
             {
                 Logger.LogInformation("Resuming existing instance {Id} (action=resume)", existingInstance.InstanceId);
-                return BuildEnvelope(existingInstance, definition, accessProfile, false);
+                return BuildEnvelope(existingInstance, definition, accessProfile);
             }
 
             return CreateAndRegisterNewInstance(
@@ -216,7 +216,7 @@ public class ProcessManagerEngine : IProcessManager
         // silently-reset blank form). ServiceRequestPageController's PRG redirect after a POST
         // relies on this same fallthrough to show the confirmation page for the visit that just
         // submitted it.
-        return BuildEnvelope(existingInstance, definition, accessProfile, false);
+        return BuildEnvelope(existingInstance, definition, accessProfile);
     }
 
     public virtual ServiceRequestResponseEnvelope Advance(
@@ -304,7 +304,7 @@ public class ProcessManagerEngine : IProcessManager
                 "Change-link: jumped instance {Id} to stage '{State}'",
                 instanceId,
                 targetStageKey);
-            return BuildEnvelope(jumped, definition, accessProfile, allowFallbackWhenHidden: true);
+            return BuildEnvelope(jumped, definition, accessProfile);
         }
 
         var visibleWorkItem = FindAccessibleWorkItems(instance, definition, accessProfile)
@@ -354,7 +354,15 @@ public class ProcessManagerEngine : IProcessManager
                 var problems = validation.Errors
                     .Select(e => new ServiceRequestProblem { FieldKey = e.Key, Message = e.Value, Code = "VALIDATION_ERROR" })
                     .ToArray();
-                return BuildEnvelope(instance, definition, accessProfile, allowFallbackWhenHidden: true) with { Problems = problems };
+
+                // Render with what was just submitted, not the persisted instance — a rejected
+                // submission is never saved (SaveInstance isn't called here, so StateVersion and
+                // the store stay untouched), but the re-render must still reflect it: this stage's
+                // fields haven't been merged into instance.FieldValues yet, so rendering from the
+                // unmodified instance would blank every field on this stage back to whatever was
+                // there before the user started typing — not just the one that failed validation.
+                var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
+                return BuildEnvelope(previewInstance, definition, accessProfile) with { Problems = problems };
             }
         }
 
@@ -392,7 +400,7 @@ public class ProcessManagerEngine : IProcessManager
             Logger.LogInformation(
                 "Multi-cursor advance instance {Id}: cursor {CursorId} → {To}",
                 instanceId, sourceCursor?.CursorId ?? "(none)", transition.ToState);
-            return BuildEnvelope(updatedMulti, definition, accessProfile, allowFallbackWhenHidden: true);
+            return BuildEnvelope(updatedMulti, definition, accessProfile);
         }
 
         var updated = instance with
@@ -410,7 +418,7 @@ public class ProcessManagerEngine : IProcessManager
             visibleWorkItem.StageKey,
             transition.ToState);
 
-        return BuildEnvelope(updated, definition, accessProfile, allowFallbackWhenHidden: true);
+        return BuildEnvelope(updated, definition, accessProfile);
     }
 
     public IEnumerable<ServiceRequest> GetAllInstances() => _instanceStore.GetAll();
@@ -624,12 +632,10 @@ public class ProcessManagerEngine : IProcessManager
     protected ServiceRequestResponseEnvelope BuildEnvelope(
         ServiceRequest instance,
         ServiceBlueprint definition,
-        ActorProfile accessProfile,
-        bool allowFallbackWhenHidden = false)
+        ActorProfile accessProfile)
     {
         var workItems = FindAccessibleWorkItems(instance, definition, accessProfile);
-        var visibleItem = workItems.FirstOrDefault()
-            ?? (allowFallbackWhenHidden ? FindFallbackWorkItem(instance, definition, accessProfile) : null);
+        var visibleItem = workItems.FirstOrDefault();
 
         if (visibleItem is null)
         {
@@ -801,64 +807,6 @@ public class ProcessManagerEngine : IProcessManager
             .ThenBy(item => item.IsJoinGateway)
             .ThenBy(item => item.StageKey, StringComparer.Ordinal)
             .ToArray();
-    }
-
-    private AccessibleWorkItem? FindFallbackWorkItem(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        ActorProfile accessProfile)
-    {
-        var fallbackStageCursor = instance.Cursors.FirstOrDefault(candidate => !candidate.IsAtGateway);
-        if (fallbackStageCursor is not null)
-        {
-            var stage = definition.Stages.FirstOrDefault(candidate =>
-                string.Equals(candidate.StageKey, fallbackStageCursor.CurrentNodeKey, StringComparison.Ordinal));
-
-            if (stage is not null)
-            {
-                var queueName = ResolveQueueName(definition, fallbackStageCursor.QueueKey);
-                return new AccessibleWorkItem(
-                    stage.StageKey,
-                    stage.DisplayName,
-                    queueName,
-                    IsJoinGateway: false,
-                    BuildAvailableActions(definition, stage.StageKey, queueName, accessProfile));
-            }
-        }
-
-        if (instance.Cursors.Count > 0)
-        {
-            var gateway = instance.Cursors
-                .Where(candidate => candidate.IsAtGateway)
-                .Select(candidate => FindGateway(definition, candidate.CurrentNodeKey))
-                .FirstOrDefault(candidate => candidate is not null && string.Equals(candidate.GatewayType, "Join", StringComparison.Ordinal));
-
-            if (gateway is not null)
-            {
-                return new AccessibleWorkItem(
-                    gateway.Key,
-                    gateway.DisplayName,
-                    ResolveQueueName(definition, gateway),
-                    IsJoinGateway: true,
-                    []);
-            }
-        }
-
-        var currentStage = definition.Stages.FirstOrDefault(candidate =>
-            string.Equals(candidate.StageKey, instance.CurrentStage, StringComparison.Ordinal));
-
-        if (currentStage is null)
-        {
-            return null;
-        }
-
-        var currentQueue = ResolveQueueName(definition, currentStage);
-        return new AccessibleWorkItem(
-            currentStage.StageKey,
-            currentStage.DisplayName,
-            currentQueue,
-            IsJoinGateway: false,
-            BuildAvailableActions(definition, currentStage.StageKey, currentQueue, accessProfile));
     }
 
     protected bool CanViewQueue(
@@ -1102,7 +1050,7 @@ public class ProcessManagerEngine : IProcessManager
         _instanceStore.Save(instance);
 
         Logger.LogInformation(logMessage, [instance.InstanceId, .. additionalLogArgs]);
-        return BuildEnvelope(instance, definition, accessProfile, false);
+        return BuildEnvelope(instance, definition, accessProfile);
     }
 
     private static ServiceRequest CreateNewInstance(
@@ -1881,7 +1829,7 @@ public class ProcessManagerEngine : IProcessManager
             "Split gateway '{Gateway}': instance {Id} fanned out to {Count} cursors.",
             splitGateway.Key, instance.InstanceId, newCursors.Count);
 
-        return BuildEnvelope(updated, definition, accessProfile, allowFallbackWhenHidden: true);
+        return BuildEnvelope(updated, definition, accessProfile);
     }
 
     protected ServiceRequestResponseEnvelope HandleJoinGatewayAdvance(
@@ -2097,7 +2045,7 @@ public class ProcessManagerEngine : IProcessManager
         };
 
         SaveInstance(releasedInstance);
-        return BuildEnvelope(releasedInstance, definition, accessProfile, allowFallbackWhenHidden: true);
+        return BuildEnvelope(releasedInstance, definition, accessProfile);
     }
 
     private static IReadOnlyList<RequestCursor> MoveCursor(

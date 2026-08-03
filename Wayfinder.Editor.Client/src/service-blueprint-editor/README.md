@@ -191,7 +191,7 @@ the cards.
 | `transition-selected` | `{ transitionIndex }` | A transition arrow is activated. |
 | `selection-change` | `GraphSelectionDetail` | Any selection change (broader umbrella). |
 | `inspector-requested` | `GraphSelectionDetail` | User explicitly asks for the inspector (e.g. Enter on focus). |
-| `serviceBlueprint-updated` | `ServiceBlueprintUpdatedDetail` | Mutation occurred — authoring-only; never fires in `read-only` mode. |
+| `service-blueprint-updated` | `ServiceBlueprintUpdatedDetail` | Mutation occurred — authoring-only; never fires in `read-only` mode. |
 
 **Read-only behaviour**
 
@@ -205,7 +205,7 @@ When `read-only` is set:
   the editor context menu can never open.
 * `aria-roledescription` becomes "viewer" so AT advertises it as
   navigation-only.
-* `serviceBlueprint-updated` cannot fire because no mutation paths are reachable.
+* `service-blueprint-updated` cannot fire because no mutation paths are reachable.
 
 A typical read-only embed:
 

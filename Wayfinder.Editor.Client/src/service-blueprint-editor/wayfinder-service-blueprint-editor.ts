@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import {
   type ActionCatalogEntry,
   type AuthoredAction,
@@ -211,8 +211,16 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @state() private _simulation: SimulationState | null = null;
   @state() private _simulationAnnouncement = '';
   @state() private _activeConfidenceTab: ConfidenceTab = 'canvas';
-  @state() private _outlineCollapsed = false;
-  @state() private _inspectorCollapsed = false;
+  // Both start collapsed — the canvas is the primary surface, and either panel is one click
+  // away via its own toggle. The inspector auto-expands the moment something is selected (see
+  // _applySelection/_applyTransitionHighlight) since a closed Properties panel right after
+  // selecting a stage/gateway would just look broken; the outline has no equivalent trigger,
+  // so it stays exactly as the author left it.
+  @state() private _outlineCollapsed = true;
+  @state() private _inspectorCollapsed = true;
+  /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
+  @state() private _graphZoom = 1;
+  @query('.graph-panel') private _graphElement?: HTMLElementTagNameMap['wayfinder-service-blueprint-graph'];
   @state() private _definitionEditorLoaded = false;
   @state() private _definitionText = '';
   @state() private _definitionParseError: string | null = null;
@@ -565,6 +573,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       const exists = serviceBlueprint.stages.some(stage => stage.stateKey === selection.stageKey);
       this._selection = exists ? { kind: 'stage', stageKey: selection.stageKey } : null;
       this._selectedTransitionIndex = null;
+      this._expandInspectorForSelection();
       this._syncStagePreview();
       return;
     }
@@ -573,6 +582,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       const exists = serviceBlueprint.metadata?.gateways?.some(gateway => gateway.key === selection.gatewayKey) ?? false;
       this._selection = exists ? { kind: 'gateway', gatewayKey: selection.gatewayKey } : null;
       this._selectedTransitionIndex = null;
+      this._expandInspectorForSelection();
       this._syncStagePreview();
       return;
     }
@@ -580,6 +590,18 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._selection = null;
     this._selectedTransitionIndex = null;
     this._syncStagePreview();
+  }
+
+  /**
+   * The Properties panel starts collapsed (see _outlineCollapsed/_inspectorCollapsed's
+   * comment) — expand it the moment a selection actually resolves to something real, so
+   * selecting a stage/gateway/route doesn't leave its own details panel closed. Never
+   * re-collapses on its own; the user's explicit toggle is the only way back.
+   */
+  private _expandInspectorForSelection() {
+    if (this._selection && this._inspectorCollapsed) {
+      this._inspectorCollapsed = false;
+    }
   }
 
   private _applyTransitionHighlight(transitionIndex: number, serviceBlueprint: AuthoredServiceBlueprint | null = this._serviceBlueprint) {
@@ -600,6 +622,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       ? { kind: 'gateway', gatewayKey: route.fromGateway }
       : { kind: 'stage', stageKey: route.fromStage };
     this._selectedTransitionIndex = transitionIndex;
+    this._expandInspectorForSelection();
     this._syncStagePreview();
   }
 
@@ -2179,69 +2202,141 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                   </h1>
                   <div class="editor-toolbar" role="toolbar" aria-label="ServiceBlueprint editor tools">
                     <button
-                      class="toolbar-btn govuk-button"
+                      class="toolbar-btn toolbar-btn--icon govuk-button"
                       data-wayfinder-save
                       ?disabled=${!this._canSave}
-                      title=${!this._canSaveByContext ? 'Saving is disabled for the current author.' : nothing}
+                      aria-label=${this._saveState === 'saving' ? 'Saving' : 'Save'}
+                      title=${!this._canSaveByContext
+                        ? 'Saving is disabled for the current author.'
+                        : `${this._dirtyStateSummary} — ${this._saveState === 'saving' ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`}
                       aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${this._handleSave}
                     >
-                      ${this._saveState === 'saving' ? 'Saving…' : 'Save'}
+                      <span aria-hidden="true">${this._saveState === 'saving' ? '⏳' : '💾'}</span>
                     </button>
                     <button
-                      class="toolbar-btn govuk-button govuk-button--secondary"
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
                       data-wayfinder-undo
                       ?disabled=${!this._canUndo}
+                      aria-label="Undo"
+                      title=${`Undo${UNDO_SHORTCUT ? ` (${UNDO_SHORTCUT.labels[0]})` : ''}`}
                       aria-keyshortcuts=${UNDO_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${this._undo}
                     >
-                      Undo
+                      <span aria-hidden="true">↶</span>
                     </button>
                     <button
-                      class="toolbar-btn govuk-button govuk-button--secondary"
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
                       data-wayfinder-redo
                       ?disabled=${!this._canRedo}
+                      aria-label="Redo"
+                      title=${`Redo${REDO_SHORTCUT ? ` (${REDO_SHORTCUT.labels[0]})` : ''}`}
                       aria-keyshortcuts=${REDO_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${this._redo}
                     >
-                      Redo
+                      <span aria-hidden="true">↷</span>
                     </button>
                     <button
-                      class="toolbar-btn govuk-button govuk-button--secondary"
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
                       data-wayfinder-copy
                       ?disabled=${!this._canCopy}
+                      aria-label="Copy"
+                      title=${`Copy${COPY_SHORTCUT ? ` (${COPY_SHORTCUT.labels[0]})` : ''}`}
                       aria-keyshortcuts=${COPY_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${() => this._copySelection()}
                     >
-                      Copy
+                      <span aria-hidden="true">⧉</span>
                     </button>
                     <button
-                      class="toolbar-btn govuk-button govuk-button--secondary"
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
                       data-wayfinder-paste
                       ?disabled=${!this._canPaste}
+                      aria-label="Paste"
+                      title=${`${this._clipboardSummary}${PASTE_SHORTCUT ? ` (${PASTE_SHORTCUT.labels[0]})` : ''}`}
                       aria-keyshortcuts=${PASTE_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${() => this._pasteClipboard()}
                     >
-                      Paste
+                      <span aria-hidden="true">📋</span>
                     </button>
                     <button
-                      class="toolbar-btn govuk-button govuk-button--secondary"
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
                       data-wayfinder-help
+                      aria-label="Help"
+                      title=${`Help${HELP_SHORTCUT ? ` (${HELP_SHORTCUT.labels[0]})` : ''}`}
                       aria-keyshortcuts=${HELP_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${(event: Event) => this._openShortcutGuide(event.currentTarget as HTMLElement)}
                     >
-                      Help
+                      <span aria-hidden="true">?</span>
                     </button>
-                    <span class="clipboard-chip" data-wayfinder-clipboard-state>${this._clipboardSummary}</span>
+
+                    <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
+
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-add-stage
+                      aria-label="Add stage"
+                      title="Add stage"
+                      @click=${(event: Event) => this._graphElement?.addStage(event.currentTarget as HTMLElement)}
+                    >
+                      <span aria-hidden="true">▭+</span>
+                    </button>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-add-gateway
+                      aria-label="Add gateway"
+                      title="Add gateway"
+                      @click=${(event: Event) => this._graphElement?.addGateway(event.currentTarget as HTMLElement)}
+                    >
+                      <span aria-hidden="true">◇+</span>
+                    </button>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-auto-arrange
+                      aria-label="Tidy layout"
+                      title="Tidy layout"
+                      @click=${() => this._graphElement?.tidyLayout()}
+                    >
+                      <span aria-hidden="true">▦</span>
+                    </button>
+
+                    <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
+
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      aria-label="Zoom out"
+                      title="Zoom out"
+                      @click=${() => this._graphElement?.zoomOut()}
+                    >
+                      <span aria-hidden="true">−</span>
+                    </button>
+                    <span class="zoom-indicator" data-wayfinder-zoom>${Math.round(this._graphZoom * 100)}%</span>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      aria-label="Zoom in"
+                      title="Zoom in"
+                      @click=${() => this._graphElement?.zoomIn()}
+                    >
+                      <span aria-hidden="true">+</span>
+                    </button>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-fit-screen
+                      aria-label="Fit to screen"
+                      title="Fit to screen"
+                      @click=${() => this._graphElement?.fitToScreen()}
+                    >
+                      <span aria-hidden="true">⛶</span>
+                    </button>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-fit-width
+                      aria-label="Fit width"
+                      title="Fit width"
+                      @click=${() => this._graphElement?.fitToWidth()}
+                    >
+                      <span aria-hidden="true">↔</span>
+                    </button>
                   </div>
-                </div>
-                <div class="editor-statusbar" data-wayfinder-history-status>
-                  <span class="status-chip">${this._dirtyStateSummary}</span>
-                  <span class="status-chip">${this._canUndo ? 'Undo ready' : 'Undo idle'}</span>
-                  <span class="status-chip">${this._canRedo ? 'Redo ready' : 'Redo idle'}</span>
-                  <span class="status-chip">${this._hasBlockingValidationIssues ? 'Save blocked' : 'Save ready'}</span>
-                  <span class="status-chip">Help F1</span>
-                  <span class="status-text">${this._historyStatusSummary}</span>
                 </div>
                 ${(() => {
                   const errorCount = this._blockingValidationIssues.length;
@@ -2269,7 +2364,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     </div>
                   `;
                 })()}
-                <div class="sr-only" role="status" aria-live="polite">${this._historyAnnouncement}</div>
+                <div class="sr-only" role="status" aria-live="polite" data-wayfinder-history-status>${this._historyAnnouncement}</div>
 
                 <wayfinder-service-blueprint-graph
                   class="graph-panel"
@@ -2281,11 +2376,15 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                   .simulationCurrentStageKey=${this._simulationCurrentStage?.stateKey ?? null}
                   .simulationPathStageKeys=${this._simulation?.history.map(entry => entry.stageKey) ?? []}
                   .simulationPathTransitionIndices=${this._simulation?.pathTransitionIndices ?? []}
+                  .hideOwnToolbar=${true}
                   @stage-selected="${this._handleStageSelected}"
                   @gateway-selected="${this._handleGatewaySelected}"
                   @transition-selected="${this._handleTransitionSelected}"
                   @service-blueprint-updated="${this._handleServiceBlueprintUpdated}"
                   @inspector-requested="${this._handleInspectorRequested}"
+                  @zoom-changed="${(event: CustomEvent<{ zoom: number }>) => {
+                    this._graphZoom = event.detail.zoom;
+                  }}"
                   @graph-multi-selection="${(event: CustomEvent<{ nodeIds: string[] }>) => {
                     this._graphMultiSelection = event.detail.nodeIds;
                   }}"
@@ -3000,44 +3099,39 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       outline-offset: 2px;
     }
 
-    .clipboard-chip {
+    /* Square icon buttons — the toolbar's own accessible name comes from aria-label (kept
+       identical to the pre-icon button text, e.g. "Save"/"Undo"), and title gives every
+       mouse/trackpad user the same hover tooltip a screen reader gets from aria-label, usually
+       with its keyboard shortcut appended. */
+    .toolbar-btn--icon {
       display: inline-flex;
       align-items: center;
-      max-width: 20rem;
-      min-height: 2.25rem;
-      padding: 0.35rem 0.75rem;
-      border-radius: 999px;
-      background: #ffffff;
-      color: #003078;
+      justify-content: center;
+      width: 2.25rem;
+      min-width: 2.25rem;
+      height: 2.25rem;
+      padding: 0;
+      font-size: 1.125rem;
+      line-height: 1;
+    }
+
+    /* Separates the toolbar's logical groups (save/undo/history — canvas authoring — zoom/fit)
+       without a full visual break; this is one continuous toolbar, not several. */
+    .toolbar-divider {
+      width: 1px;
+      align-self: stretch;
+      margin: 0.25rem 0.125rem;
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .zoom-indicator {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 2.75rem;
       font-size: 0.8125rem;
       font-weight: 600;
-      line-height: 1.35;
-    }
-
-    .editor-statusbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.6rem 1rem;
-      background: #ffffff;
-      border-bottom: 1px solid #b1b4b6;
-      flex-shrink: 0;
-      font-size: 0.875rem;
-    }
-
-    .status-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.2rem 0.55rem;
-      border-radius: 999px;
-      background: #d8dde3;
-      color: #0b0c0c;
-      font-weight: 700;
-    }
-
-    .status-text {
-      color: #505a5f;
+      color: #ffffff;
     }
 
     .canvas-health-hint {
