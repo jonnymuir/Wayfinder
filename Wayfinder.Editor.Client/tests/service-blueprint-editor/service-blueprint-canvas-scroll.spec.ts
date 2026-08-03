@@ -34,8 +34,14 @@ async function canvasRect(page: import('@playwright/test').Page) {
 
 async function panePan(page: import('@playwright/test').Page, dx: number, dy: number) {
   const rect = await canvasRect(page);
-  const startX = (rect.left + rect.right) / 2;
-  const startY = (rect.top + rect.bottom) / 2;
+  // The canvas's geometric centre isn't reliably empty pane — in the LARGE_SERVICE_BLUEPRINT
+  // scenario specifically, it lands exactly on a node's pill-trigger button, which grabs the
+  // mousedown instead of the pane and produces a tiny, wrong-direction transform rather than a
+  // real pan (confirmed live). The top-left gutter is empty pane space in every canonical
+  // scenario, matching the same "drag from an empty corner" convention used elsewhere in this
+  // suite (see service-blueprint-overflow-responsive.spec.ts's tall-blueprint panning test).
+  const startX = rect.left + 24;
+  const startY = rect.top + 24;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   await page.mouse.move(startX + dx, startY + dy, { steps: 6 });

@@ -40,15 +40,21 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
       await page.getByRole('button', { name: 'Submit application' }).click();
     });
 
-    await test.step('Handed off to the caseworker queue', async () => {
+    await test.step('Handed off to the caseworker queue: the applicant waits at their own join gateway', async () => {
+      // CitizenProfile's VisibleQueues doesn't include the caseworker queue — the applicant
+      // never gets a read-only peek at the caseworker's own stage content. Instead, the
+      // "to-under-review" split parks a citizen-queue cursor directly at a Join gateway
+      // (to-approved/to-rejected, requiredIncomingQueues: ["citizen", "caseworker"]), so the
+      // applicant sees a genuine, first-class "please wait" status via BuildJoinWaitingEnvelope
+      // — not ACCESS_DENIED, and not the caseworker's own authored stage content either.
       await expect(page.getByRole('heading', { name: 'Application under review' })).toBeVisible();
-      // No actions available here — approve/reject belong to the caseworker's backstage lane.
+      await expect(page.getByText('A caseworker is reviewing your application.')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
     });
 
-    await test.step('Reloading the journey resumes the same in-progress instance', async () => {
+    await test.step('Reloading confirms the same waiting response, not a stale render', async () => {
       await page.reload();
-      await expect(page.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+      await expect(page.getByText('A caseworker is reviewing your application.')).toBeVisible();
     });
   });
 

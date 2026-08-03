@@ -381,6 +381,7 @@
     {
       "stageKey": "approved",
       "displayName": "Licence granted",
+      "stageType": "Confirmation",
       "queueKey": "citizen",
       "components": [
         {
@@ -396,6 +397,7 @@
     {
       "stageKey": "rejected",
       "displayName": "Application not approved",
+      "stageType": "Confirmation",
       "queueKey": "citizen",
       "components": [
         {
@@ -458,34 +460,52 @@
           "id": "to-under-review--continue--under-review",
           "target": "under-review",
           "trigger": "continue"
+        },
+        {
+          "id": "to-under-review--continue--to-approved",
+          "target": "to-approved",
+          "trigger": "continue"
+        },
+        {
+          "id": "to-under-review--continue--to-rejected",
+          "target": "to-rejected",
+          "trigger": "continue"
         }
       ]
     },
     {
       "key": "to-approved",
-      "displayName": "Application approved",
-      "gatewayType": "Split",
-      "queueKey": "caseworker",
+      "displayName": "Application under review",
+      "gatewayType": "Join",
+      "queueKey": "citizen",
       "routes": [
         {
           "id": "to-approved--continue--approved",
           "target": "approved",
           "trigger": "continue"
         }
-      ]
+      ],
+      "waitingContent": "A caseworker is reviewing your application. We'll update this page once a decision is made.",
+      "waitingExpectedSeconds": 120,
+      "waitingPollIntervalMs": 5000,
+      "requiredIncomingQueues": ["citizen", "caseworker"]
     },
     {
       "key": "to-rejected",
-      "displayName": "Application rejected",
-      "gatewayType": "Split",
-      "queueKey": "caseworker",
+      "displayName": "Application under review",
+      "gatewayType": "Join",
+      "queueKey": "citizen",
       "routes": [
         {
           "id": "to-rejected--continue--rejected",
           "target": "rejected",
           "trigger": "continue"
         }
-      ]
+      ],
+      "waitingContent": "A caseworker is reviewing your application. We'll update this page once a decision is made.",
+      "waitingExpectedSeconds": 120,
+      "waitingPollIntervalMs": 5000,
+      "requiredIncomingQueues": ["citizen", "caseworker"]
     }
   ]
 }

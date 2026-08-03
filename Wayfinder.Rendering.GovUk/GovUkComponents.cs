@@ -136,11 +136,21 @@ public static class GovUkComponents
 
     private static string RenderWaiting(ComponentRenderPayload component)
     {
-        var message = component.DeferMessage ?? "This may take a few minutes. You do not need to do anything else right now.";
+        // Content is the join gateway's own authored waitingContent (pre-sanitized HTML, per
+        // its doc comment — rendered raw, same convention as RenderBody/inset-text/details
+        // elsewhere in this file); DeferMessage is a distinct, secondary line only shown when
+        // the gateway actually allows deferring, not a substitute for the main message.
+        var message = string.IsNullOrEmpty(component.Content)
+            ? "This may take a few minutes. You do not need to do anything else right now."
+            : component.Content;
+        var deferHtml = component.AllowDefer == true && !string.IsNullOrEmpty(component.DeferMessage)
+            ? $"""<p class="govuk-body">{GovUk.Esc(component.DeferMessage)}</p>"""
+            : "";
         var pollAttr = component.PollIntervalMs is { } poll ? $" data-wayfinder-poll-interval-ms=\"{poll}\"" : "";
         return $"""
             <div class="govuk-inset-text" data-wayfinder-waiting{pollAttr}>
-              <p class="govuk-body">{GovUk.Esc(message)}</p>
+              <p class="govuk-body">{message}</p>
+              {deferHtml}
             </div>
             """;
     }

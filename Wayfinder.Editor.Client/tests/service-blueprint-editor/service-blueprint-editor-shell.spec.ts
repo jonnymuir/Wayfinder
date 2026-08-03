@@ -275,6 +275,12 @@ test.describe('ServiceBlueprint editor shell proof', () => {
 
     await waitForServiceBlueprintLoad(page, 'planning');
 
+    // Both panels start collapsed by default — open them before checking their anchored
+    // position, since this test is about whether an open panel stays put during scroll, not
+    // about the default-collapsed state itself.
+    await page.getByRole('button', { name: 'Expand outline panel' }).click();
+    await page.getByRole('button', { name: 'Expand properties drawer' }).click();
+
     const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
     const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
     const toolbar = page.locator('.editor-toolbar');

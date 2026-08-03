@@ -79,6 +79,13 @@ function ServiceBlueprintGraphCanvas({ bridge, props }: { bridge: GraphBridge; p
   const { screenToFlowPosition } = useReactFlow();
   const readyFired = useRef(false);
 
+  // Relayed to the bridge so its fit-view/fit-width/fit-height all use the diagram's real
+  // content extent (including LaneLayer's lane headers) instead of React Flow's own node-only
+  // bounds — see GraphBridge.setBounds's comment for why that distinction matters.
+  useEffect(() => {
+    bridge.setBounds(model.bounds);
+  }, [bridge, model.bounds]);
+
   // React Flow resolves drop targets with document.elementFromPoint, which
   // cannot see into the shadow root — so connection drops are hit-tested
   // against the node rects in flow coordinates instead.
@@ -168,14 +175,25 @@ function ServiceBlueprintGraphCanvas({ bridge, props }: { bridge: GraphBridge; p
       zoomOnDoubleClick={false}
       onInit={instance => {
         bridge.setFlowInstance(instance);
-        callbacks.zoomChanged(instance.getZoom());
         // Readiness for test probes: nodes/edges are committed to the DOM two
         // frames after the viewport initialises.
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (!readyFired.current) {
-            readyFired.current = true;
-            callbacks.ready();
+          if (readyFired.current) {
+            return;
           }
+          readyFired.current = true;
+          // A diagram too big to fit should be visible in full the moment the canvas first
+          // opens, at a small enough zoom to see its whole shape, rather than always starting
+          // at a fixed 100% viewport that may only show a corner of it — but one that already
+          // fits at 100% should stay there, not be zoomed in to fill the fitView padding
+          // target (see GraphBridge.fitViewOnLoad's comment). Its promise is awaited before
+          // firing `ready` since the viewport transform still settles on a later frame even
+          // with no explicit duration — anything that starts interacting (a drag, a
+          // coordinate-based test) the instant `ready` fires otherwise races that settle.
+          void bridge.fitViewOnLoad().then(() => {
+            callbacks.zoomChanged(instance.getZoom());
+            callbacks.ready();
+          });
         }));
       }}
       onMove={(_event, viewport) => callbacks.zoomChanged(viewport.zoom)}

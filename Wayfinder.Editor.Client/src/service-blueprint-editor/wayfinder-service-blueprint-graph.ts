@@ -1457,8 +1457,10 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
               <div class="hud-group">
                 <button
                   type="button"
-                  class="hud-button"
+                  class="hud-button hud-button--icon"
                   data-wayfinder-add-stage
+                  aria-label="Add stage"
+                  title="Add stage"
                   @click=${(event: Event) => {
                     const selectedStage = this.serviceBlueprint?.stages.find(stage => stage.stateKey === this._selectedStageKey) ?? null;
                     this._openCreateStageDialog(
@@ -1469,36 +1471,40 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
                     );
                   }}
                 >
-                  Add stage
+                  <span aria-hidden="true">▭+</span>
                 </button>
                 <button
                   type="button"
-                  class="hud-button"
+                  class="hud-button hud-button--icon"
                   data-wayfinder-add-gateway
+                  aria-label="Add gateway"
+                  title="Add gateway"
                   @click=${(event: Event) => this._openCreateGatewayDialog(event.currentTarget as HTMLElement)}
                 >
-                  Add gateway
+                  <span aria-hidden="true">◇+</span>
                 </button>
                 <button
                   type="button"
-                  class="hud-button"
+                  class="hud-button hud-button--icon"
                   data-wayfinder-auto-arrange
+                  aria-label="Tidy layout"
+                  title="Tidy layout"
                   @click=${() => this._tidyLayout()}
                 >
-                  Tidy layout
+                  <span aria-hidden="true">▦</span>
                 </button>
               </div>
             `}
         <div class="hud-group">
-          <button type="button" class="hud-button" aria-label="Zoom out" @click=${() => this._bridge?.zoomOut()}>
-            −
+          <button type="button" class="hud-button hud-button--icon" aria-label="Zoom out" title="Zoom out" @click=${() => this._bridge?.zoomOut()}>
+            <span aria-hidden="true">−</span>
           </button>
           <span class="zoom-indicator" data-wayfinder-zoom>${Math.round(this._zoom * 100)}%</span>
-          <button type="button" class="hud-button" aria-label="Zoom in" @click=${() => this._bridge?.zoomIn()}>
-            +
+          <button type="button" class="hud-button hud-button--icon" aria-label="Zoom in" title="Zoom in" @click=${() => this._bridge?.zoomIn()}>
+            <span aria-hidden="true">+</span>
           </button>
-          <button type="button" class="hud-button" data-wayfinder-fit-screen @click=${() => this._fitToScreen()}>
-            Fit
+          <button type="button" class="hud-button hud-button--icon" data-wayfinder-fit-screen aria-label="Fit to screen" title="Fit to screen" @click=${() => this._fitToScreen()}>
+            <span aria-hidden="true">⛶</span>
           </button>
         </div>
       </div>
@@ -1668,6 +1674,17 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       background: #ffffff;
       color: #0f172a;
       cursor: pointer;
+    }
+
+    /* Square icon buttons — accessible name comes from aria-label (matching the pre-icon
+       button text, e.g. "Add stage"), title gives mouse/trackpad users the same hover
+       tooltip a screen reader gets from aria-label. */
+    .hud-button--icon {
+      width: 2.25rem;
+      min-width: 2.25rem;
+      padding: 0;
+      font-size: 1.125rem;
+      line-height: 1;
     }
 
     .mode-toggle[aria-pressed='true'] {

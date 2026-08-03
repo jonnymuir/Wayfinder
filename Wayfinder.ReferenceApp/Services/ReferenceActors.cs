@@ -23,13 +23,15 @@ public static class ReferenceActors
         ["panel", "body", "summary-list"];
 
     /// <summary>
-    /// The applicant can see and act on their own citizen-queue stages, and can see (but not
-    /// act on) the caseworker-queue stage their application is waiting at — the frontstage
-    /// visitor's view of "your application is with a caseworker", not a way to act on it.
+    /// The applicant can see and act on their own citizen-queue stages only. Once their
+    /// instance moves to the caseworker queue, GetCurrent returns ACCESS_DENIED rather than a
+    /// read-only peek at the caseworker's stage — crossing a queue boundary read-only is a
+    /// distinct capability (see <see cref="CaseworkerProfile"/>'s comment), not something every
+    /// profile gets by default just because it's convenient for a status message.
     /// </summary>
     public static ActorProfile CitizenProfile() => new()
     {
-        VisibleQueues = [CitizenQueue, CaseworkerQueue],
+        VisibleQueues = [CitizenQueue],
         StartableQueues = [CitizenQueue],
         ActionableQueues = [CitizenQueue],
         RestrictToInstanceOwner = true

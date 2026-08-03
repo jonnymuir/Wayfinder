@@ -23,7 +23,10 @@ test.describe('Caseworker queue: review and decide', () => {
 
     await applicantPage.getByLabel('I confirm the details above are correct').check();
     await applicantPage.getByRole('button', { name: 'Submit application' }).click();
-    await expect(applicantPage.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+    // The applicant waits at their own Join gateway cursor — see citizen-journey.spec.ts for
+    // why this is a genuine "please wait" status, not ACCESS_DENIED or the caseworker's own
+    // stage content.
+    await expect(applicantPage.getByText('A caseworker is reviewing your application.')).toBeVisible();
   }
 
   test('a caseworker can approve an application and the applicant sees the outcome', async ({ browser }) => {
