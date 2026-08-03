@@ -17,6 +17,7 @@ test.describe('Gateway-first route editing', () => {
     const editor = page.locator('wayfinder-service-blueprint-editor');
     await expect(editor).toBeVisible({ timeout: 10_000 });
 
+    await page.getByRole('button', { name: 'Expand outline panel' }).click();
     const outline = editor.locator('wayfinder-service-blueprint-outline');
     await outline.locator('[data-wayfinder-outline-gateway="review-split"]').click();
 

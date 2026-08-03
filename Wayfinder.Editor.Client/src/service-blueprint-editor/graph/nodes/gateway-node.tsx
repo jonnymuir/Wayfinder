@@ -23,7 +23,35 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
     if (event.key.toLowerCase() === 'e') {
       event.preventDefault();
       callbacks.selectGateway(gateway.key, { openInspector: true });
+      return;
     }
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      callbacks.requestDeleteGateway(gateway.key, event.currentTarget);
+      return;
+    }
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      event.preventDefault();
+      const rect = event.currentTarget.getBoundingClientRect();
+      callbacks.openContextMenu(
+        { clientX: rect.left + rect.width / 2, clientY: rect.bottom },
+        { kind: 'gateway', gatewayKey: gateway.key },
+        event.currentTarget
+      );
+    }
+  };
+
+  const handleContextMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (readOnly) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    callbacks.openContextMenu(
+      { clientX: event.clientX, clientY: event.clientY },
+      { kind: 'gateway', gatewayKey: gateway.key },
+      event.currentTarget
+    );
   };
 
   const className = [
@@ -56,6 +84,7 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
         onClick={() => callbacks.selectGateway(gateway.key)}
         onDoubleClick={() => callbacks.selectGateway(gateway.key, { openInspector: true })}
         onKeyDown={handleKeyDown}
+        onContextMenu={handleContextMenu}
       >
         {isPill
           ? (

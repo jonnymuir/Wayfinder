@@ -55,7 +55,7 @@ public static class GovUkComponents
     private static string RenderSummaryList(ComponentRenderPayload component, Func<FieldRenderPayload, string> renderField) => $"""
         {(string.IsNullOrWhiteSpace(component.Title) ? "" : $"""<h2 class="govuk-heading-m">{GovUk.Esc(component.Title)}</h2>""")}
         <dl class="govuk-summary-list">
-          {string.Join("\n", component.Fields.Select(GovUkFields.RenderSummaryRow))}
+          {string.Join("\n", component.Fields.Select(field => GovUkFields.RenderSummaryRow(field, component.SourceStateKey)))}
         </dl>
         """;
 

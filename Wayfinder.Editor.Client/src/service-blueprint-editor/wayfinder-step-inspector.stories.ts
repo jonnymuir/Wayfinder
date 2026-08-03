@@ -18,7 +18,7 @@ function makeElement(args: StoryArgs): WayfinderStepInspectorElement {
   el.selectedStageKey = args.selectedStageKey;
   el.selectedGatewayKey = args.selectedGatewayKey ?? null;
   el.actionCatalog = args.actionCatalog;
-  el.addEventListener('serviceBlueprint-updated', event => {
+  el.addEventListener('service-blueprint-updated', event => {
     const detail = (event as CustomEvent<{
       serviceBlueprint: AuthoredServiceBlueprint;
       selection?: { kind?: 'stage' | 'gateway'; stageKey?: string; gatewayKey?: string } | null;

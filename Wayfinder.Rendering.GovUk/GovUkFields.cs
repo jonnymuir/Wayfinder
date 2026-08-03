@@ -43,13 +43,39 @@ public static class GovUkFields
         };
     }
 
-    public static string RenderSummaryRow(FieldRenderPayload field)
+    /// <summary>
+    /// <paramref name="sourceStateKey"/> is the summary-list's own default change target
+    /// (<c>ComponentRenderPayload.SourceStateKey</c>) — used when this field doesn't declare
+    /// its own <see cref="FieldRenderPayload.ChangeStateKey"/>, for a summary spanning rows
+    /// captured on more than one earlier stage.
+    /// </summary>
+    public static string RenderSummaryRow(FieldRenderPayload field, string? sourceStateKey = null)
     {
         var value = field.Value?.ToString() ?? "";
+        var changeTarget = field.ChangeStateKey ?? sourceStateKey;
+        // A real <a href> can't safely re-trigger this — "change:" advances StateVersion
+        // through the exact same POST/Advance path as every other action on this stage, so it
+        // needs the form's current hidden stateVersion field, not a bare GET link. A button
+        // reset to look like the real govuk-frontend "Change" link (see summary-list's own
+        // template-with-actions.html) gets the same visual result via that same mechanism.
+        // formnovalidate is essential, not cosmetic: without it, a plain type="submit" button
+        // is blocked by the browser's own HTML5 constraint validation against *every* required
+        // field still on this stage (e.g. declaration's own confirmation checkbox) before the
+        // click even reaches the server — confirmed live, the click fires but no request goes
+        // out at all. The entire point of "Change" is to let the author go back and fix an
+        // earlier answer without first satisfying this stage's own requirements.
+        var actionsCell = string.IsNullOrWhiteSpace(changeTarget)
+            ? ""
+            : $"""
+                <dd class="govuk-summary-list__actions">
+                  <button type="submit" formnovalidate name="action" value="{GovUk.Esc($"change:{changeTarget}")}" class="govuk-link" style="background:none;border:0;padding:0;font:inherit;cursor:pointer;">Change<span class="govuk-visually-hidden"> {GovUk.Esc(field.Label.ToLowerInvariant())}</span></button>
+                </dd>
+                """;
         return $"""
             <div class="govuk-summary-list__row">
               <dt class="govuk-summary-list__key">{GovUk.Esc(field.Label)}</dt>
               <dd class="govuk-summary-list__value">{GovUk.Esc(FormatSummaryValue(field, value))}</dd>
+              {actionsCell}
             </div>
             """;
     }

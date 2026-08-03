@@ -189,7 +189,7 @@ export class WayfinderStepInspectorElement extends LitElement {
 
   private _emitServiceBlueprintUpdated(serviceBlueprint: AuthoredServiceBlueprint, selection?: GraphSelectionDetail | null) {
     this.dispatchEvent(
-      new CustomEvent<ServiceBlueprintUpdatedDetail>('serviceBlueprint-updated', {
+      new CustomEvent<ServiceBlueprintUpdatedDetail>('service-blueprint-updated', {
         detail: { serviceBlueprint, selection },
         bubbles: true,
         composed: true,

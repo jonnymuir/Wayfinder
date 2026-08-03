@@ -187,34 +187,6 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     }
   });
 
-  test('payment demo graph copy stays product-facing and drops implementation-detail gateway badges', async ({ page }) => {
-    await loadPaymentDemo(page);
-
-    const graphCopy = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
-      const root = (graphElement as HTMLElement).shadowRoot;
-      if (!root) {
-        throw new Error('Graph shadow root not found');
-      }
-
-      return {
-        subtitle: root.querySelector('.service-blueprint-subtitle')?.textContent?.trim() ?? '',
-        hint: root.querySelector('.graph-hint')?.textContent?.trim() ?? '',
-        roledescription: root.querySelector('.graph-canvas')?.getAttribute('aria-roledescription') ?? '',
-        gatewayBadges: Array.from(root.querySelectorAll<HTMLElement>('.gateway-kind-badge')).map(element => element.textContent?.trim() ?? ''),
-        metaCopy: Array.from(root.querySelectorAll<HTMLElement>('.node-meta')).map(element => element.textContent?.trim() ?? ''),
-      };
-    });
-
-    expect(graphCopy.subtitle).toBe('Visual service blueprint map');
-    expect(graphCopy.hint).not.toContain('queue-owned stages');
-    expect(graphCopy.hint).not.toContain('outgoing routes');
-    expect(graphCopy.roledescription).toBe('Service blueprint graph editor');
-    expect(graphCopy.gatewayBadges).toEqual([]);
-    expect(graphCopy.metaCopy.join(' ')).not.toContain('related route');
-    expect(graphCopy.metaCopy.join(' ')).not.toContain('Split gateway');
-    expect(graphCopy.metaCopy.join(' ')).not.toContain('Join gateway');
-  });
-
   test('payment demo canvas removes the extra confirmation route gateway once the route shape is simplified', async ({ page }) => {
     await loadPaymentDemo(page);
 

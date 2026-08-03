@@ -91,3 +91,21 @@ jobs:
       - name: Service blueprint graph visual regression
         working-directory: Wayfinder.Editor.Client
         run: npm run test:playwright:service-blueprint-graph-visual
+
+  # Single aggregate check so branch protection only needs to name one required status
+  # check ("all") instead of every job individually — same pattern as Umbraco.Prism's
+  # squad-ci.yml. Add new jobs above to the `needs` list here to keep them gating merges.
+  all:
+    runs-on: ubuntu-latest
+    needs: [build-and-pack, editor-client-tests]
+    if: always()
+    steps:
+      - name: Decide whether checks have passed
+        run: |
+          if [[ "${{ needs.build-and-pack.result }}" == "success" && "${{ needs.editor-client-tests.result }}" == "success" ]]; then
+            echo "All checks passed"
+            exit 0
+          else
+            echo "Some checks failed"
+            exit 1
+          fi

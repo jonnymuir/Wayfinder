@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import {
   type ActionCatalogEntry,
   type AuthoredAction,
@@ -218,6 +218,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   // so it stays exactly as the author left it.
   @state() private _outlineCollapsed = true;
   @state() private _inspectorCollapsed = true;
+  /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
+  @state() private _graphZoom = 1;
+  @query('.graph-panel') private _graphElement?: HTMLElementTagNameMap['wayfinder-service-blueprint-graph'];
   @state() private _definitionEditorLoaded = false;
   @state() private _definitionText = '';
   @state() private _definitionParseError: string | null = null;
@@ -2265,6 +2268,74 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     >
                       <span aria-hidden="true">?</span>
                     </button>
+
+                    <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
+
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-add-stage
+                      aria-label="Add stage"
+                      title="Add stage"
+                      @click=${(event: Event) => this._graphElement?.addStage(event.currentTarget as HTMLElement)}
+                    >
+                      <span aria-hidden="true">▭+</span>
+                    </button>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-add-gateway
+                      aria-label="Add gateway"
+                      title="Add gateway"
+                      @click=${(event: Event) => this._graphElement?.addGateway(event.currentTarget as HTMLElement)}
+                    >
+                      <span aria-hidden="true">◇+</span>
+                    </button>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-auto-arrange
+                      aria-label="Tidy layout"
+                      title="Tidy layout"
+                      @click=${() => this._graphElement?.tidyLayout()}
+                    >
+                      <span aria-hidden="true">▦</span>
+                    </button>
+
+                    <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
+
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      aria-label="Zoom out"
+                      title="Zoom out"
+                      @click=${() => this._graphElement?.zoomOut()}
+                    >
+                      <span aria-hidden="true">−</span>
+                    </button>
+                    <span class="zoom-indicator" data-wayfinder-zoom>${Math.round(this._graphZoom * 100)}%</span>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      aria-label="Zoom in"
+                      title="Zoom in"
+                      @click=${() => this._graphElement?.zoomIn()}
+                    >
+                      <span aria-hidden="true">+</span>
+                    </button>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-fit-screen
+                      aria-label="Fit to screen"
+                      title="Fit to screen"
+                      @click=${() => this._graphElement?.fitToScreen()}
+                    >
+                      <span aria-hidden="true">⛶</span>
+                    </button>
+                    <button
+                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+                      data-wayfinder-fit-width
+                      aria-label="Fit width"
+                      title="Fit width"
+                      @click=${() => this._graphElement?.fitToWidth()}
+                    >
+                      <span aria-hidden="true">↔</span>
+                    </button>
                   </div>
                 </div>
                 ${(() => {
@@ -2293,7 +2364,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     </div>
                   `;
                 })()}
-                <div class="sr-only" role="status" aria-live="polite">${this._historyAnnouncement}</div>
+                <div class="sr-only" role="status" aria-live="polite" data-wayfinder-history-status>${this._historyAnnouncement}</div>
 
                 <wayfinder-service-blueprint-graph
                   class="graph-panel"
@@ -2305,11 +2376,15 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                   .simulationCurrentStageKey=${this._simulationCurrentStage?.stateKey ?? null}
                   .simulationPathStageKeys=${this._simulation?.history.map(entry => entry.stageKey) ?? []}
                   .simulationPathTransitionIndices=${this._simulation?.pathTransitionIndices ?? []}
+                  .hideOwnToolbar=${true}
                   @stage-selected="${this._handleStageSelected}"
                   @gateway-selected="${this._handleGatewaySelected}"
                   @transition-selected="${this._handleTransitionSelected}"
                   @service-blueprint-updated="${this._handleServiceBlueprintUpdated}"
                   @inspector-requested="${this._handleInspectorRequested}"
+                  @zoom-changed="${(event: CustomEvent<{ zoom: number }>) => {
+                    this._graphZoom = event.detail.zoom;
+                  }}"
                   @graph-multi-selection="${(event: CustomEvent<{ nodeIds: string[] }>) => {
                     this._graphMultiSelection = event.detail.nodeIds;
                   }}"
@@ -3038,6 +3113,25 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       padding: 0;
       font-size: 1.125rem;
       line-height: 1;
+    }
+
+    /* Separates the toolbar's logical groups (save/undo/history — canvas authoring — zoom/fit)
+       without a full visual break; this is one continuous toolbar, not several. */
+    .toolbar-divider {
+      width: 1px;
+      align-self: stretch;
+      margin: 0.25rem 0.125rem;
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .zoom-indicator {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 2.75rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #ffffff;
     }
 
     .canvas-health-hint {

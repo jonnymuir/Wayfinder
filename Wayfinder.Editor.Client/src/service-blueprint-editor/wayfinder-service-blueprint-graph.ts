@@ -48,6 +48,7 @@ type ServiceBlueprintUpdatedDetail = {
 type ContextMenuTarget =
   | { kind: 'canvas' }
   | { kind: 'stage'; stageKey: string }
+  | { kind: 'gateway'; gatewayKey: string }
   | { kind: 'transition'; transitionIndex: number };
 
 type ContextMenuState = ContextMenuTarget & {
@@ -69,6 +70,11 @@ type CreateStageDialogState = {
 
 type DeleteStageDialogState = {
   stageKey: string;
+  affectedTransitions: RouteView[];
+};
+
+type DeleteGatewayDialogState = {
+  gatewayKey: string;
   affectedTransitions: RouteView[];
 };
 
@@ -110,6 +116,17 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
    */
   @property({ type: Boolean, attribute: 'read-only', reflect: true })
   readOnly = false;
+
+  /**
+   * Hides this element's own title bar and workspace toolbar (Add stage/Add gateway/Tidy
+   * layout/zoom/Fit) — used when a host (wayfinder-service-blueprint-editor) renders its own
+   * consolidated toolbar instead and calls this element's public addStage/addGateway/
+   * tidyLayout/zoomIn/zoomOut/fitToScreen/fitToWidth methods directly. Defaults to false so
+   * every other context (Storybook stories, any other standalone embedding) keeps its own
+   * fully self-contained toolbar unchanged.
+   */
+  @property({ type: Boolean, attribute: 'hide-own-toolbar' })
+  hideOwnToolbar = false;
 
   /**
    * Declarative JSON form of {@link serviceBlueprint}. Lets the element be initialised
@@ -161,6 +178,9 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
 
   @state()
   private _createGatewayDialog: CreateGatewayDialogState | null = null;
+
+  @state()
+  private _deleteGatewayDialog: DeleteGatewayDialogState | null = null;
 
   private _contextReturnTarget: HTMLElement | null = null;
   private _statusTimer: number | null = null;
@@ -267,6 +287,11 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
           this._openDeleteStageDialog(stageKey, returnTarget ?? null);
         }
       },
+      requestDeleteGateway: (gatewayKey, returnTarget) => {
+        if (!this.readOnly) {
+          this._openDeleteGatewayDialog(gatewayKey, returnTarget ?? null);
+        }
+      },
       requestDeleteTransition: transitionIndex => {
         if (!this.readOnly) {
           this._deleteTransition(transitionIndex);
@@ -302,6 +327,15 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       ),
       zoomChanged: zoom => {
         this._zoom = Number(zoom.toFixed(2));
+        // Relayed so a host rendering its own consolidated toolbar (hideOwnToolbar) can show
+        // the current zoom percentage without needing this element's own hidden HUD.
+        this.dispatchEvent(
+          new CustomEvent<{ zoom: number }>('zoom-changed', {
+            detail: { zoom: this._zoom },
+            bubbles: true,
+            composed: true,
+          })
+        );
       },
       ready: () => this.setAttribute('data-wayfinder-graph-ready', 'true'),
     };
@@ -491,7 +525,27 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     );
   }
 
-  private _tidyLayout() {
+  /**
+   * Public workspace actions — called either by this element's own HUD (standalone use,
+   * hideOwnToolbar false) or directly by a host's consolidated toolbar (hideOwnToolbar true;
+   * see wayfinder-service-blueprint-editor.ts). Kept as plain public methods rather than
+   * events, since a host toolbar button needs to *trigger* these, not just react to them.
+   */
+  addStage(returnTarget?: HTMLElement | null) {
+    const selectedStage = this.serviceBlueprint?.stages.find(stage => stage.stateKey === this._selectedStageKey) ?? null;
+    this._openCreateStageDialog(
+      selectedStage ? this._surfaceForStage(selectedStage) : 'front-stage',
+      this._selectedStageKey ? 'after' : 'append',
+      this._selectedStageKey,
+      returnTarget
+    );
+  }
+
+  addGateway(returnTarget?: HTMLElement | null) {
+    this._openCreateGatewayDialog(returnTarget);
+  }
+
+  tidyLayout() {
     if (!this.serviceBlueprint) {
       return;
     }
@@ -499,6 +553,19 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     this._emitServiceBlueprintUpdated(next, this._currentSelectionDetail());
     this._announce('Canvas tidied — nodes returned to the automatic layout.');
     requestAnimationFrame(() => this._bridge?.fitView());
+  }
+
+  zoomIn() {
+    this._bridge?.zoomIn();
+  }
+
+  zoomOut() {
+    this._bridge?.zoomOut();
+  }
+
+  fitToWidth() {
+    this._bridge?.fitWidth();
+    this._announce('Canvas fit to the diagram’s width.');
   }
 
   private _surfaceForStage(stage: AuthoredStage): StageSurface {
@@ -967,6 +1034,84 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     this._closeDeleteStageDialog();
   }
 
+  private _openDeleteGatewayDialog(gatewayKey: string, returnTarget?: HTMLElement | null) {
+    if (!this.serviceBlueprint) {
+      return;
+    }
+
+    this._dialogReturnTarget = returnTarget ?? this._contextReturnTarget ?? null;
+    this._deleteGatewayDialog = {
+      gatewayKey,
+      affectedTransitions: (flattenRoutes(this.serviceBlueprint)).filter(
+        transition => transition.fromStage === gatewayKey || transition.toStage === gatewayKey
+      ),
+    };
+    this._dismissContextMenu(false);
+    requestAnimationFrame(() => {
+      this.shadowRoot
+        ?.querySelector<HTMLButtonElement>('[data-wayfinder-delete-gateway-cancel]')
+        ?.focus();
+    });
+  }
+
+  private _closeDeleteGatewayDialog() {
+    this._deleteGatewayDialog = null;
+    const returnTarget = this._dialogReturnTarget;
+    this._dialogReturnTarget = null;
+    requestAnimationFrame(() => returnTarget?.focus());
+  }
+
+  private _confirmDeleteGateway() {
+    if (!this.serviceBlueprint || !this._deleteGatewayDialog) {
+      return;
+    }
+
+    const gatewayKey = this._deleteGatewayDialog.gatewayKey;
+    const deletedLabel = this._labelForStage(gatewayKey);
+    const transitionCount = this._deleteGatewayDialog.affectedTransitions.length;
+    const gateways = serviceBlueprintGateways(this.serviceBlueprint).filter(gateway => gateway.key !== gatewayKey);
+    const gatewaysWithRoutes = gateways.map(gateway => ({
+      ...gateway,
+      routes: (gateway.routes ?? []).filter(route => route.target !== gatewayKey),
+    }));
+    const stagesWithRoutes = this.serviceBlueprint.stages.map(stage => ({
+      ...stage,
+      routes: (stage.routes ?? []).filter(route => route.target !== gatewayKey),
+    }));
+
+    const serviceBlueprint: AuthoredServiceBlueprint = pruneLayout({
+      ...this.serviceBlueprint,
+      stages: stagesWithRoutes,
+      gateways: gatewaysWithRoutes,
+    });
+
+    this._selectedGatewayKey = null;
+    this._selectedTransitionIndex = null;
+    this._emitServiceBlueprintUpdated(serviceBlueprint, null);
+    this._announce(
+      `${deletedLabel} deleted.${transitionCount > 0 ? ` ${transitionCount} affected transition${transitionCount === 1 ? '' : 's'} removed.` : ''}`
+    );
+    this._closeDeleteGatewayDialog();
+  }
+
+  private async _copyGateway(gatewayKey: string) {
+    const gateway = serviceBlueprintGateways(this.serviceBlueprint).find(candidate => candidate.key === gatewayKey);
+    if (!gateway) {
+      return;
+    }
+
+    const payload = JSON.stringify(gateway, null, 2);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(payload);
+      }
+      this._announce(`${gateway.displayName} copied.`);
+    } catch {
+      this._announce(`${gateway.displayName} copy prepared, but clipboard access was unavailable.`);
+    }
+    this._dismissContextMenu(false);
+  }
+
   private async _copyStage(stageKey: string) {
     const stage = this.serviceBlueprint?.stages.find(candidate => candidate.stateKey === stageKey);
     if (!stage) {
@@ -1040,9 +1185,21 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     this._contextReturnTarget = returnTarget ?? null;
 
     requestAnimationFrame(() => {
-      this.shadowRoot
-        ?.querySelector<HTMLButtonElement>('[data-wayfinder-context-menu] button')
-        ?.focus();
+      const menu = this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-context-menu]');
+      menu?.querySelector<HTMLButtonElement>('button')?.focus();
+      if (menu && this._contextMenu) {
+        const menuRect = menu.getBoundingClientRect();
+        const margin = 12;
+        const overflowX = menuRect.right - (hostRect.left + hostRect.width) + margin;
+        const overflowY = menuRect.bottom - (hostRect.top + hostRect.height) + margin;
+        if (overflowX > 0 || overflowY > 0) {
+          this._contextMenu = {
+            ...this._contextMenu,
+            x: overflowX > 0 ? Math.max(margin, this._contextMenu.x - overflowX) : this._contextMenu.x,
+            y: overflowY > 0 ? Math.max(margin, this._contextMenu.y - overflowY) : this._contextMenu.y,
+          };
+        }
+      }
     });
   }
 
@@ -1061,7 +1218,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     }
 
     if (action === 'fit-screen') {
-      this._fitToScreen();
+      this.fitToScreen();
       this._dismissContextMenu(false);
       return;
     }
@@ -1086,6 +1243,18 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
         this._openDeleteStageDialog(target.stageKey);
       } else if (action === 'edit-stage') {
         this._selectStage(target.stageKey, { openInspector: true });
+        this._dismissContextMenu(false);
+      }
+      return;
+    }
+
+    if (target.kind === 'gateway') {
+      if (action === 'copy-gateway') {
+        void this._copyGateway(target.gatewayKey);
+      } else if (action === 'delete-gateway') {
+        this._openDeleteGatewayDialog(target.gatewayKey);
+      } else if (action === 'edit-gateway') {
+        this._selectGateway(target.gatewayKey, { openInspector: true });
         this._dismissContextMenu(false);
       }
       return;
@@ -1148,6 +1317,19 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
               </button>
               <button type="button" role="menuitem" class="danger" @click=${() => this._handleContextMenuAction('delete-stage')}>
                 Delete stage
+              </button>
+            `
+          : nothing}
+        ${target.kind === 'gateway'
+          ? html`
+              <button type="button" role="menuitem" @click=${() => this._handleContextMenuAction('edit-gateway')}>
+                Open gateway inspector
+              </button>
+              <button type="button" role="menuitem" @click=${() => this._handleContextMenuAction('copy-gateway')}>
+                Copy gateway JSON
+              </button>
+              <button type="button" role="menuitem" class="danger" @click=${() => this._handleContextMenuAction('delete-gateway')}>
+                Delete gateway
               </button>
             `
           : nothing}
@@ -1338,6 +1520,54 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   }
 
 
+  private _renderDeleteGatewayDialog() {
+    const dialog = this._deleteGatewayDialog;
+    if (!dialog) {
+      return nothing;
+    }
+
+    const gatewayLabel = this._labelForStage(dialog.gatewayKey);
+    return html`
+      <div class="dialog-backdrop" role="presentation">
+        <div
+          class="dialog-panel dialog-panel-danger"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-gateway-dialog-title"
+          aria-describedby="delete-gateway-dialog-copy"
+          data-wayfinder-delete-gateway-dialog
+          @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeDeleteGatewayDialog())}
+        >
+          <div class="dialog-header">
+            <div>
+              <p class="dialog-eyebrow danger">Delete gateway</p>
+              <h2 id="delete-gateway-dialog-title" class="dialog-title">Delete ${gatewayLabel}?</h2>
+            </div>
+          </div>
+          <p id="delete-gateway-dialog-copy" class="dialog-copy">
+            This removes the gateway and every transition connected to it.
+          </p>
+          <div class="delete-impact" data-wayfinder-delete-gateway-transitions>
+            ${dialog.affectedTransitions.length === 0
+              ? html`<p>No transitions will be removed.</p>`
+              : html`
+                  <p>${dialog.affectedTransitions.length} affected transition${dialog.affectedTransitions.length === 1 ? '' : 's'}:</p>
+                  <ul>
+                    ${dialog.affectedTransitions.map(transition => html`
+                      <li>${this._labelForStage(transition.fromStage)} → ${this._labelForStage(transition.toStage)} (${transition.action})</li>
+                    `)}
+                  </ul>
+                `}
+          </div>
+          <div class="dialog-actions">
+            <button type="button" class="dialog-button secondary" data-wayfinder-delete-gateway-cancel @click=${this._closeDeleteGatewayDialog}>Cancel</button>
+            <button type="button" class="dialog-button danger" data-wayfinder-delete-gateway-confirm @click=${this._confirmDeleteGateway}>Delete gateway</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private _renderCreateGatewayDialog() {
     const dialog = this._createGatewayDialog;
     if (!dialog) {
@@ -1450,70 +1680,63 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     const isEmpty = stages.length === 0 && gateways.length === 0;
 
     return html`
-      <div class="graph-hud" aria-label="Workspace controls and hints">
-        ${this.readOnly
-          ? nothing
-          : html`
+      ${this.hideOwnToolbar
+        ? nothing
+        : html`
+            <div class="graph-hud" aria-label="Workspace controls and hints">
+              ${this.readOnly
+                ? nothing
+                : html`
+                    <div class="hud-group">
+                      <button
+                        type="button"
+                        class="hud-button hud-button--icon"
+                        data-wayfinder-add-stage
+                        aria-label="Add stage"
+                        title="Add stage"
+                        @click=${(event: Event) => this.addStage(event.currentTarget as HTMLElement)}
+                      >
+                        <span aria-hidden="true">▭+</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="hud-button hud-button--icon"
+                        data-wayfinder-add-gateway
+                        aria-label="Add gateway"
+                        title="Add gateway"
+                        @click=${(event: Event) => this.addGateway(event.currentTarget as HTMLElement)}
+                      >
+                        <span aria-hidden="true">◇+</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="hud-button hud-button--icon"
+                        data-wayfinder-auto-arrange
+                        aria-label="Tidy layout"
+                        title="Tidy layout"
+                        @click=${() => this.tidyLayout()}
+                      >
+                        <span aria-hidden="true">▦</span>
+                      </button>
+                    </div>
+                  `}
               <div class="hud-group">
-                <button
-                  type="button"
-                  class="hud-button hud-button--icon"
-                  data-wayfinder-add-stage
-                  aria-label="Add stage"
-                  title="Add stage"
-                  @click=${(event: Event) => {
-                    const selectedStage = this.serviceBlueprint?.stages.find(stage => stage.stateKey === this._selectedStageKey) ?? null;
-                    this._openCreateStageDialog(
-                      selectedStage ? this._surfaceForStage(selectedStage) : 'front-stage',
-                      this._selectedStageKey ? 'after' : 'append',
-                      this._selectedStageKey,
-                      event.currentTarget as HTMLElement
-                    );
-                  }}
-                >
-                  <span aria-hidden="true">▭+</span>
+                <button type="button" class="hud-button hud-button--icon" aria-label="Zoom out" title="Zoom out" @click=${() => this.zoomOut()}>
+                  <span aria-hidden="true">−</span>
                 </button>
-                <button
-                  type="button"
-                  class="hud-button hud-button--icon"
-                  data-wayfinder-add-gateway
-                  aria-label="Add gateway"
-                  title="Add gateway"
-                  @click=${(event: Event) => this._openCreateGatewayDialog(event.currentTarget as HTMLElement)}
-                >
-                  <span aria-hidden="true">◇+</span>
+                <span class="zoom-indicator" data-wayfinder-zoom>${Math.round(this._zoom * 100)}%</span>
+                <button type="button" class="hud-button hud-button--icon" aria-label="Zoom in" title="Zoom in" @click=${() => this.zoomIn()}>
+                  <span aria-hidden="true">+</span>
                 </button>
-                <button
-                  type="button"
-                  class="hud-button hud-button--icon"
-                  data-wayfinder-auto-arrange
-                  aria-label="Tidy layout"
-                  title="Tidy layout"
-                  @click=${() => this._tidyLayout()}
-                >
-                  <span aria-hidden="true">▦</span>
+                <button type="button" class="hud-button hud-button--icon" data-wayfinder-fit-screen aria-label="Fit to screen" title="Fit to screen" @click=${() => this.fitToScreen()}>
+                  <span aria-hidden="true">⛶</span>
+                </button>
+                <button type="button" class="hud-button hud-button--icon" data-wayfinder-fit-width aria-label="Fit width" title="Fit width" @click=${() => this.fitToWidth()}>
+                  <span aria-hidden="true">↔</span>
                 </button>
               </div>
-            `}
-        <div class="hud-group">
-          <button type="button" class="hud-button hud-button--icon" aria-label="Zoom out" title="Zoom out" @click=${() => this._bridge?.zoomOut()}>
-            <span aria-hidden="true">−</span>
-          </button>
-          <span class="zoom-indicator" data-wayfinder-zoom>${Math.round(this._zoom * 100)}%</span>
-          <button type="button" class="hud-button hud-button--icon" aria-label="Zoom in" title="Zoom in" @click=${() => this._bridge?.zoomIn()}>
-            <span aria-hidden="true">+</span>
-          </button>
-          <button type="button" class="hud-button hud-button--icon" data-wayfinder-fit-screen aria-label="Fit to screen" title="Fit to screen" @click=${() => this._fitToScreen()}>
-            <span aria-hidden="true">⛶</span>
-          </button>
-        </div>
-      </div>
-
-      <p class="graph-hint">
-        ${this.readOnly
-          ? 'Tab through queues and stages. Enter selects, and arrow keys move between stages.'
-          : 'Tab through queues, stages, routes, and gateways. Enter selects, E opens details, and Shift+F10 opens the menu. Drag from a stage or gateway’s edge to connect it to another.'}
-      </p>
+            </div>
+          `}
 
       ${isEmpty
         ? this._renderWorkspaceEmptyState()
@@ -1530,7 +1753,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     `;
   }
 
-  private _fitToScreen() {
+  fitToScreen() {
     this._bridge?.fitView();
     this._announce('Canvas fit to screen.');
   }
@@ -1571,13 +1794,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   render() {
     return html`
       <div class="service-blueprint-graph-root" data-wayfinder-component="service-blueprint-graph" data-wayfinder-mode="graph" data-wayfinder-read-only=${String(this.readOnly)}>
-        <div class="toolbar">
-          <div class="toolbar-title-block">
-            <span class="service-blueprint-title">${this.serviceBlueprint?.displayName ?? 'No service blueprint loaded'}</span>
-            <span class="service-blueprint-subtitle">${this.readOnly ? 'Published service blueprint — read-only viewer' : 'Visual service blueprint map'}</span>
-          </div>
-        </div>
-
         <div id="graph-announcer" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
         ${this._renderGraph()}
@@ -1585,6 +1801,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
         ${this.readOnly ? nothing : this._renderCreateStageDialog()}
         ${this.readOnly ? nothing : this._renderDeleteStageDialog()}
         ${this.readOnly ? nothing : this._renderCreateGatewayDialog()}
+        ${this.readOnly ? nothing : this._renderDeleteGatewayDialog()}
       </div>
     `;
   }
@@ -1622,34 +1839,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       border: 1px solid #d1d5db;
       border-radius: 12px;
       overflow: hidden;
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: 0.875rem 1rem;
-      background: #ffffff;
-      border-bottom: 1px solid #dbe2ea;
-    }
-
-    .toolbar-title-block {
-      display: flex;
-      flex-direction: column;
-      gap: 0.125rem;
-      min-width: 0;
-    }
-
-    .service-blueprint-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: #0f172a;
-    }
-
-    .service-blueprint-subtitle {
-      font-size: 0.8125rem;
-      color: #475569;
     }
 
     .mode-toggle,
@@ -1782,13 +1971,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       font-size: 0.875rem;
       font-weight: 600;
       color: #334155;
-    }
-
-    .graph-hint {
-      margin: 0;
-      padding: 0 1rem 0.75rem;
-      font-size: 0.8125rem;
-      color: #475569;
     }
 
     .graph-canvas {
@@ -2701,7 +2883,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
 
     @media (max-width: 900px) {
       .graph-hud,
-      .toolbar,
       .linear-toolbar,
       .dialog-actions {
         flex-direction: column;

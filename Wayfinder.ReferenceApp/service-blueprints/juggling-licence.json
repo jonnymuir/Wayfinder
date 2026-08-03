@@ -183,7 +183,7 @@
               "visibleWhen": null,
               "default": null,
               "defaultFrom": null,
-              "changeStateKey": null
+              "changeStateKey": "your-details"
             },
             {
               "type": "email",
@@ -196,7 +196,7 @@
               "visibleWhen": null,
               "default": null,
               "defaultFrom": null,
-              "changeStateKey": null
+              "changeStateKey": "your-details"
             },
             {
               "type": "text",
@@ -212,7 +212,7 @@
               "visibleWhen": null,
               "default": null,
               "defaultFrom": null,
-              "changeStateKey": null
+              "changeStateKey": "event-details"
             },
             {
               "type": "date",
@@ -224,7 +224,7 @@
               "visibleWhen": null,
               "default": null,
               "defaultFrom": null,
-              "changeStateKey": null
+              "changeStateKey": "event-details"
             },
             {
               "type": "number",
@@ -239,7 +239,7 @@
               "visibleWhen": null,
               "default": null,
               "defaultFrom": null,
-              "changeStateKey": null
+              "changeStateKey": "event-details"
             }
           ],
           "changeStateKey": null,

@@ -58,6 +58,40 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     });
   });
 
+  test('a "Change" link on the check-your-answers page lets the applicant go back and edit an earlier answer', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.applicant);
+    await page.getByLabel('Full name').fill('Alex Applicant');
+    await page.getByLabel('Email address').fill('alex@example.test');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByLabel('Name of the event').fill('Big Top Juggling Gala');
+    await page.getByLabel('Day').fill('1');
+    await page.getByLabel('Month').fill('9');
+    await page.getByLabel('Year').fill('2026');
+    await page.getByLabel('Number of jugglers taking part').fill('12');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+
+    // Deliberately not ticking "I confirm the details above are correct" first: a summary-list
+    // Change button must not be blocked by this stage's own required-field validation — its
+    // whole point is to let the applicant fix an earlier answer before they're ready to declare.
+    // This regressed once already: a plain type="submit" button with no formnovalidate is
+    // silently blocked by the browser's own HTML5 constraint validation against the checkbox
+    // below, with no server request and no visible error at all.
+    await page.getByRole('button', { name: /Change name of the event/i }).click();
+    await expect(page.getByRole('heading', { name: 'About the event' })).toBeVisible();
+    // The stage re-renders pre-filled with what was already captured, not blanked.
+    await expect(page.getByLabel('Name of the event')).toHaveValue('Big Top Juggling Gala');
+
+    await page.getByLabel('Name of the event').fill('Grand Juggling Extravaganza');
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    const summary = page.locator('.govuk-summary-list');
+    await expect(summary.getByText('Grand Juggling Extravaganza', { exact: true })).toBeVisible();
+    // Untouched fields survive the round trip through the earlier stage.
+    await expect(summary.getByText('Alex Applicant', { exact: true })).toBeVisible();
+  });
+
   test('required fields block progress before a value is entered', async ({ page }) => {
     await loginAs(page, DEMO_USERS.applicant);
     await expect(page.getByRole('heading', { name: 'Your details' })).toBeVisible();

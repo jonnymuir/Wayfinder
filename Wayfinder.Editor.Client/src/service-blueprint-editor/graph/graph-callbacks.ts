@@ -21,6 +21,7 @@ export type GraphProps = {
 export type GraphContextMenuTarget =
   | { kind: 'canvas' }
   | { kind: 'stage'; stageKey: string }
+  | { kind: 'gateway'; gatewayKey: string }
   | { kind: 'transition'; transitionIndex: number };
 
 export type GraphNodeMove = {
@@ -42,6 +43,7 @@ export type GraphCallbacks = {
   selectGateway(gatewayKey: string, options?: { openInspector?: boolean }): void;
   selectTransition(transitionIndex: number, options?: { openInspector?: boolean }): void;
   requestDeleteStage(stageKey: string, returnTarget?: HTMLElement): void;
+  requestDeleteGateway(gatewayKey: string, returnTarget?: HTMLElement): void;
   requestDeleteTransition(transitionIndex: number): void;
   openContextMenu(
     position: { clientX: number; clientY: number },

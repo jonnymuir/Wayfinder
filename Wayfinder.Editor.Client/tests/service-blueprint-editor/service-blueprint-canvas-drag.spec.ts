@@ -34,12 +34,12 @@ async function recordServiceBlueprintUpdates(page: Page) {
     graphElement.addEventListener('service-blueprint-updated', event => {
       const serviceBlueprint = (event as CustomEvent<{ serviceBlueprint: {
         layout?: { nodes?: Record<string, unknown> };
-        states: Array<{ stateKey: string; queueKey?: string }>;
+        stages: Array<{ stateKey: string; queueKey?: string }>;
       } }>).detail.serviceBlueprint;
       window.__layoutUpdates!.push({
         layoutNodeIds: Object.keys(serviceBlueprint.layout?.nodes ?? {}),
         queuesByStage: Object.fromEntries(
-          serviceBlueprint.states.map(state => [state.stateKey, state.queueKey ?? ''])
+          serviceBlueprint.stages.map(stage => [stage.stateKey, stage.queueKey ?? ''])
         ),
       });
     });
