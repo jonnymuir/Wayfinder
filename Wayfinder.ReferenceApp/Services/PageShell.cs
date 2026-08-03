@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Wayfinder.Rendering.GovUk;
 
 namespace Wayfinder.ReferenceApp.Services;
 
@@ -23,7 +24,7 @@ public static class PageShell
 
     public static string Render(string title, string bodyHtml, ClaimsPrincipal? user)
     {
-        var esc = ComponentHtmlRenderer.Esc;
+        var esc = GovUk.Esc;
         var nav = user?.Identity?.IsAuthenticated == true ? RenderServiceNavigation(user) : "";
 
         return $"""
@@ -86,7 +87,7 @@ public static class PageShell
 
     private static string RenderServiceNavigation(ClaimsPrincipal user)
     {
-        var esc = ComponentHtmlRenderer.Esc;
+        var esc = GovUk.Esc;
         var items = new List<string>();
 
         if (user.IsInRole(DemoUsers.ApplicantRole))

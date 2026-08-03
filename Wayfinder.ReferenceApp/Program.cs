@@ -11,6 +11,7 @@ using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.ReferenceApp.Services;
+using Wayfinder.Rendering.GovUk;
 using Wayfinder.Services.Sanitization;
 
 // The one seeded demo blueprint's key — see service-blueprints/juggling-licence.json.
@@ -46,6 +47,12 @@ builder.Services.AddSingleton<IServiceContentSanitizer, PassthroughSanitizer>();
 builder.Services.AddSingleton<IServiceBlueprintStore>(
     _ => new FilesystemServiceBlueprintStore(Path.Combine(builder.Environment.ContentRootPath, "service-blueprints")));
 builder.Services.AddSingleton<IQueueCapabilitiesProvider>(ReferenceActors.CapabilitiesProvider());
+
+// Wayfinder.Rendering.GovUk's built-in catalog covers every component/field type out of the
+// box — this reference app registers zero overrides, the "simple by default" case. A host that
+// wants to customize one type calls renderer.RegisterComponent/RegisterField after resolving it
+// here, no Razor/ViewEngine ceremony required.
+builder.Services.AddSingleton<GovUkComponentRenderer>();
 
 builder.Services.AddSingleton(sp => new ProcessManagerEngine(
     sp.GetRequiredService<ILogger<ProcessManagerEngine>>(),
@@ -206,14 +213,14 @@ app.MapPost("/account/logout", async (HttpContext ctx) =>
 
 var citizenGroup = app.MapGroup("/apply").RequireAuthorization("Applicant");
 
-citizenGroup.MapGet("/", (HttpContext ctx, IProcessManager engine) =>
+citizenGroup.MapGet("/", (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
 {
     var envelope = engine.GetCurrent(
         JugglingLicenceDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CitizenProfile());
-    return Results.Content(PageShell.Render("Apply for a juggling licence", RenderJourneyBody(envelope, "/apply"), ctx.User), "text/html");
+    return Results.Content(PageShell.Render("Apply for a juggling licence", RenderJourneyBody(envelope, "/apply", renderer), ctx.User), "text/html");
 });
 
-citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine) =>
+citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
 {
     var userId = GetUserId(ctx.User);
     var profile = ReferenceActors.CitizenProfile();
@@ -233,7 +240,7 @@ citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine) =>
     if (result.Problems.Count > 0 && result.Render is not null)
     {
         return Results.Content(
-            PageShell.Render("Apply for a juggling licence", RenderJourneyBody(result, "/apply"), ctx.User), "text/html");
+            PageShell.Render("Apply for a juggling licence", RenderJourneyBody(result, "/apply", renderer), ctx.User), "text/html");
     }
 
     // Redirect rather than render the result directly (POST-redirect-GET): rendering at the
@@ -251,7 +258,7 @@ var caseworkerGroup = app.MapGroup("/caseworker").RequireAuthorization("Casework
 caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
 {
     var items = engine.GetQueueWorkItems(ReferenceActors.CaseworkerProfile()).Items;
-    var esc = ComponentHtmlRenderer.Esc;
+    var esc = GovUk.Esc;
     var rows = items.Count == 0
         ? """<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="4">No applications waiting for review</td></tr>"""
         : string.Join("\n", items.Select(item => $"""
@@ -280,15 +287,15 @@ caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
     return Results.Content(PageShell.Render("Caseworker queue", body, ctx.User), "text/html");
 });
 
-caseworkerGroup.MapGet("/queue/{instanceId}", (string instanceId, HttpContext ctx, IProcessManager engine) =>
+caseworkerGroup.MapGet("/queue/{instanceId}", (string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
 {
     var envelope = engine.GetCurrent(
         JugglingLicenceDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
     return Results.Content(
-        PageShell.Render("Review application", RenderJourneyBody(envelope, $"/caseworker/queue/{instanceId}/advance"), ctx.User), "text/html");
+        PageShell.Render("Review application", RenderJourneyBody(envelope, $"/caseworker/queue/{instanceId}/advance", renderer), ctx.User), "text/html");
 });
 
-caseworkerGroup.MapPost("/queue/{instanceId}/advance", async (string instanceId, HttpContext ctx, IProcessManager engine) =>
+caseworkerGroup.MapPost("/queue/{instanceId}/advance", async (string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
 {
     var userId = GetUserId(ctx.User);
     var profile = ReferenceActors.CaseworkerProfile();
@@ -304,7 +311,7 @@ caseworkerGroup.MapPost("/queue/{instanceId}/advance", async (string instanceId,
     if (result.Problems.Count > 0 && result.Render is not null)
     {
         return Results.Content(
-            PageShell.Render("Review application", RenderJourneyBody(result, $"/caseworker/queue/{instanceId}/advance"), ctx.User), "text/html");
+            PageShell.Render("Review application", RenderJourneyBody(result, $"/caseworker/queue/{instanceId}/advance", renderer), ctx.User), "text/html");
     }
 
     return Results.Redirect("/caseworker/queue");
@@ -331,9 +338,9 @@ static string GetUserId(ClaimsPrincipal user) =>
     user.FindFirst(ClaimTypes.NameIdentifier)?.Value
     ?? throw new InvalidOperationException("Authenticated request has no NameIdentifier claim.");
 
-static string RenderJourneyBody(ServiceRequestResponseEnvelope envelope, string formAction)
+static string RenderJourneyBody(ServiceRequestResponseEnvelope envelope, string formAction, GovUkComponentRenderer renderer)
 {
-    var esc = ComponentHtmlRenderer.Esc;
+    var esc = GovUk.Esc;
     if (envelope.Render is null)
     {
         var message = envelope.Problems.FirstOrDefault()?.Message ?? "Nothing to show.";
@@ -343,15 +350,15 @@ static string RenderJourneyBody(ServiceRequestResponseEnvelope envelope, string 
     // A panel component (confirmation/outcome stages) already renders its own <h1> — a second
     // page heading here would be a duplicate, which the real GOV.UK panel component isn't
     // designed to sit under.
-    var heading = ComponentHtmlRenderer.HasPanel(envelope.Render)
+    var heading = GovUkComponentRenderer.HasPanel(envelope.Render)
         ? ""
         : $"""<h1 class="govuk-heading-xl">{esc(envelope.Render.StateDisplayName)}</h1>""";
-    return heading + ComponentHtmlRenderer.RenderForm(envelope.Render, envelope.Problems, formAction, envelope.StateVersion);
+    return heading + renderer.RenderForm(envelope.Render, envelope.Problems, formAction, envelope.StateVersion);
 }
 
 static string RenderLoginBody(string? returnUrl, string? error)
 {
-    var esc = ComponentHtmlRenderer.Esc;
+    var esc = GovUk.Esc;
     var errorHtml = error is null
         ? ""
         : $"""
@@ -427,10 +434,10 @@ static Dictionary<string, object?> CoerceFieldValues(IFormCollection form, StepC
         }
 
         // The real GOV.UK date-input component posts three separate day/month/year fields
-        // rather than one native date value — see ComponentHtmlRenderer.RenderDateField.
+        // rather than one native date value — see Wayfinder.Rendering.GovUk.GovUkFields' date field.
         if (fieldType == "date")
         {
-            var combined = ComponentHtmlRenderer.CombineIsoDate(
+            var combined = GovUk.CombineIsoDate(
                 form[$"{formKey}-day"], form[$"{formKey}-month"], form[$"{formKey}-year"]);
             if (combined is not null)
             {

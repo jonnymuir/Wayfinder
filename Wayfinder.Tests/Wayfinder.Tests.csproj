@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="../Wayfinder/Wayfinder.csproj" />
     <ProjectReference Include="../Wayfinder.Engine/Wayfinder.Engine.csproj" />
+    <ProjectReference Include="../Wayfinder.Rendering.GovUk/Wayfinder.Rendering.GovUk.csproj" />
   </ItemGroup>
 
 </Project>
