@@ -1261,7 +1261,14 @@ public class ProcessManagerEngine : IProcessManager
 
                 case SummaryListComponent summary:
                 {
-                    var fields = BuildFields(summary.Children, displayValues, calc);
+                    // A summary-list echoes values already collected (and validated) on the
+                    // stages its "change" links point back to — never a fresh submission on
+                    // whatever stage/transition happens to render it (e.g. a check-answers
+                    // page's own "submit"). ReadOnly = true keeps FieldValueValidator from
+                    // demanding these be resubmitted alongside that stage's own real fields.
+                    var fields = BuildFields(summary.Children, displayValues, calc)
+                        .Select(f => f with { ReadOnly = true })
+                        .ToArray();
                     if (fields.Length == 0)
                     {
                         Logger.LogWarning("Summary-list component contains no renderable fields");
