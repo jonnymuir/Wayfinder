@@ -18,4 +18,13 @@ public record RequestCursor
 
     /// <summary>True when this cursor is positioned at a gateway node rather than a stage.</summary>
     public bool IsAtGateway { get; init; }
+
+    /// <summary>
+    /// The action/trigger of the transition that most recently moved this cursor onto a gateway
+    /// node, if any. Used by a Join gateway with more than one outgoing route to decide which
+    /// route to release on — e.g. a cursor that arrived via "approve" releases the join's
+    /// "approve"-triggered route, "reject" releases its "reject"-triggered route. Null/irrelevant
+    /// once the cursor is on a stage.
+    /// </summary>
+    public string? ArrivedViaAction { get; init; }
 }

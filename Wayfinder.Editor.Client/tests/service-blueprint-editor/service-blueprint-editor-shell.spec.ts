@@ -292,6 +292,44 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   });
 
+  test('dragging the properties panel resize handle widens it, and arrow keys resize it too', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(storyUrl('service-blueprint-editor-editor-shell--reference-shell'));
+    await waitForServiceBlueprintLoad(page, 'planning');
+
+    await page.getByRole('button', { name: 'Expand properties drawer' }).click();
+
+    const inspectorSection = page.locator('wayfinder-service-blueprint-editor').locator('.editor-right');
+    const handle = page.locator('wayfinder-service-blueprint-editor').locator('.panel-resize-handle');
+    await expect(handle).toBeVisible();
+
+    const before = await inspectorSection.boundingBox();
+    const handleBox = await handle.boundingBox();
+    if (!before || !handleBox) {
+      throw new Error('Expected bounding boxes for the inspector panel and its resize handle.');
+    }
+
+    // Drag left by 100px — the properties panel sits on the right, so this should widen it by
+    // roughly that much.
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + handleBox.width / 2 - 100, handleBox.y + handleBox.height / 2, { steps: 10 });
+    await page.mouse.up();
+
+    const afterDrag = await inspectorSection.boundingBox();
+    expect(afterDrag).not.toBeNull();
+    expect(afterDrag!.width - before.width).toBeGreaterThan(80);
+
+    // Keyboard: ArrowRight on the focused handle shrinks the panel back down.
+    await handle.focus();
+    for (let i = 0; i < 5; i++) {
+      await page.keyboard.press('ArrowRight');
+    }
+    const afterKeyboard = await inspectorSection.boundingBox();
+    expect(afterKeyboard).not.toBeNull();
+    expect(afterKeyboard!.width).toBeLessThan(afterDrag!.width);
+  });
+
   test.fixme('outline drawer collapse/expand controls stay accessible', async ({ page }) => {
     // BEHAVIORAL HOOK REQUEST FOR ISABELLE:
     // - [data-wayfinder-panel-toggle="outline"] button with aria-controls + aria-expanded

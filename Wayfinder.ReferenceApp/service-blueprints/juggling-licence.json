@@ -363,15 +363,15 @@
       ],
       "routes": [
         {
-          "id": "under-review--approve--to-approved",
-          "target": "to-approved",
+          "id": "under-review--approve--post-review",
+          "target": "post-review",
           "trigger": "approve",
           "label": "Approve",
           "style": "primary"
         },
         {
-          "id": "under-review--reject--to-rejected",
-          "target": "to-rejected",
+          "id": "under-review--reject--post-review",
+          "target": "post-review",
           "trigger": "reject",
           "label": "Reject",
           "style": "destructive"
@@ -462,44 +462,27 @@
           "trigger": "continue"
         },
         {
-          "id": "to-under-review--continue--to-approved",
-          "target": "to-approved",
-          "trigger": "continue"
-        },
-        {
-          "id": "to-under-review--continue--to-rejected",
-          "target": "to-rejected",
+          "id": "to-under-review--continue--post-review",
+          "target": "post-review",
           "trigger": "continue"
         }
       ]
     },
     {
-      "key": "to-approved",
+      "key": "post-review",
       "displayName": "Application under review",
       "gatewayType": "Join",
       "queueKey": "citizen",
       "routes": [
         {
-          "id": "to-approved--continue--approved",
+          "id": "post-review--approve--approved",
           "target": "approved",
-          "trigger": "continue"
-        }
-      ],
-      "waitingContent": "A caseworker is reviewing your application. We'll update this page once a decision is made.",
-      "waitingExpectedSeconds": 120,
-      "waitingPollIntervalMs": 5000,
-      "requiredIncomingQueues": ["citizen", "caseworker"]
-    },
-    {
-      "key": "to-rejected",
-      "displayName": "Application under review",
-      "gatewayType": "Join",
-      "queueKey": "citizen",
-      "routes": [
+          "trigger": "approve"
+        },
         {
-          "id": "to-rejected--continue--rejected",
+          "id": "post-review--reject--rejected",
           "target": "rejected",
-          "trigger": "continue"
+          "trigger": "reject"
         }
       ],
       "waitingContent": "A caseworker is reviewing your application. We'll update this page once a decision is made.",

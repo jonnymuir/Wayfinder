@@ -44,7 +44,7 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
       // CitizenProfile's VisibleQueues doesn't include the caseworker queue — the applicant
       // never gets a read-only peek at the caseworker's own stage content. Instead, the
       // "to-under-review" split parks a citizen-queue cursor directly at a Join gateway
-      // (to-approved/to-rejected, requiredIncomingQueues: ["citizen", "caseworker"]), so the
+      // (post-review, requiredIncomingQueues: ["citizen", "caseworker"]), so the
       // applicant sees a genuine, first-class "please wait" status via BuildJoinWaitingEnvelope
       // — not ACCESS_DENIED, and not the caseworker's own authored stage content either.
       await expect(page.getByRole('heading', { name: 'Application under review' })).toBeVisible();

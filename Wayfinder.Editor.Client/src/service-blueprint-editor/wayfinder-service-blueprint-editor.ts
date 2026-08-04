@@ -218,6 +218,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   // so it stays exactly as the author left it.
   @state() private _outlineCollapsed = true;
   @state() private _inspectorCollapsed = true;
+  /** Expanded width of the Properties panel in px — dragged via .panel-resize-handle. */
+  @state() private _inspectorWidth = 380;
+  @state() private _inspectorResizing = false;
+  private _inspectorResizeStartX = 0;
+  private _inspectorResizeStartWidth = 0;
   /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
   @state() private _graphZoom = 1;
   @query('.graph-panel') private _graphElement?: HTMLElementTagNameMap['wayfinder-service-blueprint-graph'];
@@ -297,6 +302,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(this._toastDismissTimer);
     }
+    window.removeEventListener('pointermove', this._handleInspectorResizeMove);
+    window.removeEventListener('pointerup', this._handleInspectorResizeEnd);
     super.disconnectedCallback();
   }
 
@@ -2113,6 +2120,45 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._inspectorCollapsed = !this._inspectorCollapsed;
   };
 
+  private _clampInspectorWidth(width: number): number {
+    const minWidth = 280;
+    const maxWidth = 720;
+    return Math.min(maxWidth, Math.max(minWidth, width));
+  }
+
+  // The Properties panel sits on the right, so dragging the handle left (a shrinking clientX)
+  // should widen it — width tracks the *negative* of the pointer's horizontal movement.
+  private _handleInspectorResizeStart = (event: PointerEvent) => {
+    event.preventDefault();
+    this._inspectorResizeStartX = event.clientX;
+    this._inspectorResizeStartWidth = this._inspectorWidth;
+    this._inspectorResizing = true;
+    window.addEventListener('pointermove', this._handleInspectorResizeMove);
+    window.addEventListener('pointerup', this._handleInspectorResizeEnd);
+  };
+
+  private _handleInspectorResizeMove = (event: PointerEvent) => {
+    const delta = this._inspectorResizeStartX - event.clientX;
+    this._inspectorWidth = this._clampInspectorWidth(this._inspectorResizeStartWidth + delta);
+  };
+
+  private _handleInspectorResizeEnd = () => {
+    this._inspectorResizing = false;
+    window.removeEventListener('pointermove', this._handleInspectorResizeMove);
+    window.removeEventListener('pointerup', this._handleInspectorResizeEnd);
+  };
+
+  private _handleInspectorResizeKeydown = (event: KeyboardEvent) => {
+    const step = 16;
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      this._inspectorWidth = this._clampInspectorWidth(this._inspectorWidth + step);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      this._inspectorWidth = this._clampInspectorWidth(this._inspectorWidth - step);
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -2143,8 +2189,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           <!-- Canvas tab: main workspace -->
           <div slot="canvas" class="canvas-workspace">
             <div
-              class="editor-shell"
-              style=${`--outline-width:${this._outlineCollapsed ? '3.5rem' : '240px'};--inspector-width:${this._inspectorCollapsed ? '3.5rem' : '380px'};`}
+              class=${`editor-shell ${this._inspectorResizing ? 'editor-shell-resizing' : ''}`}
+              style=${`--outline-width:${this._outlineCollapsed ? '3.5rem' : '240px'};--inspector-width:${this._inspectorCollapsed ? '3.5rem' : `${this._inspectorWidth}px`};`}
             >
               <!-- Left: outline -->
               <section class=${`editor-outline-shell ${this._outlineCollapsed ? 'panel-collapsed' : ''}`}>
@@ -2393,6 +2439,22 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
               <!-- Right: inspector -->
               <section class=${`editor-right ${this._inspectorCollapsed ? 'panel-collapsed' : ''}`}>
+                ${this._inspectorCollapsed
+                  ? nothing
+                  : html`
+                      <div
+                        class="panel-resize-handle"
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label="Resize properties panel"
+                        aria-valuenow=${this._inspectorWidth}
+                        aria-valuemin="280"
+                        aria-valuemax="720"
+                        tabindex="0"
+                        @pointerdown=${this._handleInspectorResizeStart}
+                        @keydown=${this._handleInspectorResizeKeydown}
+                      ></div>
+                    `}
                 <div class="panel-header">
                   <div class="panel-header-copy">
                     <h2 class="panel-title">Properties</h2>
@@ -3183,7 +3245,52 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     /* ---- Right panel ---- */
 
     .editor-right {
+      position: relative;
       border-left: 2px solid #b1b4b6;
+    }
+
+    /* Sits astride the left border of .editor-right — a wider invisible hit area than the
+       visible 2px line it's centred on, since a bare 2px strip is too thin to reliably grab. */
+    .panel-resize-handle {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -5px;
+      width: 10px;
+      cursor: col-resize;
+      touch-action: none;
+      z-index: 1;
+    }
+
+    .panel-resize-handle::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 4px;
+      width: 2px;
+      background: transparent;
+    }
+
+    .panel-resize-handle:hover::after,
+    .panel-resize-handle:focus-visible::after {
+      background: #1d70b8;
+    }
+
+    .panel-resize-handle:focus-visible {
+      outline: 3px solid #ffdd00;
+      outline-offset: 2px;
+    }
+
+    /* Applied to .editor-shell for the duration of a drag so the cursor stays col-resize and
+       text elsewhere on the canvas doesn't get selected while the pointer sweeps across it. */
+    .editor-shell-resizing {
+      cursor: col-resize;
+      user-select: none;
+    }
+
+    .editor-shell-resizing .panel-resize-handle::after {
+      background: #1d70b8;
     }
 
     /* ---- Confidence panel ---- */
