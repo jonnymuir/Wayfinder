@@ -976,6 +976,14 @@ public record ServiceBlueprintLayoutDefinition
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, NodePosition>? Nodes { get; init; }
+
+    /// <summary>
+    /// Manual bend point per route edge, keyed by the same "fromId->toId"
+    /// edge key the canvas uses for its graph edges. Only set once an author
+    /// drags a route; absent routes fall back to the auto-computed path.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, NodePosition>? Routes { get; init; }
 }
 
 public record NodePosition

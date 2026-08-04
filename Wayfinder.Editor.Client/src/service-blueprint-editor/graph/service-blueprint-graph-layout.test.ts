@@ -8,13 +8,16 @@ import {
   TOP_PADDING,
   computeTopology,
   computeServiceBlueprintGraphLayout,
+  gatewayNodeId,
   laneForPosition,
   mergeLayout,
   parseGraphNodeId,
   rowBandCenter,
   stageNodeId,
 } from './service-blueprint-graph-layout.js';
-import { applyAutoArrange, pruneLayout, setNodePositions } from './service-blueprint-graph-layout-block.js';
+import { applyAutoArrange, pruneLayout, setNodePositions, setRouteWaypoint } from './service-blueprint-graph-layout-block.js';
+import { buildGraphModel } from './graph-model.js';
+import type { GraphProps } from './graph-callbacks.js';
 
 type RawServiceBlueprint = Record<string, unknown>;
 
@@ -67,6 +70,62 @@ const REVIEW_LOOP_SERVICE_BLUEPRINT: RawServiceBlueprint = {
       routes: [
         { id: 'decision-gw--approve--done', target: 'done', trigger: 'approve' },
         { id: 'decision-gw--reject--draft', target: 'draft', trigger: 'reject' },
+      ],
+    },
+  ],
+};
+
+// Mirrors the juggling-licence shape reported on the canvas: a citizen-lane
+// Split hands off to a caseworker-lane review stage, whose approve/reject
+// routes merge into a citizen-lane Join. The Join's only direct predecessor
+// (the caseworker stage) sits in a different lane, so it should climb back
+// through it to the Split — its nearest same-lane ancestor — rather than
+// being pulled toward, and clamped against the edge of, the caseworker lane.
+const CROSS_LANE_MERGE_SERVICE_BLUEPRINT: RawServiceBlueprint = {
+  definitionKey: 'cross-lane-merge',
+  displayName: 'Cross-lane Merge',
+  version: 1,
+  initialStage: 'start',
+  requestPolicy: 'single',
+  queues: [
+    { key: 'citizen', displayName: 'Applicant' },
+    { key: 'caseworker', displayName: 'Caseworker' },
+  ],
+  stages: [
+    {
+      stateKey: 'start',
+      displayName: 'Start',
+      queueKey: 'citizen',
+      routes: [{ id: 'start--submit--handoff', target: 'handoff', trigger: 'submit' }],
+    },
+    {
+      stateKey: 'under-review',
+      displayName: 'Under review',
+      queueKey: 'caseworker',
+      routes: [
+        { id: 'under-review--approve--post-review', target: 'post-review', trigger: 'approve' },
+        { id: 'under-review--reject--post-review', target: 'post-review', trigger: 'reject' },
+      ],
+    },
+    { stateKey: 'approved', displayName: 'Approved', queueKey: 'citizen', routes: [] },
+    { stateKey: 'rejected', displayName: 'Rejected', queueKey: 'citizen', routes: [] },
+  ],
+  gateways: [
+    {
+      key: 'handoff',
+      displayName: 'Hand off to caseworker',
+      gatewayType: 'Split',
+      queueKey: 'citizen',
+      routes: [{ id: 'handoff--continue--under-review', target: 'under-review', trigger: 'continue' }],
+    },
+    {
+      key: 'post-review',
+      displayName: 'Application under review',
+      gatewayType: 'Join',
+      queueKey: 'citizen',
+      routes: [
+        { id: 'post-review--approve--approved', target: 'approved', trigger: 'approve' },
+        { id: 'post-review--reject--rejected', target: 'rejected', trigger: 'reject' },
       ],
     },
   ],
@@ -217,6 +276,76 @@ export function run(fixtures: LayoutTestFixtures): number {
         && edge.fromId === 'gateway:decision-gw' && edge.toId === 'stage:done'));
   }
 
+  // Cross-lane merge: a Join gateway's direct predecessor lives in a
+  // different lane than the Join itself — it should still centre under its
+  // originating Split, not get pulled toward and clamped against the foreign
+  // lane's edge.
+  {
+    const serviceBlueprint = hydrate(CROSS_LANE_MERGE_SERVICE_BLUEPRINT);
+    const { layout } = assertCommonInvariants('cross-lane-merge', serviceBlueprint, { strictRanks: true });
+
+    const split = layout.placements.get(gatewayNodeId('handoff'))!;
+    const join = layout.placements.get(gatewayNodeId('post-review'))!;
+    const splitCenter = split.x + split.width / 2;
+    const joinCenter = join.x + join.width / 2;
+    check('cross-lane-merge: Join gateway centres under its originating Split, not a foreign lane\'s stage',
+      Math.abs(splitCenter - joinCenter) < 1,
+      `split center ${splitCenter}, join center ${joinCenter}`);
+  }
+
+  // Same-pair fan-out: two transitions sharing one source and target (approve/reject
+  // both landing on post-review) must not collapse into one shared edge/handle pair —
+  // each gets its own topology edge and, in turn, its own exit/entry handle, so the two
+  // routes genuinely diverge instead of visually converging on one shared anchor point.
+  {
+    const serviceBlueprint = hydrate(CROSS_LANE_MERGE_SERVICE_BLUEPRINT);
+    const topology = computeTopology(serviceBlueprint, []);
+    const sharedPairEdges = topology.edges.filter(edge =>
+      edge.fromId === stageNodeId('under-review') && edge.toId === gatewayNodeId('post-review'));
+
+    check('same-pair fan-out: approve/reject each get their own topology edge',
+      sharedPairEdges.length === 2 && sharedPairEdges.every(edge => edge.transitionIndices.length === 1),
+      `edges: ${sharedPairEdges.map(edge => `${edge.key}[${edge.transitionIndices.join(',')}]`).join(', ')}`);
+
+    const props: GraphProps = {
+      serviceBlueprint,
+      availableQueues: [],
+      readOnly: false,
+      selectedStageKey: null,
+      selectedGatewayKey: null,
+      selectedTransitionIndex: null,
+      simulationCurrentStageKey: null,
+      simulationPathStageKeys: [],
+      simulationPathTransitionIndices: [],
+    };
+    const model = buildGraphModel(props);
+    const modelEdges = model.edges.filter(edge =>
+      edge.source === stageNodeId('under-review') && edge.target === gatewayNodeId('post-review'));
+
+    check('same-pair fan-out: each edge carries exactly one transition chip',
+      modelEdges.length === 2 && modelEdges.every(edge => edge.data?.chips.length === 1));
+
+    const sourceHandles = new Set(modelEdges.map(edge => edge.sourceHandle));
+    const targetHandles = new Set(modelEdges.map(edge => edge.targetHandle));
+    check('same-pair fan-out: approve and reject get distinct source handles',
+      sourceHandles.size === 2, `source handles: ${[...sourceHandles].join(', ')}`);
+    check('same-pair fan-out: approve and reject get distinct target handles',
+      targetHandles.size === 2, `target handles: ${[...targetHandles].join(', ')}`);
+
+    // Regression: a split-pair edge key carries a "#<transitionIndex>" suffix
+    // (e.g. "stage:under-review->gateway:post-review#3") to keep approve/reject
+    // distinct. pruneLayout's liveness check used to split on "->" and check the
+    // raw remainder against node ids — for a suffixed key that remainder still had
+    // the suffix attached, never matched a real node id, and silently deleted the
+    // waypoint immediately after setRouteWaypoint set it (the "snap back" bug).
+    const splitPairEdgeKey = sharedPairEdges[0].key;
+    const withWaypoint = setRouteWaypoint(serviceBlueprint, splitPairEdgeKey, { x: 111, y: 222 });
+    check('same-pair fan-out: a manual waypoint on a suffixed edge key survives pruneLayout',
+      withWaypoint.layout?.routes?.[splitPairEdgeKey]?.x === 111
+      && withWaypoint.layout?.routes?.[splitPairEdgeKey]?.y === 222,
+      `stored: ${JSON.stringify(withWaypoint.layout?.routes)}`);
+  }
+
   // Money modeller: calculations block, recalculate self-loop, quote fan-out.
   // The self-loop cycles through a Split gateway, so ranks are only asserted
   // to be finite (matching the original canvas behaviour).
@@ -289,6 +418,31 @@ export function run(fixtures: LayoutTestFixtures): number {
         return stored && stored.x === Math.round(derived.placements.get(placement.id)!.x)
           && stored.y === Math.round(derived.placements.get(placement.id)!.y);
       }));
+  }
+
+  // Route waypoints: a manually-dragged bend point round-trips independently of node
+  // positions, clears via setRouteWaypoint(null), and — since a stored bend point is only
+  // meaningful relative to the node positions it was drawn against — gets discarded by tidy
+  // (applyAutoArrange) same as node positions are.
+  {
+    const serviceBlueprint = hydrate(fixtures.paymentDemo);
+    const topology = computeTopology(serviceBlueprint, []);
+    const edgeKey = topology.edges[0]?.key;
+    check('route-waypoint: fixture has at least one edge to exercise', edgeKey !== undefined);
+
+    if (edgeKey) {
+      const withWaypoint = setRouteWaypoint(serviceBlueprint, edgeKey, { x: 123.4, y: 456.6 });
+      check('route-waypoint: setRouteWaypoint stores a rounded position',
+        withWaypoint.layout?.routes?.[edgeKey]?.x === 123 && withWaypoint.layout?.routes?.[edgeKey]?.y === 457);
+
+      const cleared = setRouteWaypoint(withWaypoint, edgeKey, null);
+      check('route-waypoint: setRouteWaypoint(edgeKey, null) clears the entry',
+        cleared.layout?.routes?.[edgeKey] === undefined);
+
+      const arranged = applyAutoArrange(withWaypoint, []);
+      check('route-waypoint: applyAutoArrange clears stored route waypoints along with node positions',
+        arranged.layout?.routes === undefined);
+    }
   }
 
   // Empty serviceBlueprint: never throws, produces an empty single-lane-width canvas.

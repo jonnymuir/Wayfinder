@@ -1,6 +1,12 @@
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
+import { useRef, useState } from 'react';
+import { BaseEdge, EdgeLabelRenderer, Position, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useGraphCallbacks } from '../graph-callbacks.js';
 import type { RouteFlowEdge, TransitionChip } from '../graph-model.js';
+import { buildCurvedRoutePath, buildCurvedWaypointPath } from './route-curve.js';
+
+// A chip click and a chip drag start the same way (pointerdown on the chip); this is how far
+// the pointer has to move before a press turns into a drag rather than a click.
+const DRAG_THRESHOLD_PX = 4;
 
 function chipClassName(chip: TransitionChip): string {
   return [
@@ -24,26 +30,108 @@ export function RouteEdge({
   data,
 }: EdgeProps<RouteFlowEdge>) {
   const callbacks = useGraphCallbacks();
+  const { screenToFlowPosition } = useReactFlow();
+  const [dragPreview, setDragPreview] = useState<{ x: number; y: number } | null>(null);
+  // Which chip's own pointer gesture is in flight, if any — a candidate as soon as
+  // pointerdown fires, promoted to an active drag once DRAG_THRESHOLD_PX is crossed.
+  const dragCandidateRef = useRef<{ chipIndex: number; startX: number; startY: number } | null>(null);
+  const draggingChipIndexRef = useRef<number | null>(null);
+  // Set once an actual drag (not just a click) completes, so the click event that
+  // still fires right after pointerup doesn't also select the transition.
+  const suppressNextClickRef = useRef(false);
   if (!data) {
     return null;
   }
-  const { edge, fromKey, toKey, simulationPath, chips, readOnly } = data;
+  const { edge, fromKey, toKey, simulationPath, chips, readOnly, manualWaypoint } = data;
+  const source = { x: sourceX, y: sourceY };
+  const target = { x: targetX, y: targetY };
 
-  const [path] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 6,
-  });
+  // When one route carries several transitions to the same target (e.g. approve/reject),
+  // they'd otherwise draw as one shared line with only the labels stacked apart. Bend each
+  // transition's own rail a little to either side of the shared line so the branches read as
+  // distinct paths; the offset axis is whichever axis is perpendicular to the dominant
+  // source→target direction, so a bend never runs parallel to the flow itself.
+  const verticalFlow = (sourcePosition === Position.Top || sourcePosition === Position.Bottom)
+    && (targetPosition === Position.Top || targetPosition === Position.Bottom);
+
+  const path = buildCurvedRoutePath(source, sourcePosition, target, targetPosition, 0, verticalFlow);
+
+  // An author-dragged bend point (or one being dragged right now) overrides the auto-computed
+  // path entirely: a smooth curve constrained to pass exactly through the dropped point, rather
+  // than the plain source→target curve.
+  const activeWaypoint = dragPreview ?? manualWaypoint ?? null;
+  const manualPath = activeWaypoint
+    ? buildCurvedWaypointPath(source, sourcePosition, activeWaypoint, target, targetPosition)
+    : null;
+  const effectivePath = manualPath ?? path;
+
+  const pathForChip = (chip: TransitionChip): string => {
+    if (manualPath || chips.length <= 1 || !chip.railOffset) {
+      return effectivePath;
+    }
+    return buildCurvedRoutePath(source, sourcePosition, target, targetPosition, chip.railOffset, verticalFlow);
+  };
+
+  // The chip label itself is the drag surface for the route's bend point — dragging it moves
+  // the label and bends the curve together (effectivePath already routes through dragPreview
+  // while a drag is active), so the label is always exactly on the line, never nudged off it
+  // separately. `nopan` on the chip button is load-bearing: React Flow's own pan-on-drag is
+  // wired natively on the pane element, which sits between the button and where React's
+  // synthetic events are dispatched from, so stopPropagation() in a React handler fires too
+  // late to stop it (the pane's native listener has already run by then) — `nopan` is xyflow's
+  // own supported mechanism for exactly this, checked before panning starts.
+  const chipPosition = (chip: TransitionChip): { x: number; y: number } =>
+    draggingChipIndexRef.current === chip.index && dragPreview ? dragPreview : { x: chip.x, y: chip.y };
+
+  const handleChipPointerDown = (event: React.PointerEvent<HTMLButtonElement>, chip: TransitionChip) => {
+    if (readOnly) {
+      return;
+    }
+    dragCandidateRef.current = { chipIndex: chip.index, startX: event.clientX, startY: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleChipPointerMove = (event: React.PointerEvent<HTMLButtonElement>, chip: TransitionChip) => {
+    const candidate = dragCandidateRef.current;
+    if (!candidate || candidate.chipIndex !== chip.index) {
+      return;
+    }
+    if (draggingChipIndexRef.current !== chip.index) {
+      const distance = Math.hypot(event.clientX - candidate.startX, event.clientY - candidate.startY);
+      if (distance < DRAG_THRESHOLD_PX) {
+        return;
+      }
+      draggingChipIndexRef.current = chip.index;
+    }
+    setDragPreview(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+  };
+  const handleChipPointerUp = (event: React.PointerEvent<HTMLButtonElement>, chip: TransitionChip) => {
+    const candidate = dragCandidateRef.current;
+    dragCandidateRef.current = null;
+    if (!candidate || candidate.chipIndex !== chip.index) {
+      return;
+    }
+    if (draggingChipIndexRef.current === chip.index) {
+      draggingChipIndexRef.current = null;
+      const flowPoint = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      setDragPreview(null);
+      callbacks.routeWaypointMoved(edge.key, flowPoint);
+      suppressNextClickRef.current = true;
+    }
+  };
+  const handleChipClick = (chip: TransitionChip) => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+    callbacks.selectTransition(chip.index);
+  };
 
   const basePathClass = [
     'edge-path',
     'route-rail',
     edge.backward ? 'loop-back' : '',
     simulationPath ? 'simulation-path' : '',
+    manualWaypoint ? 'manually-routed' : '',
   ].filter(Boolean).join(' ');
 
   const handleChipKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, chip: TransitionChip) => {
@@ -60,6 +148,11 @@ export function RouteEdge({
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
       callbacks.requestDeleteTransition(chip.index);
+      return;
+    }
+    if (event.key.toLowerCase() === 'r' && manualWaypoint) {
+      event.preventDefault();
+      callbacks.routeWaypointMoved(edge.key, null);
       return;
     }
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
@@ -90,7 +183,7 @@ export function RouteEdge({
     <>
       <BaseEdge
         id={id}
-        path={path}
+        path={effectivePath}
         markerEnd={markerEnd}
         className={basePathClass}
         data-wayfinder-route-path={edge.key}
@@ -101,7 +194,7 @@ export function RouteEdge({
       {chips.map(chip => (
         <path
           key={`transition-path-${chip.index}`}
-          d={path}
+          d={pathForChip(chip)}
           fill="none"
           className={[
             'edge-path',
@@ -118,29 +211,38 @@ export function RouteEdge({
         />
       ))}
       <EdgeLabelRenderer>
-        {chips.map(chip => (
-          <button
-            key={`chip-${chip.index}`}
-            type="button"
-            className={chipClassName(chip)}
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${chip.x}px, ${chip.y}px)`,
-              pointerEvents: 'all',
-            }}
-            aria-label={chip.ariaLabel}
-            data-wayfinder-transition={String(chip.index)}
-            data-wayfinder-transition-from={chip.fromKey}
-            data-wayfinder-transition-to={chip.toKey}
-            data-wayfinder-transition-simulation-path={String(chip.simulationPath)}
-            onClick={() => callbacks.selectTransition(chip.index)}
-            onDoubleClick={() => callbacks.selectTransition(chip.index, { openInspector: true })}
-            onKeyDown={event => handleChipKeyDown(event, chip)}
-            onContextMenu={event => handleChipContextMenu(event, chip)}
-          >
-            {chip.label}
-          </button>
-        ))}
+        {chips.map(chip => {
+          const position = chipPosition(chip);
+          return (
+            <button
+              key={`chip-${chip.index}`}
+              type="button"
+              className={`${chipClassName(chip)}${readOnly ? '' : ' nopan'}`}
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${position.x}px, ${position.y}px)`,
+                pointerEvents: 'all',
+                cursor: readOnly ? undefined : (draggingChipIndexRef.current === chip.index ? 'grabbing' : 'grab'),
+              }}
+              aria-label={manualWaypoint
+                ? `${chip.ariaLabel}. Drag to move this route's bend point, press R to reset to the automatic path.`
+                : `${chip.ariaLabel}. Drag to bend this route.`}
+              data-wayfinder-transition={String(chip.index)}
+              data-wayfinder-transition-from={chip.fromKey}
+              data-wayfinder-transition-to={chip.toKey}
+              data-wayfinder-transition-simulation-path={String(chip.simulationPath)}
+              onPointerDown={event => handleChipPointerDown(event, chip)}
+              onPointerMove={event => handleChipPointerMove(event, chip)}
+              onPointerUp={event => handleChipPointerUp(event, chip)}
+              onClick={() => handleChipClick(chip)}
+              onDoubleClick={() => callbacks.selectTransition(chip.index, { openInspector: true })}
+              onKeyDown={event => handleChipKeyDown(event, chip)}
+              onContextMenu={event => handleChipContextMenu(event, chip)}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
       </EdgeLabelRenderer>
     </>
   );

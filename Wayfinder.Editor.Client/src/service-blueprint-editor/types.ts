@@ -36,6 +36,8 @@ export interface AuthoredServiceBlueprint {
  */
 export interface ServiceBlueprintLayoutBlock {
   nodes?: Record<string, ServiceBlueprintNodePosition>;
+  /** Manual bend point per route edge, keyed by the graph edge's "fromId->toId" key. Routes without an entry fall back to the derived path. */
+  routes?: Record<string, ServiceBlueprintNodePosition>;
 }
 
 export interface ServiceBlueprintNodePosition {
@@ -436,11 +438,10 @@ export function hydrateServiceBlueprintDefinition<T extends AuthoredServiceBluep
   return normalisedServiceBlueprint as T;
 }
 
-function sanitiseLayoutBlock(value: unknown): ServiceBlueprintLayoutBlock | undefined {
+function sanitisePositionRecord(value: unknown): Record<string, ServiceBlueprintNodePosition> {
   const record = asRecord(value);
-  const nodes = asRecord(record.nodes);
   const entries: Record<string, ServiceBlueprintNodePosition> = {};
-  for (const [key, raw] of Object.entries(nodes)) {
+  for (const [key, raw] of Object.entries(record)) {
     const position = asRecord(raw);
     if (
       typeof position.x === 'number' && Number.isFinite(position.x)
@@ -449,7 +450,21 @@ function sanitiseLayoutBlock(value: unknown): ServiceBlueprintLayoutBlock | unde
       entries[key] = { x: position.x, y: position.y };
     }
   }
-  return Object.keys(entries).length > 0 ? { nodes: entries } : undefined;
+  return entries;
+}
+
+function sanitiseLayoutBlock(value: unknown): ServiceBlueprintLayoutBlock | undefined {
+  const record = asRecord(value);
+  const nodes = sanitisePositionRecord(record.nodes);
+  const routes = sanitisePositionRecord(record.routes);
+  const block: ServiceBlueprintLayoutBlock = {};
+  if (Object.keys(nodes).length > 0) {
+    block.nodes = nodes;
+  }
+  if (Object.keys(routes).length > 0) {
+    block.routes = routes;
+  }
+  return Object.keys(block).length > 0 ? block : undefined;
 }
 
 function firstString(...values: unknown[]): string | undefined {

@@ -29,7 +29,7 @@ import {
 import type { GraphBridge } from './graph/graph-bridge.js';
 import type { GraphCallbacks, GraphNodeMove, GraphProps } from './graph/graph-callbacks.js';
 import { gatewayNodeId, parseGraphNodeId, stageNodeId } from './graph/service-blueprint-graph-layout.js';
-import { applyAutoArrange, pruneLayout, setNodePositions } from './graph/service-blueprint-graph-layout-block.js';
+import { applyAutoArrange, pruneLayout, setNodePositions, setRouteWaypoint } from './graph/service-blueprint-graph-layout-block.js';
 
 type SelectionKind = 'stage' | 'transition' | 'gateway';
 
@@ -304,6 +304,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       },
       paneClicked: () => this._dismissContextMenu(false),
       nodesMoved: moves => this._handleNodesMoved(moves),
+      routeWaypointMoved: (edgeKey, position) => this._handleRouteWaypointMoved(edgeKey, position),
       connectRequested: connection => this._handleConnectRequested(connection),
       multiSelectionChanged: nodeIds => {
         // React Flow reports selection with a fresh array identity on every
@@ -458,6 +459,15 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     } else {
       this._announce(`${moves.length} nodes moved.`);
     }
+  }
+
+  private _handleRouteWaypointMoved(edgeKey: string, position: { x: number; y: number } | null) {
+    if (this.readOnly || !this.serviceBlueprint) {
+      return;
+    }
+    const next = setRouteWaypoint(this.serviceBlueprint, edgeKey, position);
+    this._emitServiceBlueprintUpdated(next, this._currentSelectionDetail());
+    this._announce(position ? 'Route bend point moved.' : 'Route reset to its automatic path.');
   }
 
   /**
@@ -2152,6 +2162,14 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     .edge-chip.merge-path.selected {
       border-color: #1d4ed8;
       color: #1d4ed8;
+    }
+
+
+    /* A route with an author-dragged bend point reads as dotted so it's visually distinct from
+       one still on the derived auto-routed path. */
+    .edge-path.route-rail.manually-routed {
+      stroke-dasharray: 1 5;
+      stroke-linecap: round;
     }
 
     .stage-node-shell {

@@ -39,6 +39,10 @@ export const NODE_HEIGHT = 128;
 export const ROW_BAND_PITCH = 184;
 export const TOP_PADDING = 64;
 export const SIDE_PADDING = 56;
+// Breathing room below the lowest node in a lane before the lane band's own
+// bottom edge — without it, the last row's cards sit flush against the lane
+// chrome (contentBottom == the lowest node's own bottom edge, no slack).
+export const BOTTOM_PADDING = 40;
 // Floor lane column width — lanes widen automatically when a row band needs
 // more horizontal space for sibling slots.
 export const LANE_WIDTH = 280;
@@ -459,33 +463,14 @@ export function computeTopology(
       });
   }
 
-  // Emitted edge list: forward adjacency edges plus flagged backward edges.
-  const edges: GraphTopologyEdge[] = [];
-  const pushEdge = (fromId: string, toId: string, backward: boolean) => {
-    const key = `${fromId}->${toId}`;
-    const fromNode = nodeById.get(fromId);
-    const toNode = nodeById.get(toId);
-    edges.push({
-      key,
-      fromId,
-      toId,
-      transitionIndices: [...(edgeTransitionIndices.get(key) ?? [])].sort((a, b) => a - b),
-      backward,
-      branch: isDecisionSplit(fromNode),
-      merge: toNode?.kind === 'gateway' && toNode.gateway.gatewayType === 'Join',
-    });
-  };
-  adjacency.forEach((targets, fromId) => {
-    [...targets].sort(byIntroductionOrder).forEach(toId => pushEdge(fromId, toId, false));
-  });
-  backwardEdgeKeys.forEach(key => {
-    const [fromId, toId] = key.split('->');
-    pushEdge(fromId, toId, true);
-  });
-
   // Per-authored-transition visual endpoints and hosting edge (the final hop
   // of the routed path stage → split gateway? → join gateway? → target).
-  const transitionBindings: TransitionBinding[] = transitions.map((transition, index) => {
+  // Computed before the edge list below so that list can tell, for each
+  // (fromId, toId) pair, how many distinct authored transitions actually
+  // terminate there — e.g. an approve/reject pair that both end at the same
+  // Join gateway — and give each of those its own edge/handle instead of
+  // collapsing them onto one shared line and handle pair.
+  const provisionalBindings: TransitionBinding[] = transitions.map((transition, index) => {
     const sourceStageId = stageNodeId(transition.fromStage);
     // See the matching guard in the adjacency-building loop above: a route
     // that already resolves its own target gateway needs no source-side
@@ -538,6 +523,77 @@ export function computeTopology(
       branch: isDecisionSplit(sourceGatewayNode),
       merge: targetGatewayNode?.kind === 'gateway' && targetGatewayNode.gateway.gatewayType === 'Join',
     };
+  });
+
+  // Bindings sharing an identical final-hop pair (their provisional edgeKey)
+  // each get their own suffixed key below, instead of all pointing at one
+  // shared edge — this is what lets the fan-out handle assignment in
+  // graph-model.ts give approve/reject (etc.) their own exit/entry points
+  // rather than a single shared anchor both curves have to converge on.
+  const bindingsByPairKey = new Map<string, TransitionBinding[]>();
+  provisionalBindings.forEach(binding => {
+    if (!binding.edgeKey) {
+      return;
+    }
+    const siblings = bindingsByPairKey.get(binding.edgeKey) ?? [];
+    siblings.push(binding);
+    bindingsByPairKey.set(binding.edgeKey, siblings);
+  });
+
+  const transitionBindings: TransitionBinding[] = provisionalBindings.map(binding => {
+    if (!binding.edgeKey) {
+      return binding;
+    }
+    const siblings = bindingsByPairKey.get(binding.edgeKey)!;
+    return siblings.length > 1 ? { ...binding, edgeKey: `${binding.edgeKey}#${binding.index}` } : binding;
+  });
+
+  // Emitted edge list: forward adjacency edges plus flagged backward edges.
+  // A pair with more than one binding sharing it (per bindingsByPairKey
+  // above) is split into one GraphTopologyEdge per binding, keyed to match
+  // that binding's own (now-suffixed) edgeKey; every other pair — the
+  // overwhelming majority, including purely structural hops no binding
+  // terminates at — stays exactly as it was, one edge for the whole pair.
+  const edges: GraphTopologyEdge[] = [];
+  const pushEdge = (fromId: string, toId: string, backward: boolean) => {
+    const key = `${fromId}->${toId}`;
+    const fromNode = nodeById.get(fromId);
+    const toNode = nodeById.get(toId);
+    const branch = isDecisionSplit(fromNode);
+    const merge = toNode?.kind === 'gateway' && toNode.gateway.gatewayType === 'Join';
+    const siblings = bindingsByPairKey.get(key);
+
+    if (siblings && siblings.length > 1) {
+      siblings.forEach(binding => {
+        edges.push({
+          key: `${key}#${binding.index}`,
+          fromId,
+          toId,
+          transitionIndices: [binding.index],
+          backward,
+          branch,
+          merge,
+        });
+      });
+      return;
+    }
+
+    edges.push({
+      key,
+      fromId,
+      toId,
+      transitionIndices: [...(edgeTransitionIndices.get(key) ?? [])].sort((a, b) => a - b),
+      backward,
+      branch,
+      merge,
+    });
+  };
+  adjacency.forEach((targets, fromId) => {
+    [...targets].sort(byIntroductionOrder).forEach(toId => pushEdge(fromId, toId, false));
+  });
+  backwardEdgeKeys.forEach(key => {
+    const [fromId, toId] = key.split('->');
+    pushEdge(fromId, toId, true);
   });
 
   const queues: GraphQueueInfo[] = queueOrder.map(queueKey => {
@@ -629,15 +685,45 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
   });
 
   const placements = new Map<string, NodePlacement>();
+  // A node's direct predecessors are usually in its own lane, so centring
+  // under their average x is enough to keep a branch's column stable down to
+  // its merge. But a Join gateway's direct predecessor is often a stage in a
+  // *different* lane it temporarily routed through (e.g. a caseworker review
+  // stage) — averaging that foreign x-coordinate in, then clamping the result
+  // to the Join's own lane, pins it against that lane's edge instead of
+  // under the Split that actually originated the branch, which typically
+  // sits further back but in the Join's own lane. So: prefer predecessors
+  // already in this node's lane; only when none exist does this climb
+  // through the out-of-lane predecessor(s) for the nearest ancestor that is.
+  const sameLaneAncestorCenters = (nodeId: string, laneKey: string, visited: Set<string>): number[] => {
+    if (visited.has(nodeId)) {
+      return [];
+    }
+    visited.add(nodeId);
+    const sameLane: number[] = [];
+    const crossLane: string[] = [];
+    (incomingByNode.get(nodeId) ?? []).forEach(predecessorId => {
+      const placement = placements.get(predecessorId);
+      if (!placement) {
+        return;
+      }
+      if (placement.queueKey === laneKey) {
+        sameLane.push(placement.x + placement.width / 2);
+      } else {
+        crossLane.push(predecessorId);
+      }
+    });
+    if (sameLane.length > 0) {
+      return sameLane;
+    }
+    return crossLane.flatMap(predecessorId => sameLaneAncestorCenters(predecessorId, laneKey, visited));
+  };
   const preferredCenterX = (nodeId: string, lane: LaneGeometry): number => {
-    const predecessorCenters = (incomingByNode.get(nodeId) ?? [])
-      .map(id => placements.get(id))
-      .filter((placement): placement is NodePlacement => placement !== undefined)
-      .map(placement => placement.x + placement.width / 2);
-    if (predecessorCenters.length === 0) {
+    const centers = sameLaneAncestorCenters(nodeId, lane.key, new Set());
+    if (centers.length === 0) {
       return lane.x + lane.width / 2;
     }
-    return predecessorCenters.reduce((sum, x) => sum + x, 0) / predecessorCenters.length;
+    return centers.reduce((sum, x) => sum + x, 0) / centers.length;
   };
 
   [...allRanks].sort((left, right) => left - right).forEach(rowRank => {
@@ -695,7 +781,7 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
   const contentBottom = Math.max(
     TOP_PADDING + LANE_HEADER_OFFSET + NODE_HEIGHT,
     ...[...placements.values()].map(placement => placement.y + placement.height)
-  );
+  ) + BOTTOM_PADDING;
   const height = contentBottom + TOP_PADDING;
 
   return { placements, lanes, bounds: { width, height } };
@@ -741,7 +827,7 @@ export function mergeLayout(
 
   const contentBottom = Math.max(
     derived.bounds.height - TOP_PADDING,
-    ...[...placements.values()].map(placement => placement.y + placement.height)
+    ...[...placements.values()].map(placement => placement.y + placement.height + BOTTOM_PADDING)
   );
   const contentRight = Math.max(
     derived.bounds.width - SIDE_PADDING,

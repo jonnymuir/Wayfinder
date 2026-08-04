@@ -34,13 +34,33 @@ export function setNodePositions(
   for (const [nodeId, position] of Object.entries(positions)) {
     nodes[nodeId] = roundPosition(position);
   }
-  return pruneLayout({ ...serviceBlueprint, layout: { nodes } });
+  return pruneLayout({ ...serviceBlueprint, layout: { ...serviceBlueprint.layout, nodes } });
 }
 
-/** Drops layout entries whose stage or gateway no longer exists. */
+/**
+ * Returns a new serviceBlueprint with a route's manual bend point set (or,
+ * passing `position: null`, cleared back to the derived auto-routed path).
+ * Keyed by the same graph edge key ("fromId->toId") RouteEdge renders with.
+ */
+export function setRouteWaypoint(
+  serviceBlueprint: AuthoredServiceBlueprint,
+  edgeKey: string,
+  position: ServiceBlueprintNodePosition | null
+): AuthoredServiceBlueprint {
+  const routes: Record<string, ServiceBlueprintNodePosition> = { ...(serviceBlueprint.layout?.routes ?? {}) };
+  if (position) {
+    routes[edgeKey] = roundPosition(position);
+  } else {
+    delete routes[edgeKey];
+  }
+  return pruneLayout({ ...serviceBlueprint, layout: { ...serviceBlueprint.layout, routes } });
+}
+
+/** Drops layout entries whose stage/gateway, or route endpoint, no longer exists. */
 export function pruneLayout(serviceBlueprint: AuthoredServiceBlueprint): AuthoredServiceBlueprint {
-  const entries = Object.entries(serviceBlueprint.layout?.nodes ?? {});
-  if (entries.length === 0) {
+  const nodeEntries = Object.entries(serviceBlueprint.layout?.nodes ?? {});
+  const routeEntries = Object.entries(serviceBlueprint.layout?.routes ?? {});
+  if (nodeEntries.length === 0 && routeEntries.length === 0) {
     return serviceBlueprint.layout === undefined ? serviceBlueprint : { ...serviceBlueprint, layout: undefined };
   }
 
@@ -49,16 +69,37 @@ export function pruneLayout(serviceBlueprint: AuthoredServiceBlueprint): Authore
     ...serviceBlueprintGateways(serviceBlueprint).map(gateway => gatewayNodeId(gateway.key)),
   ]);
   const nodes: Record<string, ServiceBlueprintNodePosition> = {};
-  for (const [nodeId, position] of entries) {
+  for (const [nodeId, position] of nodeEntries) {
     if (liveIds.has(nodeId)) {
       nodes[nodeId] = position;
     }
   }
+  const routes: Record<string, ServiceBlueprintNodePosition> = {};
+  for (const [edgeKey, position] of routeEntries) {
+    const [fromId, toIdWithSuffix] = edgeKey.split('->');
+    // Edges shared by more than one transition to the same target (e.g. approve/reject) get a
+    // "#<transitionIndex>" suffix on toId to keep their keys distinct — strip it before checking
+    // node liveness, or every suffixed key fails this check and its waypoint gets dropped right
+    // after being set (toId would be checked as e.g. "gateway:foo#3", which never matches a real
+    // node id).
+    const toId = toIdWithSuffix?.split('#')[0];
+    if (liveIds.has(fromId) && liveIds.has(toId)) {
+      routes[edgeKey] = position;
+    }
+  }
 
-  if (Object.keys(nodes).length === 0) {
+  const hasNodes = Object.keys(nodes).length > 0;
+  const hasRoutes = Object.keys(routes).length > 0;
+  if (!hasNodes && !hasRoutes) {
     return { ...serviceBlueprint, layout: undefined };
   }
-  return { ...serviceBlueprint, layout: { nodes } };
+  return {
+    ...serviceBlueprint,
+    layout: {
+      ...(hasNodes ? { nodes } : {}),
+      ...(hasRoutes ? { routes } : {}),
+    },
+  };
 }
 
 /**

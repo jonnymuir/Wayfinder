@@ -148,12 +148,27 @@ function centreX(node: MeasuredNode): number {
   return node.left + node.width / 2;
 }
 
+// M/L each carry one point; C (cubic bezier) carries three — two control
+// points plus the endpoint — so only the last pair of a C command is a point
+// the route actually passes through. Coordinates may be separated by a
+// comma or whitespace (both valid SVG path syntax, and different builders
+// in this codebase use either), so numbers are extracted independent of the
+// separator rather than assuming one convention.
 function parseRoutePoints(path: string): Array<{ x: number; y: number }> {
-  const matches = path.match(/[ML]\s*(-?\d+(?:\.\d+)?)\s*(-?\d+(?:\.\d+)?)/g) ?? [];
-  return matches.map(segment => {
-    const [, x, y] = /[ML]\s*(-?\d+(?:\.\d+)?)\s*(-?\d+(?:\.\d+)?)/.exec(segment)!;
-    return { x: Number(x), y: Number(y) };
-  });
+  const points: Array<{ x: number; y: number }> = [];
+  const commandPattern = /([MLC])([^MLC]*)/g;
+  const numberPattern = /-?\d+(?:\.\d+)?/g;
+  let match: RegExpExecArray | null;
+  while ((match = commandPattern.exec(path)) !== null) {
+    const [, command, args] = match;
+    const numbers = (args.match(numberPattern) ?? []).map(Number);
+    if ((command === 'M' || command === 'L') && numbers.length >= 2) {
+      points.push({ x: numbers[0], y: numbers[1] });
+    } else if (command === 'C' && numbers.length >= 6) {
+      points.push({ x: numbers[4], y: numbers[5] });
+    }
+  }
+  return points;
 }
 
 function assertNoNodeOverlaps(graph: MeasuredGraph, label: string): void {
