@@ -76,7 +76,13 @@ export function pruneLayout(serviceBlueprint: AuthoredServiceBlueprint): Authore
   }
   const routes: Record<string, ServiceBlueprintNodePosition> = {};
   for (const [edgeKey, position] of routeEntries) {
-    const [fromId, toId] = edgeKey.split('->');
+    const [fromId, toIdWithSuffix] = edgeKey.split('->');
+    // Edges shared by more than one transition to the same target (e.g. approve/reject) get a
+    // "#<transitionIndex>" suffix on toId to keep their keys distinct — strip it before checking
+    // node liveness, or every suffixed key fails this check and its waypoint gets dropped right
+    // after being set (toId would be checked as e.g. "gateway:foo#3", which never matches a real
+    // node id).
+    const toId = toIdWithSuffix?.split('#')[0];
     if (liveIds.has(fromId) && liveIds.has(toId)) {
       routes[edgeKey] = position;
     }

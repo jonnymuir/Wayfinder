@@ -39,6 +39,10 @@ export const NODE_HEIGHT = 128;
 export const ROW_BAND_PITCH = 184;
 export const TOP_PADDING = 64;
 export const SIDE_PADDING = 56;
+// Breathing room below the lowest node in a lane before the lane band's own
+// bottom edge — without it, the last row's cards sit flush against the lane
+// chrome (contentBottom == the lowest node's own bottom edge, no slack).
+export const BOTTOM_PADDING = 40;
 // Floor lane column width — lanes widen automatically when a row band needs
 // more horizontal space for sibling slots.
 export const LANE_WIDTH = 280;
@@ -777,7 +781,7 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
   const contentBottom = Math.max(
     TOP_PADDING + LANE_HEADER_OFFSET + NODE_HEIGHT,
     ...[...placements.values()].map(placement => placement.y + placement.height)
-  );
+  ) + BOTTOM_PADDING;
   const height = contentBottom + TOP_PADDING;
 
   return { placements, lanes, bounds: { width, height } };
@@ -823,7 +827,7 @@ export function mergeLayout(
 
   const contentBottom = Math.max(
     derived.bounds.height - TOP_PADDING,
-    ...[...placements.values()].map(placement => placement.y + placement.height)
+    ...[...placements.values()].map(placement => placement.y + placement.height + BOTTOM_PADDING)
   );
   const contentRight = Math.max(
     derived.bounds.width - SIDE_PADDING,

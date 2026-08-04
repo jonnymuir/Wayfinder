@@ -1855,7 +1855,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     .hud-button,
     .context-menu button,
     .edge-chip,
-    .edge-waypoint-handle,
     .exit-tag,
     .transition-handle {
       font: inherit;
@@ -1899,7 +1898,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     .validation-link:focus-visible,
     .transition-link:focus-visible,
     .edge-chip:focus-visible,
-    .edge-waypoint-handle:focus-visible,
     .gateway-node:focus-visible,
     .stage-node:focus-visible,
     .row-trigger:focus-visible,
@@ -2166,14 +2164,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       color: #1d4ed8;
     }
 
-    /* The route line itself is the drag surface (route-drag-surface, an invisible wide hit
-       stroke rendered over the visible rail in route-edge.tsx) — hovering it previews the grab
-       affordance on the visible rail underneath, since the hit path itself is transparent. */
-    .edge-path.route-rail:has(~ .route-drag-surface:hover),
-    .edge-path.route-rail:has(~ .route-drag-surface:active) {
-      stroke: #1d4ed8;
-      opacity: 1;
-    }
 
     /* A route with an author-dragged bend point reads as dotted so it's visually distinct from
        one still on the derived auto-routed path. */

@@ -331,6 +331,19 @@ export function run(fixtures: LayoutTestFixtures): number {
       sourceHandles.size === 2, `source handles: ${[...sourceHandles].join(', ')}`);
     check('same-pair fan-out: approve and reject get distinct target handles',
       targetHandles.size === 2, `target handles: ${[...targetHandles].join(', ')}`);
+
+    // Regression: a split-pair edge key carries a "#<transitionIndex>" suffix
+    // (e.g. "stage:under-review->gateway:post-review#3") to keep approve/reject
+    // distinct. pruneLayout's liveness check used to split on "->" and check the
+    // raw remainder against node ids — for a suffixed key that remainder still had
+    // the suffix attached, never matched a real node id, and silently deleted the
+    // waypoint immediately after setRouteWaypoint set it (the "snap back" bug).
+    const splitPairEdgeKey = sharedPairEdges[0].key;
+    const withWaypoint = setRouteWaypoint(serviceBlueprint, splitPairEdgeKey, { x: 111, y: 222 });
+    check('same-pair fan-out: a manual waypoint on a suffixed edge key survives pruneLayout',
+      withWaypoint.layout?.routes?.[splitPairEdgeKey]?.x === 111
+      && withWaypoint.layout?.routes?.[splitPairEdgeKey]?.y === 222,
+      `stored: ${JSON.stringify(withWaypoint.layout?.routes)}`);
   }
 
   // Money modeller: calculations block, recalculate self-loop, quote fan-out.

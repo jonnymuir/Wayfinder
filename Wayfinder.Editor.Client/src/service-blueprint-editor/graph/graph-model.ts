@@ -376,6 +376,12 @@ export function buildGraphModel(props: GraphProps): GraphModel {
     chipsByEdgeKey.set(binding.edgeKey, [...(chipsByEdgeKey.get(binding.edgeKey) ?? []), chip]);
   });
 
+  // A route the author dragged a bend point onto is exempt from the seeding/decluttering below
+  // entirely: its chip renders exactly at that point (the same point RouteEdge bends the curve
+  // through), so the label is always exactly on the line rather than nudged off it to dodge an
+  // obstacle — the author placed it deliberately, so nothing here should second-guess that.
+  const manualWaypointByEdgeKey = props.serviceBlueprint?.layout?.routes ?? {};
+
   // Seed each chip at its edge's anchor (chips sharing an edge stack
   // vertically around it, as before), then let every chip in the graph
   // settle apart from every other chip and every node body — real fan-out
@@ -383,8 +389,15 @@ export function buildGraphModel(props: GraphProps): GraphModel {
   // another and on top of the gateway itself.
   const chipBoxes: ChipBox[] = [];
   chipsByEdgeKey.forEach((chips, edgeKey) => {
+    const manualWaypoint = manualWaypointByEdgeKey[edgeKey];
     const anchor = routingByEdgeKey.get(edgeKey)?.anchor ?? { x: 0, y: 0 };
     chips.forEach((chip, slot) => {
+      if (manualWaypoint) {
+        chip.x = manualWaypoint.x;
+        chip.y = manualWaypoint.y;
+        chip.railOffset = 0;
+        return;
+      }
       const offsetY = (slot - (chips.length - 1) / 2) * CHIP_STACK_PITCH;
       chip.railOffset = chips.length > 1 ? (slot - (chips.length - 1) / 2) * RAIL_OFFSET_PITCH : 0;
       chipBoxes.push({
