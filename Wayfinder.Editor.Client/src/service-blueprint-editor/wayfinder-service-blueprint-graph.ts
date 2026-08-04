@@ -2166,36 +2166,20 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       color: #1d4ed8;
     }
 
-    /* Drag handle for a route's manual bend point — deliberately subtle (a small dot rather
-       than a full chip) since one renders per route and the canvas already has a lot on it;
-       it brightens on hover/focus so it's still easy to find. A filled ring marks a route that
-       already has a manually-dragged bend point, so authors can see which routes were hand-tuned
-       and which are still on the auto-computed path. */
-    .edge-waypoint-handle {
-      width: 10px;
-      height: 10px;
-      padding: 0;
-      border: 2px solid #94a3b8;
-      border-radius: 50%;
-      background: #f8fafc;
-      cursor: grab;
-      opacity: 0.55;
-    }
-
-    .edge-waypoint-handle:hover,
-    .edge-waypoint-handle:focus-visible {
+    /* The route line itself is the drag surface (route-drag-surface, an invisible wide hit
+       stroke rendered over the visible rail in route-edge.tsx) — hovering it previews the grab
+       affordance on the visible rail underneath, since the hit path itself is transparent. */
+    .edge-path.route-rail:has(~ .route-drag-surface:hover),
+    .edge-path.route-rail:has(~ .route-drag-surface:active) {
+      stroke: #1d4ed8;
       opacity: 1;
-      border-color: #1d4ed8;
     }
 
-    .edge-waypoint-handle:active {
-      cursor: grabbing;
-    }
-
-    .edge-waypoint-handle.manual {
-      border-color: #1d4ed8;
-      background: #dbeafe;
-      opacity: 0.85;
+    /* A route with an author-dragged bend point reads as dotted so it's visually distinct from
+       one still on the derived auto-routed path. */
+    .edge-path.route-rail.manually-routed {
+      stroke-dasharray: 1 5;
+      stroke-linecap: round;
     }
 
     .stage-node-shell {

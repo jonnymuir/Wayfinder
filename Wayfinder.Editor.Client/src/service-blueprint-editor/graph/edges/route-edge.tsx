@@ -62,29 +62,20 @@ export function RouteEdge({
     return buildCurvedRoutePath(source, sourcePosition, target, targetPosition, chip.railOffset, verticalFlow);
   };
 
-  // Where the drag handle sits when there's no manual bend point yet: offset a little to the
-  // side of the raw midpoint so it doesn't sit exactly under the transition chip label(s), which
-  // anchor at (roughly) the same point.
-  const defaultHandlePosition = verticalFlow
-    ? { x: (sourceX + targetX) / 2 - 30, y: (sourceY + targetY) / 2 }
-    : { x: (sourceX + targetX) / 2, y: (sourceY + targetY) / 2 - 30 };
-  const handlePosition = activeWaypoint ?? defaultHandlePosition;
-
-  const handleWaypointPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const handleDragPointerDown = (event: React.PointerEvent<SVGPathElement>) => {
     if (readOnly) {
       return;
     }
-    event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     draggingRef.current = true;
   };
-  const handleWaypointPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const handleDragPointerMove = (event: React.PointerEvent<SVGPathElement>) => {
     if (!draggingRef.current) {
       return;
     }
     setDragPreview(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
   };
-  const handleWaypointPointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const handleDragPointerUp = (event: React.PointerEvent<SVGPathElement>) => {
     if (!draggingRef.current) {
       return;
     }
@@ -93,11 +84,10 @@ export function RouteEdge({
     setDragPreview(null);
     callbacks.routeWaypointMoved(edge.key, flowPoint);
   };
-  const handleWaypointDoubleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleDragDoubleClick = () => {
     if (readOnly || !manualWaypoint) {
       return;
     }
-    event.stopPropagation();
     callbacks.routeWaypointMoved(edge.key, null);
   };
 
@@ -106,6 +96,7 @@ export function RouteEdge({
     'route-rail',
     edge.backward ? 'loop-back' : '',
     simulationPath ? 'simulation-path' : '',
+    manualWaypoint ? 'manually-routed' : '',
   ].filter(Boolean).join(' ');
 
   const handleChipKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, chip: TransitionChip) => {
@@ -179,6 +170,31 @@ export function RouteEdge({
           data-wayfinder-transition-simulation-path={String(chip.simulationPath)}
         />
       ))}
+      {!readOnly && (
+        // Invisible, wide hit target over the whole rendered curve: the route itself is the
+        // drag surface, not a separate handle. `nopan` is load-bearing — React Flow's own
+        // pan-on-drag is wired natively on the pane element, which sits between this path and
+        // where React's synthetic events are dispatched from, so calling stopPropagation() in
+        // a React handler here fires too late to stop it (the pane's native listener has
+        // already run by then). `nopan` is xyflow's own supported mechanism for exactly this:
+        // it's checked before panning starts, not raced against via propagation.
+        <path
+          d={effectivePath}
+          className="nopan route-drag-surface"
+          fill="none"
+          stroke="transparent"
+          strokeWidth={16}
+          style={{ pointerEvents: 'stroke', cursor: dragPreview ? 'grabbing' : 'grab' }}
+          aria-label={manualWaypoint
+            ? 'Drag to move this route’s bend point. Double-click to reset to the automatic path.'
+            : 'Drag to bend this route.'}
+          data-wayfinder-route-drag-surface={edge.key}
+          onPointerDown={handleDragPointerDown}
+          onPointerMove={handleDragPointerMove}
+          onPointerUp={handleDragPointerUp}
+          onDoubleClick={handleDragDoubleClick}
+        />
+      )}
       <EdgeLabelRenderer>
         {chips.map(chip => (
           <button
@@ -203,25 +219,6 @@ export function RouteEdge({
             {chip.label}
           </button>
         ))}
-        {!readOnly && (
-          <button
-            type="button"
-            className={`edge-waypoint-handle${manualWaypoint ? ' manual' : ''}`}
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${handlePosition.x}px, ${handlePosition.y}px)`,
-              pointerEvents: 'all',
-            }}
-            aria-label={manualWaypoint
-              ? 'Drag to move this route’s bend point. Double-click to reset to the automatic path.'
-              : 'Drag to bend this route.'}
-            data-wayfinder-route-waypoint={edge.key}
-            onPointerDown={handleWaypointPointerDown}
-            onPointerMove={handleWaypointPointerMove}
-            onPointerUp={handleWaypointPointerUp}
-            onDoubleClick={handleWaypointDoubleClick}
-          />
-        )}
       </EdgeLabelRenderer>
     </>
   );
