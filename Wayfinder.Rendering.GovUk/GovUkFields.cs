@@ -137,11 +137,21 @@ public static class GovUkFields
         };
     }
 
-    private static (string Name, string Hint, string DescribedBy, string Required, string? Error) Common(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
+    /// <summary>
+    /// <paramref name="id"/> is the bare field key — what every <c>id</c>/<c>for</c>/
+    /// <c>aria-describedby</c> reference uses, so a rendered field stays addressable by plain
+    /// CSS ID selectors and doesn't need colon-escaping. <paramref name="name"/> is
+    /// <see cref="GovUk.FieldName"/>'s <c>field:{fieldKey}</c> form, used only for the
+    /// <c>name</c> attribute a host's own form-submission parsing keys off — the two used to be
+    /// conflated into one string here, which broke id-based selectors even though name-based
+    /// posting was already correct.
+    /// </summary>
+    private static (string Id, string Name, string Hint, string DescribedBy, string Required, string? Error) Common(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
+        var id = field.FieldKey;
         var name = GovUk.FieldName(field.FieldKey);
-        var hintId = $"{name}-hint";
-        var errorId = $"{name}-error";
+        var hintId = $"{id}-hint";
+        var errorId = $"{id}-error";
         var hasHint = !string.IsNullOrWhiteSpace(field.Hint);
         var hasError = errors.TryGetValue(field.FieldKey, out var error);
 
@@ -151,7 +161,7 @@ public static class GovUkFields
         var hint = hasHint ? $"""<div id="{hintId}" class="govuk-hint">{GovUk.Esc(field.Hint)}</div>""" : "";
         var required = field.Required ? "required" : "";
 
-        return (name, hint, describedBy, required, hasError ? error : null);
+        return (id, name, hint, describedBy, required, hasError ? error : null);
     }
 
     private static string ErrorMessage(string errorId, string? error) =>
@@ -159,22 +169,22 @@ public static class GovUkFields
 
     private static string RenderText(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         var errorClass = error is null ? "" : " govuk-input--error";
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <label class="govuk-label" for="{name}">{GovUk.Esc(field.Label)}</label>
+              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
-              {ErrorMessage($"{name}-error", error)}
-              <input class="govuk-input{errorClass}" id="{name}" name="{name}" type="text" value="{GovUk.Esc(value)}"{describedBy} {required}>
+              {ErrorMessage($"{id}-error", error)}
+              <input class="govuk-input{errorClass}" id="{id}" name="{name}" type="text" value="{GovUk.Esc(value)}"{describedBy} {required}>
             </div>
             """;
     }
 
     private static string RenderNumber(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         var errorClass = error is null ? "" : " govuk-input--error";
         var inputMode = field.FieldType == "decimal" ? "decimal" : "numeric";
@@ -185,17 +195,17 @@ public static class GovUkFields
             <div class="govuk-input__suffix" aria-hidden="true">{GovUk.Esc(field.Suffix)}</div>
             """;
         var wrapped = string.IsNullOrEmpty(prefix) && string.IsNullOrEmpty(suffix)
-            ? $"""<input class="govuk-input govuk-input--width-5{errorClass}" id="{name}" name="{name}" type="text" inputmode="{inputMode}" value="{GovUk.Esc(value)}"{describedBy} {required}>"""
+            ? $"""<input class="govuk-input govuk-input--width-5{errorClass}" id="{id}" name="{name}" type="text" inputmode="{inputMode}" value="{GovUk.Esc(value)}"{describedBy} {required}>"""
             : $"""
                 <div class="govuk-input__wrapper">
-                  {prefix}<input class="govuk-input govuk-input--width-5{errorClass}" id="{name}" name="{name}" type="text" inputmode="{inputMode}" value="{GovUk.Esc(value)}"{describedBy} {required}>{suffix}
+                  {prefix}<input class="govuk-input govuk-input--width-5{errorClass}" id="{id}" name="{name}" type="text" inputmode="{inputMode}" value="{GovUk.Esc(value)}"{describedBy} {required}>{suffix}
                 </div>
                 """;
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <label class="govuk-label" for="{name}">{GovUk.Esc(field.Label)}</label>
+              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
-              {ErrorMessage($"{name}-error", error)}
+              {ErrorMessage($"{id}-error", error)}
               {wrapped}
             </div>
             """;
@@ -203,46 +213,46 @@ public static class GovUkFields
 
     private static string RenderEmail(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         var errorClass = error is null ? "" : " govuk-input--error";
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <label class="govuk-label" for="{name}">{GovUk.Esc(field.Label)}</label>
+              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
-              {ErrorMessage($"{name}-error", error)}
-              <input class="govuk-input{errorClass}" id="{name}" name="{name}" type="email" autocomplete="email" spellcheck="false" value="{GovUk.Esc(value)}"{describedBy} {required}>
+              {ErrorMessage($"{id}-error", error)}
+              <input class="govuk-input{errorClass}" id="{id}" name="{name}" type="email" autocomplete="email" spellcheck="false" value="{GovUk.Esc(value)}"{describedBy} {required}>
             </div>
             """;
     }
 
     private static string RenderTextarea(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         var errorClass = error is null ? "" : " govuk-textarea--error";
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <label class="govuk-label" for="{name}">{GovUk.Esc(field.Label)}</label>
+              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
-              {ErrorMessage($"{name}-error", error)}
-              <textarea class="govuk-textarea{errorClass}" id="{name}" name="{name}" rows="5"{describedBy} {required}>{GovUk.Esc(value)}</textarea>
+              {ErrorMessage($"{id}-error", error)}
+              <textarea class="govuk-textarea{errorClass}" id="{id}" name="{name}" rows="5"{describedBy} {required}>{GovUk.Esc(value)}</textarea>
             </div>
             """;
     }
 
     private static string RenderBoolean(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
               {hint}
-              {ErrorMessage($"{name}-error", error)}
+              {ErrorMessage($"{id}-error", error)}
               <div class="govuk-checkboxes" data-module="govuk-checkboxes">
                 <div class="govuk-checkboxes__item">
-                  <input class="govuk-checkboxes__input" id="{name}" name="{name}" type="checkbox" value="true" {(value == "true" ? "checked" : "")}{describedBy} {required}>
-                  <label class="govuk-label govuk-checkboxes__label" for="{name}">{GovUk.Esc(field.Label)}</label>
+                  <input class="govuk-checkboxes__input" id="{id}" name="{name}" type="checkbox" value="true" {(value == "true" ? "checked" : "")}{describedBy} {required}>
+                  <label class="govuk-label govuk-checkboxes__label" for="{id}">{GovUk.Esc(field.Label)}</label>
                 </div>
               </div>
             </div>
@@ -251,32 +261,32 @@ public static class GovUkFields
 
     private static string RenderDate(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, _, required, error) = Common(field, errors);
+        var (id, name, hint, _, required, error) = Common(field, errors);
         var (day, month, year) = GovUk.SplitIsoDate(field.Value?.ToString());
         var errorClass = error is null ? "" : " govuk-input--error";
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <fieldset class="govuk-fieldset" role="group"{(string.IsNullOrWhiteSpace(field.Hint) ? "" : $" aria-describedby=\"{name}-hint\"")}>
+              <fieldset class="govuk-fieldset" role="group"{(string.IsNullOrWhiteSpace(field.Hint) ? "" : $" aria-describedby=\"{id}-hint\"")}>
                 <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">{GovUk.Esc(field.Label)}</legend>
                 {hint}
-                {ErrorMessage($"{name}-error", error)}
-                <div class="govuk-date-input" id="{name}">
+                {ErrorMessage($"{id}-error", error)}
+                <div class="govuk-date-input" id="{id}">
                   <div class="govuk-date-input__item">
                     <div class="govuk-form-group">
-                      <label class="govuk-label govuk-date-input__label" for="{name}-day">Day</label>
-                      <input class="govuk-input govuk-date-input__input govuk-input--width-2{errorClass}" id="{name}-day" name="{name}-day" type="text" inputmode="numeric" value="{GovUk.Esc(day)}" {required}>
+                      <label class="govuk-label govuk-date-input__label" for="{id}-day">Day</label>
+                      <input class="govuk-input govuk-date-input__input govuk-input--width-2{errorClass}" id="{id}-day" name="{name}-day" type="text" inputmode="numeric" value="{GovUk.Esc(day)}" {required}>
                     </div>
                   </div>
                   <div class="govuk-date-input__item">
                     <div class="govuk-form-group">
-                      <label class="govuk-label govuk-date-input__label" for="{name}-month">Month</label>
-                      <input class="govuk-input govuk-date-input__input govuk-input--width-2{errorClass}" id="{name}-month" name="{name}-month" type="text" inputmode="numeric" value="{GovUk.Esc(month)}" {required}>
+                      <label class="govuk-label govuk-date-input__label" for="{id}-month">Month</label>
+                      <input class="govuk-input govuk-date-input__input govuk-input--width-2{errorClass}" id="{id}-month" name="{name}-month" type="text" inputmode="numeric" value="{GovUk.Esc(month)}" {required}>
                     </div>
                   </div>
                   <div class="govuk-date-input__item">
                     <div class="govuk-form-group">
-                      <label class="govuk-label govuk-date-input__label" for="{name}-year">Year</label>
-                      <input class="govuk-input govuk-date-input__input govuk-input--width-4{errorClass}" id="{name}-year" name="{name}-year" type="text" inputmode="numeric" value="{GovUk.Esc(year)}" {required}>
+                      <label class="govuk-label govuk-date-input__label" for="{id}-year">Year</label>
+                      <input class="govuk-input govuk-date-input__input govuk-input--width-4{errorClass}" id="{id}-year" name="{name}-year" type="text" inputmode="numeric" value="{GovUk.Esc(year)}" {required}>
                     </div>
                   </div>
                 </div>
@@ -287,17 +297,17 @@ public static class GovUkFields
 
     private static string RenderSelect(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         var errorClass = error is null ? "" : " govuk-select--error";
         var options = (field.Options ?? Array.Empty<string>())
             .Select(o => $"""<option value="{GovUk.Esc(o)}"{(string.Equals(o, value, StringComparison.OrdinalIgnoreCase) ? " selected" : "")}>{GovUk.Esc(o)}</option>""");
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <label class="govuk-label" for="{name}">{GovUk.Esc(field.Label)}</label>
+              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
-              {ErrorMessage($"{name}-error", error)}
-              <select class="govuk-select{errorClass}" id="{name}" name="{name}"{describedBy} {required}>
+              {ErrorMessage($"{id}-error", error)}
+              <select class="govuk-select{errorClass}" id="{id}" name="{name}"{describedBy} {required}>
                 <option value="">-- Select --</option>
                 {string.Join("\n", options)}
               </select>
@@ -307,11 +317,11 @@ public static class GovUkFields
 
     private static string RenderRadio(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         var items = (field.Options ?? Array.Empty<string>()).Select(option =>
         {
-            var optionId = $"{name}-{OptionIdFragment(option)}";
+            var optionId = $"{id}-{OptionIdFragment(option)}";
             var isChecked = string.Equals(option, value, StringComparison.OrdinalIgnoreCase);
             return $"""
                 <div class="govuk-radios__item">
@@ -325,7 +335,7 @@ public static class GovUkFields
               <fieldset class="govuk-fieldset"{describedBy}>
                 <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">{GovUk.Esc(field.Label)}</legend>
                 {hint}
-                {ErrorMessage($"{name}-error", error)}
+                {ErrorMessage($"{id}-error", error)}
                 <div class="govuk-radios" data-module="govuk-radios">
                   {string.Join("\n", items)}
                 </div>
@@ -336,13 +346,13 @@ public static class GovUkFields
 
     private static string RenderCheckboxList(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, _, error) = Common(field, errors);
+        var (id, name, hint, describedBy, _, error) = Common(field, errors);
         var checkedValues = (field.Value?.ToString() ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var items = (field.Options ?? Array.Empty<string>()).Select(option =>
         {
-            var optionId = $"{name}-{OptionIdFragment(option)}";
+            var optionId = $"{id}-{OptionIdFragment(option)}";
             return $"""
                 <div class="govuk-checkboxes__item">
                   <input class="govuk-checkboxes__input" type="checkbox" id="{optionId}" name="{name}[]" value="{GovUk.Esc(option)}" {(checkedValues.Contains(option) ? "checked" : "")}>
@@ -355,7 +365,7 @@ public static class GovUkFields
               <fieldset class="govuk-fieldset"{describedBy}>
                 <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">{GovUk.Esc(field.Label)}</legend>
                 {hint}
-                {ErrorMessage($"{name}-error", error)}
+                {ErrorMessage($"{id}-error", error)}
                 <div class="govuk-checkboxes" data-module="govuk-checkboxes">
                   {string.Join("\n", items)}
                 </div>
@@ -372,7 +382,7 @@ public static class GovUkFields
     /// </summary>
     private static string RenderSlider(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var min = field.Min ?? 0;
         var max = field.Max ?? 100;
         var step = field.Step ?? 1;
@@ -381,11 +391,11 @@ public static class GovUkFields
         var suffix = field.Suffix ?? "";
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <label class="govuk-label" for="{name}">{GovUk.Esc(field.Label)}</label>
+              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
-              {ErrorMessage($"{name}-error", error)}
-              <input type="range" id="{name}" name="{name}" min="{min}" max="{max}" step="{step}" value="{GovUk.Esc(value)}"{describedBy} {required}>
-              <output for="{name}" class="govuk-body">{GovUk.Esc(prefix)}{GovUk.Esc(value)}{GovUk.Esc(suffix)}</output>
+              {ErrorMessage($"{id}-error", error)}
+              <input type="range" id="{id}" name="{name}" min="{min}" max="{max}" step="{step}" value="{GovUk.Esc(value)}"{describedBy} {required}>
+              <output for="{id}" class="govuk-body">{GovUk.Esc(prefix)}{GovUk.Esc(value)}{GovUk.Esc(suffix)}</output>
             </div>
             """;
     }
@@ -399,7 +409,7 @@ public static class GovUkFields
     /// </summary>
     private static string RenderFileUpload(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, required, error) = Common(field, errors);
+        var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var alreadyUploaded = !string.IsNullOrEmpty(field.Value?.ToString());
         var accept = field.AcceptedFileTypes is { Count: > 0 }
             ? $" accept=\"{GovUk.Esc(string.Join(",", field.AcceptedFileTypes))}\""
@@ -410,18 +420,18 @@ public static class GovUkFields
             : "";
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <label class="govuk-label" for="{name}">{GovUk.Esc(field.Label)}</label>
+              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
-              {ErrorMessage($"{name}-error", error)}
+              {ErrorMessage($"{id}-error", error)}
               {uploadedNotice}
-              <input class="govuk-file-upload{errorClass}" id="{name}" name="{name}" type="file"{accept}{describedBy} {(alreadyUploaded ? "" : required)}>
+              <input class="govuk-file-upload{errorClass}" id="{id}" name="{name}" type="file"{accept}{describedBy} {(alreadyUploaded ? "" : required)}>
             </div>
             """;
     }
 
     private static string RenderGuidanceChecklist(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
-        var (name, hint, describedBy, _, error) = Common(field, errors);
+        var (id, name, hint, describedBy, _, error) = Common(field, errors);
         var checkedValues = (field.Value?.ToString() ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -429,7 +439,7 @@ public static class GovUkFields
         var completed = items.Count(i => checkedValues.Contains(i.Key));
         var rows = items.Select(item =>
         {
-            var itemId = $"{name}-{item.Key}";
+            var itemId = $"{id}-{item.Key}";
             return $"""
                 <div class="govuk-checkboxes__item">
                   <input class="govuk-checkboxes__input" type="checkbox" id="{itemId}" name="{name}[]" value="{GovUk.Esc(item.Key)}" {(checkedValues.Contains(item.Key) ? "checked" : "")}>
@@ -444,7 +454,7 @@ public static class GovUkFields
               <fieldset class="govuk-fieldset"{describedBy}>
                 <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">{GovUk.Esc(field.Label)}</legend>
                 {hint}
-                {ErrorMessage($"{name}-error", error)}
+                {ErrorMessage($"{id}-error", error)}
                 <p class="govuk-body">{completed} of {items.Count} guidance articles completed</p>
                 <div class="govuk-checkboxes" data-module="govuk-checkboxes">
                   {string.Join("\n", rows)}

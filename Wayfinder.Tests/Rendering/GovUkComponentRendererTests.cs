@@ -257,4 +257,67 @@ public class GovUkComponentRendererTests
         Assert.Contains("<custom-panel>Application received</custom-panel>", html);
         Assert.DoesNotContain("govuk-panel", html);
     }
+
+    // Regression coverage: id and name used to share the same "field:{fieldKey}"-prefixed
+    // string. A colon in an id breaks any plain CSS ID selector targeting it (`#fieldKey`
+    // matches nothing; `field:fieldKey` parses as a `field` id plus a `:fieldKey` pseudo-class)
+    // — confirmed live via a Playwright journey hanging forever on a date field's day/month/year
+    // sub-inputs, none of which a bare `#dateField-day` selector could ever find. id must stay
+    // the bare field key; only name carries the field: prefix a host's own form-submission
+    // parsing keys off.
+
+    [Fact]
+    public void RenderField_Text_IdStaysBareFieldKey_NameCarriesFieldPrefix()
+    {
+        var html = GovUkFields.Render(new FieldRenderPayload
+        {
+            FieldKey = "full-name",
+            Label = "Full name",
+            FieldType = "text",
+            Required = true,
+        }, NoErrors);
+
+        Assert.Contains("id=\"full-name\"", html);
+        Assert.Contains("for=\"full-name\"", html);
+        Assert.Contains("name=\"field:full-name\"", html);
+        Assert.DoesNotContain("id=\"field:full-name\"", html);
+    }
+
+    [Fact]
+    public void RenderField_Date_SubInputIdsStayBare_NamesCarryFieldPrefix()
+    {
+        var html = GovUkFields.Render(new FieldRenderPayload
+        {
+            FieldKey = "date-of-birth",
+            Label = "Date of birth",
+            FieldType = "date",
+            Required = true,
+        }, NoErrors);
+
+        Assert.Contains("id=\"date-of-birth-day\"", html);
+        Assert.Contains("id=\"date-of-birth-month\"", html);
+        Assert.Contains("id=\"date-of-birth-year\"", html);
+        Assert.Contains("for=\"date-of-birth-day\"", html);
+        Assert.Contains("name=\"field:date-of-birth-day\"", html);
+        Assert.Contains("name=\"field:date-of-birth-month\"", html);
+        Assert.Contains("name=\"field:date-of-birth-year\"", html);
+        Assert.DoesNotContain("id=\"field:date-of-birth", html);
+    }
+
+    [Fact]
+    public void RenderField_Boolean_IdStaysBareFieldKey_NameCarriesFieldPrefix()
+    {
+        var html = GovUkFields.Render(new FieldRenderPayload
+        {
+            FieldKey = "age-confirmation",
+            Label = "I confirm I am aged 16 or over",
+            FieldType = "boolean",
+            Required = true,
+        }, NoErrors);
+
+        Assert.Contains("id=\"age-confirmation\"", html);
+        Assert.Contains("for=\"age-confirmation\"", html);
+        Assert.Contains("name=\"field:age-confirmation\"", html);
+        Assert.DoesNotContain("id=\"field:age-confirmation\"", html);
+    }
 }
