@@ -1,4 +1,5 @@
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Position, type EdgeProps } from '@xyflow/react';
+import { useRef, useState } from 'react';
+import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Position, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useGraphCallbacks } from '../graph-callbacks.js';
 import type { RouteFlowEdge, TransitionChip } from '../graph-model.js';
 
@@ -24,10 +25,13 @@ export function RouteEdge({
   data,
 }: EdgeProps<RouteFlowEdge>) {
   const callbacks = useGraphCallbacks();
+  const { screenToFlowPosition } = useReactFlow();
+  const [dragPreview, setDragPreview] = useState<{ x: number; y: number } | null>(null);
+  const draggingRef = useRef(false);
   if (!data) {
     return null;
   }
-  const { edge, fromKey, toKey, simulationPath, chips, readOnly } = data;
+  const { edge, fromKey, toKey, simulationPath, chips, readOnly, manualWaypoint } = data;
 
   const [path] = getSmoothStepPath({
     sourceX,
@@ -46,9 +50,20 @@ export function RouteEdge({
   // source→target direction, so a bend never runs parallel to the flow itself.
   const verticalFlow = (sourcePosition === Position.Top || sourcePosition === Position.Bottom)
     && (targetPosition === Position.Top || targetPosition === Position.Bottom);
+
+  // An author-dragged bend point (or one being dragged right now) overrides the auto-computed
+  // path entirely: two straight segments meeting exactly where it was dropped, rather than the
+  // orthogonal elbow, since there's no well-defined "position" (Top/Bottom/Left/Right) for an
+  // arbitrary interior point the way there is for a node-anchored handle.
+  const activeWaypoint = dragPreview ?? manualWaypoint ?? null;
+  const manualPath = activeWaypoint
+    ? `M ${sourceX},${sourceY} L ${activeWaypoint.x},${activeWaypoint.y} L ${targetX},${targetY}`
+    : null;
+  const effectivePath = manualPath ?? path;
+
   const pathForChip = (chip: TransitionChip): string => {
-    if (chips.length <= 1 || !chip.railOffset) {
-      return path;
+    if (manualPath || chips.length <= 1 || !chip.railOffset) {
+      return effectivePath;
     }
     const [chipPath] = getSmoothStepPath({
       sourceX,
@@ -63,6 +78,45 @@ export function RouteEdge({
         : { centerY: (sourceY + targetY) / 2 + chip.railOffset }),
     });
     return chipPath;
+  };
+
+  // Where the drag handle sits when there's no manual bend point yet: offset a little to the
+  // side of the raw midpoint so it doesn't sit exactly under the transition chip label(s), which
+  // anchor at (roughly) the same point.
+  const defaultHandlePosition = verticalFlow
+    ? { x: (sourceX + targetX) / 2 - 30, y: (sourceY + targetY) / 2 }
+    : { x: (sourceX + targetX) / 2, y: (sourceY + targetY) / 2 - 30 };
+  const handlePosition = activeWaypoint ?? defaultHandlePosition;
+
+  const handleWaypointPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (readOnly) {
+      return;
+    }
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    draggingRef.current = true;
+  };
+  const handleWaypointPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!draggingRef.current) {
+      return;
+    }
+    setDragPreview(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+  };
+  const handleWaypointPointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!draggingRef.current) {
+      return;
+    }
+    draggingRef.current = false;
+    const flowPoint = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    setDragPreview(null);
+    callbacks.routeWaypointMoved(edge.key, flowPoint);
+  };
+  const handleWaypointDoubleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (readOnly || !manualWaypoint) {
+      return;
+    }
+    event.stopPropagation();
+    callbacks.routeWaypointMoved(edge.key, null);
   };
 
   const basePathClass = [
@@ -116,7 +170,7 @@ export function RouteEdge({
     <>
       <BaseEdge
         id={id}
-        path={path}
+        path={effectivePath}
         markerEnd={markerEnd}
         className={basePathClass}
         data-wayfinder-route-path={edge.key}
@@ -167,6 +221,25 @@ export function RouteEdge({
             {chip.label}
           </button>
         ))}
+        {!readOnly && (
+          <button
+            type="button"
+            className={`edge-waypoint-handle${manualWaypoint ? ' manual' : ''}`}
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${handlePosition.x}px, ${handlePosition.y}px)`,
+              pointerEvents: 'all',
+            }}
+            aria-label={manualWaypoint
+              ? 'Drag to move this route’s bend point. Double-click to reset to the automatic path.'
+              : 'Drag to bend this route.'}
+            data-wayfinder-route-waypoint={edge.key}
+            onPointerDown={handleWaypointPointerDown}
+            onPointerMove={handleWaypointPointerMove}
+            onPointerUp={handleWaypointPointerUp}
+            onDoubleClick={handleWaypointDoubleClick}
+          />
+        )}
       </EdgeLabelRenderer>
     </>
   );

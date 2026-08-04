@@ -15,7 +15,7 @@ import {
   rowBandCenter,
   stageNodeId,
 } from './service-blueprint-graph-layout.js';
-import { applyAutoArrange, pruneLayout, setNodePositions } from './service-blueprint-graph-layout-block.js';
+import { applyAutoArrange, pruneLayout, setNodePositions, setRouteWaypoint } from './service-blueprint-graph-layout-block.js';
 
 type RawServiceBlueprint = Record<string, unknown>;
 
@@ -363,6 +363,31 @@ export function run(fixtures: LayoutTestFixtures): number {
         return stored && stored.x === Math.round(derived.placements.get(placement.id)!.x)
           && stored.y === Math.round(derived.placements.get(placement.id)!.y);
       }));
+  }
+
+  // Route waypoints: a manually-dragged bend point round-trips independently of node
+  // positions, clears via setRouteWaypoint(null), and — since a stored bend point is only
+  // meaningful relative to the node positions it was drawn against — gets discarded by tidy
+  // (applyAutoArrange) same as node positions are.
+  {
+    const serviceBlueprint = hydrate(fixtures.paymentDemo);
+    const topology = computeTopology(serviceBlueprint, []);
+    const edgeKey = topology.edges[0]?.key;
+    check('route-waypoint: fixture has at least one edge to exercise', edgeKey !== undefined);
+
+    if (edgeKey) {
+      const withWaypoint = setRouteWaypoint(serviceBlueprint, edgeKey, { x: 123.4, y: 456.6 });
+      check('route-waypoint: setRouteWaypoint stores a rounded position',
+        withWaypoint.layout?.routes?.[edgeKey]?.x === 123 && withWaypoint.layout?.routes?.[edgeKey]?.y === 457);
+
+      const cleared = setRouteWaypoint(withWaypoint, edgeKey, null);
+      check('route-waypoint: setRouteWaypoint(edgeKey, null) clears the entry',
+        cleared.layout?.routes?.[edgeKey] === undefined);
+
+      const arranged = applyAutoArrange(withWaypoint, []);
+      check('route-waypoint: applyAutoArrange clears stored route waypoints along with node positions',
+        arranged.layout?.routes === undefined);
+    }
   }
 
   // Empty serviceBlueprint: never throws, produces an empty single-lane-width canvas.

@@ -75,6 +75,8 @@ export type RouteEdgeData = {
   simulationPath: boolean;
   chips: TransitionChip[];
   readOnly: boolean;
+  /** Author-dragged bend point for this route, if any — see setRouteWaypoint. Undefined falls back to the auto-computed path. */
+  manualWaypoint: { x: number; y: number } | undefined;
   [key: string]: unknown;
 };
 
@@ -444,6 +446,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
         simulationPath,
         chips: chipsByEdgeKey.get(topologyEdge.key) ?? [],
         readOnly: props.readOnly,
+        manualWaypoint: props.serviceBlueprint?.layout?.routes?.[topologyEdge.key],
       },
     } satisfies RouteFlowEdge;
   });

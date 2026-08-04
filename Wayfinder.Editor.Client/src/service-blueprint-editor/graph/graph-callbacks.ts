@@ -53,6 +53,8 @@ export type GraphCallbacks = {
   paneClicked(): void;
   /** One drag gesture ended — commit all moved nodes as a single undoable update. */
   nodesMoved(moves: GraphNodeMove[]): void;
+  /** A route's bend point was dragged (or, passing `null`, reset to the auto-computed path). */
+  routeWaypointMoved(edgeKey: string, position: { x: number; y: number } | null): void;
   /** A connection handle was dragged from one node to another. */
   connectRequested(connection: { sourceId: string; targetId: string }): void;
   /** The shift-marquee multi-selection changed (prefixed node ids; empty = none). */

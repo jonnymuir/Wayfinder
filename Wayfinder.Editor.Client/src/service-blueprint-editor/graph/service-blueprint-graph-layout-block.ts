@@ -34,13 +34,33 @@ export function setNodePositions(
   for (const [nodeId, position] of Object.entries(positions)) {
     nodes[nodeId] = roundPosition(position);
   }
-  return pruneLayout({ ...serviceBlueprint, layout: { nodes } });
+  return pruneLayout({ ...serviceBlueprint, layout: { ...serviceBlueprint.layout, nodes } });
 }
 
-/** Drops layout entries whose stage or gateway no longer exists. */
+/**
+ * Returns a new serviceBlueprint with a route's manual bend point set (or,
+ * passing `position: null`, cleared back to the derived auto-routed path).
+ * Keyed by the same graph edge key ("fromId->toId") RouteEdge renders with.
+ */
+export function setRouteWaypoint(
+  serviceBlueprint: AuthoredServiceBlueprint,
+  edgeKey: string,
+  position: ServiceBlueprintNodePosition | null
+): AuthoredServiceBlueprint {
+  const routes: Record<string, ServiceBlueprintNodePosition> = { ...(serviceBlueprint.layout?.routes ?? {}) };
+  if (position) {
+    routes[edgeKey] = roundPosition(position);
+  } else {
+    delete routes[edgeKey];
+  }
+  return pruneLayout({ ...serviceBlueprint, layout: { ...serviceBlueprint.layout, routes } });
+}
+
+/** Drops layout entries whose stage/gateway, or route endpoint, no longer exists. */
 export function pruneLayout(serviceBlueprint: AuthoredServiceBlueprint): AuthoredServiceBlueprint {
-  const entries = Object.entries(serviceBlueprint.layout?.nodes ?? {});
-  if (entries.length === 0) {
+  const nodeEntries = Object.entries(serviceBlueprint.layout?.nodes ?? {});
+  const routeEntries = Object.entries(serviceBlueprint.layout?.routes ?? {});
+  if (nodeEntries.length === 0 && routeEntries.length === 0) {
     return serviceBlueprint.layout === undefined ? serviceBlueprint : { ...serviceBlueprint, layout: undefined };
   }
 
@@ -49,16 +69,31 @@ export function pruneLayout(serviceBlueprint: AuthoredServiceBlueprint): Authore
     ...serviceBlueprintGateways(serviceBlueprint).map(gateway => gatewayNodeId(gateway.key)),
   ]);
   const nodes: Record<string, ServiceBlueprintNodePosition> = {};
-  for (const [nodeId, position] of entries) {
+  for (const [nodeId, position] of nodeEntries) {
     if (liveIds.has(nodeId)) {
       nodes[nodeId] = position;
     }
   }
+  const routes: Record<string, ServiceBlueprintNodePosition> = {};
+  for (const [edgeKey, position] of routeEntries) {
+    const [fromId, toId] = edgeKey.split('->');
+    if (liveIds.has(fromId) && liveIds.has(toId)) {
+      routes[edgeKey] = position;
+    }
+  }
 
-  if (Object.keys(nodes).length === 0) {
+  const hasNodes = Object.keys(nodes).length > 0;
+  const hasRoutes = Object.keys(routes).length > 0;
+  if (!hasNodes && !hasRoutes) {
     return { ...serviceBlueprint, layout: undefined };
   }
-  return { ...serviceBlueprint, layout: { nodes } };
+  return {
+    ...serviceBlueprint,
+    layout: {
+      ...(hasNodes ? { nodes } : {}),
+      ...(hasRoutes ? { routes } : {}),
+    },
+  };
 }
 
 /**

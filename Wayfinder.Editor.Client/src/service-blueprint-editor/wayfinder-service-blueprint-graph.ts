@@ -29,7 +29,7 @@ import {
 import type { GraphBridge } from './graph/graph-bridge.js';
 import type { GraphCallbacks, GraphNodeMove, GraphProps } from './graph/graph-callbacks.js';
 import { gatewayNodeId, parseGraphNodeId, stageNodeId } from './graph/service-blueprint-graph-layout.js';
-import { applyAutoArrange, pruneLayout, setNodePositions } from './graph/service-blueprint-graph-layout-block.js';
+import { applyAutoArrange, pruneLayout, setNodePositions, setRouteWaypoint } from './graph/service-blueprint-graph-layout-block.js';
 
 type SelectionKind = 'stage' | 'transition' | 'gateway';
 
@@ -304,6 +304,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       },
       paneClicked: () => this._dismissContextMenu(false),
       nodesMoved: moves => this._handleNodesMoved(moves),
+      routeWaypointMoved: (edgeKey, position) => this._handleRouteWaypointMoved(edgeKey, position),
       connectRequested: connection => this._handleConnectRequested(connection),
       multiSelectionChanged: nodeIds => {
         // React Flow reports selection with a fresh array identity on every
@@ -458,6 +459,15 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     } else {
       this._announce(`${moves.length} nodes moved.`);
     }
+  }
+
+  private _handleRouteWaypointMoved(edgeKey: string, position: { x: number; y: number } | null) {
+    if (this.readOnly || !this.serviceBlueprint) {
+      return;
+    }
+    const next = setRouteWaypoint(this.serviceBlueprint, edgeKey, position);
+    this._emitServiceBlueprintUpdated(next, this._currentSelectionDetail());
+    this._announce(position ? 'Route bend point moved.' : 'Route reset to its automatic path.');
   }
 
   /**
@@ -1845,6 +1855,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     .hud-button,
     .context-menu button,
     .edge-chip,
+    .edge-waypoint-handle,
     .exit-tag,
     .transition-handle {
       font: inherit;
@@ -1888,6 +1899,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     .validation-link:focus-visible,
     .transition-link:focus-visible,
     .edge-chip:focus-visible,
+    .edge-waypoint-handle:focus-visible,
     .gateway-node:focus-visible,
     .stage-node:focus-visible,
     .row-trigger:focus-visible,
@@ -2152,6 +2164,38 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     .edge-chip.merge-path.selected {
       border-color: #1d4ed8;
       color: #1d4ed8;
+    }
+
+    /* Drag handle for a route's manual bend point — deliberately subtle (a small dot rather
+       than a full chip) since one renders per route and the canvas already has a lot on it;
+       it brightens on hover/focus so it's still easy to find. A filled ring marks a route that
+       already has a manually-dragged bend point, so authors can see which routes were hand-tuned
+       and which are still on the auto-computed path. */
+    .edge-waypoint-handle {
+      width: 10px;
+      height: 10px;
+      padding: 0;
+      border: 2px solid #94a3b8;
+      border-radius: 50%;
+      background: #f8fafc;
+      cursor: grab;
+      opacity: 0.55;
+    }
+
+    .edge-waypoint-handle:hover,
+    .edge-waypoint-handle:focus-visible {
+      opacity: 1;
+      border-color: #1d4ed8;
+    }
+
+    .edge-waypoint-handle:active {
+      cursor: grabbing;
+    }
+
+    .edge-waypoint-handle.manual {
+      border-color: #1d4ed8;
+      background: #dbeafe;
+      opacity: 0.85;
     }
 
     .stage-node-shell {
