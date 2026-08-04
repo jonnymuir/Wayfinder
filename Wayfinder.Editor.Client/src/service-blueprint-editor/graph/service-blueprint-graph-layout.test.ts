@@ -16,6 +16,8 @@ import {
   stageNodeId,
 } from './service-blueprint-graph-layout.js';
 import { applyAutoArrange, pruneLayout, setNodePositions, setRouteWaypoint } from './service-blueprint-graph-layout-block.js';
+import { buildGraphModel } from './graph-model.js';
+import type { GraphProps } from './graph-callbacks.js';
 
 type RawServiceBlueprint = Record<string, unknown>;
 
@@ -289,6 +291,46 @@ export function run(fixtures: LayoutTestFixtures): number {
     check('cross-lane-merge: Join gateway centres under its originating Split, not a foreign lane\'s stage',
       Math.abs(splitCenter - joinCenter) < 1,
       `split center ${splitCenter}, join center ${joinCenter}`);
+  }
+
+  // Same-pair fan-out: two transitions sharing one source and target (approve/reject
+  // both landing on post-review) must not collapse into one shared edge/handle pair —
+  // each gets its own topology edge and, in turn, its own exit/entry handle, so the two
+  // routes genuinely diverge instead of visually converging on one shared anchor point.
+  {
+    const serviceBlueprint = hydrate(CROSS_LANE_MERGE_SERVICE_BLUEPRINT);
+    const topology = computeTopology(serviceBlueprint, []);
+    const sharedPairEdges = topology.edges.filter(edge =>
+      edge.fromId === stageNodeId('under-review') && edge.toId === gatewayNodeId('post-review'));
+
+    check('same-pair fan-out: approve/reject each get their own topology edge',
+      sharedPairEdges.length === 2 && sharedPairEdges.every(edge => edge.transitionIndices.length === 1),
+      `edges: ${sharedPairEdges.map(edge => `${edge.key}[${edge.transitionIndices.join(',')}]`).join(', ')}`);
+
+    const props: GraphProps = {
+      serviceBlueprint,
+      availableQueues: [],
+      readOnly: false,
+      selectedStageKey: null,
+      selectedGatewayKey: null,
+      selectedTransitionIndex: null,
+      simulationCurrentStageKey: null,
+      simulationPathStageKeys: [],
+      simulationPathTransitionIndices: [],
+    };
+    const model = buildGraphModel(props);
+    const modelEdges = model.edges.filter(edge =>
+      edge.source === stageNodeId('under-review') && edge.target === gatewayNodeId('post-review'));
+
+    check('same-pair fan-out: each edge carries exactly one transition chip',
+      modelEdges.length === 2 && modelEdges.every(edge => edge.data?.chips.length === 1));
+
+    const sourceHandles = new Set(modelEdges.map(edge => edge.sourceHandle));
+    const targetHandles = new Set(modelEdges.map(edge => edge.targetHandle));
+    check('same-pair fan-out: approve and reject get distinct source handles',
+      sourceHandles.size === 2, `source handles: ${[...sourceHandles].join(', ')}`);
+    check('same-pair fan-out: approve and reject get distinct target handles',
+      targetHandles.size === 2, `target handles: ${[...targetHandles].join(', ')}`);
   }
 
   // Money modeller: calculations block, recalculate self-loop, quote fan-out.

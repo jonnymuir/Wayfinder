@@ -459,33 +459,14 @@ export function computeTopology(
       });
   }
 
-  // Emitted edge list: forward adjacency edges plus flagged backward edges.
-  const edges: GraphTopologyEdge[] = [];
-  const pushEdge = (fromId: string, toId: string, backward: boolean) => {
-    const key = `${fromId}->${toId}`;
-    const fromNode = nodeById.get(fromId);
-    const toNode = nodeById.get(toId);
-    edges.push({
-      key,
-      fromId,
-      toId,
-      transitionIndices: [...(edgeTransitionIndices.get(key) ?? [])].sort((a, b) => a - b),
-      backward,
-      branch: isDecisionSplit(fromNode),
-      merge: toNode?.kind === 'gateway' && toNode.gateway.gatewayType === 'Join',
-    });
-  };
-  adjacency.forEach((targets, fromId) => {
-    [...targets].sort(byIntroductionOrder).forEach(toId => pushEdge(fromId, toId, false));
-  });
-  backwardEdgeKeys.forEach(key => {
-    const [fromId, toId] = key.split('->');
-    pushEdge(fromId, toId, true);
-  });
-
   // Per-authored-transition visual endpoints and hosting edge (the final hop
   // of the routed path stage → split gateway? → join gateway? → target).
-  const transitionBindings: TransitionBinding[] = transitions.map((transition, index) => {
+  // Computed before the edge list below so that list can tell, for each
+  // (fromId, toId) pair, how many distinct authored transitions actually
+  // terminate there — e.g. an approve/reject pair that both end at the same
+  // Join gateway — and give each of those its own edge/handle instead of
+  // collapsing them onto one shared line and handle pair.
+  const provisionalBindings: TransitionBinding[] = transitions.map((transition, index) => {
     const sourceStageId = stageNodeId(transition.fromStage);
     // See the matching guard in the adjacency-building loop above: a route
     // that already resolves its own target gateway needs no source-side
@@ -538,6 +519,77 @@ export function computeTopology(
       branch: isDecisionSplit(sourceGatewayNode),
       merge: targetGatewayNode?.kind === 'gateway' && targetGatewayNode.gateway.gatewayType === 'Join',
     };
+  });
+
+  // Bindings sharing an identical final-hop pair (their provisional edgeKey)
+  // each get their own suffixed key below, instead of all pointing at one
+  // shared edge — this is what lets the fan-out handle assignment in
+  // graph-model.ts give approve/reject (etc.) their own exit/entry points
+  // rather than a single shared anchor both curves have to converge on.
+  const bindingsByPairKey = new Map<string, TransitionBinding[]>();
+  provisionalBindings.forEach(binding => {
+    if (!binding.edgeKey) {
+      return;
+    }
+    const siblings = bindingsByPairKey.get(binding.edgeKey) ?? [];
+    siblings.push(binding);
+    bindingsByPairKey.set(binding.edgeKey, siblings);
+  });
+
+  const transitionBindings: TransitionBinding[] = provisionalBindings.map(binding => {
+    if (!binding.edgeKey) {
+      return binding;
+    }
+    const siblings = bindingsByPairKey.get(binding.edgeKey)!;
+    return siblings.length > 1 ? { ...binding, edgeKey: `${binding.edgeKey}#${binding.index}` } : binding;
+  });
+
+  // Emitted edge list: forward adjacency edges plus flagged backward edges.
+  // A pair with more than one binding sharing it (per bindingsByPairKey
+  // above) is split into one GraphTopologyEdge per binding, keyed to match
+  // that binding's own (now-suffixed) edgeKey; every other pair — the
+  // overwhelming majority, including purely structural hops no binding
+  // terminates at — stays exactly as it was, one edge for the whole pair.
+  const edges: GraphTopologyEdge[] = [];
+  const pushEdge = (fromId: string, toId: string, backward: boolean) => {
+    const key = `${fromId}->${toId}`;
+    const fromNode = nodeById.get(fromId);
+    const toNode = nodeById.get(toId);
+    const branch = isDecisionSplit(fromNode);
+    const merge = toNode?.kind === 'gateway' && toNode.gateway.gatewayType === 'Join';
+    const siblings = bindingsByPairKey.get(key);
+
+    if (siblings && siblings.length > 1) {
+      siblings.forEach(binding => {
+        edges.push({
+          key: `${key}#${binding.index}`,
+          fromId,
+          toId,
+          transitionIndices: [binding.index],
+          backward,
+          branch,
+          merge,
+        });
+      });
+      return;
+    }
+
+    edges.push({
+      key,
+      fromId,
+      toId,
+      transitionIndices: [...(edgeTransitionIndices.get(key) ?? [])].sort((a, b) => a - b),
+      backward,
+      branch,
+      merge,
+    });
+  };
+  adjacency.forEach((targets, fromId) => {
+    [...targets].sort(byIntroductionOrder).forEach(toId => pushEdge(fromId, toId, false));
+  });
+  backwardEdgeKeys.forEach(key => {
+    const [fromId, toId] = key.split('->');
+    pushEdge(fromId, toId, true);
   });
 
   const queues: GraphQueueInfo[] = queueOrder.map(queueKey => {

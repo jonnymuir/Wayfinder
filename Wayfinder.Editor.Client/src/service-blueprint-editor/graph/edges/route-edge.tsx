@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Position, useReactFlow, type EdgeProps } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, Position, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useGraphCallbacks } from '../graph-callbacks.js';
 import type { RouteFlowEdge, TransitionChip } from '../graph-model.js';
+import { buildCurvedRoutePath, buildCurvedWaypointPath } from './route-curve.js';
 
 function chipClassName(chip: TransitionChip): string {
   return [
@@ -32,16 +33,8 @@ export function RouteEdge({
     return null;
   }
   const { edge, fromKey, toKey, simulationPath, chips, readOnly, manualWaypoint } = data;
-
-  const [path] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 6,
-  });
+  const source = { x: sourceX, y: sourceY };
+  const target = { x: targetX, y: targetY };
 
   // When one route carries several transitions to the same target (e.g. approve/reject),
   // they'd otherwise draw as one shared line with only the labels stacked apart. Bend each
@@ -51,13 +44,14 @@ export function RouteEdge({
   const verticalFlow = (sourcePosition === Position.Top || sourcePosition === Position.Bottom)
     && (targetPosition === Position.Top || targetPosition === Position.Bottom);
 
+  const path = buildCurvedRoutePath(source, sourcePosition, target, targetPosition, 0, verticalFlow);
+
   // An author-dragged bend point (or one being dragged right now) overrides the auto-computed
-  // path entirely: two straight segments meeting exactly where it was dropped, rather than the
-  // orthogonal elbow, since there's no well-defined "position" (Top/Bottom/Left/Right) for an
-  // arbitrary interior point the way there is for a node-anchored handle.
+  // path entirely: a smooth curve constrained to pass exactly through the dropped point, rather
+  // than the plain source→target curve.
   const activeWaypoint = dragPreview ?? manualWaypoint ?? null;
   const manualPath = activeWaypoint
-    ? `M ${sourceX},${sourceY} L ${activeWaypoint.x},${activeWaypoint.y} L ${targetX},${targetY}`
+    ? buildCurvedWaypointPath(source, sourcePosition, activeWaypoint, target, targetPosition)
     : null;
   const effectivePath = manualPath ?? path;
 
@@ -65,19 +59,7 @@ export function RouteEdge({
     if (manualPath || chips.length <= 1 || !chip.railOffset) {
       return effectivePath;
     }
-    const [chipPath] = getSmoothStepPath({
-      sourceX,
-      sourceY,
-      sourcePosition,
-      targetX,
-      targetY,
-      targetPosition,
-      borderRadius: 6,
-      ...(verticalFlow
-        ? { centerX: (sourceX + targetX) / 2 + chip.railOffset }
-        : { centerY: (sourceY + targetY) / 2 + chip.railOffset }),
-    });
-    return chipPath;
+    return buildCurvedRoutePath(source, sourcePosition, target, targetPosition, chip.railOffset, verticalFlow);
   };
 
   // Where the drag handle sits when there's no manual bend point yet: offset a little to the
