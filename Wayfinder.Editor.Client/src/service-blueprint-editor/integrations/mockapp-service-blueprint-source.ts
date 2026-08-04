@@ -29,7 +29,7 @@ type ProblemDetailsPayload = {
 };
 
 // The shape Wayfinder.Engine.Services.ServiceBlueprintSaveOutcome serializes to — returned
-// by both /mockapp/service-blueprints/{key} and /prism/service-blueprint-authoring/blueprints/{key} on a version
+// by both /mockapp/service-blueprints/{key} and /wayfinder/service-blueprint-authoring/blueprints/{key} on a version
 // conflict (409). Not a ProblemDetails payload, so it's parsed separately.
 type ServiceBlueprintSaveOutcomePayload = {
   status?: unknown;
@@ -206,7 +206,7 @@ export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSo
    */
   async checkVersion(blueprintKey: string): Promise<number | null> {
     const response = await fetch(
-      `${this.base}/prism/service-blueprint-authoring/blueprints/${encodeURIComponent(blueprintKey)}/version`,
+      `${this.base}/wayfinder/service-blueprint-authoring/blueprints/${encodeURIComponent(blueprintKey)}/version`,
       { headers: { Accept: 'application/json' }, credentials: 'same-origin' }
     );
     if (!response.ok) {

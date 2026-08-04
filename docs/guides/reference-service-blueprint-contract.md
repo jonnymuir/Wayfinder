@@ -111,17 +111,32 @@ A gateway (`ServiceBlueprintGatewayDefinition`) is a routing node — not a rend
   `requiredIncomingQueues`).
 - A route's `trigger` on a gateway is typically `"continue"` — gateways aren't
   usually waiting on user choice the way a stage's routes are, they're evaluating
-  where an already-triggered action goes next.
+  where an already-triggered action goes next. The exception is a Join gateway
+  with more than one outgoing route (see below), where the trigger is exactly
+  what a real decision — not "continue" — needs to be.
 
-**Convention for a business-side/reviewer action after a Split:** route it
-*only* into the Join, never fan it out to its own separate terminal stage as
-well. `simulate_service_blueprint`'s trace follows a single cursor — if the business
-side's action routes to both a Join and its own terminal, the trace can only
-follow one of those branches, silently leaving the other's actions
-unexercised and unverified. `payment-demo` and `information-request` both
-follow this convention already (the reviewer's action routes straight into
-the Join, with no separate reviewer-side terminal) — match it rather than
-adding a parallel terminal for the business queue.
+**A Join with one outgoing route always fires it, once every
+`requiredIncomingQueues` has a cursor parked at the gateway** — it doesn't
+matter which specific route produced that cursor, only that one arrived from
+each required queue. That's what makes "joined by both predecessors, whichever
+path either one took" the default: `payment-demo` and `information-request`
+both route a reviewer's action straight into a Join with no separate
+reviewer-side terminal, which is also what keeps `simulate_service_blueprint`'s
+single-cursor trace exercising the whole branch.
+
+**A Join can also have more than one outgoing route, to route out based on
+which action fed it.** `ProcessManagerEngine` records the trigger of whichever
+route delivered the cursor that completed the join, and on release matches it
+against the Join's own outgoing routes' triggers — exactly one must match, or
+the instance hard-fails with `GATEWAY_AMBIGUOUS_JOIN_ROUTE`. This is how a
+single decision point like an approve/reject caseworker action can converge
+citizen and caseworker cursors *and* land on the right confirmation stage,
+without needing one Join gateway per outcome: give the Join's outgoing routes
+distinct triggers (e.g. `approve` → `approved`, `reject` → `rejected`) that
+match the triggers used on the routes feeding into it. `ValidateGatewayRouting()`
+enforces that every route on a multi-route Join has a non-empty, unique
+trigger (`JOIN_ROUTE_TRIGGER_EMPTY` / `JOIN_ROUTE_TRIGGER_DUPLICATE`) — see
+`juggling-licence`'s `post-review` gateway for a worked example.
 
 **A "request more info" (or any) loop must have a real way out.** A gateway
 can have every route resolve to a real target and still be a dead end in

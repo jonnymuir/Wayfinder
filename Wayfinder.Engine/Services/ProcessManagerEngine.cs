@@ -1768,7 +1768,8 @@ public class ProcessManagerEngine : IProcessManager
                 CursorId = Guid.NewGuid().ToString(),
                 QueueKey = targetQueueKey ?? string.Empty,
                 CurrentNodeKey = t.ToState,
-                IsAtGateway = targetGateway != null
+                IsAtGateway = targetGateway != null,
+                ArrivedViaAction = targetGateway != null ? t.Action : null
             };
         }).ToList();
 
@@ -1870,8 +1871,8 @@ public class ProcessManagerEngine : IProcessManager
 
         // Move the arriving cursor to the join gateway.
         var cursorsAfterArrival = instance.Cursors.Count > 0
-            ? MoveCursor(instance.Cursors, arrivingCursor?.CursorId, gatewayKey, isAtGateway: true)
-            : [new RequestCursor { CursorId = arrivingCursorId, QueueKey = arrivingQueueKey, CurrentNodeKey = gatewayKey, IsAtGateway = true }];
+            ? MoveCursor(instance.Cursors, arrivingCursor?.CursorId, gatewayKey, isAtGateway: true, arrivedViaAction: arrivingTransition.Action)
+            : [new RequestCursor { CursorId = arrivingCursorId, QueueKey = arrivingQueueKey, CurrentNodeKey = gatewayKey, IsAtGateway = true, ArrivedViaAction = arrivingTransition.Action }];
 
         var updatedArrivals = new Dictionary<string, IReadOnlyList<string>>(instance.JoinArrivals)
         {
@@ -2013,11 +2014,45 @@ public class ProcessManagerEngine : IProcessManager
                 "GATEWAY_NO_OUTGOING");
         }
 
+        // A join with a single outgoing route always fires it — unchanged from before this
+        // gateway could branch at all. A join with more than one outgoing route picks the one
+        // whose trigger matches the action that produced one of the cursors now parked here (e.g.
+        // "approve" vs "reject") instead of firing every route, which is what let two cursors —
+        // one per branch — leak out of what's supposed to be a single decision point.
+        var selectedOutgoing = outgoing;
+        if (outgoing.Count > 1)
+        {
+            var arrivedActions = instance.Cursors
+                .Where(cursor => cursor.IsAtGateway
+                    && string.Equals(cursor.CurrentNodeKey, gatewayKey, StringComparison.Ordinal)
+                    && arrivedCursorIds.Contains(cursor.CursorId)
+                    && !string.IsNullOrWhiteSpace(cursor.ArrivedViaAction))
+                .Select(cursor => cursor.ArrivedViaAction!)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            var matches = outgoing
+                .Where(transition => arrivedActions.Contains(transition.Action, StringComparer.Ordinal))
+                .ToList();
+
+            if (matches.Count != 1)
+            {
+                return ErrorEnvelope(
+                    $"Join gateway '{gatewayKey}' has {outgoing.Count} outgoing routes but could not " +
+                    $"determine which to take (arrived actions: [{string.Join(", ", arrivedActions)}], " +
+                    $"matched {matches.Count} route(s)). Exactly one outgoing route's trigger must match " +
+                    "exactly one arrived action.",
+                    "GATEWAY_AMBIGUOUS_JOIN_ROUTE");
+            }
+
+            selectedOutgoing = matches;
+        }
+
         var cursorsWithoutJoin = instance.Cursors
             .Where(cursor => !(cursor.IsAtGateway && string.Equals(cursor.CurrentNodeKey, gatewayKey, StringComparison.Ordinal)))
             .ToList();
 
-        var releaseCursors = outgoing.Select(transition =>
+        var releaseCursors = selectedOutgoing.Select(transition =>
         {
             var targetGateway = FindGateway(definition, transition.ToState);
             return new RequestCursor
@@ -2029,7 +2064,8 @@ public class ProcessManagerEngine : IProcessManager
                                joinGateway.QueueKey)
                            ?? string.Empty,
                 CurrentNodeKey = transition.ToState,
-                IsAtGateway = targetGateway != null
+                IsAtGateway = targetGateway != null,
+                ArrivedViaAction = targetGateway != null ? transition.Action : null
             };
         }).ToList();
 
@@ -2039,7 +2075,7 @@ public class ProcessManagerEngine : IProcessManager
 
         var releasedInstance = instance with
         {
-            CurrentStage = FirstActiveStageCursorKey(releasedCursors) ?? outgoing[0].ToState,
+            CurrentStage = FirstActiveStageCursorKey(releasedCursors) ?? selectedOutgoing[0].ToState,
             Cursors = releasedCursors,
             JoinArrivals = cleanedArrivals
         };
@@ -2052,14 +2088,15 @@ public class ProcessManagerEngine : IProcessManager
         IReadOnlyList<RequestCursor> cursors,
         string? cursorId,
         string newNodeKey,
-        bool isAtGateway)
+        bool isAtGateway,
+        string? arrivedViaAction = null)
     {
         if (cursorId == null)
             return cursors;
 
         return cursors
             .Select(c => c.CursorId == cursorId
-                ? c with { CurrentNodeKey = newNodeKey, IsAtGateway = isAtGateway }
+                ? c with { CurrentNodeKey = newNodeKey, IsAtGateway = isAtGateway, ArrivedViaAction = isAtGateway ? arrivedViaAction : null }
                 : c)
             .ToArray();
     }

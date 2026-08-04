@@ -181,6 +181,42 @@ public record ServiceBlueprint
                 routeIndex++;
             }
 
+            // A Join gateway with more than one outgoing route picks which one to release based on
+            // matching its trigger against the action that produced the cursor completing the join
+            // (ProcessManagerEngine.TryReleaseJoinIfReady) — so unlike a single-route Join (where the
+            // trigger is irrelevant, the one route always fires), a blank or repeated trigger here
+            // makes that match impossible or ambiguous and every real instance that reaches it will
+            // hard-fail at runtime with GATEWAY_AMBIGUOUS_JOIN_ROUTE.
+            if (string.Equals(gateway.GatewayType, "Join", StringComparison.OrdinalIgnoreCase)
+                && (gateway.Routes ?? []).Count > 1)
+            {
+                var seenTriggers = new HashSet<string>(StringComparer.Ordinal);
+                var joinRouteIndex = 0;
+                foreach (var route in gateway.Routes ?? [])
+                {
+                    if (string.IsNullOrWhiteSpace(route.Trigger))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "JOIN_ROUTE_TRIGGER_EMPTY",
+                            $"gateways[{gatewayIndex}].routes[{joinRouteIndex}]",
+                            $"Join gateway '{gateway.Key}' has {gateway.Routes!.Count} outgoing routes but " +
+                            $"route '{route.Id}' has no trigger. A multi-route Join needs a distinct trigger " +
+                            "on every route to know which one to take when it releases."));
+                    }
+                    else if (!seenTriggers.Add(route.Trigger))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "JOIN_ROUTE_TRIGGER_DUPLICATE",
+                            $"gateways[{gatewayIndex}].routes[{joinRouteIndex}]",
+                            $"Join gateway '{gateway.Key}' has more than one outgoing route with trigger " +
+                            $"'{route.Trigger}'. A multi-route Join needs a distinct trigger on every route " +
+                            "to know which one to take when it releases."));
+                    }
+
+                    joinRouteIndex++;
+                }
+            }
+
             gatewayIndex++;
         }
 
