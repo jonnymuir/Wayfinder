@@ -111,7 +111,10 @@ public sealed class GovUkComponentRenderer
             sb.Append("""<div class="govuk-error-summary" data-module="govuk-error-summary"><div role="alert"><h2 class="govuk-error-summary__title">There is a problem</h2><div class="govuk-error-summary__body"><ul class="govuk-list govuk-error-summary__list">""");
             foreach (var problem in problems)
             {
-                var href = string.IsNullOrWhiteSpace(problem.FieldKey) ? "" : $" href=\"#{GovUk.FieldName(problem.FieldKey)}\"";
+                // Targets the input's own id, which is the bare field key — GovUk.FieldName's
+                // "field:{fieldKey}" is the name= attribute's own convention (posted-form
+                // routing), never what's actually in a rendered id="" to jump focus to.
+                var href = string.IsNullOrWhiteSpace(problem.FieldKey) ? "" : $" href=\"#{GovUk.Esc(problem.FieldKey)}\"";
                 sb.Append($"<li><a{href}>{GovUk.Esc(problem.Message)}</a></li>");
             }
             sb.Append("</ul></div></div></div>");

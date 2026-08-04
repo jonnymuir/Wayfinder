@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Description>Default GOV.UK Design System rendering for Wayfinder's Component/FieldRenderPayload catalog — plain C#, no Razor/ASP.NET Core MVC dependency, so it works from a minimal-API host as well as an MVC one. Ships one function per component/field type, plus a small override registry for hosts that want to replace or extend individual types.</Description>
   </PropertyGroup>
 
