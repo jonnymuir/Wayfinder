@@ -168,8 +168,9 @@ public static class FieldValueValidator
 
         var fieldType = field.FieldType.ToLowerInvariant();
 
-        // Check for checkboxlist/checkboxes suffix
-        if ((fieldType == "checkboxlist" || fieldType == "checkboxes") &&
+        // Check for checkboxlist/checkboxes/guidance-checklist suffix — all three render as a
+        // multi-checkbox group posting under "{fieldKey}[]", never the bare field key.
+        if (IsMultiCheckboxFieldType(fieldType) &&
             submitted.TryGetValue($"{field.FieldKey}[]", out var suffixedValue))
         {
             return suffixedValue;
@@ -197,6 +198,14 @@ public static class FieldValueValidator
 
         return string.Empty;
     }
+
+    /// <summary>
+    /// True for every field type that renders as a group of same-name checkboxes and posts
+    /// under "{fieldKey}[]" rather than the bare field key — checkboxlist/checkboxes plus
+    /// guidance-checklist (a required-every-item variant of the same multi-checkbox rendering).
+    /// </summary>
+    private static bool IsMultiCheckboxFieldType(string lowercaseFieldType) =>
+        lowercaseFieldType is "checkboxlist" or "checkboxes" or "guidance-checklist";
 
     private static string? ValidateType(FieldRenderPayload field, string raw)
     {
@@ -265,13 +274,12 @@ public static class FieldValueValidator
         }
 
         var fieldType = field.FieldType.ToLowerInvariant();
-        if (fieldType != "select" && fieldType != "radio" && fieldType != "radios"
-            && fieldType != "checkboxlist" && fieldType != "checkboxes")
+        if (fieldType != "select" && fieldType != "radio" && fieldType != "radios" && !IsMultiCheckboxFieldType(fieldType))
         {
             return null;
         }
 
-        var submittedValues = (fieldType == "checkboxlist" || fieldType == "checkboxes")
+        var submittedValues = IsMultiCheckboxFieldType(fieldType)
             ? raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : new[] { raw };
 

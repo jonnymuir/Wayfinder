@@ -160,4 +160,48 @@ public class FieldValueValidatorTests
 
         Assert.True(result.IsValid);
     }
+
+    // Regression coverage: guidance-checklist renders as a same-name checkbox group posting
+    // under "{fieldKey}[]" — same as checkboxlist/checkboxes — but GetSubmittedValue's suffix
+    // lookup only recognised those two literal type strings, so a guidance-checklist's own
+    // submitted value was never found and its required-completeness check failed unconditionally,
+    // regardless of what the visitor actually checked. Confirmed live: a real "Before you apply"
+    // guidance page in Umbraco.Prism stuck at "0 of 4 completed" with every item visibly checked.
+    private static FieldRenderPayload GuidanceChecklistField(bool required = true) => new()
+    {
+        FieldKey = "guidance",
+        Label = "Guidance",
+        FieldType = "guidance-checklist",
+        Required = required,
+        Options = new[] { "transfer-rules", "international-transfers", "supporting-evidence", "professional-standards" },
+    };
+
+    [Fact]
+    public void Validate_GuidanceChecklist_AcceptsAllItemsAcknowledgedViaBracketSuffixKey()
+    {
+        var fields = new[] { GuidanceChecklistField() };
+        var submitted = new Dictionary<string, string>
+        {
+            ["guidance[]"] = "transfer-rules,international-transfers,supporting-evidence,professional-standards",
+        };
+
+        var result = FieldValueValidator.Validate(fields, submitted);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Validate_GuidanceChecklist_RejectsWhenNotEveryItemAcknowledged()
+    {
+        var fields = new[] { GuidanceChecklistField() };
+        var submitted = new Dictionary<string, string>
+        {
+            ["guidance[]"] = "transfer-rules,international-transfers",
+        };
+
+        var result = FieldValueValidator.Validate(fields, submitted);
+
+        Assert.False(result.IsValid);
+        Assert.True(result.Errors.ContainsKey("guidance"));
+    }
 }
