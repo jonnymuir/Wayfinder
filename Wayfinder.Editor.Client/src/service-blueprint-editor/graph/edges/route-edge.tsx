@@ -1,4 +1,4 @@
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Position, type EdgeProps } from '@xyflow/react';
 import { useGraphCallbacks } from '../graph-callbacks.js';
 import type { RouteFlowEdge, TransitionChip } from '../graph-model.js';
 
@@ -38,6 +38,32 @@ export function RouteEdge({
     targetPosition,
     borderRadius: 6,
   });
+
+  // When one route carries several transitions to the same target (e.g. approve/reject),
+  // they'd otherwise draw as one shared line with only the labels stacked apart. Bend each
+  // transition's own rail a little to either side of the shared line so the branches read as
+  // distinct paths; the offset axis is whichever axis is perpendicular to the dominant
+  // source→target direction, so a bend never runs parallel to the flow itself.
+  const verticalFlow = (sourcePosition === Position.Top || sourcePosition === Position.Bottom)
+    && (targetPosition === Position.Top || targetPosition === Position.Bottom);
+  const pathForChip = (chip: TransitionChip): string => {
+    if (chips.length <= 1 || !chip.railOffset) {
+      return path;
+    }
+    const [chipPath] = getSmoothStepPath({
+      sourceX,
+      sourceY,
+      sourcePosition,
+      targetX,
+      targetY,
+      targetPosition,
+      borderRadius: 6,
+      ...(verticalFlow
+        ? { centerX: (sourceX + targetX) / 2 + chip.railOffset }
+        : { centerY: (sourceY + targetY) / 2 + chip.railOffset }),
+    });
+    return chipPath;
+  };
 
   const basePathClass = [
     'edge-path',
@@ -101,7 +127,7 @@ export function RouteEdge({
       {chips.map(chip => (
         <path
           key={`transition-path-${chip.index}`}
-          d={path}
+          d={pathForChip(chip)}
           fill="none"
           className={[
             'edge-path',
