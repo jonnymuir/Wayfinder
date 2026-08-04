@@ -629,15 +629,45 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
   });
 
   const placements = new Map<string, NodePlacement>();
+  // A node's direct predecessors are usually in its own lane, so centring
+  // under their average x is enough to keep a branch's column stable down to
+  // its merge. But a Join gateway's direct predecessor is often a stage in a
+  // *different* lane it temporarily routed through (e.g. a caseworker review
+  // stage) — averaging that foreign x-coordinate in, then clamping the result
+  // to the Join's own lane, pins it against that lane's edge instead of
+  // under the Split that actually originated the branch, which typically
+  // sits further back but in the Join's own lane. So: prefer predecessors
+  // already in this node's lane; only when none exist does this climb
+  // through the out-of-lane predecessor(s) for the nearest ancestor that is.
+  const sameLaneAncestorCenters = (nodeId: string, laneKey: string, visited: Set<string>): number[] => {
+    if (visited.has(nodeId)) {
+      return [];
+    }
+    visited.add(nodeId);
+    const sameLane: number[] = [];
+    const crossLane: string[] = [];
+    (incomingByNode.get(nodeId) ?? []).forEach(predecessorId => {
+      const placement = placements.get(predecessorId);
+      if (!placement) {
+        return;
+      }
+      if (placement.queueKey === laneKey) {
+        sameLane.push(placement.x + placement.width / 2);
+      } else {
+        crossLane.push(predecessorId);
+      }
+    });
+    if (sameLane.length > 0) {
+      return sameLane;
+    }
+    return crossLane.flatMap(predecessorId => sameLaneAncestorCenters(predecessorId, laneKey, visited));
+  };
   const preferredCenterX = (nodeId: string, lane: LaneGeometry): number => {
-    const predecessorCenters = (incomingByNode.get(nodeId) ?? [])
-      .map(id => placements.get(id))
-      .filter((placement): placement is NodePlacement => placement !== undefined)
-      .map(placement => placement.x + placement.width / 2);
-    if (predecessorCenters.length === 0) {
+    const centers = sameLaneAncestorCenters(nodeId, lane.key, new Set());
+    if (centers.length === 0) {
       return lane.x + lane.width / 2;
     }
-    return predecessorCenters.reduce((sum, x) => sum + x, 0) / predecessorCenters.length;
+    return centers.reduce((sum, x) => sum + x, 0) / centers.length;
   };
 
   [...allRanks].sort((left, right) => left - right).forEach(rowRank => {

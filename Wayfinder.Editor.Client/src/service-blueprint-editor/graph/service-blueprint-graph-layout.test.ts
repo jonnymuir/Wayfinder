@@ -8,6 +8,7 @@ import {
   TOP_PADDING,
   computeTopology,
   computeServiceBlueprintGraphLayout,
+  gatewayNodeId,
   laneForPosition,
   mergeLayout,
   parseGraphNodeId,
@@ -67,6 +68,62 @@ const REVIEW_LOOP_SERVICE_BLUEPRINT: RawServiceBlueprint = {
       routes: [
         { id: 'decision-gw--approve--done', target: 'done', trigger: 'approve' },
         { id: 'decision-gw--reject--draft', target: 'draft', trigger: 'reject' },
+      ],
+    },
+  ],
+};
+
+// Mirrors the juggling-licence shape reported on the canvas: a citizen-lane
+// Split hands off to a caseworker-lane review stage, whose approve/reject
+// routes merge into a citizen-lane Join. The Join's only direct predecessor
+// (the caseworker stage) sits in a different lane, so it should climb back
+// through it to the Split — its nearest same-lane ancestor — rather than
+// being pulled toward, and clamped against the edge of, the caseworker lane.
+const CROSS_LANE_MERGE_SERVICE_BLUEPRINT: RawServiceBlueprint = {
+  definitionKey: 'cross-lane-merge',
+  displayName: 'Cross-lane Merge',
+  version: 1,
+  initialStage: 'start',
+  requestPolicy: 'single',
+  queues: [
+    { key: 'citizen', displayName: 'Applicant' },
+    { key: 'caseworker', displayName: 'Caseworker' },
+  ],
+  stages: [
+    {
+      stateKey: 'start',
+      displayName: 'Start',
+      queueKey: 'citizen',
+      routes: [{ id: 'start--submit--handoff', target: 'handoff', trigger: 'submit' }],
+    },
+    {
+      stateKey: 'under-review',
+      displayName: 'Under review',
+      queueKey: 'caseworker',
+      routes: [
+        { id: 'under-review--approve--post-review', target: 'post-review', trigger: 'approve' },
+        { id: 'under-review--reject--post-review', target: 'post-review', trigger: 'reject' },
+      ],
+    },
+    { stateKey: 'approved', displayName: 'Approved', queueKey: 'citizen', routes: [] },
+    { stateKey: 'rejected', displayName: 'Rejected', queueKey: 'citizen', routes: [] },
+  ],
+  gateways: [
+    {
+      key: 'handoff',
+      displayName: 'Hand off to caseworker',
+      gatewayType: 'Split',
+      queueKey: 'citizen',
+      routes: [{ id: 'handoff--continue--under-review', target: 'under-review', trigger: 'continue' }],
+    },
+    {
+      key: 'post-review',
+      displayName: 'Application under review',
+      gatewayType: 'Join',
+      queueKey: 'citizen',
+      routes: [
+        { id: 'post-review--approve--approved', target: 'approved', trigger: 'approve' },
+        { id: 'post-review--reject--rejected', target: 'rejected', trigger: 'reject' },
       ],
     },
   ],
@@ -215,6 +272,23 @@ export function run(fixtures: LayoutTestFixtures): number {
     check('review-loop: the approve route still flows forward to done',
       topology.edges.some(edge => !edge.backward
         && edge.fromId === 'gateway:decision-gw' && edge.toId === 'stage:done'));
+  }
+
+  // Cross-lane merge: a Join gateway's direct predecessor lives in a
+  // different lane than the Join itself — it should still centre under its
+  // originating Split, not get pulled toward and clamped against the foreign
+  // lane's edge.
+  {
+    const serviceBlueprint = hydrate(CROSS_LANE_MERGE_SERVICE_BLUEPRINT);
+    const { layout } = assertCommonInvariants('cross-lane-merge', serviceBlueprint, { strictRanks: true });
+
+    const split = layout.placements.get(gatewayNodeId('handoff'))!;
+    const join = layout.placements.get(gatewayNodeId('post-review'))!;
+    const splitCenter = split.x + split.width / 2;
+    const joinCenter = join.x + join.width / 2;
+    check('cross-lane-merge: Join gateway centres under its originating Split, not a foreign lane\'s stage',
+      Math.abs(splitCenter - joinCenter) < 1,
+      `split center ${splitCenter}, join center ${joinCenter}`);
   }
 
   // Money modeller: calculations block, recalculate self-loop, quote fan-out.
