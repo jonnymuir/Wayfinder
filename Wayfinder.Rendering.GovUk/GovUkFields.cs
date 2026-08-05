@@ -375,27 +375,38 @@ public static class GovUkFields
     }
 
     /// <summary>
-    /// A plain HTML5 range input — real GOV.UK Design System has no official "slider" component,
-    /// so this deliberately doesn't chase Wayfinder.Umbraco's bespoke <c>wayfinder-slider</c> CSS/JS
-    /// (custom, non-<c>govuk-frontend</c> styling this package doesn't ship). Functionally complete
-    /// (posts a value, respects Min/Max/Step), visually plainer until a host wants to style it.
+    /// Real GOV.UK Design System has no official "slider" component, so this is Wayfinder's own —
+    /// a live-updating <c>wayfinder-slider__*</c>-classed range input with a progressive-enhancement
+    /// hook (<c>data-wayfinder-slider-input</c>/<c>data-wayfinder-slider-value</c>) a host wires its
+    /// own JS to, same as govuk-frontend's own components need a host to load govuk-frontend's JS.
+    /// This is the gold-standard rendering — hosts don't need their own override for this type.
     /// </summary>
     private static string RenderSlider(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
         var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var min = field.Min ?? 0;
         var max = field.Max ?? 100;
-        var step = field.Step ?? 1;
-        var value = field.Value?.ToString() ?? min.ToString();
+        var value = string.IsNullOrEmpty(field.Value?.ToString()) ? min.ToString() : field.Value!.ToString()!;
         var prefix = field.Prefix ?? "";
         var suffix = field.Suffix ?? "";
+        var errorClass = error is null ? "" : " wayfinder-slider__input--error";
         return $"""
-            <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
+            <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}" data-wayfinder-slider>
               <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
               {ErrorMessage($"{id}-error", error)}
-              <input type="range" id="{id}" name="{name}" min="{min}" max="{max}" step="{step}" value="{GovUk.Esc(value)}"{describedBy} {required}>
-              <output for="{id}" class="govuk-body">{GovUk.Esc(prefix)}{GovUk.Esc(value)}{GovUk.Esc(suffix)}</output>
+              <div class="wayfinder-slider__row">
+                <input class="wayfinder-slider__input{errorClass}"
+                       type="range" id="{id}" name="{name}" value="{GovUk.Esc(value)}"
+                       data-label="{GovUk.Esc(field.Label)}" data-wayfinder-slider-input{describedBy} {required}
+                       min="{min}" max="{max}" step="{field.Step ?? 1}" />
+                <span class="wayfinder-slider__value" data-wayfinder-slider-value
+                      data-prefix="{GovUk.Esc(prefix)}" data-suffix="{GovUk.Esc(suffix)}" aria-hidden="true">{GovUk.Esc(prefix)}{GovUk.Esc(value)}{GovUk.Esc(suffix)}</span>
+              </div>
+              <div class="wayfinder-slider__bounds" aria-hidden="true">
+                <span>{GovUk.Esc(prefix)}{min}{GovUk.Esc(suffix)}</span>
+                <span>{GovUk.Esc(prefix)}{max}{GovUk.Esc(suffix)}</span>
+              </div>
             </div>
             """;
     }
