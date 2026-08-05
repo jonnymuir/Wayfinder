@@ -201,10 +201,10 @@ public static class GovUkComponents
     }
 
     /// <summary>
-    /// A real GOV.UK Design System has no official "stat card" component — this deliberately
-    /// avoids Wayfinder.Umbraco's bespoke <c>wayfinder-stat-*</c> CSS this package doesn't ship,
-    /// using a plain <c>govuk-heading-l</c>/<c>govuk-body</c> pairing per statistic instead
-    /// (the informal pattern several real GOV.UK services use for "big number" displays).
+    /// A real GOV.UK Design System has no official "stat card" component, so this is Wayfinder's
+    /// own — <c>wayfinder-stat-*</c>-classed cards a host styles with its own CSS, same as
+    /// govuk-frontend's own components need a host to load govuk-frontend's CSS. This is the
+    /// gold-standard rendering — hosts don't need their own override for this type.
     /// </summary>
     private static string RenderStatGroup(ComponentRenderPayload component)
     {
@@ -212,28 +212,30 @@ public static class GovUkComponents
         var heading = string.IsNullOrEmpty(component.Title) ? "" : $"""<h2 class="govuk-heading-m">{GovUk.Esc(component.Title)}</h2>""";
         var cards = stats.Select(stat =>
         {
-            var qualifier = string.IsNullOrEmpty(stat.Qualifier) ? "" : $"""<p class="govuk-body-s">{GovUk.Esc(stat.Qualifier)}</p>""";
+            var qualifier = string.IsNullOrEmpty(stat.Qualifier) ? "" : $"""<div class="wayfinder-stat-card__qualifier">{GovUk.Esc(stat.Qualifier)}</div>""";
             return $"""
-                <div class="govuk-grid-column-one-third" data-wayfinder-stat-field="{GovUk.Esc(stat.FieldKey)}">
-                  <p class="govuk-body-s govuk-!-margin-bottom-1">{GovUk.Esc(stat.Label)}</p>
-                  <p class="govuk-heading-l govuk-!-margin-bottom-1">{GovUk.Esc(string.IsNullOrEmpty(stat.Value) ? "—" : stat.Value)}</p>
+                <div class="wayfinder-stat-card{(stat.Emphasis ? " wayfinder-stat-card--emphasis" : "")}" data-wayfinder-stat="{GovUk.Esc(stat.Label)}" data-wayfinder-stat-field="{GovUk.Esc(stat.FieldKey)}">
+                  <div class="wayfinder-stat-card__label">{GovUk.Esc(stat.Label)}</div>
+                  <div class="wayfinder-stat-card__value">{(string.IsNullOrEmpty(stat.Value) ? "—" : GovUk.Esc(stat.Value))}</div>
                   {qualifier}
                 </div>
                 """;
         });
         return $"""
             {heading}
-            <div class="govuk-grid-row" role="group" aria-label="{GovUk.Esc(component.Title ?? "Key figures")}" aria-live="polite">
+            <div class="wayfinder-stat-group" data-wayfinder-stat-group role="group" aria-label="{GovUk.Esc(component.Title ?? "Key figures")}" aria-live="polite">
               {string.Join("\n", cards)}
             </div>
             """;
     }
 
     /// <summary>
-    /// A real GOV.UK <c>govuk-table</c> — the accessible-data-table representation, always
-    /// present. Deliberately doesn't attempt Wayfinder.Umbraco's bespoke bar-chart visualization
-    /// (bespoke <c>wayfinder-chart</c> CSS/JS this package doesn't ship); the table alone is a
-    /// real, correct GDS component, not a lookalike or a placeholder.
+    /// A real GOV.UK Design System has no official chart component, so this is Wayfinder's own —
+    /// a <c>wayfinder-chart</c>-classed stacked-bar visualization (progressive-enhancement hook
+    /// via <c>data-wayfinder-chart</c>/<c>data-wayfinder-chart-config</c> a host wires its own
+    /// JS to, same as govuk-frontend's own components need a host to load govuk-frontend's JS)
+    /// plus a genuinely accessible data table always present alongside it, never a substitute for
+    /// one. This is the gold-standard rendering — hosts don't need their own override for this type.
     /// </summary>
     private static string RenderChart(ComponentRenderPayload component)
     {
@@ -246,35 +248,66 @@ public static class GovUkComponents
         using var doc = JsonDocument.Parse(chartJson);
         var chart = doc.RootElement;
 
+        var palette = new[] { "#4f46e5", "#0d9488", "#b45309", "#6d28d9" };
         var bands = chart.TryGetProperty("bands", out var bandsElement)
-            ? bandsElement.EnumerateArray().Select(band => new
+            ? bandsElement.EnumerateArray().Select((band, index) => new
             {
                 Key = band.GetProperty("key").GetString() ?? "",
-                Label = band.TryGetProperty("label", out var l) ? l.GetString() ?? "" : "",
+                Label = band.GetProperty("label").GetString() ?? "",
+                Color = band.TryGetProperty("color", out var color) && color.ValueKind == JsonValueKind.String
+                    ? color.GetString()!
+                    : palette[index % palette.Length]
             }).ToArray()
             : [];
 
         var xKey = chart.TryGetProperty("x", out var xElement) ? xElement.GetString() ?? "" : "";
-        var rows = chart.TryGetProperty("rows", out var rowsElement) ? rowsElement.EnumerateArray().ToArray() : [];
+        var xLabelEvery = chart.TryGetProperty("xLabelEvery", out var everyElement) ? everyElement.GetInt32() : 5;
 
-        var headerCells = new[] { $"""<th scope="col">{GovUk.Esc(xKey)}</th>""" }
-            .Concat(bands.Select(b => $"""<th scope="col">{GovUk.Esc(b.Label)}</th>"""));
+        var rows = chart.TryGetProperty("rows", out var rowsElement)
+            ? rowsElement.EnumerateArray().Select(row => new
+            {
+                X = row.GetProperty(xKey).GetDecimal(),
+                Values = bands.Select(band => row.GetProperty(band.Key).GetDecimal()).ToArray()
+            }).ToArray()
+            : [];
 
-        var bodyRows = rows.Select(row =>
+        var maxTotal = rows.Length == 0 ? 1m : Math.Max(1m, rows.Max(r => r.Values.Sum()));
+        const int plotHeight = 160;
+        var safeConfig = chartJson.Replace("</", "<\\/");
+
+        var legend = bands.Select(band => $"""
+            <span class="wayfinder-chart__legend-item"><span class="wayfinder-chart__swatch" style="background:{band.Color}"></span>{GovUk.Esc(band.Label)}</span>
+            """);
+
+        var bars = rows.Select(row =>
         {
-            var xCell = row.TryGetProperty(xKey, out var x) ? x.ToString() : "";
-            var valueCells = bands.Select(b => row.TryGetProperty(b.Key, out var v) ? $"""<td class="govuk-table__cell">{GovUk.Esc(v.ToString())}</td>""" : """<td class="govuk-table__cell"></td>""");
-            return $"""<tr class="govuk-table__row"><th scope="row" class="govuk-table__header">{GovUk.Esc(xCell)}</th>{string.Join("", valueCells)}</tr>""";
+            var segments = string.Join("", Enumerable.Range(0, bands.Length).Select(i =>
+                $"""<div style="height:{Math.Round(row.Values[i] / maxTotal * plotHeight, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)}px;background:{bands[i].Color}"></div>"""));
+            return $"""<div class="wayfinder-chart__bar" title="{GovUk.Esc(xKey)} {row.X}: {row.Values.Sum():N0}">{segments}</div>""";
         });
 
-        var caption = string.IsNullOrEmpty(component.Heading) ? "" : $"""<caption class="govuk-table__caption govuk-table__caption--m">{GovUk.Esc(component.Heading)}</caption>""";
+        var labels = rows.Select(row => $"<span>{(row.X % xLabelEvery == 0 ? row.X.ToString("0") : "")}</span>");
+
+        var headerCells = string.Concat(bands.Select(band => $"""<th scope="col">{GovUk.Esc(band.Label)}</th>"""));
+        var tableRows = rows.Where((r, i) => r.X % xLabelEvery == 0 || i == 0).Select(row =>
+        {
+            var cells = string.Concat(row.Values.Select(v => $"<td>{v:N0}</td>"));
+            return $"""<tr><th scope="row">{row.X:0}</th>{cells}</tr>""";
+        });
 
         return $"""
-            <table class="govuk-table">
-              {caption}
-              <thead class="govuk-table__head"><tr class="govuk-table__row">{string.Join("", headerCells)}</tr></thead>
-              <tbody class="govuk-table__body">{string.Join("\n", bodyRows)}</tbody>
-            </table>
+            <figure class="wayfinder-chart" data-wayfinder-chart>
+              <script type="application/json" data-wayfinder-chart-config>{safeConfig}</script>
+              {(string.IsNullOrEmpty(component.Heading) ? "" : $"""<figcaption class="wayfinder-chart__title">{GovUk.Esc(component.Heading)}</figcaption>""")}
+              <div class="wayfinder-chart__legend">{string.Join("\n", legend)}</div>
+              <div class="wayfinder-chart__plot" data-wayfinder-chart-plot aria-hidden="true">{string.Join("\n", bars)}</div>
+              <div class="wayfinder-chart__labels" data-wayfinder-chart-labels aria-hidden="true">{string.Join("\n", labels)}</div>
+              <table class="wayfinder-visually-hidden" data-wayfinder-chart-table>
+                <caption>{GovUk.Esc(component.Heading ?? "Chart data")}</caption>
+                <thead><tr><th scope="col">{GovUk.Esc(xKey)}</th>{headerCells}</tr></thead>
+                <tbody>{string.Join("\n", tableRows)}</tbody>
+              </table>
+            </figure>
             """;
     }
 
