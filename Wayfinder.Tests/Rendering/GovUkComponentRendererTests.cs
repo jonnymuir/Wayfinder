@@ -91,6 +91,29 @@ public class GovUkComponentRendererTests
         Assert.Contains("type=\"range\"", html);
         Assert.Contains("min=\"0\"", html);
         Assert.Contains("max=\"10\"", html);
+        Assert.Contains("data-wayfinder-slider", html);
+        Assert.Contains("wayfinder-slider__input", html);
+    }
+
+    // Regression coverage: id and name used to share the same "field:{fieldKey}"-prefixed
+    // string here too, breaking any plain CSS ID selector targeting the rendered input.
+    [Fact]
+    public void RenderField_Slider_IdStaysBareFieldKey_NameCarriesFieldPrefix()
+    {
+        var html = GovUkFields.Render(new FieldRenderPayload
+        {
+            FieldKey = "risk",
+            Label = "Risk appetite",
+            FieldType = "slider",
+            Required = true,
+            Min = 0,
+            Max = 10,
+        }, NoErrors);
+
+        Assert.Contains("id=\"risk\"", html);
+        Assert.Contains("for=\"risk\"", html);
+        Assert.Contains("name=\"field:risk\"", html);
+        Assert.DoesNotContain("id=\"field:risk\"", html);
     }
 
     [Fact]
@@ -179,6 +202,8 @@ public class GovUkComponentRendererTests
 
         Assert.Contains("Annual pension", html);
         Assert.Contains("16400", html);
+        Assert.Contains("wayfinder-stat-group", html);
+        Assert.Contains("wayfinder-stat-card", html);
     }
 
     [Fact]
@@ -219,9 +244,24 @@ public class GovUkComponentRendererTests
             ChartJson = chartJson,
         });
 
-        Assert.Contains("govuk-table", html);
+        Assert.Contains("data-wayfinder-chart-table", html);
         Assert.Contains("Pension", html);
         Assert.Contains("12000", html);
+        Assert.Contains("wayfinder-chart", html);
+        Assert.Contains("data-wayfinder-chart-plot", html);
+    }
+
+    [Fact]
+    public void RenderComponent_Chart_EmptyChartJson_RendersNothing()
+    {
+        var html = Renderer.RenderComponent(new ComponentRenderPayload
+        {
+            Type = "chart",
+            Heading = "Projected income",
+            ChartJson = null,
+        }, NoErrors);
+
+        Assert.Equal("", html);
     }
 
     [Fact]
