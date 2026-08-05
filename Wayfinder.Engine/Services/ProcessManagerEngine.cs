@@ -345,7 +345,20 @@ public class ProcessManagerEngine : IProcessManager
                 .SelectMany(c => c.Fields)
                 .Select(f => f.FieldKey)
                 .ToHashSet(StringComparer.Ordinal);
-            var submittedStrings = (fieldValues ?? new Dictionary<string, object?>())
+
+            // A host may legitimately omit a field from fieldValues entirely — a file-upload
+            // field the visitor didn't re-select on this submission is the case that actually
+            // happens (browsers can never pre-fill a file input's value, unlike every other
+            // field type, so a host can't "resubmit what's already there" the way it does for
+            // text/radio/date), relying on this stage's already-persisted instance.FieldValues to
+            // satisfy Required instead. Only this stage's OWN field keys are eligible to backfill
+            // from instance.FieldValues — anything else in there belongs to a different stage and
+            // must stay out, or the whitelist check below would reject it as an unknown field.
+            var currentStageFieldKeys = authoritativeFields.Select(f => f.FieldKey).ToHashSet(StringComparer.Ordinal);
+            var existingForCurrentStage = instance.FieldValues
+                .Where(kvp => currentStageFieldKeys.Contains(kvp.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal);
+            var submittedStrings = Merge(existingForCurrentStage, fieldValues)
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value?.ToString() ?? string.Empty, StringComparer.Ordinal);
 
             var validation = FieldValueValidator.Validate(authoritativeFields, submittedStrings, hiddenFieldKeys);
