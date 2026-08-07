@@ -111,7 +111,7 @@ public class ProcessManagerEngineFileUploadRetentionTests
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
-            new PassthroughSanitizer());
+            new PassthroughContentSanitizer());
 
         var started = engine.GetCurrent(DefinitionKey, TenantId, UserId);
         var atCheckAnswers = engine.Advance(
@@ -138,10 +138,5 @@ public class ProcessManagerEngineFileUploadRetentionTests
 
         Assert.Empty(afterContinue.Problems);
         Assert.Equal("Check your answers", afterContinue.Render?.StateDisplayName);
-    }
-
-    private sealed class PassthroughSanitizer : IServiceContentSanitizer
-    {
-        public string Sanitize(string? html) => html ?? string.Empty;
     }
 }

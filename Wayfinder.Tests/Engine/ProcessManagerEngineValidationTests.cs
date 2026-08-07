@@ -83,7 +83,7 @@ public class ProcessManagerEngineValidationTests
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
-            new PassthroughSanitizer());
+            new PassthroughContentSanitizer());
 
         var started = engine.GetCurrent(DefinitionKey, TenantId, UserId);
         return (engine, started.InstanceId, started.StateVersion);
@@ -179,10 +179,5 @@ public class ProcessManagerEngineValidationTests
             "continue", stateVersion, tampered);
 
         Assert.Contains(result.Problems, p => p.FieldKey == "name");
-    }
-
-    private sealed class PassthroughSanitizer : IServiceContentSanitizer
-    {
-        public string Sanitize(string? html) => html ?? string.Empty;
     }
 }

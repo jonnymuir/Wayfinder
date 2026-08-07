@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Services.Calculations;
+using Wayfinder.Services.Sanitization;
 using Wayfinder.Engine.Stores;
 
 namespace Wayfinder.Engine.Services;
@@ -58,7 +59,7 @@ public sealed class ServiceBlueprintSimulationRunner
         var engine = new ProcessManagerEngine(
             logger ?? NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
-            new SimulationContentSanitizer(),
+            new PassthroughContentSanitizer(),
             mockServiceInputs is null ? null : (_, _, _) => mockServiceInputs);
 
         var trace = new List<ServiceRequestResponseEnvelope>();
