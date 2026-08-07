@@ -253,12 +253,20 @@ kind of not-yet-done follow-up as the calculation engine above.
 
 `/premium`'s own "Recalculate" button — a plain, fully declarative self-loop gateway
 (`money-modeller.json`'s own documented pattern, see
-[calculation-language.md](./calculation-language.md)) that any blueprint can still use without
-any client-side runtime at all — is gone from `juggling-insurance-modeller.json` now that
-`wayfinder-live-form.js` makes it redundant for this specific demo: every input change
+[calculation-language.md](./calculation-language.md)) that any blueprint can still declare
+without any client-side runtime at all — is gone from `juggling-insurance-modeller.json` now
+that `wayfinder-live-form.js` makes it redundant for this specific demo: every input change
 recalculates instantly, client-side, with zero network requests (see
-`insurance-modeller.spec.ts`'s own "genuinely local" test, which asserts exactly that). The
-pattern itself isn't deprecated — `wayfinder-live-recalculate.js` still exists in
-`Wayfinder.Rendering.GovUk` as a simpler, network-round-trip alternative for a host that wants
-live-feeling updates without embedding a calculation runtime client-side at all; this reference
-app's own `PageShell.cs` just doesn't load it anymore, since nothing here needs it now.
+`insurance-modeller.spec.ts`'s own "genuinely local" test, which asserts exactly that).
+
+`wayfinder-live-recalculate.js` (the AJAX-automated version of clicking that button — never
+computed anything itself, just fetched freshly-rendered HTML) is deleted, not just unloaded: once
+`wayfinder-live-form.js` exists, nothing needs it. It required JavaScript exactly like the
+live-form runtime does, but unlike the live-form runtime it still paid for a network round trip
+on every change — there's no scenario where it beats *either* alternative (a plain declarative
+button with no JS at all, or the live-form runtime with JS). Its one real justification would
+have been calculation confidentiality — the live-form runtime embeds the actual `calculations`
+expressions as page JSON, visible via view-source, where the AJAX version never shipped the
+formulas client-side at all — but nothing in this repo has ever needed that, so it stayed
+unbuilt-on hypothetical baggage rather than an active alternative. Recoverable from git history
+if a real host ever needs exactly that trade-off.
