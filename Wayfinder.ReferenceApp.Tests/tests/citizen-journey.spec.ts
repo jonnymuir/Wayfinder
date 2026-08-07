@@ -30,6 +30,11 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
       await page.getByRole('button', { name: 'Continue' }).click();
     });
 
+    await test.step('Risk assessment: optional, skipped here', async () => {
+      await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
+      await page.getByRole('button', { name: 'Continue' }).click();
+    });
+
     await test.step('Check your answers and declare', async () => {
       await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
       const summary = page.locator('.govuk-summary-list');
@@ -69,6 +74,8 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     await page.getByLabel('Year').fill('2026');
     await page.getByLabel('Number of jugglers taking part').fill('12');
     await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
 
     // Deliberately not ticking "I confirm the details above are correct" first: a summary-list
@@ -83,6 +90,8 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     await expect(page.getByLabel('Name of the event')).toHaveValue('Big Top Juggling Gala');
 
     await page.getByLabel('Name of the event').fill('Grand Juggling Extravaganza');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
     await page.getByRole('button', { name: 'Continue' }).click();
 
     await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();

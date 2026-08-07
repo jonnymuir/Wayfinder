@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { DEMO_USERS, loginAs, resetApp } from './fixtures';
 
-// The "does your act involve fire, knives, or other dangerous props?" branch on the juggling
-// licence blueprint — a conditionally-required file-upload field (risk assessment / public
-// liability insurance), gated by a calc-driven showWhen on the *next* stage (declaration), since
-// this reference app has no client-side live-form runtime to reveal a same-page field the moment
-// a checkbox changes — the reveal only becomes real once the answer is actually persisted.
+// The risk assessment upload is its own dedicated stage between "About the event" and "Check
+// your answers and declare" — always shown, always optional. This engine's Split gateways always
+// fan out to every one of their routes (there's no conditional single-branch choice), so a stage
+// can never be skipped based on an earlier answer; making the field itself unconditionally
+// optional, rather than gating the whole stage's visibility on hasDangerousProps, is what keeps
+// this a genuine standalone screen instead of a same-page reveal.
 async function completeYourDetailsAndEventDetails(page: import('@playwright/test').Page, options: { dangerousProps: boolean }) {
   await loginAs(page, DEMO_USERS.applicant);
   await page.getByLabel('Full name').fill('Alex Applicant');
@@ -22,19 +23,20 @@ async function completeYourDetailsAndEventDetails(page: import('@playwright/test
     await page.getByLabel('This act involves fire, knives, or other dangerous props').check();
   }
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
 }
 
-test.describe('File upload: risk assessment for dangerous props', () => {
+test.describe('File upload: risk assessment', () => {
   test.beforeEach(async ({ request }) => resetApp(request));
 
-  test('answering no never shows or requires the file upload', async ({ page }) => {
-    await completeYourDetailsAndEventDetails(page, { dangerousProps: false });
+  test('the upload is optional even when dangerous props are declared, and shows "Not provided" when skipped', async ({ page }) => {
+    await completeYourDetailsAndEventDetails(page, { dangerousProps: true });
+    await page.getByRole('button', { name: 'Continue' }).click();
 
-    // Still present in the DOM (behind a `hidden` component wrapper, not removed) — a live-form
-    // JS runtime could reveal it without a full reload; this reference app has none, so it only
-    // ever becomes real (and required) via the persisted answer on the next stage's render.
-    await expect(page.getByLabel('Upload your risk assessment or public liability insurance certificate')).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    const summary = page.locator('.govuk-summary-list');
+    await expect(summary.getByText('Yes', { exact: true })).toBeVisible(); // hasDangerousProps
+    await expect(summary.getByText('Not provided', { exact: true })).toBeVisible();
 
     await page.getByLabel('I confirm the details above are correct').check();
     await page.getByRole('button', { name: 'Submit application' }).click();
@@ -44,64 +46,52 @@ test.describe('File upload: risk assessment for dangerous props', () => {
     await expect(page.getByText('A caseworker is reviewing your application.')).toBeVisible();
   });
 
-  test('answering yes reveals the upload and requires it before submitting', async ({ page }) => {
+  test('a valid file completes the journey and shows on check your answers', async ({ page }) => {
     await completeYourDetailsAndEventDetails(page, { dangerousProps: true });
 
-    const upload = page.getByLabel('Upload your risk assessment or public liability insurance certificate');
-    await expect(upload).toBeVisible();
-
-    await page.getByLabel('I confirm the details above are correct').check();
-    await page.getByRole('button', { name: 'Submit application' }).click();
-    // Browser-native `required` on a real, visible file input blocks the submit — still on
-    // the same stage, not a server round trip (mirrors the existing plain-required-field spec).
-    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
-  });
-
-  test('a valid file completes the journey', async ({ page }) => {
-    await completeYourDetailsAndEventDetails(page, { dangerousProps: true });
-
-    await page.getByLabel('Upload your risk assessment or public liability insurance certificate').setInputFiles({
+    await page.getByLabel('Risk assessment or public liability insurance certificate').setInputFiles({
       name: 'risk-assessment.pdf',
       mimeType: 'application/pdf',
       buffer: Buffer.from('%PDF-1.4 test risk assessment content'),
     });
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    const summary = page.locator('.govuk-summary-list');
+    await expect(summary.getByText('risk-assessment.pdf', { exact: true })).toBeVisible();
+
     await page.getByLabel('I confirm the details above are correct').check();
     await page.getByRole('button', { name: 'Submit application' }).click();
-    // The applicant waits at their own Join gateway cursor — see citizen-journey.spec.ts for
-    // why this is a genuine "please wait" status, not ACCESS_DENIED or the caseworker's own
-    // stage content.
     await expect(page.getByText('A caseworker is reviewing your application.')).toBeVisible();
   });
 
   test('an oversized file is rejected server-side, with a field-scoped error', async ({ page }) => {
-    await completeYourDetailsAndEventDetails(page, { dangerousProps: true });
+    await completeYourDetailsAndEventDetails(page, { dangerousProps: false });
 
     // 6MB — over the blueprint's declared 5MB maxSizeBytes. A real <input type="file"> has no
     // client-side size constraint of its own, so this only ever gets caught server-side.
-    await page.getByLabel('Upload your risk assessment or public liability insurance certificate').setInputFiles({
+    await page.getByLabel('Risk assessment or public liability insurance certificate').setInputFiles({
       name: 'oversized.pdf',
       mimeType: 'application/pdf',
       buffer: Buffer.alloc(6 * 1024 * 1024, '0'),
     });
-    await page.getByLabel('I confirm the details above are correct').check();
-    await page.getByRole('button', { name: 'Submit application' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
     await expect(page.locator('.govuk-error-message', { hasText: 'must be smaller than 5MB' })).toBeVisible();
   });
 
   test('a disallowed file type is rejected server-side, with a field-scoped error', async ({ page }) => {
-    await completeYourDetailsAndEventDetails(page, { dangerousProps: true });
+    await completeYourDetailsAndEventDetails(page, { dangerousProps: false });
 
-    await page.getByLabel('Upload your risk assessment or public liability insurance certificate').setInputFiles({
+    await page.getByLabel('Risk assessment or public liability insurance certificate').setInputFiles({
       name: 'malware.exe',
       mimeType: 'application/octet-stream',
       buffer: Buffer.from('not a real risk assessment'),
     });
-    await page.getByLabel('I confirm the details above are correct').check();
-    await page.getByRole('button', { name: 'Submit application' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
     await expect(page.locator('.govuk-error-message', { hasText: 'must be one of' })).toBeVisible();
   });
 
@@ -111,11 +101,13 @@ test.describe('File upload: risk assessment for dangerous props', () => {
     await completeYourDetailsAndEventDetails(applicantPage, { dangerousProps: true });
 
     const fileContent = '%PDF-1.4 test risk assessment content';
-    await applicantPage.getByLabel('Upload your risk assessment or public liability insurance certificate').setInputFiles({
+    await applicantPage.getByLabel('Risk assessment or public liability insurance certificate').setInputFiles({
       name: 'risk-assessment.pdf',
       mimeType: 'application/pdf',
       buffer: Buffer.from(fileContent),
     });
+    await applicantPage.getByRole('button', { name: 'Continue' }).click();
+    await expect(applicantPage.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
     await applicantPage.getByLabel('I confirm the details above are correct').check();
     await applicantPage.getByRole('button', { name: 'Submit application' }).click();
     await expect(applicantPage.getByText('A caseworker is reviewing your application.')).toBeVisible();
