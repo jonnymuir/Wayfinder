@@ -62,6 +62,27 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     await caseworkerContext.close();
   });
 
+  test('the modelled premium updates live as inputs change, with no button click', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.applicant);
+    await page.goto('/premium');
+
+    const total = page.locator('.wayfinder-stat-card--emphasis .wayfinder-stat-card__value');
+    await expect(total).toHaveText('£64');
+
+    // A radio change alone (no Recalculate click) should trigger a live AJAX recalculation —
+    // see wayfinder-live-recalculate.js.
+    await page.getByLabel('Professional').check();
+    await expect(total).toHaveText('£204');
+
+    // A keyboard-driven slider change should recalculate live too, and must not lose focus
+    // partway through (each arrow-key press fires its own "change" and swap) — a real
+    // regression this test caught during development.
+    await page.locator('#performancesPerYear').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(total).not.toHaveText('£204');
+    await expect(page.locator('#performancesPerYear')).toBeFocused();
+  });
+
   test('a caseworker can refer a request to a broker instead', async ({ browser }) => {
     const applicantContext = await browser.newContext();
     const applicantPage = await applicantContext.newPage();
