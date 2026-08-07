@@ -2,8 +2,9 @@
   "name": "@wayfinder/reference-app-assets",
   "version": "0.1.0",
   "private": true,
-  "description": "Source of the real GOV.UK Design System (govuk-frontend) static assets vendored into wwwroot/govuk-frontend for the reference app's hand-rolled server-rendered pages.",
+  "description": "Source of the real GOV.UK Design System (govuk-frontend) static assets vendored into wwwroot/govuk-frontend, and the real bootstrap-icons SVG path data vendored into Services/WayfinderIcons.cs and wwwroot/assets/images/favicon*, for the reference app's hand-rolled server-rendered pages.",
   "dependencies": {
+    "bootstrap-icons": "^1.13.1",
     "govuk-frontend": "6.4.0"
   }
 }

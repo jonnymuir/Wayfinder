@@ -146,6 +146,26 @@
   min-height: 1em;
 }
 
+/* Nav/logo icons — see Services/WayfinderIcons.cs for where the inline SVGs themselves come
+   from. display:inline-flex keeps the icon vertically centred against the text baseline instead
+   of sitting on the text's own baseline (an inline SVG's default alignment). */
+.wayfinder-nav-link,
+.wayfinder-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.wayfinder-brand-link svg {
+  flex-shrink: 0;
+}
+
+.wayfinder-home-links li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .wayfinder-visually-hidden {
   position: absolute;
   width: 1px;

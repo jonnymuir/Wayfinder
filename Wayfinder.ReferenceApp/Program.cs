@@ -160,11 +160,11 @@ app.MapGet("/", (HttpContext ctx) =>
         API/MCP and editor — seeded with GOV.UK Service Manual's own "Apply for a licence to
         hold a juggling event" exemplar, and a second citizen/caseworker demo showcasing
         slider/stat-group/chart.</p>
-        <ul class="govuk-list">
-          {(ctx.User.IsInRole(DemoUsers.ApplicantRole) ? """<li><a class="govuk-link" href="/apply">Apply for a juggling licence</a> — the applicant's frontstage journey.</li>""" : "")}
-          {(ctx.User.IsInRole(DemoUsers.ApplicantRole) ? """<li><a class="govuk-link" href="/premium">Model your performance insurance premium</a> — an interactive slider/stat-group/chart-driven modeller.</li>""" : "")}
-          {(ctx.User.IsInRole(DemoUsers.CaseworkerRole) ? """<li><a class="govuk-link" href="/caseworker/queue">Caseworker queue</a> — the backstage review queue, shared across both demos.</li>""" : "")}
-          <li><a class="govuk-link" href="/service-blueprint-editor">Service blueprint editor</a> — author/edit either seeded blueprint live.</li>
+        <ul class="govuk-list wayfinder-home-links">
+          {(ctx.User.IsInRole(DemoUsers.ApplicantRole) ? $"""<li>{WayfinderIcons.PencilSquare}<a class="govuk-link" href="/apply">Apply for a juggling licence</a> — the applicant's frontstage journey.</li>""" : "")}
+          {(ctx.User.IsInRole(DemoUsers.ApplicantRole) ? $"""<li>{WayfinderIcons.Sliders}<a class="govuk-link" href="/premium">Model your performance insurance premium</a> — an interactive slider/stat-group/chart-driven modeller.</li>""" : "")}
+          {(ctx.User.IsInRole(DemoUsers.CaseworkerRole) ? $"""<li>{WayfinderIcons.Inbox}<a class="govuk-link" href="/caseworker/queue">Caseworker queue</a> — the backstage review queue, shared across both demos.</li>""" : "")}
+          <li>{WayfinderIcons.DiagramThree}<a class="govuk-link" href="/service-blueprint-editor">Service blueprint editor</a> — author/edit either seeded blueprint live.</li>
         </ul>
         """;
     return Results.Content(PageShell.Render("Home", body, ctx.User), "text/html");

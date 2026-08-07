@@ -10,7 +10,11 @@ namespace Wayfinder.ReferenceApp.Services;
 /// structure, the <c>js-enabled</c> progressive-enhancement script) rather than approximated.
 /// Uses the <c>generic-header</c> component (no crown) since this isn't a government service,
 /// and a minimal real <c>govuk-footer</c> with this repo's own MIT licence instead of the
-/// Crown-copyright/OGL text those government-specific footer examples carry.
+/// Crown-copyright/OGL text those government-specific footer examples carry. Same reasoning for
+/// the favicon/touch-icon set: template.njk's own assets are the GOV.UK crest, replaced here
+/// with a compass mark (Bootstrap Icons' own <c>compass-fill</c>, MIT licensed, vendored the same
+/// way as govuk-frontend — see wwwroot/assets/images/favicon.svg) and reused as the small inline
+/// SVGs throughout <see cref="RenderServiceNavigation"/> and the home page's own link list.
 /// </summary>
 public static class PageShell
 {
@@ -55,8 +59,8 @@ public static class PageShell
               <link rel="stylesheet" href="/css/wayfinder-components.css">
               <link rel="icon" sizes="48x48" href="/assets/images/favicon.ico">
               <link rel="icon" sizes="any" href="/assets/images/favicon.svg" type="image/svg+xml">
-              <link rel="mask-icon" href="/assets/images/govuk-icon-mask.svg" color="#1d70b8">
-              <link rel="apple-touch-icon" href="/assets/images/govuk-icon-180.png">
+              <link rel="mask-icon" href="/assets/images/wayfinder-icon-mask.svg" color="#1d70b8">
+              <link rel="apple-touch-icon" href="/assets/images/wayfinder-icon-180.png">
               <link rel="manifest" href="/assets/manifest.json">
             </head>
             <body class="govuk-template__body">
@@ -67,7 +71,7 @@ public static class PageShell
                 <div class="govuk-generic-header">
                   <div class="govuk-generic-header__container govuk-width-container">
                     <div class="govuk-generic-header__logo">
-                      <a href="/" class="govuk-generic-header__homepage-link">Wayfinder Reference App</a>
+                      <a href="/" class="govuk-generic-header__homepage-link wayfinder-brand-link">{WayfinderIcons.Compass}<span>Wayfinder Reference App</span></a>
                     </div>
                   </div>
                 </div>
@@ -112,25 +116,25 @@ public static class PageShell
 
         if (user.IsInRole(DemoUsers.ApplicantRole))
         {
-            items.Add("""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link" href="/apply">Apply</a></li>""");
-            items.Add("""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link" href="/premium">Model premium</a></li>""");
+            items.Add($"""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link wayfinder-nav-link" href="/apply">{WayfinderIcons.PencilSquare}Apply</a></li>""");
+            items.Add($"""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link wayfinder-nav-link" href="/premium">{WayfinderIcons.Sliders}Model premium</a></li>""");
         }
 
         if (user.IsInRole(DemoUsers.CaseworkerRole))
         {
-            items.Add("""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link" href="/caseworker/queue">Caseworker queue</a></li>""");
+            items.Add($"""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link wayfinder-nav-link" href="/caseworker/queue">{WayfinderIcons.Inbox}Caseworker queue</a></li>""");
         }
 
-        items.Add("""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link" href="/service-blueprint-editor">Editor</a></li>""");
+        items.Add($"""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link wayfinder-nav-link" href="/service-blueprint-editor">{WayfinderIcons.DiagramThree}Editor</a></li>""");
         items.Add($"""
             <li class="govuk-service-navigation__item">
-              <span class="govuk-service-navigation__link" style="cursor:default">Signed in as {esc(user.Identity!.Name)} ({esc(user.FindFirst(ClaimTypes.Role)?.Value)})</span>
+              <span class="govuk-service-navigation__link wayfinder-nav-link" style="cursor:default">{WayfinderIcons.PersonCircle}Signed in as {esc(user.Identity!.Name)} ({esc(user.FindFirst(ClaimTypes.Role)?.Value)})</span>
             </li>
             """);
-        items.Add("""
+        items.Add($"""
             <li class="govuk-service-navigation__item">
               <form method="post" action="/account/logout">
-                <button class="govuk-service-navigation__link govuk-button--text-as-link" type="submit" style="background:none;border:0;padding:0;font:inherit;cursor:pointer">Sign out</button>
+                <button class="govuk-service-navigation__link govuk-button--text-as-link wayfinder-nav-link" type="submit" style="background:none;border:0;padding:0;font:inherit;cursor:pointer">{WayfinderIcons.BoxArrowRight}Sign out</button>
               </form>
             </li>
             """);

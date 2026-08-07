@@ -12,25 +12,25 @@
       "purpose": "any"
     },
     {
-      "src": "images/govuk-icon-180.png",
+      "src": "images/wayfinder-icon-180.png",
       "type": "image/png",
       "sizes": "180x180",
       "purpose": "maskable"
     },
     {
-      "src": "images/govuk-icon-192.png",
+      "src": "images/wayfinder-icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "maskable"
     },
     {
-      "src": "images/govuk-icon-512.png",
+      "src": "images/wayfinder-icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"
     },
     {
-      "src": "images/govuk-icon-mask.svg",
+      "src": "images/wayfinder-icon-mask.svg",
       "type": "image/svg+xml",
       "sizes": "150x150",
       "purpose": "monochrome"
