@@ -131,7 +131,41 @@
       ],
       "routes": [
         {
-          "id": "event-details--continue--to-declaration",
+          "id": "event-details--continue--to-risk-assessment",
+          "target": "to-risk-assessment",
+          "trigger": "continue",
+          "label": "Continue",
+          "style": "primary"
+        }
+      ]
+    },
+    {
+      "stageKey": "risk-assessment",
+      "displayName": "Risk assessment",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "body",
+          "content": "If your act involves fire, knives, or other dangerous props, upload a risk assessment or public liability insurance certificate. This is optional for every other act."
+        },
+        {
+          "type": "file-upload",
+          "acceptedFileTypes": [".pdf", ".jpg", ".png"],
+          "maxSizeBytes": 5242880,
+          "fieldKey": "riskAssessment",
+          "label": "Risk assessment or public liability insurance certificate",
+          "hint": "Optional. PDF, JPG or PNG, up to 5MB.",
+          "required": false,
+          "conditionalOn": null,
+          "visibleWhen": null,
+          "default": null,
+          "defaultFrom": null,
+          "changeStateKey": null
+        }
+      ],
+      "routes": [
+        {
+          "id": "risk-assessment--continue--to-declaration",
           "target": "to-declaration",
           "trigger": "continue",
           "label": "Continue",
@@ -144,28 +178,6 @@
       "displayName": "Check your answers and declare",
       "queueKey": "citizen",
       "components": [
-        {
-          "type": "fieldset",
-          "showWhen": "hasDangerousProps",
-          "children": [
-            {
-              "type": "file-upload",
-              "acceptedFileTypes": [".pdf", ".jpg", ".png"],
-              "maxSizeBytes": 5242880,
-              "fieldKey": "riskAssessment",
-              "label": "Upload your risk assessment or public liability insurance certificate",
-              "hint": "PDF, JPG or PNG, up to 5MB",
-              "required": true,
-              "conditionalOn": null,
-              "visibleWhen": null,
-              "default": null,
-              "defaultFrom": null,
-              "changeStateKey": null
-            }
-          ],
-          "legend": "Fire, knives and dangerous props",
-          "legendSize": null
-        },
         {
           "type": "summary-list",
           "children": [
@@ -240,6 +252,32 @@
               "default": null,
               "defaultFrom": null,
               "changeStateKey": "event-details"
+            },
+            {
+              "type": "boolean",
+              "fieldKey": "hasDangerousProps",
+              "label": "Fire, knives or other dangerous props",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": "event-details"
+            },
+            {
+              "type": "file-upload",
+              "acceptedFileTypes": null,
+              "maxSizeBytes": null,
+              "fieldKey": "riskAssessment",
+              "label": "Risk assessment / insurance certificate",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": "risk-assessment"
             }
           ],
           "changeStateKey": null,
@@ -357,6 +395,18 @@
               "changeStateKey": null
             },
             {
+              "type": "boolean",
+              "fieldKey": "hasDangerousProps",
+              "label": "Fire, knives or other dangerous props",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
               "type": "file-upload",
               "acceptedFileTypes": null,
               "maxSizeBytes": null,
@@ -447,6 +497,19 @@
         {
           "id": "to-event-details--continue--event-details",
           "target": "event-details",
+          "trigger": "continue"
+        }
+      ]
+    },
+    {
+      "key": "to-risk-assessment",
+      "displayName": "Continue to risk assessment",
+      "gatewayType": "Split",
+      "queueKey": "citizen",
+      "routes": [
+        {
+          "id": "to-risk-assessment--continue--risk-assessment",
+          "target": "risk-assessment",
           "trigger": "continue"
         }
       ]

@@ -21,6 +21,8 @@ test.describe('Caseworker queue: review and decide', () => {
     await applicantPage.getByLabel('Number of jugglers taking part').fill('12');
     await applicantPage.getByRole('button', { name: 'Continue' }).click();
 
+    await applicantPage.getByRole('button', { name: 'Continue' }).click(); // Risk assessment: optional, skipped.
+
     await applicantPage.getByLabel('I confirm the details above are correct').check();
     await applicantPage.getByRole('button', { name: 'Submit application' }).click();
     // The applicant waits at their own Join gateway cursor — see citizen-journey.spec.ts for

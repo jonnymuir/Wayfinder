@@ -82,7 +82,10 @@ public static class GovUkFields
 
     private static string FormatSummaryValue(FieldRenderPayload field, string value) => field.FieldType switch
     {
-        "boolean" => value == "true" ? "Yes" : "No",
+        // A same-request value is still a boxed CLR bool (.ToString() => "True"/"False"); a
+        // reloaded one comes back as a JsonElement whose .ToString() is the lowercase JSON
+        // literal ("true"/"false") — case-insensitive to cover both without caring which.
+        "boolean" => string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ? "Yes" : "No",
         "date" => DateOnly.TryParse(value, out var date) ? date.ToString("d MMMM yyyy") : value,
         "file-upload" => string.IsNullOrEmpty(value) ? "Not provided" : value,
         _ => value

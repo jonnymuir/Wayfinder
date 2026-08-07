@@ -40,6 +40,7 @@ test.describe('Service blueprint editor', () => {
     expect(blueprint.stages.map((s: { stageKey: string }) => s.stageKey)).toEqual([
       'your-details',
       'event-details',
+      'risk-assessment',
       'declaration',
       'under-review',
       'approved',
