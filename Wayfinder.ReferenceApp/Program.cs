@@ -45,7 +45,7 @@ builder.Services.AddAuthorization(options =>
 // *instance* state stays in-memory (see InMemoryRuntimeServiceBlueprintSourceStore's remarks),
 // so this host is still transient — Playwright resets it between tests via
 // DELETE /api/test/reset instead of restarting the process.
-builder.Services.AddSingleton<IServiceContentSanitizer, PassthroughSanitizer>();
+builder.Services.AddSingleton<IServiceContentSanitizer, PassthroughContentSanitizer>();
 builder.Services.AddSingleton<IServiceBlueprintStore>(
     _ => new FilesystemServiceBlueprintStore(Path.Combine(builder.Environment.ContentRootPath, "service-blueprints")));
 builder.Services.AddSingleton<IQueueCapabilitiesProvider>(ReferenceActors.CapabilitiesProvider());

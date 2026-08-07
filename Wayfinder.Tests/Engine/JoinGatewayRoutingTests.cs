@@ -158,7 +158,7 @@ public class JoinGatewayRoutingTests
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
-            new PassthroughSanitizer());
+            new PassthroughContentSanitizer());
     }
 
     [Fact]
@@ -272,10 +272,5 @@ public class JoinGatewayRoutingTests
         var diagnostics = withDuplicateTrigger.ValidateGatewayRouting();
 
         Assert.Contains(diagnostics, d => d.Code == "JOIN_ROUTE_TRIGGER_DUPLICATE");
-    }
-
-    private sealed class PassthroughSanitizer : IServiceContentSanitizer
-    {
-        public string Sanitize(string? html) => html ?? string.Empty;
     }
 }
