@@ -195,13 +195,6 @@
       ],
       "routes": [
         {
-          "id": "model--recalculate--recalculate-loop",
-          "target": "recalculate-loop",
-          "trigger": "recalculate",
-          "label": "Recalculate",
-          "style": "secondary"
-        },
-        {
           "id": "model--request-quote--to-under-review",
           "target": "to-under-review",
           "trigger": "request-quote",
@@ -305,19 +298,6 @@
     }
   ],
   "gateways": [
-    {
-      "key": "recalculate-loop",
-      "displayName": "Recalculate",
-      "gatewayType": "Split",
-      "queueKey": "citizen",
-      "routes": [
-        {
-          "id": "recalculate-loop--continue--model",
-          "target": "model",
-          "trigger": "continue"
-        }
-      ]
-    },
     {
       "key": "to-under-review",
       "displayName": "Send for caseworker review",

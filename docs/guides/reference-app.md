@@ -198,9 +198,9 @@ enhancing `Wayfinder.Rendering.GovUk`'s own slider/stat-group/chart markup (no G
 System equivalent exists for these types) were originally hand-copied into
 `Wayfinder.ReferenceApp/wwwroot`. The CSS was *also* independently duplicated in
 [Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism)'s own `components.css` — two repos
-maintaining the same styling by hand, with no mechanism to notice drift between them. Both files
-(plus `wayfinder-live-recalculate.js`) now live in `Wayfinder.Rendering.GovUk/wwwroot/`, served
-from `/_content/Wayfinder.Rendering.GovUk/`. Before adding a CSS/JS file to any host's own
+maintaining the same styling by hand, with no mechanism to notice drift between them. `wayfinder-
+components.css` and `wayfinder-slider.js` now live in `Wayfinder.Rendering.GovUk/wwwroot/`,
+served from `/_content/Wayfinder.Rendering.GovUk/`. Before adding a CSS/JS file to any host's own
 `wwwroot`, ask: does this style or enhance a component type / behaviour Wayfinder itself defines?
 If so, it belongs in the package that defines that type, not the host.
 
@@ -227,11 +227,38 @@ rediscovered as a surprise later.
 Using the client-side runtime never changes the engine's trust model — it's a preview
 accelerator only. A host still only ever submits raw field inputs to `Advance`, which always
 recomputes the calculation scope server-side from persisted `FieldValues`; nothing a client
-claims to have calculated is itself ever trusted for a real decision. **Building this doesn't
-mean any host renders live-calculated results yet** — the JS runtime does the maths, but
-actually re-rendering a stage's markup (stat-group values, chart bars, `showWhen`-gated
-components) from its output in the browser is a distinct, larger "live-form runtime" that
-doesn't exist in any Wayfinder host today (this reference app's own `/premium` live-recalculate
-still round-trips to the server on every input change — see
-`wayfinder-live-recalculate.js`'s own comments). Building that runtime is real, substantial,
-follow-up work, not a natural extension of shipping the evaluator.
+claims to have calculated is itself ever trusted for a real decision.
+
+### The live-form runtime
+
+Running the maths client-side is only half the job — a stage's *markup* (stat-group values,
+chart bars, `showWhen`-gated visibility) still needs to be re-rendered from that output. That
+piece is `Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-live-form.js`, wired in automatically
+for free by two things every host already gets: `ProcessManagerEngine.BuildLiveModel` (the
+calculation set, input types/defaults, service-sourced values, populated into
+`StepContent.Data["live"]` whenever a definition declares a `calculations` block — engine-owned,
+not host-specific) and `GovUkComponentRenderer.RenderForm` embedding it as
+`<script type="application/json" data-wayfinder-live-model>`. A host only has to load the script
+itself (`/_content/Wayfinder.Rendering.GovUk/js/wayfinder-live-form.js`, `type="module"`) — see
+`Wayfinder.ReferenceApp/Services/PageShell.cs`.
+
+Same discovery as the calculation engine, a third time over: the real implementation already
+existed — `prism-live-form.ts`, again only in
+[Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism), reading `[data-wayfinder-show-when]`
+and `[data-wayfinder-stat-field]`/`[data-wayfinder-chart]` hooks `GovUkComponentRenderer` already
+emits for exactly this purpose. Ported into `Wayfinder.Rendering.GovUk`, adapted from Umbraco.
+Prism's own `fields[key]` form-naming convention to this package's `field:{key}` one
+(`GovUk.FieldName`). Umbraco.Prism switching to consume this instead of its own copy is the same
+kind of not-yet-done follow-up as the calculation engine above.
+
+`/premium`'s own "Recalculate" button — a plain, fully declarative self-loop gateway
+(`money-modeller.json`'s own documented pattern, see
+[calculation-language.md](./calculation-language.md)) that any blueprint can still use without
+any client-side runtime at all — is gone from `juggling-insurance-modeller.json` now that
+`wayfinder-live-form.js` makes it redundant for this specific demo: every input change
+recalculates instantly, client-side, with zero network requests (see
+`insurance-modeller.spec.ts`'s own "genuinely local" test, which asserts exactly that). The
+pattern itself isn't deprecated — `wayfinder-live-recalculate.js` still exists in
+`Wayfinder.Rendering.GovUk` as a simpler, network-round-trip alternative for a host that wants
+live-feeling updates without embedding a calculation runtime client-side at all; this reference
+app's own `PageShell.cs` just doesn't load it anymore, since nothing here needs it now.

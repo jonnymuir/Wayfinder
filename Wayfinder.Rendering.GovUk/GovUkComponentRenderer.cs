@@ -130,6 +130,19 @@ public sealed class GovUkComponentRenderer
             sb.Append(RenderComponent(component, errors));
         }
 
+        // The engine's own render-data hook (ProcessManagerEngine.BuildLiveModel) already
+        // computes everything a client-side live-form runtime needs — the calculation set,
+        // input types/defaults, service-sourced values — whenever the definition declares a
+        // calculations block. Embedding it here means any host using RenderForm gets this for
+        // free; no host-specific code required, same as every other component type in this
+        // renderer. `</` is escaped so a calculation string containing it (unlikely, but
+        // possible in a table key or similar) can't prematurely close the script tag — same
+        // guard GovUkComponents.RenderChart already applies to its own embedded chart config.
+        if (render.Data?["live"] is { } live)
+        {
+            sb.Append($"""<script type="application/json" data-wayfinder-live-model>{live.ToJsonString().Replace("</", "<\\/")}</script>""");
+        }
+
         if (render.AvailableActions.Count > 0)
         {
             sb.Append("""<div class="govuk-button-group">""");
