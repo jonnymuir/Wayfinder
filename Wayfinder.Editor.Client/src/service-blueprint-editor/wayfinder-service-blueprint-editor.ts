@@ -42,6 +42,7 @@ import type {
   ServiceBlueprintSimulationTransitionOption,
 } from './wayfinder-service-blueprint-simulation.js';
 import type { ProjectServiceBlueprintResult, ProjectedServiceBlueprintState, ProjectedServiceBlueprintTransition } from './service-request-runtime-projection.js';
+import { renderToolbarIcon } from './graph/toolbar-icons.js';
 
 type ServiceBlueprintSelection =
   | { kind: 'stage'; stageKey: string }
@@ -2215,7 +2216,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     aria-label=${this._outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
                     @click=${this._toggleOutlineCollapsed}
                   >
-                    <span aria-hidden="true">${this._outlineCollapsed ? '⟩' : '⟨'}</span>
+                    ${this._outlineCollapsed ? renderToolbarIcon('chevronRight') : renderToolbarIcon('chevronLeft')}
                     <span class="sr-only">${this._outlineCollapsed ? 'Expand outline' : 'Collapse outline'}</span>
                   </button>
                 </div>
@@ -2248,7 +2249,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                   </h1>
                   <div class="editor-toolbar" role="toolbar" aria-label="ServiceBlueprint editor tools">
                     <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button"
+                      class="toolbar-btn toolbar-btn--icon govuk-button${this._saveState === 'saving' ? ' toolbar-btn--spinning' : ''}"
                       data-wayfinder-save
                       ?disabled=${!this._canSave}
                       aria-label=${this._saveState === 'saving' ? 'Saving' : 'Save'}
@@ -2258,7 +2259,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${this._handleSave}
                     >
-                      <span aria-hidden="true">${this._saveState === 'saving' ? '⏳' : '💾'}</span>
+                      ${this._saveState === 'saving' ? renderToolbarIcon('saving') : renderToolbarIcon('save')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2269,7 +2270,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       aria-keyshortcuts=${UNDO_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${this._undo}
                     >
-                      <span aria-hidden="true">↶</span>
+                      ${renderToolbarIcon('undo')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2280,7 +2281,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       aria-keyshortcuts=${REDO_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${this._redo}
                     >
-                      <span aria-hidden="true">↷</span>
+                      ${renderToolbarIcon('redo')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2291,7 +2292,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       aria-keyshortcuts=${COPY_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${() => this._copySelection()}
                     >
-                      <span aria-hidden="true">⧉</span>
+                      ${renderToolbarIcon('copy')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2302,7 +2303,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       aria-keyshortcuts=${PASTE_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${() => this._pasteClipboard()}
                     >
-                      <span aria-hidden="true">📋</span>
+                      ${renderToolbarIcon('paste')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2312,7 +2313,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       aria-keyshortcuts=${HELP_SHORTCUT?.ariaKeys ?? nothing}
                       @click=${(event: Event) => this._openShortcutGuide(event.currentTarget as HTMLElement)}
                     >
-                      <span aria-hidden="true">?</span>
+                      ${renderToolbarIcon('help')}
                     </button>
 
                     <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
@@ -2324,7 +2325,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       title="Add stage"
                       @click=${(event: Event) => this._graphElement?.addStage(event.currentTarget as HTMLElement)}
                     >
-                      <span aria-hidden="true">▭+</span>
+                      ${renderToolbarIcon('addStage')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2333,7 +2334,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       title="Add gateway"
                       @click=${(event: Event) => this._graphElement?.addGateway(event.currentTarget as HTMLElement)}
                     >
-                      <span aria-hidden="true">◇+</span>
+                      ${renderToolbarIcon('addGateway')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2342,7 +2343,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       title="Tidy layout"
                       @click=${() => this._graphElement?.tidyLayout()}
                     >
-                      <span aria-hidden="true">▦</span>
+                      ${renderToolbarIcon('tidyLayout')}
                     </button>
 
                     <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
@@ -2353,7 +2354,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       title="Zoom out"
                       @click=${() => this._graphElement?.zoomOut()}
                     >
-                      <span aria-hidden="true">−</span>
+                      ${renderToolbarIcon('zoomOut')}
                     </button>
                     <span class="zoom-indicator" data-wayfinder-zoom>${Math.round(this._graphZoom * 100)}%</span>
                     <button
@@ -2362,7 +2363,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       title="Zoom in"
                       @click=${() => this._graphElement?.zoomIn()}
                     >
-                      <span aria-hidden="true">+</span>
+                      ${renderToolbarIcon('zoomIn')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2371,7 +2372,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       title="Fit to screen"
                       @click=${() => this._graphElement?.fitToScreen()}
                     >
-                      <span aria-hidden="true">⛶</span>
+                      ${renderToolbarIcon('fitToScreen')}
                     </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -2380,7 +2381,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       title="Fit width"
                       @click=${() => this._graphElement?.fitToWidth()}
                     >
-                      <span aria-hidden="true">↔</span>
+                      ${renderToolbarIcon('fitWidth')}
                     </button>
                   </div>
                 </div>
@@ -2471,7 +2472,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     aria-label=${this._inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}
                     @click=${this._toggleInspectorCollapsed}
                   >
-                    <span aria-hidden="true">${this._inspectorCollapsed ? '⟨' : '⟩'}</span>
+                    ${this._inspectorCollapsed ? renderToolbarIcon('chevronLeft') : renderToolbarIcon('chevronRight')}
                     <span class="sr-only">${this._inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}</span>
                   </button>
                 </div>
@@ -3175,6 +3176,36 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       padding: 0;
       font-size: 1.125rem;
       line-height: 1;
+    }
+
+    /* Bootstrap Icons path data rendered inline (see graph/toolbar-icons.ts) — sized to sit
+       comfortably inside the 2.25rem toolbar/panel-toggle buttons, colour inherited from the
+       button's own color via currentColor so hover/disabled states need no separate rule. */
+    .toolbar-icon-glyph {
+      width: 1.125rem;
+      height: 1.125rem;
+      flex-shrink: 0;
+    }
+
+    .panel-toggle .toolbar-icon-glyph {
+      width: 1rem;
+      height: 1rem;
+    }
+
+    @keyframes toolbar-btn-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .toolbar-btn--spinning .toolbar-icon-glyph {
+      animation: toolbar-btn-spin 0.9s linear infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .toolbar-btn--spinning .toolbar-icon-glyph {
+        animation: none;
+      }
     }
 
     /* Separates the toolbar's logical groups (save/undo/history — canvas authoring — zoom/fit)
