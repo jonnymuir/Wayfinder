@@ -1,0 +1,378 @@
+{
+  "definitionKey": "juggling-insurance-modeller",
+  "displayName": "Model your performance insurance premium",
+  "version": 1,
+  "description": "Interactive performance-insurance premium modeller: model your annual premium, then send it to a caseworker to confirm — a second citizen/caseworker demo alongside the juggling-licence exemplar, showcasing slider/stat-group/chart.",
+  "initialStage": "model",
+  "requestPolicy": "single",
+  "calculations": {
+    "fields": {
+      "riskMultiplier": {
+        "expr": "if(riskCategory = 'Fire & blades', 1.8, if(riskCategory = 'Contact & balance', 1.3, 1.0))"
+      },
+      "basePremium": {
+        "expr": "if(licenceTier = 'Professional', 180, if(licenceTier = 'Competitive', 90, 40))",
+        "format": "gbp"
+      },
+      "experienceDiscountRate": {
+        "expr": "if(yearsRegistered >= 10, 0.15, if(yearsRegistered >= 5, 0.1, if(yearsRegistered >= 2, 0.05, 0)))"
+      },
+      "riskLoading": {
+        "expr": "round(basePremium * (riskMultiplier - 1))",
+        "format": "gbp"
+      },
+      "frequencyLoading": {
+        "expr": "round(performancesPerYear * 1.25)",
+        "format": "gbp"
+      },
+      "audienceLoading": {
+        "expr": "round(averageAudienceSize * 0.05)",
+        "format": "gbp"
+      },
+      "totalLoading": {
+        "expr": "round(riskLoading + frequencyLoading + audienceLoading)",
+        "format": "gbp"
+      },
+      "subtotal": {
+        "expr": "basePremium + totalLoading"
+      },
+      "experienceDiscount": {
+        "expr": "round(subtotal * experienceDiscountRate)",
+        "format": "gbp"
+      },
+      "totalPremium": {
+        "expr": "clamp(round(subtotal - experienceDiscount), 25, 5000)",
+        "format": "gbp"
+      }
+    },
+    "series": {
+      "premiumByFrequency": {
+        "over": "performances",
+        "from": "0",
+        "to": "50",
+        "values": {
+          "base": "round(basePremium + riskLoading)",
+          "audience": "round(audienceLoading)",
+          "frequency": "round(performances * 1.25)"
+        }
+      }
+    }
+  },
+  "stages": [
+    {
+      "stageKey": "model",
+      "displayName": "Model your performance insurance premium",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "body",
+          "content": "Adjust the figures below to see how your licence tier, risk profile and performance schedule affect your annual premium."
+        },
+        {
+          "type": "fieldset",
+          "legend": "Your licence",
+          "legendSize": "m",
+          "children": [
+            {
+              "type": "radio",
+              "fieldKey": "licenceTier",
+              "label": "What licence tier do you hold?",
+              "options": [
+                "Recreational",
+                "Competitive",
+                "Professional"
+              ],
+              "default": "Recreational",
+              "required": true
+            },
+            {
+              "type": "number",
+              "fieldKey": "yearsRegistered",
+              "label": "Years you've held a licence",
+              "hint": "Used to calculate your experience discount.",
+              "min": 0,
+              "max": 40,
+              "default": "0",
+              "required": true
+            }
+          ]
+        },
+        {
+          "type": "fieldset",
+          "legend": "Your risk profile",
+          "legendSize": "m",
+          "children": [
+            {
+              "type": "radio",
+              "fieldKey": "riskCategory",
+              "label": "What do you perform with?",
+              "hint": "Choose the option that best matches your main act.",
+              "options": [
+                "Recreational objects",
+                "Contact & balance",
+                "Fire & blades"
+              ],
+              "default": "Recreational objects",
+              "required": true
+            },
+            {
+              "type": "slider",
+              "fieldKey": "performancesPerYear",
+              "label": "Performances a year",
+              "hint": "How many ticketed performances do you expect to give this year?",
+              "min": 0,
+              "max": 50,
+              "step": 5,
+              "default": "15",
+              "required": true
+            },
+            {
+              "type": "slider",
+              "fieldKey": "averageAudienceSize",
+              "label": "Average audience size",
+              "hint": "A rough estimate is fine — you can change this later.",
+              "min": 0,
+              "max": 2000,
+              "step": 50,
+              "default": "100",
+              "required": true
+            }
+          ]
+        },
+        {
+          "type": "stat-group",
+          "title": "Your modelled premium",
+          "items": [
+            {
+              "label": "Base premium",
+              "fieldKey": "basePremium",
+              "qualifier": "for your licence tier"
+            },
+            {
+              "label": "Additional loading",
+              "fieldKey": "totalLoading",
+              "qualifier": "risk, frequency & audience"
+            },
+            {
+              "label": "Experience discount",
+              "fieldKey": "experienceDiscount",
+              "qualifier": "for years registered"
+            },
+            {
+              "label": "Total annual premium",
+              "fieldKey": "totalPremium",
+              "qualifier": "before a caseworker confirms it",
+              "emphasis": true
+            }
+          ]
+        },
+        {
+          "type": "chart",
+          "title": "How performance frequency affects your premium",
+          "kind": "stacked-bar",
+          "series": "premiumByFrequency",
+          "x": "performances",
+          "xLabelEvery": 10,
+          "bands": [
+            {
+              "key": "base",
+              "label": "Base & risk charges"
+            },
+            {
+              "key": "audience",
+              "label": "Audience loading"
+            },
+            {
+              "key": "frequency",
+              "label": "Frequency loading"
+            }
+          ]
+        },
+        {
+          "type": "inset-text",
+          "content": "Figures are estimates for illustration only, based on the assumptions shown, and aren't a promise of what you'll pay. A caseworker confirms every premium before it's final."
+        }
+      ],
+      "routes": [
+        {
+          "id": "model--recalculate--recalculate-loop",
+          "target": "recalculate-loop",
+          "trigger": "recalculate",
+          "label": "Recalculate",
+          "style": "secondary"
+        },
+        {
+          "id": "model--request-quote--to-under-review",
+          "target": "to-under-review",
+          "trigger": "request-quote",
+          "label": "Send to a caseworker",
+          "style": "primary"
+        }
+      ]
+    },
+    {
+      "stageKey": "under-review",
+      "displayName": "Review premium request",
+      "description": "A caseworker's review of a modelled premium before it's confirmed.",
+      "queueKey": "caseworker",
+      "components": [
+        {
+          "type": "body",
+          "content": "An applicant has requested a formal premium confirmation. Review the modelled figures below."
+        },
+        {
+          "type": "summary-list",
+          "title": "Modelled scenario",
+          "children": [
+            {
+              "type": "text",
+              "fieldKey": "licenceTier",
+              "label": "Licence tier"
+            },
+            {
+              "type": "text",
+              "fieldKey": "riskCategory",
+              "label": "Risk category"
+            },
+            {
+              "type": "text",
+              "fieldKey": "performancesPerYear",
+              "label": "Performances a year"
+            },
+            {
+              "type": "text",
+              "fieldKey": "averageAudienceSize",
+              "label": "Average audience size"
+            },
+            {
+              "type": "text",
+              "fieldKey": "totalPremium",
+              "label": "Modelled total premium"
+            }
+          ]
+        }
+      ],
+      "routes": [
+        {
+          "id": "under-review--approve--awaiting-review",
+          "target": "awaiting-review",
+          "trigger": "approve",
+          "label": "Confirm premium",
+          "style": "primary"
+        },
+        {
+          "id": "under-review--decline--awaiting-review",
+          "target": "awaiting-review",
+          "trigger": "decline",
+          "label": "Refer to a broker",
+          "style": "destructive"
+        }
+      ]
+    },
+    {
+      "stageKey": "quote-approved",
+      "displayName": "Premium confirmed",
+      "stageType": "Confirmation",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Your premium has been confirmed"
+        },
+        {
+          "type": "body",
+          "content": "A caseworker has confirmed your modelled premium. Keep this confirmation for your records."
+        }
+      ],
+      "routes": []
+    },
+    {
+      "stageKey": "quote-declined",
+      "displayName": "Referred to a broker",
+      "stageType": "Confirmation",
+      "queueKey": "citizen",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Referred to a broker"
+        },
+        {
+          "type": "body",
+          "content": "Your risk profile needs a manual underwriting review before we can confirm a price online. A broker will be in touch to arrange your cover."
+        }
+      ],
+      "routes": []
+    }
+  ],
+  "gateways": [
+    {
+      "key": "recalculate-loop",
+      "displayName": "Recalculate",
+      "gatewayType": "Split",
+      "queueKey": "citizen",
+      "routes": [
+        {
+          "id": "recalculate-loop--continue--model",
+          "target": "model",
+          "trigger": "continue"
+        }
+      ]
+    },
+    {
+      "key": "to-under-review",
+      "displayName": "Send for caseworker review",
+      "gatewayType": "Split",
+      "queueKey": "citizen",
+      "routes": [
+        {
+          "id": "to-under-review--continue--under-review",
+          "target": "under-review",
+          "trigger": "continue"
+        },
+        {
+          "id": "to-under-review--continue--awaiting-review",
+          "target": "awaiting-review",
+          "trigger": "continue"
+        }
+      ]
+    },
+    {
+      "key": "awaiting-review",
+      "displayName": "Awaiting caseworker review",
+      "gatewayType": "Join",
+      "queueKey": "citizen",
+      "routes": [
+        {
+          "id": "awaiting-review--approve--quote-approved",
+          "target": "quote-approved",
+          "trigger": "approve"
+        },
+        {
+          "id": "awaiting-review--decline--quote-declined",
+          "target": "quote-declined",
+          "trigger": "decline"
+        }
+      ],
+      "waitingContent": "A caseworker is reviewing your modelled premium. We'll update this page once they've confirmed it.",
+      "waitingExpectedSeconds": 60,
+      "waitingPollIntervalMs": 5000,
+      "requiredIncomingQueues": ["citizen", "caseworker"]
+    }
+  ],
+  "queues": [
+    {
+      "key": "citizen",
+      "displayName": "Applicant",
+      "actor": "citizen"
+    },
+    {
+      "key": "caseworker",
+      "displayName": "Caseworker",
+      "actor": "caseworker"
+    }
+  ],
+  "tags": {
+    "demo": "juggling-insurance-modeller",
+    "pattern": "interactive-island-with-review"
+  }
+}
