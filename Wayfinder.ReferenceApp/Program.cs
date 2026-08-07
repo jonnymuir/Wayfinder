@@ -433,7 +433,7 @@ static string RenderJourneyBody(ServiceRequestResponseEnvelope envelope, string 
     if (envelope.Render is null)
     {
         var message = envelope.Problems.FirstOrDefault()?.Message ?? "Nothing to show.";
-        return $"""<div id="wayfinder-journey"><p class="govuk-body">{esc(message)}</p></div>""";
+        return $"""<p class="govuk-body">{esc(message)}</p>""";
     }
 
     // A panel component (confirmation/outcome stages) already renders its own <h1> — a second
@@ -443,12 +443,7 @@ static string RenderJourneyBody(ServiceRequestResponseEnvelope envelope, string 
         ? ""
         : $"""<h1 class="govuk-heading-xl">{esc(envelope.Render.StateDisplayName)}</h1>""";
 
-    // The fixed id is what /js/wayfinder-live-recalculate.js swaps in place after an AJAX
-    // "recalculate" submit — any stage offering that action (a slider/radio-driven interactive
-    // island, per Wayfinder.Rendering.GovUk's slider/stat-group/chart markup) gets a genuinely
-    // live-feeling result with zero duplication of the calculation logic itself, which stays
-    // server-side and single-sourced from the blueprint's own calculations block.
-    return $"""<div id="wayfinder-journey">{heading}{renderer.RenderForm(envelope.Render, envelope.Problems, formAction, envelope.StateVersion)}</div>""";
+    return $"{heading}{renderer.RenderForm(envelope.Render, envelope.Problems, formAction, envelope.StateVersion)}";
 }
 
 /// <summary>
