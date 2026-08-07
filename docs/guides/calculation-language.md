@@ -6,17 +6,29 @@ needs to compute. It's the **only** place business maths should live: don't
 hand-write it in a host service or a client component (see
 [Umbraco.Prism's CLAUDE.md](https://github.com/jonnymuir/Umbraco.Prism/blob/main/CLAUDE.md#declarative-calculations--live-stages-money-modeller-pattern),
 which documents this convention for that host).
-`Wayfinder` itself ships one runtime for this grammar — C# (`Wayfinder/Services/Calculations`,
-authoritative), checked against one conformance suite,
-[`calculation-golden.json`](../../Wayfinder/calculation-fixtures/calculation-golden.json)
-— if you're unsure whether something is legal syntax, that file is the ground truth. A host
-that wants the same expressions re-evaluated client-side between form submits (for instant
-`showWhen`/chart updates with no round-trip) has to build that itself: Wayfinder doesn't ship
-a client-side runtime. [Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism) is the one
-real example — its own
-[`calculation-engine.ts`](https://github.com/jonnymuir/Umbraco.Prism/blob/main/src/UmbracoPrism.Client/src/calculations/calculation-engine.ts)
-mirrors this exact grammar in TypeScript with matching semantics, checked against the same
-golden fixture.
+`Wayfinder` ships two runtimes for this grammar, both checked against the same conformance
+suite, [`calculation-golden.json`](../../Wayfinder/calculation-fixtures/calculation-golden.json)
+— if you're unsure whether something is legal syntax, that file is the ground truth:
+
+- **C#** (`Wayfinder/Services/Calculations`) — authoritative. The engine only ever persists or
+  branches on what this runtime computes; nothing a client claims to have calculated is ever
+  trusted for a real decision.
+- **JavaScript** (`Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-calculations.js`, shipped as
+  this package's own static web asset at `/_content/Wayfinder.Rendering.GovUk/js/`) — for a host
+  that wants the same expressions re-evaluated client-side between form submits (instant
+  `showWhen`/chart updates with no round-trip). Plain ES module, no build step, no framework
+  dependency — a host loads it the same way it loads `wayfinder-slider.js`. Ported from
+  [Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism)'s own independent TypeScript
+  evaluator (`calculation-engine.ts`), which mirrored this same grammar in a separate repo before
+  this port existed; Wayfinder is now the canonical source for both runtimes, so the two stop
+  drifting independently of each other. Run its own conformance check with
+  `node Wayfinder.Rendering.GovUk/test/wayfinder-calculations.conformance.mjs`.
+
+Using the client-side runtime doesn't change the engine's trust model: it's purely a preview
+accelerator for what the same submission would compute server-side. A host still only ever
+submits raw field inputs (never a pre-computed result) to `Advance`, which always recomputes the
+calculation scope itself from persisted `FieldValues` — the same server-side check that already
+existed before any client-side runtime did.
 
 This document is also exposed as an MCP resource (`service-blueprint-docs://calculation-language`)
 so an AI agent authoring service blueprints through the MCP toolkit can fetch it directly, without

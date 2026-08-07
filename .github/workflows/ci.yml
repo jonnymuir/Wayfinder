@@ -46,6 +46,12 @@ jobs:
       - name: Test
         run: dotnet test Wayfinder.slnx -c Release --no-build
 
+      # Proves the JS calculation evaluator (Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-
+      # calculations.js) stays behaviourally identical to the C# one just tested above — both
+      # run the same shared fixture file. Plain Node, no npm install needed for this one script.
+      - name: JS calculation engine conformance
+        run: node Wayfinder.Rendering.GovUk/test/wayfinder-calculations.conformance.mjs
+
       # Validates packing still succeeds on every push — the real publish only happens from
       # package-release.yml on a version tag, straight to nuget.org (Trusted Publishing). No
       # GitHub Packages feed: nuget.org is the only publish target.
