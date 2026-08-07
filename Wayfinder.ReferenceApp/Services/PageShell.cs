@@ -52,6 +52,7 @@ public static class PageShell
               <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
               <meta name="theme-color" content="#1d70b8">
               <link rel="stylesheet" href="/govuk-frontend/govuk-frontend.min.css">
+              <link rel="stylesheet" href="/css/wayfinder-components.css">
               <link rel="icon" sizes="48x48" href="/assets/images/favicon.ico">
               <link rel="icon" sizes="any" href="/assets/images/favicon.svg" type="image/svg+xml">
               <link rel="mask-icon" href="/assets/images/govuk-icon-mask.svg" color="#1d70b8">
@@ -97,6 +98,7 @@ public static class PageShell
               <script type="module" src="/govuk-frontend/govuk-frontend.min.js"></script>
               <script type="module">{InitScript}</script>
               <script>{PollScript}</script>
+              <script src="/js/wayfinder-slider.js"></script>
             </body>
             </html>
             """;
