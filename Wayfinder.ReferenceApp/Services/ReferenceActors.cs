@@ -17,7 +17,8 @@ public static class ReferenceActors
     public const string TenantId = "reference";
 
     private static readonly IReadOnlyList<string> CitizenComponentTypes =
-        ["fieldset", "text", "email", "date", "number", "decimal", "boolean", "panel", "body", "summary-list"];
+        ["fieldset", "text", "email", "date", "number", "decimal", "boolean", "radio", "slider",
+         "panel", "body", "summary-list", "stat-group", "chart", "inset-text", "warning-text"];
 
     private static readonly IReadOnlyList<string> CaseworkerComponentTypes =
         ["panel", "body", "summary-list"];

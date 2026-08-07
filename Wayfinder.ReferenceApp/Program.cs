@@ -14,8 +14,10 @@ using Wayfinder.ReferenceApp.Services;
 using Wayfinder.Rendering.GovUk;
 using Wayfinder.Services.Sanitization;
 
-// The one seeded demo blueprint's key — see service-blueprints/juggling-licence.json.
+// The seeded demo blueprints' keys — see service-blueprints/juggling-licence.json and
+// service-blueprints/juggling-insurance-modeller.json.
 const string JugglingLicenceDefinitionKey = "juggling-licence";
+const string InsuranceModellerDefinitionKey = "juggling-insurance-modeller";
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -156,11 +158,13 @@ app.MapGet("/", (HttpContext ctx) =>
         <h1 class="govuk-heading-xl">Wayfinder reference app</h1>
         <p class="govuk-body">A completely transient, in-memory host demonstrating Wayfinder's engine, authoring
         API/MCP and editor — seeded with GOV.UK Service Manual's own "Apply for a licence to
-        hold a juggling event" exemplar.</p>
+        hold a juggling event" exemplar, and a second citizen/caseworker demo showcasing
+        slider/stat-group/chart.</p>
         <ul class="govuk-list">
           {(ctx.User.IsInRole(DemoUsers.ApplicantRole) ? """<li><a class="govuk-link" href="/apply">Apply for a juggling licence</a> — the applicant's frontstage journey.</li>""" : "")}
-          {(ctx.User.IsInRole(DemoUsers.CaseworkerRole) ? """<li><a class="govuk-link" href="/caseworker/queue">Caseworker queue</a> — the backstage review queue.</li>""" : "")}
-          <li><a class="govuk-link" href="/service-blueprint-editor">Service blueprint editor</a> — author/edit the seeded blueprint live.</li>
+          {(ctx.User.IsInRole(DemoUsers.ApplicantRole) ? """<li><a class="govuk-link" href="/premium">Model your performance insurance premium</a> — an interactive slider/stat-group/chart-driven modeller.</li>""" : "")}
+          {(ctx.User.IsInRole(DemoUsers.CaseworkerRole) ? """<li><a class="govuk-link" href="/caseworker/queue">Caseworker queue</a> — the backstage review queue, shared across both demos.</li>""" : "")}
+          <li><a class="govuk-link" href="/service-blueprint-editor">Service blueprint editor</a> — author/edit either seeded blueprint live.</li>
         </ul>
         """;
     return Results.Content(PageShell.Render("Home", body, ctx.User), "text/html");
@@ -259,12 +263,56 @@ citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkC
     return Results.Redirect("/apply");
 });
 
+// A second, independent citizen-queue demo — slider/stat-group/chart-driven interactive
+// modelling, ending in a "send to a caseworker" fan-out into the same backstage queue below.
+// Same shape as the /apply group above; a distinct route prefix and definition key are the
+// only difference, since ActorProfile/queue access is keyed by queue name, not blueprint key.
+var premiumGroup = app.MapGroup("/premium").RequireAuthorization("Applicant");
+
+premiumGroup.MapGet("/", (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
+{
+    var envelope = engine.GetCurrent(
+        InsuranceModellerDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CitizenProfile());
+    return Results.Content(PageShell.Render("Model your performance insurance premium", RenderJourneyBody(envelope, "/premium", renderer), ctx.User), "text/html");
+});
+
+premiumGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
+{
+    var userId = GetUserId(ctx.User);
+    var profile = ReferenceActors.CitizenProfile();
+    var current = engine.GetCurrent(InsuranceModellerDefinitionKey, ReferenceActors.TenantId, userId, profile);
+
+    var form = await ctx.Request.ReadFormAsync();
+    var action = form["action"].ToString();
+    var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
+    var fieldValues = CoerceFieldValues(form, current.Render);
+
+    var fileErrors = await ApplyFileUploadsAsync(form, current.Render, current.InstanceId, fileStorage, fieldValues);
+    if (fileErrors.Count > 0)
+    {
+        return Results.Content(
+            PageShell.Render("Model your performance insurance premium", RenderJourneyBody(current with { Problems = fileErrors }, "/premium", renderer), ctx.User), "text/html");
+    }
+
+    var result = engine.Advance(current.InstanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
+
+    if (result.Problems.Count > 0 && result.Render is not null)
+    {
+        return Results.Content(
+            PageShell.Render("Model your performance insurance premium", RenderJourneyBody(result, "/premium", renderer), ctx.User), "text/html");
+    }
+
+    return Results.Redirect("/premium");
+});
+
 // ── Backstage: the caseworker's review queue ─────────────────────────────────────────────
 
 var caseworkerGroup = app.MapGroup("/caseworker").RequireAuthorization("Caseworker");
 
 caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
 {
+    // Genuinely multi-blueprint: GetQueueWorkItems has no blueprint filter, so both demos'
+    // caseworker-queue items already show up here side by side, keyed by queue name alone.
     var items = engine.GetQueueWorkItems(ReferenceActors.CaseworkerProfile()).Items;
     var esc = GovUk.Esc;
     var rows = items.Count == 0
@@ -274,7 +322,7 @@ caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
               <td class="govuk-table__cell">{esc(item.BlueprintDisplayName)}</td>
               <td class="govuk-table__cell">{esc(item.StateDisplayName)}</td>
               <td class="govuk-table__cell">{esc(item.InstanceId[..Math.Min(8, item.InstanceId.Length)])}…</td>
-              <td class="govuk-table__cell"><a class="govuk-link" href="/caseworker/queue/{Uri.EscapeDataString(item.InstanceId)}">Review</a></td>
+              <td class="govuk-table__cell"><a class="govuk-link" href="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">Review</a></td>
             </tr>
             """));
 
@@ -295,19 +343,19 @@ caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
     return Results.Content(PageShell.Render("Caseworker queue", body, ctx.User), "text/html");
 });
 
-caseworkerGroup.MapGet("/queue/{instanceId}", (string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
+caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}", (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
 {
     var envelope = engine.GetCurrent(
-        JugglingLicenceDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
+        blueprintKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
     return Results.Content(
-        PageShell.Render("Review application", RenderJourneyBody(envelope, $"/caseworker/queue/{instanceId}/advance", renderer), ctx.User), "text/html");
+        PageShell.Render("Review application", RenderJourneyBody(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer), ctx.User), "text/html");
 });
 
-caseworkerGroup.MapPost("/queue/{instanceId}/advance", async (string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
+caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
 {
     var userId = GetUserId(ctx.User);
     var profile = ReferenceActors.CaseworkerProfile();
-    var current = engine.GetCurrent(JugglingLicenceDefinitionKey, ReferenceActors.TenantId, userId, profile, instanceId);
+    var current = engine.GetCurrent(blueprintKey, ReferenceActors.TenantId, userId, profile, instanceId);
 
     var form = await ctx.Request.ReadFormAsync();
     var action = form["action"].ToString();
@@ -318,7 +366,7 @@ caseworkerGroup.MapPost("/queue/{instanceId}/advance", async (string instanceId,
     if (fileErrors.Count > 0)
     {
         return Results.Content(
-            PageShell.Render("Review application", RenderJourneyBody(current with { Problems = fileErrors }, $"/caseworker/queue/{instanceId}/advance", renderer), ctx.User), "text/html");
+            PageShell.Render("Review application", RenderJourneyBody(current with { Problems = fileErrors }, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer), ctx.User), "text/html");
     }
 
     var result = engine.Advance(instanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
@@ -326,7 +374,7 @@ caseworkerGroup.MapPost("/queue/{instanceId}/advance", async (string instanceId,
     if (result.Problems.Count > 0 && result.Render is not null)
     {
         return Results.Content(
-            PageShell.Render("Review application", RenderJourneyBody(result, $"/caseworker/queue/{instanceId}/advance", renderer), ctx.User), "text/html");
+            PageShell.Render("Review application", RenderJourneyBody(result, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer), ctx.User), "text/html");
     }
 
     return Results.Redirect("/caseworker/queue");

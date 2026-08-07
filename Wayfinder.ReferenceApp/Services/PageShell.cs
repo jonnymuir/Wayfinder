@@ -110,6 +110,7 @@ public static class PageShell
         if (user.IsInRole(DemoUsers.ApplicantRole))
         {
             items.Add("""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link" href="/apply">Apply</a></li>""");
+            items.Add("""<li class="govuk-service-navigation__item"><a class="govuk-service-navigation__link" href="/premium">Model premium</a></li>""");
         }
 
         if (user.IsInRole(DemoUsers.CaseworkerRole))
