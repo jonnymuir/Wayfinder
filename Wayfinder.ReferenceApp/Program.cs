@@ -347,8 +347,34 @@ caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}", (string blueprintKe
 {
     var envelope = engine.GetCurrent(
         blueprintKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
+    var downloadLinks = BuildFileDownloadLinks(
+        engine, instanceId, envelope.Render, $"/caseworker/queue/{blueprintKey}/{instanceId}/files");
     return Results.Content(
-        PageShell.Render("Review application", RenderJourneyBody(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer), ctx.User), "text/html");
+        PageShell.Render(
+            "Review application",
+            RenderJourneyBody(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer) + downloadLinks,
+            ctx.User),
+        "text/html");
+});
+
+caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/files/{fieldKey}", async (
+    string blueprintKey, string instanceId, string fieldKey, IProcessManager engine, IServiceRequestFileStorage fileStorage) =>
+{
+    var rawValues = engine.GetAllInstances().FirstOrDefault(request => request.InstanceId == instanceId)?.FieldValues;
+    var reference = rawValues is null ? null : ServiceRequestFileReference.FromFieldValue(rawValues.GetValueOrDefault(fieldKey));
+    if (reference is null)
+    {
+        return Results.NotFound();
+    }
+
+    var stream = await fileStorage.OpenReadAsync(reference.StorageKey);
+    if (stream is null)
+    {
+        return Results.NotFound();
+    }
+
+    var contentType = string.IsNullOrEmpty(reference.ContentType) ? "application/octet-stream" : reference.ContentType;
+    return Results.File(stream, contentType, reference.OriginalFileName);
 });
 
 caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
@@ -423,6 +449,55 @@ static string RenderJourneyBody(ServiceRequestResponseEnvelope envelope, string 
     // live-feeling result with zero duplication of the calculation logic itself, which stays
     // server-side and single-sourced from the blueprint's own calculations block.
     return $"""<div id="wayfinder-journey">{heading}{renderer.RenderForm(envelope.Render, envelope.Problems, formAction, envelope.StateVersion)}</div>""";
+}
+
+/// <summary>
+/// A caseworker reviewing an application needs to actually open what was uploaded, not just see
+/// its filename — this is the demo's one exercise of IServiceRequestFileStorage.OpenReadAsync,
+/// the read half of the interface the rest of the app only ever writes to. Generic over every
+/// file-upload field the current stage renders, so it needs no per-blueprint wiring: any new
+/// file-upload field anywhere just starts working here too. Reads the *raw* persisted
+/// FieldValues (not the rendered display value, which is deliberately just a filename — see
+/// ProcessManagerEngine.GetDisplayValue) because only the raw ServiceRequestFileReference still
+/// carries the storage key OpenReadAsync needs.
+/// </summary>
+static string BuildFileDownloadLinks(IProcessManager engine, string instanceId, StepContent? render, string downloadUrlPrefix)
+{
+    if (render is null)
+    {
+        return "";
+    }
+
+    var fileFields = render.Components
+        .SelectMany(component => component.Fields)
+        .Where(field => field.FieldType == "file-upload")
+        .ToList();
+    if (fileFields.Count == 0)
+    {
+        return "";
+    }
+
+    var rawValues = engine.GetAllInstances().FirstOrDefault(request => request.InstanceId == instanceId)?.FieldValues;
+    if (rawValues is null)
+    {
+        return "";
+    }
+
+    var esc = GovUk.Esc;
+    var links = fileFields
+        .Select(field => (Field: field, Reference: ServiceRequestFileReference.FromFieldValue(rawValues.GetValueOrDefault(field.FieldKey))))
+        .Where(entry => entry.Reference is not null)
+        .Select(entry => $"""
+            <li><a class="govuk-link" href="{downloadUrlPrefix}/{Uri.EscapeDataString(entry.Field.FieldKey)}">{esc(entry.Field.Label)} ({esc(entry.Reference!.OriginalFileName)})</a></li>
+            """)
+        .ToList();
+
+    return links.Count == 0
+        ? ""
+        : $"""
+            <h2 class="govuk-heading-m">Uploaded files</h2>
+            <ul class="govuk-list">{string.Join("\n", links)}</ul>
+            """;
 }
 
 static string RenderLoginBody(string? returnUrl, string? error)
@@ -590,7 +665,19 @@ static async Task<List<ServiceRequestProblem>> ApplyFileUploadsAsync(
         }
 
         await using var stream = file.OpenReadStream();
-        fieldValues[field.FieldKey] = await fileStorage.SaveAsync(instanceId, field.FieldKey, stream, file.FileName);
+        var storageKey = await fileStorage.SaveAsync(instanceId, field.FieldKey, stream, file.FileName);
+        // The engine's own GetDisplayValue (ProcessManagerEngine) only recognises a file-upload
+        // field's persisted value as a ServiceRequestFileReference (or its JsonElement round
+        // trip) — a bare storage-key string displays as nothing at all, which also leaves the
+        // rendered <input> incorrectly marked required after a validation bounce-back, since a
+        // browser can't pre-populate a file input from a prior selection.
+        fieldValues[field.FieldKey] = new ServiceRequestFileReference
+        {
+            StorageKey = storageKey,
+            OriginalFileName = file.FileName,
+            ContentType = file.ContentType,
+            SizeBytes = file.Length,
+        };
     }
 
     return problems;

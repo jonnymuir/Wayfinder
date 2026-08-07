@@ -84,6 +84,7 @@ public static class GovUkFields
     {
         "boolean" => value == "true" ? "Yes" : "No",
         "date" => DateOnly.TryParse(value, out var date) ? date.ToString("d MMMM yyyy") : value,
+        "file-upload" => string.IsNullOrEmpty(value) ? "Not provided" : value,
         _ => value
     };
 
