@@ -99,7 +99,7 @@ public static class PageShell
               <script type="module">{InitScript}</script>
               <script>{PollScript}</script>
               <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-slider.js"></script>
-              <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-live-recalculate.js"></script>
+              <script type="module" src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-live-form.js"></script>
             </body>
             </html>
             """;
