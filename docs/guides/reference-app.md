@@ -6,8 +6,10 @@ is actually Wayfinder's problem to solve.
 `Wayfinder.AppHost` + `Wayfinder.ReferenceApp` (with `Wayfinder.ServiceDefaults` for the usual
 Aspire plumbing) is a small ASP.NET Core app in this repo that demonstrates every package —
 `Wayfinder`, `Wayfinder.Engine`, `Wayfinder.Engine.Api`, `Wayfinder.Engine.Mcp`,
-`Wayfinder.Editor` — running together, with real GOV.UK Design System rendering and a real
-(if intentionally minimal) auth boundary. It is **completely transient**: seeded from a JSON
+`Wayfinder.Rendering.GovUk`, `Wayfinder.Editor` — running together, with real GOV.UK Design
+System rendering and a real (if intentionally minimal) auth boundary. See
+[Package Architecture](#package-architecture) below for what each of these owns and why. It is
+**completely transient**: seeded from a JSON
 file on disk, everything else in memory, nothing survives a restart. That's deliberate — this
 host exists to be booted and reset constantly by Playwright (`DELETE /api/test/reset`), not to
 be a real content store. See ["Service blueprint definitions: seed vs. save"](#service-blueprint-definitions-seed-vs-save)
@@ -27,7 +29,8 @@ scratch. It models NN/g's frontstage/backstage split
 (https://www.nngroup.com/articles/service-blueprints-definition/) across two queues:
 
 - **`citizen`** (frontstage) — the applicant's own journey at `/apply`: enter details, describe
-  the event, check answers and declare, then wait behind the line of visibility.
+  the event, optionally upload a risk assessment, check answers and declare, then wait behind
+  the line of visibility.
 - **`caseworker`** (backstage) — the review team's worklist at `/caseworker/queue`: see what's
   waiting, approve or reject.
 
@@ -55,7 +58,7 @@ see the file paths below.)
 | `IQueueCapabilitiesProvider` | `StaticQueueCapabilitiesProvider` declaring exactly what `citizen`/`caseworker` render (`Services/ReferenceActors.cs`) | Same pattern — declares whatever a host's own rendering surface actually supports |
 | `IServiceContentSanitizer` | `PassthroughSanitizer` — seed content is developer-authored, no XSS risk | `ServiceContentSanitizer` — a real Ganss.Xss GDS allowlist, because real content is backoffice/user-authored |
 | Auth | A hand-rolled in-memory cookie login, two fixed demo users (`Services/DemoUsers.cs`) — deliberately not OIDC, see below | `WayfinderUmbracoAuthorizationPolicies` — two named policies a host binds to its own scheme: `ServiceRequestPolling` (citizen-facing, host wires it — e.g. to its member cookie) and `BlueprintsAdmin` (backoffice authoring, self-registered against Umbraco backoffice group membership) |
-| Stage rendering | `ComponentHtmlRenderer.cs` — hand-rolled server-side HTML using the real `govuk-frontend` package (see below) | Ships its own Razor views/tag helpers — a complete GDS-style rendering layer, not something a host writes itself |
+| Stage rendering | `Wayfinder.Rendering.GovUk`'s `GovUkComponentRenderer` — the shared package's own default rendering, registered as-is with zero overrides, driving hand-rolled server-side HTML pages that load the real `govuk-frontend` package (see below) | Ships its own Razor views/tag helpers — a complete GDS-style rendering layer, not something a host writes itself |
 | Wiring it all together | Six separate `builder.Services.AddSingleton(...)` calls in `Program.cs` (deliberately visible — see "why so much wiring?" below) | One call: `services.AddWayfinderUmbraco()` |
 
 Why is Wayfinder.Umbraco's own auth split into two named policies rather than one, and why
@@ -153,9 +156,82 @@ node would be. `Wayfinder` itself has no opinion about this at all — it's a ca
 
 - `Wayfinder.AppHost/Program.cs` — the Aspire orchestrator (one resource, no containers)
 - `Wayfinder.ReferenceApp/Program.cs` — all the wiring described above, plus the routes
-- `Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json` — the seed
+- `Wayfinder.ReferenceApp/service-blueprints/` — the seeds (`juggling-licence.json`, and
+  `juggling-insurance-modeller.json` for the slider/stat-group/chart-driven premium modeller demo
+  at `/premium` — see [Package Architecture](#package-architecture) for what renders that)
 - `Wayfinder.ReferenceApp/Services/` — every custom implementation in the table above
-- `Wayfinder.ReferenceApp/wwwroot/` — the real vendored `govuk-frontend` CSS/JS/fonts/images
+- `Wayfinder.ReferenceApp/wwwroot/` — the real vendored `govuk-frontend` CSS/JS/fonts/images —
+  **host-specific** assets only; anything owned by a shared Wayfinder package (slider/stat-group/
+  chart styling, calculation runtimes) lives in that package's own `wwwroot` instead, see below
 - `Wayfinder.ReferenceApp.Tests/` — the Playwright suite (auth, the full citizen→caseworker→citizen
-  handoff, the editor/authoring wiring) — run single-worker, since the backend is one shared
-  in-memory process with fixed demo identities, not per-test isolated
+  handoff, the editor/authoring wiring, file upload, the premium modeller) — run single-worker,
+  since the backend is one shared in-memory process with fixed demo identities, not per-test
+  isolated
+
+## Package Architecture
+
+**Wayfinder's components (rendering, the calculation language, the editor) are owned once, by
+Wayfinder, and packaged so any host gets them automatically — never re-implemented or
+hand-copied per host.** A host only ever supplies *its own* concerns on top: storage backends,
+auth, business services (`ResolveServiceInputs`), and presentation chrome/branding. If something
+looks like host-specific glue code but is actually describing behaviour for a component type or
+expression grammar Wayfinder itself defines, that's a sign it's in the wrong project — see the
+concrete example below.
+
+`Wayfinder.Umbraco` is not a different set of components — it's the same shared packages,
+wired up as a specific *implementation* of Wayfinder's extension points: an Umbraco backoffice
+package (editor in the backoffice, uSync-tracked persistence, Umbraco-specific hosting). See the
+extension-point table above for exactly how it differs from this reference app at the
+implementation level, not the component level.
+
+### Shared static web assets
+
+`Wayfinder.Rendering.GovUk` and `Wayfinder.Editor` both ship CSS/JS as their own static web
+assets — `Sdk="Microsoft.NET.Sdk.Web"`, `IsPackable`, and an explicit `StaticWebAssetBasePath`
+(`/_content/{PackageId}/...`) in the `.csproj`. A referencing host gets these for free via
+ASP.NET Core's standard static-web-assets middleware (`app.UseStaticFiles()`) — no hand-copying,
+no `wwwroot` file to keep in sync across repos. This is a *Microsoft.NET.Sdk.Web* concern, not a
+Razor/MVC one: the C# in these packages stays plain, framework-independent code either way.
+
+The concrete history here is a worked cautionary example, not a hypothetical: the CSS and JS
+enhancing `Wayfinder.Rendering.GovUk`'s own slider/stat-group/chart markup (no GOV.UK Design
+System equivalent exists for these types) were originally hand-copied into
+`Wayfinder.ReferenceApp/wwwroot`. The CSS was *also* independently duplicated in
+[Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism)'s own `components.css` — two repos
+maintaining the same styling by hand, with no mechanism to notice drift between them. Both files
+(plus `wayfinder-live-recalculate.js`) now live in `Wayfinder.Rendering.GovUk/wwwroot/`, served
+from `/_content/Wayfinder.Rendering.GovUk/`. Before adding a CSS/JS file to any host's own
+`wwwroot`, ask: does this style or enhance a component type / behaviour Wayfinder itself defines?
+If so, it belongs in the package that defines that type, not the host.
+
+### The calculation language has two runtimes, one canonical source
+
+[The calculation language](./calculation-language.md) is evaluated by two independent
+implementations checked against the same conformance suite
+(`Wayfinder/calculation-fixtures/calculation-golden.json`):
+
+- **C#** (`Wayfinder/Services/Calculations`) — authoritative; the engine only ever persists or
+  branches on what this computes.
+- **JavaScript** (`Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-calculations.js`) — for a host
+  that wants the same expressions re-evaluated client-side, with no round-trip.
+
+Both now live in Wayfinder itself, run against the same golden fixture in CI
+(`.github/workflows/ci.yml`'s "JS calculation engine conformance" step). This wasn't always
+true: the JS runtime was ported from an independent TypeScript implementation
+([Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism)'s own `calculation-engine.ts`,
+mirroring the same grammar in a separate repo with no shared source, only a shared fixture file
+to catch drift after the fact). Umbraco.Prism switching to consume Wayfinder's canonical version
+instead of its own copy is a known, not-yet-done follow-up — flagged here so it isn't
+rediscovered as a surprise later.
+
+Using the client-side runtime never changes the engine's trust model — it's a preview
+accelerator only. A host still only ever submits raw field inputs to `Advance`, which always
+recomputes the calculation scope server-side from persisted `FieldValues`; nothing a client
+claims to have calculated is itself ever trusted for a real decision. **Building this doesn't
+mean any host renders live-calculated results yet** — the JS runtime does the maths, but
+actually re-rendering a stage's markup (stat-group values, chart bars, `showWhen`-gated
+components) from its output in the browser is a distinct, larger "live-form runtime" that
+doesn't exist in any Wayfinder host today (this reference app's own `/premium` live-recalculate
+still round-trips to the server on every input change — see
+`wayfinder-live-recalculate.js`'s own comments). Building that runtime is real, substantial,
+follow-up work, not a natural extension of shipping the evaluator.
