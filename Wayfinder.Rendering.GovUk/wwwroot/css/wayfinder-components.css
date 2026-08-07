@@ -1,10 +1,13 @@
 /*
  * Styling for the wayfinder-slider/-stat-group/-chart markup Wayfinder.Rendering.GovUk ships as
  * its own default for these three component types (no real GOV.UK Design System equivalent
- * exists) — a host is expected to supply this, the same way it must load govuk-frontend's own
- * CSS/JS for every other component. Ported from Umbraco.Prism's components.css, using this app's
- * own GOV.UK blue (#1d70b8, already set as PageShell's theme-color) instead of Prism's tenant
- * --prism-primary custom property.
+ * exists). Shipped as this package's own static web asset — a host loads it the same way it
+ * must load govuk-frontend's own CSS/JS for every other component, from
+ * /_content/Wayfinder.Rendering.GovUk/css/wayfinder-components.css — rather than hand-copying a
+ * host-local version, so every consumer (Wayfinder.ReferenceApp, Umbraco.Prism, any future host)
+ * shares one file instead of drifting independently. Uses GOV.UK blue (#1d70b8) directly; a host
+ * that needs a different brand colour overrides these rules after loading this file, the same
+ * way it would override any other govuk-frontend default.
  */
 
 .wayfinder-slider__row {

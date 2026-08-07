@@ -1,15 +1,48 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <OutputType>Library</OutputType>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageId>Wayfinder.Rendering.GovUk</PackageId>
+    <Title>Wayfinder GOV.UK Design System Rendering</Title>
     <Version>0.2.0</Version>
-    <Description>Default GOV.UK Design System rendering for Wayfinder's Component/FieldRenderPayload catalog — plain C#, no Razor/ASP.NET Core MVC dependency, so it works from a minimal-API host as well as an MVC one. Ships one function per component/field type, plus a small override registry for hosts that want to replace or extend individual types.</Description>
+    <Authors>Jonny Muir</Authors>
+    <Company>Wayfinder</Company>
+    <!-- Sdk.Web (not the plain Sdk) is only here so this project can ship the CSS/JS below as
+         static web assets via the same mechanism Wayfinder.Editor uses — it still has zero
+         Razor/ASP.NET Core MVC C# code of its own, so "plain C#, works from a minimal-API host
+         as well as an MVC one" (below) is still true for the rendering functions themselves.
+         Any real consumer is already an ASP.NET Core app of some kind (that's the only way to
+         call these functions from an HTTP pipeline), so the implicit AspNetCore.App framework
+         reference Sdk.Web adds costs it nothing it didn't already have. -->
+    <Description>Default GOV.UK Design System rendering for Wayfinder's Component/FieldRenderPayload catalog — plain C#, no Razor/ASP.NET Core MVC dependency, so it works from a minimal-API host as well as an MVC one. Ships one function per component/field type, plus a small override registry for hosts that want to replace or extend individual types. Also ships the CSS and progressive-enhancement JS the slider/stat-group/chart/live-recalculate markup needs (no GOV.UK Design System equivalent exists for these) as static web assets at /_content/Wayfinder.Rendering.GovUk/ — every host loads the same files instead of hand-copying its own.</Description>
+    <PackageTags>Blueprint;GDS;Rendering;Wayfinder</PackageTags>
+    <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIcon>assets/icon-wayfinder.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- See Wayfinder.Editor.csproj's own comment on this same property: without it, a
+         consuming host serves these files at bare site-root paths instead of the expected
+         /_content/{PackageId}/ prefix. Not needed to route around a gitignore issue here (these
+         files are hand-authored and committed, not npm build output) — just for the same
+         explicit, predictable base path. -->
+    <StaticWebAssetBasePath>_content/Wayfinder.Rendering.GovUk</StaticWebAssetBasePath>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../Wayfinder/Wayfinder.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Include="../assets/icon-wayfinder.png" Pack="true" PackagePath="assets/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>

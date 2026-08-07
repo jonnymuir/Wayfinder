@@ -6,6 +6,12 @@
 // this script only avoids a full page navigation to get their result back, via the exact same
 // POST a manual click on the "Recalculate" button already performs, then swaps the result into
 // the page in place. A stage with no "recalculate" action (most stages) is untouched entirely.
+// Shipped as this package's own static web asset
+// (/_content/Wayfinder.Rendering.GovUk/js/wayfinder-live-recalculate.js) — every host that wants
+// this behaviour loads the same file instead of hand-copying its own; the "recalculate" action
+// itself is a declarative, ordinary blueprint route (see docs/guides/reference-service-blueprint
+// -contract.md's own money-modeller example) — this script only automates clicking a button the
+// blueprint already declares, it never decides what renders.
 document.addEventListener('change', async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement) || !target.matches('input[type="radio"], input[type="range"], input[type="number"]')) {
