@@ -355,6 +355,20 @@
               "default": null,
               "defaultFrom": null,
               "changeStateKey": null
+            },
+            {
+              "type": "file-upload",
+              "acceptedFileTypes": null,
+              "maxSizeBytes": null,
+              "fieldKey": "riskAssessment",
+              "label": "Risk assessment / insurance certificate",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
             }
           ],
           "changeStateKey": null,

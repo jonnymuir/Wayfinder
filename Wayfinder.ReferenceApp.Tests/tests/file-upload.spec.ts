@@ -104,4 +104,45 @@ test.describe('File upload: risk assessment for dangerous props', () => {
     await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
     await expect(page.locator('.govuk-error-message', { hasText: 'must be one of' })).toBeVisible();
   });
+
+  test('a caseworker can see and download the uploaded risk assessment', async ({ browser }) => {
+    const applicantContext = await browser.newContext();
+    const applicantPage = await applicantContext.newPage();
+    await completeYourDetailsAndEventDetails(applicantPage, { dangerousProps: true });
+
+    const fileContent = '%PDF-1.4 test risk assessment content';
+    await applicantPage.getByLabel('Upload your risk assessment or public liability insurance certificate').setInputFiles({
+      name: 'risk-assessment.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from(fileContent),
+    });
+    await applicantPage.getByLabel('I confirm the details above are correct').check();
+    await applicantPage.getByRole('button', { name: 'Submit application' }).click();
+    await expect(applicantPage.getByText('A caseworker is reviewing your application.')).toBeVisible();
+
+    const caseworkerContext = await browser.newContext();
+    const caseworkerPage = await caseworkerContext.newPage();
+    await loginAs(caseworkerPage, DEMO_USERS.caseworker);
+    await caseworkerPage.getByRole('link', { name: 'Review' }).click();
+
+    // The summary row proves IServiceRequestFileStorage's persisted reference round-trips back
+    // to a display value (see ProcessManagerEngine.GetDisplayValue's file-upload branch), not
+    // just the storage key/bytes underneath it.
+    await expect(caseworkerPage.getByText('risk-assessment.pdf').first()).toBeVisible();
+
+    const downloadLink = caseworkerPage.getByRole('link', { name: /Risk assessment.*risk-assessment\.pdf/ });
+    await expect(downloadLink).toBeVisible();
+
+    // The download itself exercises OpenReadAsync — the read half of IServiceRequestFileStorage
+    // that nothing else in this app ever calls — and proves the bytes served back are exactly
+    // what the applicant uploaded, not just that a link with the right filename exists.
+    const href = await downloadLink.getAttribute('href');
+    const response = await caseworkerPage.request.get(href!);
+    expect(response.ok()).toBeTruthy();
+    expect(response.headers()['content-type']).toBe('application/pdf');
+    expect(await response.text()).toBe(fileContent);
+
+    await applicantContext.close();
+    await caseworkerContext.close();
+  });
 });
