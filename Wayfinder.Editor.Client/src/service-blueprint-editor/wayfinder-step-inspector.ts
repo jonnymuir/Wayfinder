@@ -43,8 +43,18 @@ function describeComponent(component: AuthoredComponent): string {
     case 'inset-text':
     case 'warning-text':
     case 'details':
-      return component.content ?? component.type;
+    case 'heading':
+    case 'notification-banner':
+      return component.content ?? component.heading ?? component.type;
+    case 'stat-group':
+      return `${component.title ?? 'Statistics'} · ${component.items.length} tile${component.items.length === 1 ? '' : 's'}`;
+    case 'chart':
+      return `${component.title ?? 'Chart'} · bound to ${component.series}`;
     default:
+      // Every remaining type — the full input catalog (text/number/decimal/select/radio/
+      // checkboxlist/date/email/textarea/boolean/slider/file-upload/guidance-checklist) — shares
+      // `label`/`fieldKey` via AuthoredInputComponentBase, so this stays generic rather than
+      // needing a case added every time a new input type is registered.
       return (component as { label?: string }).label
         ?? (component as { fieldKey?: string }).fieldKey
         ?? component.type;
