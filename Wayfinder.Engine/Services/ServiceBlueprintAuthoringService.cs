@@ -99,6 +99,8 @@ public sealed class ServiceBlueprintAuthoringService(
         diagnostics.AddRange(blueprint.ValidateDataDisplayBindings());
         diagnostics.AddRange(blueprint.ValidateReachability());
         diagnostics.AddRange(blueprint.ValidateStageVocabulary());
+        diagnostics.AddRange(ValidateComponentProperties(blueprint));
+        diagnostics.AddRange(ValidateQueueCapabilityDeclarations());
         diagnostics.AddRange(ValidateQueueCapabilities(blueprint));
         foreach (var validator in _structuralValidators)
         {
@@ -185,6 +187,64 @@ public sealed class ServiceBlueprintAuthoringService(
 
         return new ServiceBlueprintValidationOutcome(
             !diagnostics.Any(d => d.Severity == ServiceBlueprintDiagnosticSeverity.Error), diagnostics);
+    }
+
+    /// <summary>
+    /// Validates every component in the blueprint against its own registered
+    /// <see cref="ComponentDescriptor"/> — required properties, allowed values, patterns,
+    /// length/numeric constraints, and (for a <c>ConditionalChildren</c>-style container)
+    /// that every conditional-child key actually matches a declared option. See
+    /// <see cref="ComponentPropertyValidator"/>.
+    /// </summary>
+    private static IEnumerable<ServiceBlueprintDiagnostic> ValidateComponentProperties(ServiceBlueprint blueprint)
+    {
+        foreach (var stage in blueprint.Stages)
+        {
+            foreach (var (component, path) in stage.Components.FlattenWithPaths($"stages.{stage.StageKey}.components"))
+            {
+                var descriptor = ComponentTypeRegistry.DescriptorFor(component);
+                foreach (var diagnostic in ComponentPropertyValidator.Validate(component, descriptor, path))
+                {
+                    yield return diagnostic;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cross-checks every discriminator string a registered <see cref="IQueueCapabilitiesProvider"/>
+    /// declares against <see cref="ComponentTypeRegistry"/> itself — catching a typo'd capability
+    /// string (e.g. <c>"texts"</c> instead of <c>"text"</c>) directly at its source, rather than
+    /// only as a downstream symptom (every component of the intended type silently reported as
+    /// unsupported by <see cref="ValidateQueueCapabilities"/>). Runs unconditionally, independent
+    /// of what <paramref name="blueprint"/> actually contains — a host's declared capabilities are
+    /// static configuration, not blueprint content, so a typo in a queue nothing currently
+    /// authors for would otherwise go unnoticed indefinitely.
+    /// </summary>
+    private IEnumerable<ServiceBlueprintDiagnostic> ValidateQueueCapabilityDeclarations()
+    {
+        if (queueCapabilities is null)
+        {
+            yield break;
+        }
+
+        foreach (var (queueKey, supportedTypes) in queueCapabilities.GetAllDeclaredCapabilities())
+        {
+            foreach (var discriminator in supportedTypes)
+            {
+                if (ComponentTypeRegistry.Find(discriminator) is not null)
+                {
+                    continue;
+                }
+
+                yield return new ServiceBlueprintDiagnostic(
+                    "QUEUE_CAPABILITY_UNKNOWN_COMPONENT_TYPE",
+                    $"queues.{queueKey}",
+                    $"Queue '{queueKey}' declares support for component type '{discriminator}', but no such " +
+                    "type is registered in ComponentTypeRegistry — check for a typo. Call list_component_types " +
+                    "to see every valid discriminator.");
+            }
+        }
     }
 
     /// <summary>
