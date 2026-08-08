@@ -60,6 +60,19 @@ public static class ServiceBlueprintAuthoringResources
         "instead.")]
     public static string AiServiceBlueprintAuthoring() => ReadEmbeddedDoc("ai-service-blueprint-authoring.md");
 
+    [McpServerResource(
+        Name = "extending-the-component-catalog",
+        UriTemplate = "service-blueprint-docs://extending-the-component-catalog",
+        Title = "Extending the Component Catalog",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "How a toolkit integrator registers a genuinely new Component type — ComponentDescriptor/" +
+        "ComponentPropertyDescriptor shape, containment shapes, ComponentTypeRegistry.Register timing, " +
+        "the GovUkComponentRenderer pairing, and a full worked example. For whoever is building a " +
+        "Wayfinder host, not whoever is authoring a blueprint against one — that agent wants " +
+        "authoring-guide instead.")]
+    public static string ExtendingTheComponentCatalog() => ReadEmbeddedDoc("extending-the-component-catalog.md");
+
     private static string ReadEmbeddedDoc(string fileName)
     {
         var assembly = Assembly.GetExecutingAssembly();

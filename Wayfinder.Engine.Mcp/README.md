@@ -33,7 +33,7 @@ for the full picture.
 
 ## Resources
 
-Alongside the tools, this project also registers four MCP resources — the canonical
+Alongside the tools, this project also registers five MCP resources — the canonical
 authoring docs, embedded from `docs/guides/` at build time, fetchable directly by any
 MCP client with no repo checkout:
 
@@ -43,6 +43,7 @@ MCP client with no repo checkout:
 | `service-blueprint-docs://authoring-guide` | [Reference Service Blueprint Contract](../../docs/guides/reference-service-blueprint-contract.md) — the full `ServiceBlueprint` JSON shape. |
 | `service-blueprint-docs://service-design-principles` | [Service Design Principles](../../docs/guides/service-design-principles.md) — Double Diamond, the GOV.UK Service Standard, and Lou Downe's 15 principles of good services, industry-agnostic. |
 | `service-blueprint-docs://ai-service-blueprint-authoring` | [AI-Ready Service Blueprint Authoring — Integrator Guide](../../docs/guides/ai-service-blueprint-authoring.md) — how a host app wires this MCP surface into its own pipeline. |
+| `service-blueprint-docs://extending-the-component-catalog` | [Extending the Component Catalog](../../docs/guides/extending-the-component-catalog.md) — how to register a genuinely new `Component` type. |
 
 ## Connect it to Claude Code
 
