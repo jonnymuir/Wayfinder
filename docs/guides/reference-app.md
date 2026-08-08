@@ -160,9 +160,11 @@ node would be. `Wayfinder` itself has no opinion about this at all — it's a ca
   `juggling-insurance-modeller.json` for the slider/stat-group/chart-driven premium modeller demo
   at `/premium` — see [Package Architecture](#package-architecture) for what renders that)
 - `Wayfinder.ReferenceApp/Services/` — every custom implementation in the table above
-- `Wayfinder.ReferenceApp/wwwroot/` — the real vendored `govuk-frontend` CSS/JS/fonts/images —
-  **host-specific** assets only; anything owned by a shared Wayfinder package (slider/stat-group/
-  chart styling, calculation runtimes) lives in that package's own `wwwroot` instead, see below
+- `Wayfinder.ReferenceApp/wwwroot/` — just this app's own favicon/manifest branding now;
+  **host-specific** assets only. `govuk-frontend` itself, and everything owned by a shared
+  Wayfinder package (slider/stat-group/chart styling, calculation runtimes, the live-form
+  runtime, the join-gateway poll script), lives in that package's own `wwwroot` instead — see
+  below
 - `Wayfinder.ReferenceApp.Tests/` — the Playwright suite (auth, the full citizen→caseworker→citizen
   handoff, the editor/authoring wiring, file upload, the premium modeller) — run single-worker,
   since the backend is one shared in-memory process with fixed demo identities, not per-test
@@ -203,6 +205,29 @@ components.css` and `wayfinder-slider.js` now live in `Wayfinder.Rendering.GovUk
 served from `/_content/Wayfinder.Rendering.GovUk/`. Before adding a CSS/JS file to any host's own
 `wwwroot`, ask: does this style or enhance a component type / behaviour Wayfinder itself defines?
 If so, it belongs in the package that defines that type, not the host.
+
+Same question, same answer, for two more things that had been quietly living in
+`Wayfinder.ReferenceApp` despite describing Wayfinder's own behaviour rather than anything
+host-specific:
+
+- **The real `govuk-frontend` package itself** — CSS, JS, and fonts — is now vendored inside
+  `Wayfinder.Rendering.GovUk/wwwroot/govuk-frontend/` (`Wayfinder.Rendering.GovUk/package.json`
+  documents the exact version), not hand-copied per host. `GovUkComponentRenderer`'s generated
+  markup targets a *specific* `govuk-frontend` version's class names and structure, so shipping
+  the matching build alongside the renderer that assumes it keeps them permanently in lockstep —
+  no host can accidentally load a mismatched version. One real wrinkle: `govuk-frontend.min.css`'s
+  own `@font-face` rules hard-code an absolute `/assets/fonts/...` URL regardless of where the CSS
+  itself is served from, so `Wayfinder.ReferenceApp/Program.cs` re-roots that one sub-path onto
+  its own site root with a second `SubPathFileProvider`-backed `UseStaticFiles()` call — the exact
+  same trick already used to serve `Wayfinder.Editor`'s compiled bundle at plain `/`, just applied
+  to a font sub-path instead of a whole site root.
+- **The join-gateway poll script and the govuk-frontend `initAll()` bootstrap** — previously two
+  raw JavaScript strings hand-authored as C# constants inside `PageShell.cs` — are now real files,
+  `wayfinder-poll.js` and `wayfinder-govuk-frontend-init.js`, shipped the same way. Neither had
+  any host-specific logic in it: the poll script only ever reacts to
+  `data-wayfinder-poll-interval-ms`, a Wayfinder-owned data attribute (`RenderWaiting` in
+  `GovUkComponents.cs`), and the init script is govuk-frontend's own documented three-line
+  quick-start, not something specific to this app.
 
 ### The calculation language has two runtimes, one canonical source
 

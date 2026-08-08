@@ -75,8 +75,9 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
-// This app's own wwwroot — the real govuk-frontend compiled CSS/JS/fonts/images vendored in
-// (see Wayfinder.ReferenceApp/package.json and PageShell.cs), not a lookalike stylesheet.
+// This app's own wwwroot — just its favicon/manifest branding now. The real govuk-frontend
+// package (CSS/JS/fonts) is vendored inside Wayfinder.Rendering.GovUk instead, version-locked to
+// whatever that package's own generated markup actually targets — see PageShell.cs.
 app.UseStaticFiles();
 
 // Serve Wayfinder.Editor's compiled service-blueprint-editor.html + JS/CSS assets at web root —
@@ -95,6 +96,18 @@ app.UseStaticFiles(new StaticFileOptions
             ctx.Context.Response.Headers.Expires = "0";
         }
     }
+});
+
+// govuk-frontend.min.css's own @font-face rules request fonts at a hard-coded absolute
+// "/assets/fonts/..." — baked into the pre-built CSS regardless of where the CSS file itself is
+// served from, so the vendored font files (inside Wayfinder.Rendering.GovUk alongside the CSS)
+// need re-rooting onto that exact path, the same SubPathFileProvider trick as Wayfinder.Editor
+// above. Distinct sub-path from this app's own "/assets/images/..." favicon set below — both
+// static files middleware calls just fall through to the next on a miss, so there's no collision.
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new SubPathFileProvider(app.Environment.WebRootFileProvider, "_content/Wayfinder.Rendering.GovUk/govuk-frontend/assets"),
+    RequestPath = "/assets"
 });
 
 app.UseAuthentication();
