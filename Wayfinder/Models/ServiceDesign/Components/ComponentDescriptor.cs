@@ -60,7 +60,19 @@ public enum ComponentPropertyValueKind
 /// </summary>
 public sealed record ComponentPropertyDescriptor
 {
-    /// <summary>The JSON property name, e.g. <c>"minLength"</c>.</summary>
+    /// <summary>
+    /// The real CLR property name on the component record (e.g. <c>"FieldKey"</c>) —
+    /// <c>BuiltInComponentDescriptors.cs</c> sets this via <see langword="nameof"/> against the
+    /// actual property, deliberately, so a rename breaks the build instead of drifting silently,
+    /// and <c>ComponentPropertyValidator</c> reflects against this exact value at runtime
+    /// (<c>type.GetProperty(property.Key)</c>) — it must stay the real CLR name, PascalCase,
+    /// for that to keep working. Serializes to JSON as camelCase (e.g. <c>"fieldKey"</c>) via
+    /// <see cref="PropertyNameJsonConverter"/>, matching the real wire property this key
+    /// addresses in an authored component's own JSON — a client should never need to camelCase
+    /// this itself. Read <see cref="PropertyNameJsonConverter"/>'s own remarks for why this
+    /// exists as a converter rather than two different values.
+    /// </summary>
+    [JsonConverter(typeof(PropertyNameJsonConverter))]
     public required string Key { get; init; }
 
     /// <summary>Human-readable label for editor UI, e.g. "Minimum length".</summary>
@@ -139,22 +151,30 @@ public sealed record ComponentContainment
     /// <summary>
     /// The CLR property (on the component's own record) holding the children
     /// (<see cref="ContainmentKind.ChildList"/>/<see cref="ContainmentKind.KeyedChildren"/>) or
-    /// sections (<see cref="ContainmentKind.NamedSections"/>).
+    /// sections (<see cref="ContainmentKind.NamedSections"/>). Same PascalCase-internally,
+    /// camelCase-over-JSON split as <see cref="ComponentPropertyDescriptor.Key"/> — see
+    /// <see cref="PropertyNameJsonConverter"/>'s remarks; <c>ComponentExtensions</c>'s tree
+    /// walker and <c>ComponentPropertyValidator</c> both reflect against this exact value.
     /// </summary>
+    [JsonConverter(typeof(PropertyNameJsonConverter))]
     public string? PropertyName { get; init; }
 
     /// <summary>
     /// For <see cref="ContainmentKind.NamedSections"/> only: the property on each section
-    /// record holding its own children (e.g. <c>AccordionSection.Children</c>).
+    /// record holding its own children (e.g. <c>AccordionSection.Children</c>). Same
+    /// PascalCase-internally, camelCase-over-JSON split as <see cref="PropertyName"/>.
     /// </summary>
+    [JsonConverter(typeof(PropertyNameJsonConverter))]
     public string? SectionChildrenPropertyName { get; init; }
 
     /// <summary>
     /// For <see cref="ContainmentKind.KeyedChildren"/> only: the property on the *same*
     /// component whose values a valid key should be a subset of (e.g. <c>"Options"</c>) — lets
     /// the generic validator catch a <c>ConditionalChildren</c> key that doesn't match any
-    /// declared option, a check that doesn't exist anywhere today.
+    /// declared option, a check that doesn't exist anywhere today. Same PascalCase-internally,
+    /// camelCase-over-JSON split as <see cref="PropertyName"/>.
     /// </summary>
+    [JsonConverter(typeof(PropertyNameJsonConverter))]
     public string? KeySourceProperty { get; init; }
 
     public static ComponentContainment ChildList(string propertyName) =>
@@ -231,4 +251,33 @@ internal sealed class ClrTypeNameJsonConverter : JsonConverter<Type>
 
     public override void Write(Utf8JsonWriter writer, Type value, JsonSerializerOptions options) =>
         writer.WriteStringValue(value.Name);
+}
+
+/// <summary>
+/// Writes a real CLR property name (e.g. <c>"FieldKey"</c>) as its camelCase JSON-property-name
+/// form (e.g. <c>"fieldKey"</c>) — used on every descriptor field that names another property
+/// (<see cref="ComponentPropertyDescriptor.Key"/>, <see cref="ComponentContainment.PropertyName"/>/
+/// <see cref="ComponentContainment.SectionChildrenPropertyName"/>/<see cref="ComponentContainment.KeySourceProperty"/>).
+/// Deliberately a converter, not two separate values: the C# side needs the *real* CLR name
+/// (both for <see langword="nameof"/>'s compile-time safety in <c>BuiltInComponentDescriptors.cs</c>,
+/// and because <c>ComponentExtensions</c>/<c>ComponentPropertyValidator</c> reflect against this
+/// exact value at runtime — <c>type.GetProperty(property.Key)</c> — so it can never itself become
+/// camelCase), while every JSON consumer (the editor client's TS side included) only ever wants
+/// to address the real wire property this key names, which is camelCase. Converting once, here,
+/// at the one place the two representations actually meet, means neither side has to think about
+/// the other's casing convention — found the need for this the hard way: the editor's properties-
+/// panel add/edit UI (phase 6) originally read/wrote raw <see cref="ComponentPropertyDescriptor.Key"/>
+/// values directly against real component JSON, silently reading/writing the wrong property
+/// (every field appeared blank; edits never reached the field the runtime actually reads) —
+/// fixed here instead of by asking every client call site to remember to camelCase it itself.
+/// </summary>
+internal sealed class PropertyNameJsonConverter : JsonConverter<string>
+{
+    public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        throw new NotSupportedException(
+            "A ComponentDescriptor property-name field is not deserializable — descriptors are " +
+            "constructed in code, never read from JSON.");
+
+    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.Length == 0 ? value : char.ToLowerInvariant(value[0]) + value[1..]);
 }

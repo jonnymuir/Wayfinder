@@ -18,10 +18,6 @@ function findLine(source: string, needle: string): number | undefined {
   return source.slice(0, index).split('\n').length;
 }
 
-function lowerFirst(text: string): string {
-  return text.length === 0 ? text : text.charAt(0).toLowerCase() + text.slice(1);
-}
-
 /**
  * Phase 7 — live, as-you-type component validation in the Definition tab, mirroring
  * Wayfinder.Engine.Services.ComponentPropertyValidator's own checks (required/allowedValues/
@@ -72,11 +68,11 @@ function lintComponentTree(
 
     const { containment } = descriptor;
     if (containment.kind === 'ChildList' && containment.propertyName) {
-      const key = lowerFirst(containment.propertyName);
+      const key = containment.propertyName;
       lintComponentTree(component[key], catalog, source, `${componentPath}.${key}`, issues);
     } else if (containment.kind === 'NamedSections' && containment.propertyName) {
-      const key = lowerFirst(containment.propertyName);
-      const childrenKey = containment.sectionChildrenPropertyName ? lowerFirst(containment.sectionChildrenPropertyName) : 'children';
+      const key = containment.propertyName;
+      const childrenKey = containment.sectionChildrenPropertyName ?? 'children';
       const sections = component[key];
       if (Array.isArray(sections)) {
         sections.forEach((rawSection, sectionIndex) => {
@@ -87,8 +83,8 @@ function lintComponentTree(
         });
       }
     } else if (containment.kind === 'KeyedChildren' && containment.propertyName && containment.keySourceProperty) {
-      const key = lowerFirst(containment.propertyName);
-      const optionsKey = lowerFirst(containment.keySourceProperty);
+      const key = containment.propertyName;
+      const optionsKey = containment.keySourceProperty;
       const byKey = component[key];
       const options = Array.isArray(component[optionsKey]) ? (component[optionsKey] as unknown[]).map(String) : [];
       if (byKey && typeof byKey === 'object' && !Array.isArray(byKey)) {

@@ -34,7 +34,7 @@ const CATALOG: ComponentDescriptor[] = [
     clrType: 'FieldsetComponent',
     isInput: false,
     properties: [{ key: 'legend', title: 'Legend', valueKind: 'String', required: false }],
-    containment: { kind: 'ChildList', propertyName: 'Children' },
+    containment: { kind: 'ChildList', propertyName: 'children' },
   },
   {
     discriminator: 'radio',
@@ -47,7 +47,10 @@ const CATALOG: ComponentDescriptor[] = [
       { key: 'label', title: 'Label', valueKind: 'String', required: true },
       { key: 'options', title: 'Options', valueKind: 'StringArray', required: true },
     ],
-    containment: { kind: 'KeyedChildren', propertyName: 'ConditionalChildren', keySourceProperty: 'Options' },
+    // propertyName/keySourceProperty are camelCase here too, matching what a live host actually
+    // sends (see ComponentDescriptor.cs's PropertyNameJsonConverter) — not the C#-internal
+    // "ConditionalChildren"/"Options" nameof() values.
+    containment: { kind: 'KeyedChildren', propertyName: 'conditionalChildren', keySourceProperty: 'options' },
   },
 ];
 

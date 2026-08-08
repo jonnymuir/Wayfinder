@@ -45,10 +45,6 @@ export interface ChildEditorContext {
   idPrefix: string;
 }
 
-function lowerFirst(text: string): string {
-  return text.length === 0 ? text : text.charAt(0).toLowerCase() + text.slice(1);
-}
-
 function describeChildLabel(component: AuthoredComponent): string {
   return (component as { label?: string }).label
     ?? (component as { fieldKey?: string }).fieldKey
@@ -91,7 +87,7 @@ function renderContainment(
   }
 
   const record = component as unknown as Record<string, unknown>;
-  const propertyKey = lowerFirst(containment.propertyName);
+  const propertyKey = containment.propertyName;
 
   if (containment.kind === 'ChildList') {
     const children = Array.isArray(record[propertyKey]) ? (record[propertyKey] as AuthoredComponent[]) : [];
@@ -102,9 +98,7 @@ function renderContainment(
     const sections = Array.isArray(record[propertyKey])
       ? (record[propertyKey] as Array<{ heading?: string; summary?: string | null; children?: AuthoredComponent[] }>)
       : [];
-    const sectionChildrenKey = containment.sectionChildrenPropertyName
-      ? lowerFirst(containment.sectionChildrenPropertyName)
-      : 'children';
+    const sectionChildrenKey = containment.sectionChildrenPropertyName ?? 'children';
     const sectionsPath: PropertyPath = [...path, propertyKey];
     const containerKey = sectionsPath.join('-');
 
@@ -146,7 +140,7 @@ function renderContainment(
   // KeyedChildren — radio/checkboxlist's conditionalChildren, keyed by a subset of a sibling
   // Options property (see ComponentContainment.keySourceProperty).
   if (containment.kind === 'KeyedChildren' && containment.keySourceProperty) {
-    const optionsKey = lowerFirst(containment.keySourceProperty);
+    const optionsKey = containment.keySourceProperty;
     const options = Array.isArray(record[optionsKey]) ? (record[optionsKey] as string[]) : [];
     const byKey = (record[propertyKey] && typeof record[propertyKey] === 'object')
       ? (record[propertyKey] as Record<string, AuthoredComponent[]>)
