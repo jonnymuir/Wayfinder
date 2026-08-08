@@ -210,7 +210,7 @@ public sealed class ServiceBlueprintAuthoringService(
 
             foreach (var (component, path) in stage.Components.FlattenWithPaths($"stages.{stage.StageKey}.components"))
             {
-                var discriminator = ComponentTypeCatalog.DiscriminatorFor(component);
+                var discriminator = ComponentTypeRegistry.DiscriminatorFor(component);
                 if (supportedTypes.Contains(discriminator, StringComparer.Ordinal))
                 {
                     continue;
