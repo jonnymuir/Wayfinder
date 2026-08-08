@@ -54,6 +54,14 @@ public static class ServiceBlueprintAuthoringApiExtensions
         group.MapGet("/blueprints", async (ServiceBlueprintAuthoringService service, CancellationToken ct) =>
             Results.Ok(await service.ListAsync(ct)));
 
+        // Read-only, host-wide catalog data — not scoped to any one blueprint, so it lives
+        // directly on this toolkit route rather than behind a host's own mockapp-style CRUD
+        // mediation (see ServiceBlueprintSource in Wayfinder.Editor.Client). The REST twin of
+        // the MCP list_component_types tool, for the browser-based editor: every registered
+        // component type (built-in and any host-registered custom one — see
+        // docs/guides/extending-the-component-catalog.md), driving the schema-based add/edit UI.
+        group.MapGet("/component-types", () => Results.Ok(ComponentTypeRegistry.All));
+
         group.MapGet("/blueprints/{definitionKey}", async (
             string definitionKey,
             ServiceBlueprintAuthoringService service,

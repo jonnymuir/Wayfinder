@@ -6,8 +6,15 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 /// <summary>
 /// Where a component type sits in the catalog — matches the categorisation already used in
 /// docs/guides/reference-service-blueprint-contract.md's own prose catalog exactly, now made
-/// machine-readable instead of re-derived by hand wherever it's needed.
+/// machine-readable instead of re-derived by hand wherever it's needed. Serializes as its name
+/// (e.g. <c>"Container"</c>), not the underlying int — found the hard way: this enum had no
+/// converter of its own (unlike <c>ServiceBlueprintSaveStatus</c>), and neither
+/// <see cref="ServiceBlueprintJson"/>'s shared options nor ASP.NET Core's own default JSON
+/// options apply a global string-enum converter, so <c>list_component_types</c>/
+/// <c>GET /component-types</c> silently sent a raw integer to every consumer — caught only by
+/// actually curling the live endpoint and inspecting the response, not by any compiler.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ComponentCategory>))]
 public enum ComponentCategory
 {
     /// <summary>Declares a <c>fieldKey</c>, participates in the calculation scope.</summary>
@@ -27,8 +34,10 @@ public enum ComponentCategory
 /// small vocabulary as <c>AuthoredParameterDefinition.valueKind</c> (the editor's own proven
 /// schema shape for action parameters, <c>Wayfinder.Editor.Client/src/service-blueprint-editor/types.ts</c>),
 /// so a component's property schema and an action's parameter schema are the same shape a host
-/// or editor UI only has to understand once.
+/// or editor UI only has to understand once. Serializes as its name — see
+/// <see cref="ComponentCategory"/>'s remarks for why this attribute matters.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ComponentPropertyValueKind>))]
 public enum ComponentPropertyValueKind
 {
     String,
@@ -92,7 +101,11 @@ public sealed record ComponentPropertyDescriptor
     public ComponentPropertyDescriptor? Items { get; init; }
 }
 
-/// <summary>The shape of a container component's child slot(s).</summary>
+/// <summary>
+/// The shape of a container component's child slot(s). Serializes as its name — see
+/// <see cref="ComponentCategory"/>'s remarks for why this attribute matters.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ContainmentKind>))]
 public enum ContainmentKind
 {
     /// <summary>A leaf — no children (most component types).</summary>
