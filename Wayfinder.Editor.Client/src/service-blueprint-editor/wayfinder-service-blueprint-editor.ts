@@ -311,6 +311,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-save-error]')?.focus();
       });
     }
+    // The component catalog fetch (component-catalog.ts) resolves asynchronously, independent
+    // of the Definition tab's own debounced re-lint (which only re-runs on text edits) — a user
+    // who opens the Definition tab before it resolves would otherwise see component-schema
+    // issues only after their next keystroke. Re-lint the already-loaded text once the catalog
+    // actually arrives, so it isn't silently skipped for however long that race happens to last.
+    if (_changedProperties.has('_componentCatalog') && this._definitionText) {
+      this._tryApplyDefinitionText();
+    }
   }
 
   disconnectedCallback() {
@@ -1338,7 +1346,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return;
     }
 
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, source);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, source, this._componentCatalog);
     if (issues.length > 0) {
       this._definitionParseError = null;
       this._definitionSchemaIssues = issues;
