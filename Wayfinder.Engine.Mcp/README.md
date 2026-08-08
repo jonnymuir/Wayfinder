@@ -26,7 +26,8 @@ for the full picture.
 | `list_service_blueprints` | List every service blueprint definition in the store (key + display name). |
 | `read_service_blueprint` | Read a service blueprint definition by `definitionKey`. |
 | `list_queue_capabilities` | List every queue this host has declared render capabilities for, and which component types each supports. A queue absent from the result is unrestricted (not this host's declared concern). |
-| `validate_service_blueprint` | Check gateway routing, any `calculations` block, and (when the host declares queue render capabilities) that every component is supported by its state's queue, without saving. |
+| `list_component_types` | List every registered `Component` "type" discriminator (built-in and any toolkit extension's own) — display name, category, property schema, and containment shape. The live source of truth behind every "type" string used in a stage's `components` array. |
+| `validate_service_blueprint` | Check gateway routing, any `calculations` block, every component's own properties against its registered type, and (when the host declares queue render capabilities) that every component is supported by its state's queue, without saving. |
 | `save_service_blueprint` | Validate and save. Invalid definitions are rejected, not saved. Visible to the live app immediately. |
 | `simulate_service_blueprint` | Dry-run a scripted sequence of actions with zero persistence. Returns `{ trace, calculations }` — the resulting state trace, plus the raw calculated field/series values per step (not just what's baked into rendered UI text). Accepts optional `mockServiceInputsJson` to resolve any `source: "service"` calculation field. |
 

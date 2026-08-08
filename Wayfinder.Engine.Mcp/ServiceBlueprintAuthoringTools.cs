@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
 using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Services.Calculations;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Services;
@@ -71,11 +72,32 @@ public static class ServiceBlueprintAuthoringTools
         ServiceBlueprintAuthoringService service) =>
         service.GetQueueCapabilities();
 
+    [McpServerTool(Name = "list_component_types")]
+    [Description(
+        "List every registered Component \"type\" discriminator this toolkit (built-in and any " +
+        "toolkit extension's own) actually knows how to deserialize — the live source of truth " +
+        "behind every \"type\" value used in a stage's components array. Each entry has " +
+        "discriminator, displayName, category (Input/Content/Container/DataDisplay/FlowControl), " +
+        "isInput (participates in the calculation scope), properties (key/title/valueKind/" +
+        "required/allowedValues/format/pattern/minimum/maximum/minLength/maxLength, recursively " +
+        "via properties/items for nested shapes like a chart's bands), and containment (none, or " +
+        "how it holds child components — see the containment.kind/propertyName fields). Call this " +
+        "before authoring a component you haven't used before, or before declaring a queue's " +
+        "capabilities, to avoid a typo'd \"type\" string that validate_service_blueprint would " +
+        "otherwise only catch indirectly. See also service-blueprint-docs://extending-the-component-catalog " +
+        "for how to register a genuinely new component type.")]
+    public static IReadOnlyList<ComponentDescriptor> ListComponentTypes() => ComponentTypeRegistry.All;
+
     [McpServerTool(Name = "validate_service_blueprint")]
     [Description(
         "Validate a service blueprint JSON — checks that every stage route targets a gateway " +
-        "(never another stage directly), that any calculations block evaluates cleanly, and that " +
-        "every stat-group/chart/summary-list component's bound field or series actually exists. " +
+        "(never another stage directly), that any calculations block evaluates cleanly, that " +
+        "every stat-group/chart/summary-list component's bound field or series actually exists, " +
+        "and that every component's own properties satisfy its registered type's requirements " +
+        "(COMPONENT_PROPERTY_REQUIRED/_INVALID_VALUE/_PATTERN_MISMATCH/_TOO_SHORT/_TOO_LONG/" +
+        "_TOO_SMALL/_TOO_LARGE, and COMPONENT_CONDITIONAL_CHILD_KEY_MISMATCH for a " +
+        "ConditionalChildren key that doesn't match a declared option — call list_component_types " +
+        "to see what's required per type). " +
         "Does not save. Returns { isValid, diagnostics }, each diagnostic { code, path, message, severity } " +
         "— severity \"Warning\" (e.g. an unverifiable service-sourced field) does not block isValid. " +
         "When the host declares queue render capabilities, also checks that every component in a " +

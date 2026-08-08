@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
@@ -177,7 +180,19 @@ public sealed record ComponentDescriptor
     /// <summary>Longer help text — editor tooltip / AI-agent-readable prose.</summary>
     public string? Description { get; init; }
 
-    /// <summary>The CLR type backing this discriminator — must derive from <see cref="Component"/>.</summary>
+    /// <summary>
+    /// The CLR type backing this discriminator — must derive from <see cref="Component"/>.
+    /// <see cref="Type"/> itself isn't meaningfully JSON-serializable (reflecting over its own
+    /// huge surface), so this serializes as just its <see cref="Type.Name"/> (e.g.
+    /// <c>"TextInputComponent"</c>) via <see cref="ClrTypeNameJsonConverter"/> — a converter
+    /// rather than <c>[JsonIgnore]</c>: System.Text.Json treats a <see langword="required"/>
+    /// member that's also ignored as a contradiction (it can never be satisfied during
+    /// deserialization) and throws when building a contract for the type. Hit for real: the
+    /// <c>list_component_types</c> MCP tool's auto-generated output schema — built by
+    /// <c>Microsoft.Extensions.AI</c> — crashed the whole host at startup on exactly this before
+    /// it became a converter instead.
+    /// </summary>
+    [JsonConverter(typeof(ClrTypeNameJsonConverter))]
     public required Type ClrType { get; init; }
 
     /// <summary>True for types deriving from <see cref="InputComponent"/> — declares a <c>fieldKey</c> and participates in the calculation scope.</summary>
@@ -186,4 +201,21 @@ public sealed record ComponentDescriptor
     public IReadOnlyList<ComponentPropertyDescriptor> Properties { get; init; } = Array.Empty<ComponentPropertyDescriptor>();
 
     public ComponentContainment Containment { get; init; } = ComponentContainment.None;
+}
+
+/// <summary>
+/// Writes a <see cref="ComponentDescriptor.ClrType"/> as just <see cref="Type.Name"/> — a
+/// <see cref="ComponentDescriptor"/> is only ever hand-constructed in code (see
+/// <see cref="BuiltInComponentDescriptors"/>), never deserialized from JSON, so
+/// <see cref="Read"/> is unreachable in practice and throws rather than pretend to support it.
+/// </summary>
+internal sealed class ClrTypeNameJsonConverter : JsonConverter<Type>
+{
+    public override Type Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        throw new NotSupportedException(
+            $"{nameof(ComponentDescriptor)}.{nameof(ComponentDescriptor.ClrType)} is not deserializable — " +
+            "descriptors are constructed in code, never read from JSON.");
+
+    public override void Write(Utf8JsonWriter writer, Type value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.Name);
 }
