@@ -22,14 +22,10 @@ public static class ServiceBlueprintAuthoringTools
     // no supported hook to configure it), so it fails whenever a component's "type"
     // discriminator isn't the first JSON property, which a model-constructed payload can't
     // be relied on to guarantee. Tools that take a blueprint as input accept it as a JSON
-    // string and deserialize it themselves with the same options FilesystemServiceBlueprintSourceStore
-    // uses. Tools that only return a ServiceBlueprint (read_service_blueprint) are unaffected —
-    // serialization already writes the discriminator first — so those stay typed.
-    private static readonly JsonSerializerOptions ServiceBlueprintJsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        AllowOutOfOrderMetadataProperties = true
-    };
+    // string and deserialize it themselves with ServiceBlueprintJson.ReadOptions — the same
+    // shared options every other store/tool in the engine uses. Tools that only return a
+    // ServiceBlueprint (read_service_blueprint) are unaffected — serialization already writes
+    // the discriminator first — so those stay typed.
 
     [McpServerTool(Name = "list_service_blueprints")]
     [Description("List every service blueprint available in the connected host's store, with key and display name.")]
@@ -158,7 +154,7 @@ public static class ServiceBlueprintAuthoringTools
         {
             throw new InvalidOperationException(diagnostic!.Message);
         }
-        var steps = JsonSerializer.Deserialize<List<ProcessManagerSimulationStep>>(stepsJson, ServiceBlueprintJsonOptions)
+        var steps = JsonSerializer.Deserialize<List<ProcessManagerSimulationStep>>(stepsJson, ServiceBlueprintJson.ReadOptions)
             ?? [];
         var mockServiceInputs = string.IsNullOrWhiteSpace(mockServiceInputsJson)
             ? null
@@ -176,7 +172,7 @@ public static class ServiceBlueprintAuthoringTools
     {
         try
         {
-            blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(blueprintJson, ServiceBlueprintJsonOptions)
+            blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(blueprintJson, ServiceBlueprintJson.ReadOptions)
                 ?? throw new JsonException("blueprintJson did not deserialize to a ServiceBlueprint.");
             diagnostic = null;
             return true;

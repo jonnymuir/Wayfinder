@@ -7,12 +7,6 @@ namespace Wayfinder.Engine.Stores;
 
 public sealed class FilesystemServiceBlueprintStore(string blueprintSeedPath) : IServiceBlueprintStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
     public IReadOnlyDictionary<string, ServiceBlueprint> LoadDefinitions(ILogger logger)
     {
         var definitions = new Dictionary<string, ServiceBlueprint>(StringComparer.OrdinalIgnoreCase);
@@ -31,7 +25,7 @@ public sealed class FilesystemServiceBlueprintStore(string blueprintSeedPath) : 
             {
                 var definition = JsonSerializer.Deserialize<ServiceBlueprint>(
                     File.ReadAllText(file),
-                    JsonOptions);
+                    ServiceBlueprintJson.ReadOptions);
 
                 if (definition == null || string.IsNullOrWhiteSpace(definition.DefinitionKey))
                 {

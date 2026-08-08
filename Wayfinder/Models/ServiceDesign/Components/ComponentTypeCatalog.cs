@@ -6,10 +6,13 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 /// <summary>
 /// Reflects <see cref="Component"/>'s <c>[JsonDerivedType]</c> attribute list ONCE into
 /// static lookups — the single source of truth for which component "type" discriminator
-/// strings actually exist, avoiding a second hand-maintained list that can drift (a hardcoded
-/// switch elsewhere in the runtime still lists "tel" despite <c>TelComponent</c> having no
-/// <c>[JsonDerivedType]</c> entry and therefore never actually being deserializable — proof of
-/// the drift risk this catalog exists to prevent; not fixed here, out of scope).
+/// strings actually exist, avoiding a second hand-maintained list that can drift. This class
+/// used to carry a cautionary example of exactly that drift: a hardcoded switch elsewhere in
+/// the runtime still listing "tel" despite <c>TelComponent</c> having no <c>[JsonDerivedType]</c>
+/// entry and therefore never actually being deserializable. Fixed by deleting the dead type and
+/// its orphaned switch arms rather than finishing it — see git history if a real telephone input
+/// type is wanted later; it would need a renderer case (<c>GovUkFields.cs</c> never had one
+/// either) as well as the discriminator entry to actually work.
 ///
 /// This also doubles as Wayfinder's own honest, published declaration of what its stock rendering
 /// pipeline supports — referenced directly (not re-derived or guessed) by any host wanting to
