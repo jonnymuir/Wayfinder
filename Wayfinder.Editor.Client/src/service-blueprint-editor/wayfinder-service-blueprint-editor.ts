@@ -7,6 +7,7 @@ import {
   type AuthoredRoute,
   type AuthoredStage,
   type AuthoredServiceBlueprint,
+  type ComponentDescriptor,
   type ServiceBlueprintNodePosition,
   hydrateServiceBlueprintDefinition,
   serviceBlueprintGateways,
@@ -16,6 +17,8 @@ import { projectServiceBlueprintLocally } from './service-request-runtime-projec
 import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import { BuiltInServiceBlueprintActionCatalog } from './action-catalog.js';
+import type { ServiceBlueprintComponentCatalog } from './component-catalog.js';
+import { HttpServiceBlueprintComponentCatalog } from './component-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
 import { availableContexts, contextForTiming, timingForContext, updateActionSummary } from './action-editing.js';
@@ -167,6 +170,18 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @property({ attribute: false })
   actionCatalog?: ServiceBlueprintActionCatalog;
 
+  /**
+   * Host-supplied catalog of component types the properties panel's add/edit UI can offer —
+   * see docs/guides/extending-the-component-catalog.md. Falls back to a live fetch from
+   * whichever host this editor instance is talking to (see HttpServiceBlueprintComponentCatalog),
+   * NOT a hand-mirrored static stub like actionCatalog's default — a host-registered custom
+   * component type should appear here with no editor code change. If the fetch fails (no live
+   * host, e.g. an offline Storybook story with no explicit override), the add/edit UI degrades
+   * gracefully to a read-only component list, same as before this feature existed.
+   */
+  @property({ attribute: false })
+  componentCatalog?: ServiceBlueprintComponentCatalog;
+
   /** Optional UX hint about the current author. Never authoritative. */
   @property({ attribute: false })
   authorContext?: ServiceBlueprintAuthorContext;
@@ -193,6 +208,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @state() private _loading = false;
   @state() private _error: string | null = null;
   @state() private _actionCatalog: ActionCatalogEntry[] = [];
+  @state() private _componentCatalog: ComponentDescriptor[] = [];
   @state() private _undoHistory: ServiceBlueprintHistoryEntry[] = [];
   @state() private _redoHistory: ServiceBlueprintHistoryEntry[] = [];
   @state() private _historyAnnouncement = '';
@@ -267,6 +283,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     void this._loadActionCatalog();
+    void this._loadComponentCatalog();
 
     if (this.initialServiceBlueprint) {
       this._initialiseEditorState(this.initialServiceBlueprint);
@@ -349,6 +366,18 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private async _loadActionCatalog() {
     const catalog = this.actionCatalog ?? new BuiltInServiceBlueprintActionCatalog();
     this._actionCatalog = await catalog.entries();
+  }
+
+  private async _loadComponentCatalog() {
+    const catalog = this.componentCatalog ?? new HttpServiceBlueprintComponentCatalog();
+    try {
+      this._componentCatalog = await catalog.entries();
+    } catch {
+      // No live host to fetch from (an offline demo, a Storybook story with no override) — the
+      // properties panel's add/edit UI simply stays unavailable, same as before this feature
+      // existed; never block the rest of the editor on this.
+      this._componentCatalog = [];
+    }
   }
 
   private _initialiseEditorState(serviceBlueprint: AuthoredServiceBlueprint) {
@@ -2491,6 +2520,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     .selectedActionIndex=${this._selectedActionIndex}
                     .selectedActionTransitionIndex=${this._selectedTransitionIndex}
                     .actionCatalog=${this._actionCatalog}
+                    .componentCatalog=${this._componentCatalog}
                     @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
                     @action-selected=${this._handleActionSelected}
                   ></wayfinder-step-inspector>

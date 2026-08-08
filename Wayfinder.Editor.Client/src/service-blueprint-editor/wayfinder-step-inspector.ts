@@ -6,12 +6,19 @@ import type {
   AuthoredComponent,
   AuthoredGateway,
   AuthoredStage,
+  ComponentDescriptor,
   RouteView,
   AuthoredServiceBlueprint,
   EditorStageType,
 } from './types.js';
 import { serviceBlueprintGateways, serviceBlueprintStages } from './types.js';
 import { NODE_ICONS, defaultIconForGateway, defaultIconForStage, type NodeIconDef, type NodeIconName } from './graph/node-icons.js';
+import {
+  blankComponentFor,
+  renderComponentPropertyFields,
+  setAtPath,
+  type PropertyPath,
+} from './component-property-editor.js';
 
 function renderNodeIconSvg(icon: NodeIconDef) {
   return svg`
@@ -135,6 +142,14 @@ export class WayfinderStepInspectorElement extends LitElement {
   @property({ attribute: false })
   actionCatalog: ActionCatalogEntry[] = [];
 
+  /**
+   * Component types this properties panel can offer for add/edit — see
+   * component-catalog.ts. Empty (the default) means no live host catalog is available; the
+   * components section falls back to a read-only list, same as before this feature existed.
+   */
+  @property({ attribute: false })
+  componentCatalog: ComponentDescriptor[] = [];
+
   @property({ attribute: false })
   availableQueues: QueueDefinition[] = [];
 
@@ -146,9 +161,13 @@ export class WayfinderStepInspectorElement extends LitElement {
 
   @state() private _stageKeyError: string | null = null;
   @state() private _statusMessage: string | null = null;
+  @state() private _expandedComponentIndex: number | null = null;
 
   /** Tracks the route id of a just-created route so updated() can focus its target picker. */
   private _newlyAddedRouteId: string | null = null;
+
+  /** Index of a just-added component so updated() can expand it and focus its first field. */
+  private _newlyAddedComponentIndex: number | null = null;
 
   private get _selectedStage(): AuthoredStage | null {
     if (!this.serviceBlueprint || !this.selectedStageKey) {
@@ -169,6 +188,7 @@ export class WayfinderStepInspectorElement extends LitElement {
   protected updated(changed: Map<string, unknown>) {
     if (changed.has('selectedStageKey')) {
       this._stageKeyError = null;
+      this._expandedComponentIndex = null;
     }
     if (changed.has('selectedGatewayKey')) {
       this._gatewayKeyError = null;
@@ -185,6 +205,21 @@ export class WayfinderStepInspectorElement extends LitElement {
         }
         if (targetPicker) {
           targetPicker.focus();
+        }
+      });
+    }
+
+    if (this._newlyAddedComponentIndex !== null) {
+      const index = this._newlyAddedComponentIndex;
+      this._newlyAddedComponentIndex = null;
+      requestAnimationFrame(() => {
+        const container = this.shadowRoot?.querySelector<HTMLElement>(`[data-wayfinder-component-index="${index}"]`);
+        const firstField = container?.querySelector<HTMLElement>('input, select, textarea');
+        if (container) {
+          container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        if (firstField) {
+          firstField.focus();
         }
       });
     }
@@ -637,6 +672,83 @@ export class WayfinderStepInspectorElement extends LitElement {
     this._newlyAddedRouteId = routeId;
     this._emitServiceBlueprintUpdated(nextServiceBlueprint, { kind: 'gateway', gatewayKey });
     this._announce('Route added — choose a destination.');
+  }
+
+  private _replaceSelectedStageComponents(nextComponents: AuthoredComponent[]) {
+    const stage = this._selectedStage;
+    if (!stage) {
+      return;
+    }
+
+    this._replaceSelectedStage({ ...stage, components: nextComponents });
+  }
+
+  private _handleAddComponent() {
+    const stage = this._selectedStage;
+    if (!stage || this.componentCatalog.length === 0) {
+      return;
+    }
+
+    const select = this.shadowRoot?.querySelector<HTMLSelectElement>('[data-wayfinder-add-component-type]');
+    const descriptor = this.componentCatalog.find(candidate => candidate.discriminator === select?.value);
+    if (!descriptor) {
+      this._announce('Choose a component type before adding.');
+      return;
+    }
+
+    const nextComponent = blankComponentFor(descriptor) as unknown as AuthoredComponent;
+    const components = [...(stage.components ?? []), nextComponent];
+    const newIndex = components.length - 1;
+
+    this._replaceSelectedStageComponents(components);
+    this._expandedComponentIndex = newIndex;
+    this._newlyAddedComponentIndex = newIndex;
+    this._announce(`${descriptor.displayName} component added.`);
+  }
+
+  private _handleComponentPropertyChange(index: number, path: PropertyPath, value: unknown) {
+    const stage = this._selectedStage;
+    if (!stage) {
+      return;
+    }
+
+    const components = stage.components ?? [];
+    const current = components[index];
+    if (!current) {
+      return;
+    }
+
+    const nextComponent = setAtPath(current as unknown as Record<string, unknown>, path, value) as unknown as AuthoredComponent;
+    const nextComponents = components.map((component, i) => (i === index ? nextComponent : component));
+    this._replaceSelectedStageComponents(nextComponents);
+  }
+
+  private _handleDeleteComponent(index: number) {
+    const stage = this._selectedStage;
+    if (!stage) {
+      return;
+    }
+
+    const components = stage.components ?? [];
+    const component = components[index];
+    if (!component) {
+      return;
+    }
+
+    const nextComponents = components.filter((_, i) => i !== index);
+    this._expandedComponentIndex = null;
+    this._replaceSelectedStageComponents(nextComponents);
+    this._announce(`${describeComponent(component)} component deleted.`);
+    // The deleted item's own controls no longer exist to refocus — the "+ Add component"
+    // control is the nearest stable, always-present target, matching the same "refocus a
+    // surviving ancestor's own control, not <body>" pattern used elsewhere in this file.
+    requestAnimationFrame(() => {
+      this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-add-component-type]')?.focus();
+    });
+  }
+
+  private _toggleComponentExpanded(index: number) {
+    this._expandedComponentIndex = this._expandedComponentIndex === index ? null : index;
   }
 
   private _renderEmpty() {
@@ -1454,21 +1566,98 @@ export class WayfinderStepInspectorElement extends LitElement {
           ${components.length === 0
             ? html`<p class="section-empty">No components defined for this stage.</p>`
             : html`
-                <ul class="field-list">
-                  ${components.map(component => html`
-                    <li class="field-item">
-                      <span class="field-item-label">${describeComponent(component)}</span>
-                      <span class="field-item-meta">${component.type}</span>
-                    </li>
-                  `)}
+                <ul class="field-list" data-wayfinder-stage-components>
+                  ${components.map((component, index) => this._renderComponentListItem(component, index))}
                 </ul>
               `}
-          <p class="section-empty">
-            To edit components in detail, switch to the <strong>Definition</strong> tab and edit this stage's
-            <code>components</code> block in the JSON editor.
-          </p>
+          ${this.componentCatalog.length > 0
+            ? html`
+                <div class="component-add-row">
+                  <label class="sr-only" for="add-component-type-${stage.stateKey}">Component type to add</label>
+                  <select
+                    id="add-component-type-${stage.stateKey}"
+                    class="field-control"
+                    data-wayfinder-add-component-type
+                  >
+                    ${this.componentCatalog.map(descriptor => html`
+                      <option value=${descriptor.discriminator}>${descriptor.displayName}</option>
+                    `)}
+                  </select>
+                  <button
+                    type="button"
+                    class="secondary-button"
+                    aria-label="Add component to ${stage.displayName}"
+                    @click=${this._handleAddComponent}
+                  >+ Add component</button>
+                </div>
+              `
+            : html`
+                <p class="section-empty">
+                  To add components, switch to the <strong>Definition</strong> tab and edit this stage's
+                  <code>components</code> block in the JSON editor.
+                </p>
+              `}
         </section>
       </article>
+    `;
+  }
+
+  private _renderComponentListItem(component: AuthoredComponent, index: number) {
+    const descriptor = this.componentCatalog.find(candidate => candidate.discriminator === component.type);
+    const expanded = this._expandedComponentIndex === index;
+    const label = describeComponent(component);
+    const editorId = `component-editor-${index}`;
+
+    return html`
+      <li class="field-item component-item" data-wayfinder-component-index="${index}">
+        <div class="component-item-header">
+          <span class="field-item-label">${label}</span>
+          <span class="field-item-meta">${component.type}</span>
+          <div class="component-item-actions">
+            ${descriptor
+              ? html`
+                  <button
+                    type="button"
+                    class="secondary-button"
+                    aria-expanded=${String(expanded)}
+                    aria-controls=${editorId}
+                    @click=${() => this._toggleComponentExpanded(index)}
+                  >${expanded ? 'Close' : 'Edit'}</button>
+                `
+              : nothing}
+            <button
+              type="button"
+              class="icon-button danger-button"
+              aria-label="Delete ${label} component"
+              @click=${() => this._handleDeleteComponent(index)}
+            >Delete</button>
+          </div>
+        </div>
+        ${expanded && descriptor ? this._renderComponentEditor(component, descriptor, index, editorId) : nothing}
+      </li>
+    `;
+  }
+
+  private _renderComponentEditor(component: AuthoredComponent, descriptor: ComponentDescriptor, index: number, editorId: string) {
+    const childrenProperty = descriptor.containment.propertyName;
+    const childrenJsonKey = childrenProperty ? childrenProperty.charAt(0).toLowerCase() + childrenProperty.slice(1) : 'children';
+
+    return html`
+      <div id=${editorId} class="component-editor field-grid">
+        ${renderComponentPropertyFields(descriptor.properties, {
+          value: component,
+          onChange: (path, value) => this._handleComponentPropertyChange(index, path, value),
+          idPrefix: `component-${index}`,
+        })}
+        ${descriptor.containment.kind !== 'None'
+          ? html`
+              <p class="section-empty field-block-full">
+                This component contains other components. Switch to the <strong>Definition</strong> tab to edit
+                its <code>${childrenJsonKey}</code> block in the JSON editor.
+              </p>
+            `
+          : nothing}
+      </div>
     `;
   }
 
@@ -1866,6 +2055,82 @@ export class WayfinderStepInspectorElement extends LitElement {
     .transition-arrow,
     .field-item-meta {
       color: #475569;
+      font-size: 0.8125rem;
+    }
+
+    .component-item {
+      display: block;
+    }
+
+    .component-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .component-item-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .component-add-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-top: 0.75rem;
+    }
+
+    .component-add-row .field-control {
+      flex: 1;
+    }
+
+    .component-editor {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #d8dde3;
+    }
+
+    .property-array,
+    .property-object {
+      display: grid;
+      gap: 0.5rem;
+      border: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .property-array-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .property-array-item {
+      display: grid;
+      gap: 0.5rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #d8dde3;
+    }
+
+    .property-array-item-fields {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .property-array-remove {
+      justify-self: start;
+      background: none;
+      border: none;
+      color: #b91c1c;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
       font-size: 0.8125rem;
     }
 

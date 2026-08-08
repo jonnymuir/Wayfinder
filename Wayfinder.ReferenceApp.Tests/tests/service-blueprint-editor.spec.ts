@@ -47,4 +47,20 @@ test.describe('Service blueprint editor', () => {
       'rejected'
     ]);
   });
+
+  // The properties panel's schema-driven component add/edit UI (see Wayfinder.Editor.Client's
+  // own Storybook/Playwright suite for the UI behaviour itself) fetches this live from whichever
+  // host it's talking to — proving it's actually reachable here, backed by this host's real
+  // ComponentTypeRegistry, is what makes that UI usable against this reference app at all.
+  test('the component type catalog is reachable and reflects this host\'s own registered types', async ({ request }) => {
+    const response = await request.get('/wayfinder/service-blueprint-authoring/component-types');
+    expect(response.ok()).toBeTruthy();
+    const descriptors = await response.json();
+
+    expect(descriptors).toContainEqual(expect.objectContaining({ discriminator: 'text', category: 'Input' }));
+    // "rating" is Wayfinder.ReferenceApp's own toolkit-extension component (see
+    // Services/CustomComponents.cs) — never built into Wayfinder itself. Its presence here is
+    // the whole point: an editor UI driven by this endpoint needs no code change to offer it.
+    expect(descriptors).toContainEqual(expect.objectContaining({ discriminator: 'rating', category: 'Input' }));
+  });
 });

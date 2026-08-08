@@ -3,13 +3,14 @@ import { expect } from '@storybook/test';
 import './wayfinder-step-inspector.js';
 import type { WayfinderStepInspectorElement } from './wayfinder-step-inspector.js';
 import { STUB_ACTION_CATALOG, STUB_SERVICE_BLUEPRINT } from './types.js';
-import type { ActionCatalogEntry, AuthoredServiceBlueprint } from './types.js';
+import type { ActionCatalogEntry, AuthoredServiceBlueprint, ComponentDescriptor } from './types.js';
 
 type StoryArgs = {
   serviceBlueprint: AuthoredServiceBlueprint | null;
   selectedStageKey: string | null;
   selectedGatewayKey?: string | null;
   actionCatalog: ActionCatalogEntry[];
+  componentCatalog: ComponentDescriptor[];
 };
 
 function makeElement(args: StoryArgs): WayfinderStepInspectorElement {
@@ -18,6 +19,7 @@ function makeElement(args: StoryArgs): WayfinderStepInspectorElement {
   el.selectedStageKey = args.selectedStageKey;
   el.selectedGatewayKey = args.selectedGatewayKey ?? null;
   el.actionCatalog = args.actionCatalog;
+  el.componentCatalog = args.componentCatalog ?? [];
   el.addEventListener('service-blueprint-updated', event => {
     const detail = (event as CustomEvent<{
       serviceBlueprint: AuthoredServiceBlueprint;
@@ -58,6 +60,7 @@ const meta: Meta<StoryArgs> = {
     selectedStageKey: null,
     selectedGatewayKey: null,
     actionCatalog: STUB_ACTION_CATALOG,
+    componentCatalog: [],
   },
   render: args => makeElement(args),
 };
@@ -226,5 +229,177 @@ export const AddRouteExistingGateway: Story = {
     serviceBlueprint: GATEWAY_ROUTE_SERVICE_BLUEPRINT,
     selectedStageKey: null,
     selectedGatewayKey: 'review-split',
+  },
+};
+
+// A small fixture catalog — not the full 27-type built-in catalog (that's fetched live from a
+// real host in production, see component-catalog.ts), just enough shapes to exercise every real
+// code path in the property editor: a flat Input type ('text'), a flat Content type with a
+// textarea editor ('body'), a type with a genuinely recursive Array-of-Object property
+// ('stat-group', mirroring StatGroupComponent.Items), and a Container type to prove its own flat
+// properties are still editable while its children stay JSON-editor-only ('fieldset').
+const COMPONENT_CATALOG_FIXTURE: ComponentDescriptor[] = [
+  {
+    discriminator: 'text',
+    displayName: 'Text input',
+    category: 'Input',
+    clrType: 'TextInputComponent',
+    isInput: true,
+    properties: [
+      { key: 'fieldKey', title: 'Field key', valueKind: 'String', required: true },
+      { key: 'label', title: 'Label', valueKind: 'String', required: true },
+      { key: 'required', title: 'Required', valueKind: 'Boolean', required: false, editor: 'toggle' },
+    ],
+    containment: { kind: 'None' },
+  },
+  {
+    discriminator: 'body',
+    displayName: 'Body text',
+    category: 'Content',
+    clrType: 'BodyComponent',
+    isInput: false,
+    properties: [
+      { key: 'content', title: 'Content', valueKind: 'String', required: true, editor: 'textarea' },
+    ],
+    containment: { kind: 'None' },
+  },
+  {
+    discriminator: 'stat-group',
+    displayName: 'Statistic group',
+    category: 'DataDisplay',
+    clrType: 'StatGroupComponent',
+    isInput: false,
+    properties: [
+      { key: 'title', title: 'Title', valueKind: 'String', required: false },
+      {
+        key: 'items',
+        title: 'Statistic tiles',
+        valueKind: 'Array',
+        required: true,
+        items: {
+          key: 'item',
+          title: 'Statistic tile',
+          valueKind: 'Object',
+          required: false,
+          properties: [
+            { key: 'label', title: 'Label', valueKind: 'String', required: true },
+            { key: 'fieldKey', title: 'Field key', valueKind: 'String', required: true },
+          ],
+        },
+      },
+    ],
+    containment: { kind: 'None' },
+  },
+  {
+    discriminator: 'fieldset',
+    displayName: 'Fieldset',
+    category: 'Container',
+    clrType: 'FieldsetComponent',
+    isInput: false,
+    properties: [{ key: 'legend', title: 'Legend', valueKind: 'String', required: false }],
+    containment: { kind: 'ChildList', propertyName: 'Children' },
+  },
+];
+
+// Proves the schema-driven component add/edit UI (phase 6a of the component-catalog
+// extensibility work) genuinely works: add a flat component, edit its scalar property, add a
+// component with a recursive Array-of-Object property and edit a nested item field, then delete
+// one — all through real DOM events against native form controls (no custom widgets in this
+// slice, so keyboard operability comes for free from the browser).
+export const ComponentAddEditDelete: Story = {
+  args: {
+    serviceBlueprint: STUB_SERVICE_BLUEPRINT,
+    selectedStageKey: 'reviewer-assessment',
+    componentCatalog: COMPONENT_CATALOG_FIXTURE,
+  },
+  play: async ({ canvasElement }) => {
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
+    await el.updateComplete;
+    const root = el.shadowRoot!;
+
+    const typeSelect = root.querySelector<HTMLSelectElement>('[data-wayfinder-add-component-type]')!;
+    const addButton = root.querySelector<HTMLButtonElement>('.component-add-row .secondary-button')!;
+    await expect(typeSelect).not.toBeNull();
+    await expect(addButton).not.toBeNull();
+
+    // Add a "Body text" component — it auto-expands for editing.
+    typeSelect.value = 'body';
+    addButton.click();
+    await el.updateComplete;
+
+    let stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    await expect(stage.components?.length).toBe(1);
+    await expect(stage.components?.[0].type).toBe('body');
+
+    const contentField = root.querySelector<HTMLTextAreaElement>('[data-wayfinder-component-index="0"] textarea')!;
+    await expect(contentField).not.toBeNull();
+    contentField.value = 'Hello from the properties panel.';
+    contentField.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    await expect((stage.components?.[0] as { content?: string }).content).toBe('Hello from the properties panel.');
+
+    // Add a "Statistic group" and exercise the recursive Array-of-Object property editor.
+    typeSelect.value = 'stat-group';
+    addButton.click();
+    await el.updateComplete;
+
+    const statGroupItem = root.querySelector<HTMLElement>('[data-wayfinder-component-index="1"]')!;
+    await expect(statGroupItem).not.toBeNull();
+    const addTileButton = Array.from(statGroupItem.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.includes('Add'))!;
+    await expect(addTileButton).not.toBeUndefined();
+    addTileButton.click();
+    await el.updateComplete;
+
+    const tileLabelField = statGroupItem.querySelector<HTMLInputElement>('.property-array-item input');
+    await expect(tileLabelField).not.toBeNull();
+    tileLabelField!.value = 'Total';
+    tileLabelField!.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    const statGroup = stage.components?.[1] as { items?: Array<{ label?: string }> };
+    await expect(statGroup.items?.[0]?.label).toBe('Total');
+
+    // Delete the body component — the stat-group survives.
+    const deleteButtons = root.querySelectorAll<HTMLButtonElement>('.component-item-actions .danger-button');
+    await expect(deleteButtons.length).toBe(2);
+    deleteButtons[0].click();
+    await el.updateComplete;
+
+    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    await expect(stage.components?.length).toBe(1);
+    await expect(stage.components?.[0].type).toBe('stat-group');
+  },
+};
+
+// A container type's (fieldset's) own flat properties are still editable through this UI; only
+// its children stay JSON-editor-only in this phase — proves the notice renders and the legend
+// field itself is genuinely editable.
+export const ComponentEditorContainerNotice: Story = {
+  args: {
+    serviceBlueprint: STUB_SERVICE_BLUEPRINT,
+    selectedStageKey: 'reviewer-assessment',
+    componentCatalog: COMPONENT_CATALOG_FIXTURE,
+  },
+  play: async ({ canvasElement }) => {
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
+    await el.updateComplete;
+    const root = el.shadowRoot!;
+
+    const typeSelect = root.querySelector<HTMLSelectElement>('[data-wayfinder-add-component-type]')!;
+    const addButton = root.querySelector<HTMLButtonElement>('.component-add-row .secondary-button')!;
+    typeSelect.value = 'fieldset';
+    addButton.click();
+    await el.updateComplete;
+
+    const editor = root.querySelector<HTMLElement>('[data-wayfinder-component-index="0"] .component-editor')!;
+    await expect(editor).not.toBeNull();
+    await expect(editor.textContent).toContain('This component contains other components');
+    await expect(editor.querySelector('input')).not.toBeNull();
   },
 };

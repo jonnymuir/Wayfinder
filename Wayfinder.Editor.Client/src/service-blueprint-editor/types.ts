@@ -1069,6 +1069,67 @@ export type AuthoredComponent =
   | AuthoredTaskListComponent
   | AuthoredContentComponent;
 
+// ---------------------------------------------------------------------------
+// Component type catalog (ComponentTypeRegistry, over the wire)
+// ---------------------------------------------------------------------------
+//
+// Mirrors Wayfinder/Models/ServiceDesign/Components/ComponentDescriptor.cs field-for-field —
+// the wire shape returned by GET /wayfinder/service-blueprint-authoring/component-types (see
+// component-catalog.ts). Unlike AuthoredComponent above, this isn't a catalog of TS shapes to
+// keep in sync by hand: it's the schema itself, fetched live from whichever host is connected,
+// so a host-registered custom component type (see
+// docs/guides/extending-the-component-catalog.md) shows up automatically with no editor code
+// change — the whole point of driving the add/edit UI from this rather than a hand-written
+// switch over `AuthoredComponent.type`.
+
+export type ComponentCategory = 'Input' | 'Content' | 'Container' | 'DataDisplay' | 'FlowControl';
+
+export type ComponentPropertyValueKind = 'String' | 'Number' | 'Integer' | 'Boolean' | 'StringArray' | 'Object' | 'Array';
+
+export interface ComponentPropertyDescriptor {
+  key: string;
+  title: string;
+  description?: string | null;
+  valueKind: ComponentPropertyValueKind;
+  format?: string | null;
+  editor?: string | null;
+  allowedValues?: string[] | null;
+  required: boolean;
+  defaultValue?: unknown;
+  minimum?: number | null;
+  maximum?: number | null;
+  minLength?: number | null;
+  maxLength?: number | null;
+  pattern?: string | null;
+  // Nested schema when valueKind is 'Object'.
+  properties?: ComponentPropertyDescriptor[] | null;
+  // Element schema when valueKind is 'Array'.
+  items?: ComponentPropertyDescriptor | null;
+}
+
+export type ComponentContainmentKind = 'None' | 'ChildList' | 'NamedSections' | 'KeyedChildren';
+
+export interface ComponentContainment {
+  kind: ComponentContainmentKind;
+  propertyName?: string | null;
+  sectionChildrenPropertyName?: string | null;
+  keySourceProperty?: string | null;
+}
+
+export interface ComponentDescriptor {
+  discriminator: string;
+  displayName: string;
+  category: ComponentCategory;
+  description?: string | null;
+  // The wire property really is "clrType", not "clrTypeName" — Wayfinder/Models/ServiceDesign/
+  // Components/ComponentDescriptor.cs's ClrTypeNameJsonConverter serializes the CLR Type
+  // property to just its name, but under its own C# property name (ClrType → camelCase clrType).
+  clrType: string;
+  isInput: boolean;
+  properties: ComponentPropertyDescriptor[];
+  containment: ComponentContainment;
+}
+
 export type ActionFormFieldType = 'text' | 'number' | 'textarea' | 'select' | 'radio' | 'date';
 
 export interface ActionFormFieldConfig {
