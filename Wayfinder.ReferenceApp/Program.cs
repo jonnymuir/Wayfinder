@@ -19,6 +19,12 @@ using Wayfinder.Services.Sanitization;
 const string JugglingLicenceDefinitionKey = "juggling-licence";
 const string InsuranceModellerDefinitionKey = "juggling-insurance-modeller";
 
+// Must run before anything reads ComponentTypeRegistry (it freezes on first read) — the seed
+// blueprints below declare a "rating" component (juggling-licence.json's "event-details" stage),
+// proving a genuinely new, host-defined component type registered from outside Wayfinder's own
+// assembly. See Services/CustomComponents.cs and docs/guides/extending-the-component-catalog.md.
+CustomComponents.Register();
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
@@ -51,11 +57,16 @@ builder.Services.AddSingleton<IServiceBlueprintStore>(
 builder.Services.AddSingleton<IQueueCapabilitiesProvider>(ReferenceActors.CapabilitiesProvider());
 builder.Services.AddSingleton<IServiceRequestFileStorage, InMemoryServiceRequestFileStorage>();
 
-// Wayfinder.Rendering.GovUk's built-in catalog covers every component/field type out of the
-// box — this reference app registers zero overrides, the "simple by default" case. A host that
-// wants to customize one type calls renderer.RegisterComponent/RegisterField after resolving it
-// here, no Razor/ViewEngine ceremony required.
-builder.Services.AddSingleton<GovUkComponentRenderer>();
+// Wayfinder.Rendering.GovUk's built-in catalog covers every built-in component/field type out
+// of the box. This reference app registers exactly one override — CustomComponents.RegisterRendering
+// pairs the "rating" type registered above with real govuk-frontend-styled HTML, its own
+// GovUkComponentRenderer.RegisterField call, no Razor/ViewEngine ceremony required.
+builder.Services.AddSingleton(_ =>
+{
+    var renderer = new GovUkComponentRenderer();
+    CustomComponents.RegisterRendering(renderer);
+    return renderer;
+});
 
 builder.Services.AddSingleton(sp => new ProcessManagerEngine(
     sp.GetRequiredService<ILogger<ProcessManagerEngine>>(),
@@ -69,6 +80,7 @@ builder.Services.AddSingleton<IProcessManager>(sp => sp.GetRequiredService<Proce
 builder.Services.AddSingleton<InMemoryRuntimeServiceBlueprintSourceStore>();
 builder.Services.AddSingleton<IServiceBlueprintSourceStore>(sp => sp.GetRequiredService<InMemoryRuntimeServiceBlueprintSourceStore>());
 builder.Services.AddServiceBlueprintAuthoring();
+builder.Services.AddServiceBlueprintAuthoringApi();
 builder.Services.AddServiceBlueprintAuthoringMcp();
 
 var app = builder.Build();

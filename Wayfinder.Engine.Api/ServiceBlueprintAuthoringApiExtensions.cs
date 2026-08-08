@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Services.Calculations;
 using Wayfinder.Engine.Services;
 
@@ -12,10 +14,37 @@ namespace Wayfinder.Engine.Api;
 /// onto <see cref="ServiceBlueprintAuthoringService"/>. The returned <see cref="RouteGroupBuilder"/> lets
 /// the host chain its own policy, e.g. <c>.RequireAuthorization()</c>; this extension applies none.
 /// The host must have already registered <c>ServiceBlueprintAuthoringService</c> (see
-/// <c>AddServiceBlueprintAuthoring()</c>) and its own <c>IServiceBlueprintSourceStore</c>.
+/// <c>AddServiceBlueprintAuthoring()</c>), its own <c>IServiceBlueprintSourceStore</c>, and
+/// <see cref="AddServiceBlueprintAuthoringApi"/> (see its own remarks — required, not optional,
+/// for a registry-registered component type to actually work through this surface).
 /// </summary>
 public static class ServiceBlueprintAuthoringApiExtensions
 {
+    /// <summary>
+    /// Wires <see cref="ComponentTypeRegistry"/>'s runtime-polymorphic resolver into ASP.NET
+    /// Core's own request/response JSON options — minimal API's implicit <c>[FromBody]</c>
+    /// binding (used by every <c>ServiceBlueprint blueprint</c> parameter below) reads
+    /// <c>Microsoft.AspNetCore.Http.Json.JsonOptions</c>, a completely different, separately-
+    /// configured <see cref="System.Text.Json.JsonSerializerOptions"/> instance to
+    /// <see cref="ServiceBlueprintJson"/>'s — every other read/write path in this toolkit already
+    /// goes through <c>ServiceBlueprintJson.ReadOptions</c>/<c>WriteOptions</c> and so already
+    /// picks up custom-registered types automatically, but this one didn't, silently: a built-in
+    /// component type still round-tripped (seeded onto <c>Component</c> itself via
+    /// <c>[JsonDerivedType]</c>, so it works even through options this method never touched), but
+    /// any type registered only via <see cref="ComponentTypeRegistry.Register{TComponent}"/> —
+    /// exactly the extensibility case this whole registry exists for — failed to deserialize with
+    /// an "unrecognized type discriminator" 400 the moment it reached this REST surface, even
+    /// though the very same JSON round-tripped correctly everywhere else (MCP tools, direct
+    /// <c>ServiceBlueprintAuthoringService</c> calls, the engine's own definition loading). Call
+    /// this once at startup, alongside <c>AddServiceBlueprintAuthoring()</c>, before
+    /// <c>MapServiceBlueprintAuthoringApi()</c>.
+    /// </summary>
+    public static IServiceCollection AddServiceBlueprintAuthoringApi(this IServiceCollection services) =>
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.TypeInfoResolver = ComponentTypeRegistry.CreateJsonTypeInfoResolver();
+        });
+
     public static RouteGroupBuilder MapServiceBlueprintAuthoringApi(
         this IEndpointRouteBuilder endpoints,
         string prefix = "/wayfinder/service-blueprint-authoring")
