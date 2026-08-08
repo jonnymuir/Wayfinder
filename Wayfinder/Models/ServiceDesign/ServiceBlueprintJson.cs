@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Wayfinder.Models.ServiceDesign.Components;
 
 namespace Wayfinder.Models.ServiceDesign;
 
@@ -13,8 +14,9 @@ namespace Wayfinder.Models.ServiceDesign;
 /// different, independently-drifting options instance; one of them (the boot-time seed loader)
 /// was missing the out-of-order-metadata tolerance the other two already needed for real seed
 /// files, a latent bug this consolidation fixes as a side effect rather than a special case.
-/// Also the seam <c>ComponentTypeRegistry</c>'s runtime-polymorphism
-/// resolver gets wired into — one place, not four.
+/// Also the one place <see cref="ComponentTypeRegistry.CreateJsonTypeInfoResolver"/> is wired
+/// in, so a component type registered at runtime (built-in or a toolkit extension's own) is
+/// recognised everywhere a blueprint is read or written — not four places to keep in sync.
 /// </summary>
 public static class ServiceBlueprintJson
 {
@@ -28,6 +30,7 @@ public static class ServiceBlueprintJson
     {
         PropertyNameCaseInsensitive = true,
         AllowOutOfOrderMetadataProperties = true,
+        TypeInfoResolver = ComponentTypeRegistry.CreateJsonTypeInfoResolver(),
     };
 
     /// <summary>For serializing a <see cref="ServiceBlueprint"/> back out to storage.</summary>
@@ -36,5 +39,6 @@ public static class ServiceBlueprintJson
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = true,
+        TypeInfoResolver = ComponentTypeRegistry.CreateJsonTypeInfoResolver(),
     };
 }
