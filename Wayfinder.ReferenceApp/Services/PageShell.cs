@@ -14,30 +14,6 @@ namespace Wayfinder.ReferenceApp.Services;
 /// </summary>
 public static class PageShell
 {
-    // A plain (non-interpolated) raw string — JS import braces would otherwise collide with
-    // interpolated raw string literals' own interpolation-hole syntax. Exact usage from
-    // govuk-frontend's own README "Importing JavaScript" quick-start.
-    private const string InitScript = """
-        import { initAll } from '/govuk-frontend/govuk-frontend.min.js'
-        initAll()
-        """;
-
-    // A join gateway's waiting stage (RenderWaiting in GovUkComponents.cs) carries its own
-    // authored poll interval as data-wayfinder-poll-interval-ms. This host is hand-rolled,
-    // server-rendered HTML with no client-side router, so "poll" here just means reload the
-    // page after that interval — the server re-evaluates the request's cursor state on every
-    // request, so a still-waiting applicant gets the same page back (with a fresh timer) and
-    // one whose case has moved on gets the next stage automatically, with no manual refresh.
-    private const string PollScript = """
-        var pollTarget = document.querySelector('[data-wayfinder-poll-interval-ms]');
-        if (pollTarget) {
-          var intervalMs = Number(pollTarget.getAttribute('data-wayfinder-poll-interval-ms'));
-          if (intervalMs > 0) {
-            setTimeout(function () { location.reload(); }, intervalMs);
-          }
-        }
-        """;
-
     public static string Render(string title, string bodyHtml, ClaimsPrincipal? user)
     {
         var esc = GovUk.Esc;
@@ -51,7 +27,7 @@ public static class PageShell
               <title>{esc(title)} — Wayfinder reference app</title>
               <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
               <meta name="theme-color" content="#1d70b8">
-              <link rel="stylesheet" href="/govuk-frontend/govuk-frontend.min.css">
+              <link rel="stylesheet" href="/_content/Wayfinder.Rendering.GovUk/govuk-frontend/govuk-frontend.min.css">
               <link rel="stylesheet" href="/_content/Wayfinder.Rendering.GovUk/css/wayfinder-components.css">
               <link rel="icon" sizes="48x48" href="/assets/images/favicon.ico">
               <link rel="icon" sizes="any" href="/assets/images/favicon.svg" type="image/svg+xml">
@@ -95,9 +71,8 @@ public static class PageShell
                 </div>
               </footer>
 
-              <script type="module" src="/govuk-frontend/govuk-frontend.min.js"></script>
-              <script type="module">{InitScript}</script>
-              <script>{PollScript}</script>
+              <script type="module" src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-govuk-frontend-init.js"></script>
+              <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-poll.js"></script>
               <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-slider.js"></script>
               <script type="module" src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-live-form.js"></script>
             </body>
