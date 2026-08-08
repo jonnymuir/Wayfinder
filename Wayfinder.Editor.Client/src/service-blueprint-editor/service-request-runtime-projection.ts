@@ -1,11 +1,16 @@
 import type {
   AuthoredAccordionComponent,
+  AuthoredChartComponent,
   AuthoredComponent,
   AuthoredContentComponent,
   AuthoredFieldsetComponent,
+  AuthoredFileUploadComponent,
+  AuthoredGuidanceChecklistComponent,
   AuthoredInputComponent,
   AuthoredPanelComponent,
+  AuthoredSliderComponent,
   AuthoredStage,
+  AuthoredStatGroupComponent,
   AuthoredSummaryListComponent,
   AuthoredTaskListComponent,
   AuthoredWaitingComponent,
@@ -33,6 +38,11 @@ export interface ProjectServiceBlueprintResult {
 export type ProjectedServiceBlueprintState = AuthoredStage;
 export type ProjectedServiceBlueprintTransition = AuthoredRoute;
 export type ProjectedInputComponent = AuthoredInputComponent;
+export type ProjectedSliderComponent = AuthoredSliderComponent;
+export type ProjectedFileUploadComponent = AuthoredFileUploadComponent;
+export type ProjectedGuidanceChecklistComponent = AuthoredGuidanceChecklistComponent;
+export type ProjectedStatGroupComponent = AuthoredStatGroupComponent;
+export type ProjectedChartComponent = AuthoredChartComponent;
 export type ProjectedFieldsetComponent = AuthoredFieldsetComponent;
 export type ProjectedAccordionComponent = AuthoredAccordionComponent;
 export type ProjectedPanelComponent = AuthoredPanelComponent;

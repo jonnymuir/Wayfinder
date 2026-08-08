@@ -911,16 +911,36 @@ export interface ActionCatalogEntry {
 // Stages carry a tree of `AuthoredComponent` instances directly — the same
 // polymorphic hierarchy the runtime renders. Containers (fieldset, accordion,
 // summary-list, panel), inputs (text, email, textarea, number, decimal,
-// select, radio, checkboxlist, date, boolean), and content (body, heading,
-// inset-text, warning-text, details, notification-banner, waiting,
-// task-list) are all peers in this tree. The projector hands the tree
-// straight through to the runtime.
+// select, radio, checkboxlist, date, boolean, slider, file-upload,
+// guidance-checklist), data-display (stat-group, chart, summary-list,
+// task-list), and content (body, heading, inset-text, warning-text, details,
+// notification-banner, waiting) are all peers in this tree. The projector
+// hands the tree straight through to the runtime. Mirrors
+// Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs —
+// see docs/guides/extending-the-component-catalog.md if a type is missing
+// here (this file has no drift-locking test against the registry the way
+// the docs table does; keep it in sync by hand).
 
 interface AuthoredComponentBase {
   type: string;
 }
 
-export interface AuthoredInputComponent extends AuthoredComponentBase {
+// Every InputComponent-derived type shares this, whatever else it declares —
+// mirrors Wayfinder/Models/ServiceDesign/Components/InputComponents.cs's
+// `InputComponent` base record exactly.
+interface AuthoredInputComponentBase extends AuthoredComponentBase {
+  fieldKey: string;
+  label: string;
+  hint?: string;
+  required: boolean;
+  conditionalOn?: string | null;
+  visibleWhen?: string | null;
+  default?: string | null;
+  defaultFrom?: string | null;
+  changeStateKey?: string | null;
+}
+
+export interface AuthoredInputComponent extends AuthoredInputComponentBase {
   type:
     | 'text'
     | 'number'
@@ -932,12 +952,6 @@ export interface AuthoredInputComponent extends AuthoredComponentBase {
     | 'email'
     | 'textarea'
     | 'boolean';
-  fieldKey: string;
-  label: string;
-  hint?: string;
-  required: boolean;
-  conditionalOn?: string | null;
-  visibleWhen?: string | null;
   options?: string[];
   minLength?: number | null;
   maxLength?: number | null;
@@ -945,6 +959,46 @@ export interface AuthoredInputComponent extends AuthoredComponentBase {
   prefix?: string | null;
   min?: number | null;
   max?: number | null;
+  // 'radio'/'checkboxlist' only — sub-fields revealed when a given option is selected. Key is
+  // the option value; value is the list of components shown when that option is active. Mirrors
+  // RadiosComponent/CheckboxesComponent.ConditionalChildren.
+  conditionalChildren?: Record<string, AuthoredComponent[]>;
+}
+
+export interface AuthoredSliderComponent extends AuthoredInputComponentBase {
+  type: 'slider';
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
+  prefix?: string | null;
+  suffix?: string | null;
+}
+
+export interface AuthoredFileUploadComponent extends AuthoredInputComponentBase {
+  type: 'file-upload';
+  acceptedFileTypes?: string[] | null;
+  maxSizeBytes?: number | null;
+}
+
+export interface AuthoredGuidanceChecklistComponent extends AuthoredInputComponentBase {
+  type: 'guidance-checklist';
+  items: Array<{ key: string; label: string; href: string }>;
+}
+
+export interface AuthoredStatGroupComponent extends AuthoredComponentBase {
+  type: 'stat-group';
+  title?: string | null;
+  items: Array<{ label: string; fieldKey: string; qualifier?: string | null; emphasis?: boolean }>;
+}
+
+export interface AuthoredChartComponent extends AuthoredComponentBase {
+  type: 'chart';
+  title?: string | null;
+  kind?: string;
+  series: string;
+  x: string;
+  xLabelEvery?: number;
+  bands: Array<{ key: string; label: string; color?: string | null }>;
 }
 
 export interface AuthoredFieldsetComponent extends AuthoredComponentBase {
@@ -1002,6 +1056,11 @@ export interface AuthoredContentComponent extends AuthoredComponentBase {
 
 export type AuthoredComponent =
   | AuthoredInputComponent
+  | AuthoredSliderComponent
+  | AuthoredFileUploadComponent
+  | AuthoredGuidanceChecklistComponent
+  | AuthoredStatGroupComponent
+  | AuthoredChartComponent
   | AuthoredFieldsetComponent
   | AuthoredAccordionComponent
   | AuthoredPanelComponent

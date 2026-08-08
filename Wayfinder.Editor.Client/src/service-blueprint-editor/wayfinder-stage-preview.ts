@@ -2,9 +2,14 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { AuthoredStage } from './types.js';
 import type {
+  ProjectedChartComponent,
   ProjectedComponent,
   ProjectedFieldsetComponent,
+  ProjectedFileUploadComponent,
+  ProjectedGuidanceChecklistComponent,
   ProjectedInputComponent,
+  ProjectedSliderComponent,
+  ProjectedStatGroupComponent,
   ProjectedSummaryListComponent,
   ProjectedTaskListComponent,
   ProjectedWaitingComponent,
@@ -191,9 +196,43 @@ export class WayfinderStagePreviewElement extends LitElement {
             </div>
           </div>
         `;
+      case 'stat-group':
+        return this._renderStatGroup(component);
+      case 'chart':
+        return this._renderChart(component);
       default:
         return this._renderInput(component);
     }
+  }
+
+  private _renderStatGroup(component: ProjectedStatGroupComponent): TemplateResult {
+    return html`
+      <div class="preview-stat-group">
+        ${component.title ? html`<h4 class="govuk-heading-s">${component.title}</h4>` : nothing}
+        <dl class="preview-stat-group-items">
+          ${component.items.map(item => html`
+            <div class="preview-stat-item">
+              <dt class="govuk-body-s">${item.label}</dt>
+              <dd class=${item.emphasis ? 'govuk-heading-m' : 'govuk-body'}>
+                ${item.fieldKey}${item.qualifier ? html` <span class="govuk-hint">${item.qualifier}</span>` : nothing}
+              </dd>
+            </div>
+          `)}
+        </dl>
+      </div>
+    `;
+  }
+
+  private _renderChart(component: ProjectedChartComponent): TemplateResult {
+    return html`
+      <div class="preview-chart" role="img" aria-label=${component.title || `Chart bound to ${component.series}`}>
+        ${component.title ? html`<h4 class="govuk-heading-s">${component.title}</h4>` : nothing}
+        <p class="govuk-hint">
+          Chart preview not rendered here — bound to calculation series <code>${component.series}</code>,
+          bands: ${component.bands.map(band => band.label).join(', ') || 'none configured'}.
+        </p>
+      </div>
+    `;
   }
 
   private _renderFieldset(component: ProjectedFieldsetComponent): TemplateResult {
@@ -288,7 +327,9 @@ export class WayfinderStagePreviewElement extends LitElement {
     `;
   }
 
-  private _renderInput(component: ProjectedInputComponent): TemplateResult {
+  private _renderInput(
+    component: ProjectedInputComponent | ProjectedSliderComponent | ProjectedFileUploadComponent | ProjectedGuidanceChecklistComponent,
+  ): TemplateResult {
     if (component.type === 'radio' || component.type === 'checkboxlist') {
       const itemClass = component.type === 'radio' ? 'govuk-radios' : 'govuk-checkboxes';
       const inputClass = component.type === 'radio' ? 'govuk-radios__input' : 'govuk-checkboxes__input';
@@ -509,6 +550,28 @@ export class WayfinderStagePreviewElement extends LitElement {
     .preview-summary-action {
       color: #6f777b;
       text-decoration: underline;
+    }
+
+    .preview-stat-group-items {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+      gap: 1rem;
+      margin: 0;
+    }
+
+    .preview-stat-item dt {
+      margin: 0;
+    }
+
+    .preview-stat-item dd {
+      margin: 0;
+    }
+
+    .preview-chart {
+      padding: 1rem;
+      border-radius: 8px;
+      background: #f8f8f8;
+      border: 1px dashed #b1b4b6;
     }
 
     .govuk-input[disabled],
