@@ -19,6 +19,15 @@ import type { ComponentDescriptor, ComponentPropertyDescriptor } from './types.j
 
 export type PropertyPath = Array<string | number>;
 
+// ComponentPropertyDescriptor.Key arrives already camelCased to match the real component JSON
+// this module reads/writes (e.g. "fieldKey") — server-side, PropertyNameJsonConverter
+// (Wayfinder/Models/ServiceDesign/Components/ComponentDescriptor.cs) converts it from the real
+// CLR property name at the JSON boundary, so this module can use property.key directly with no
+// conversion of its own. Confirmed live against a running host that skipping this step (using
+// the raw, un-converted value) silently reads/writes the wrong property: every field in the
+// properties panel's edit form appeared blank on open, and typing into one never actually
+// reached the field the runtime reads.
+
 function pathKey(path: PropertyPath): string {
   return path.join('-');
 }
@@ -81,10 +90,6 @@ function blankObjectFor(properties: ComponentPropertyDescriptor[]): Record<strin
   return obj;
 }
 
-function lowerFirst(text: string): string {
-  return text.length === 0 ? text : text.charAt(0).toLowerCase() + text.slice(1);
-}
-
 /**
  * A fresh component instance for `descriptor` — every declared property at its default value,
  * PLUS an empty (but structurally present, never absent) child slot when `descriptor.containment`
@@ -103,12 +108,12 @@ export function blankComponentFor(descriptor: ComponentDescriptor): Record<strin
     case 'ChildList':
     case 'NamedSections':
       if (containment.propertyName) {
-        base[lowerFirst(containment.propertyName)] = [];
+        base[containment.propertyName] = [];
       }
       break;
     case 'KeyedChildren':
       if (containment.propertyName) {
-        base[lowerFirst(containment.propertyName)] = {};
+        base[containment.propertyName] = {};
       }
       break;
     case 'None':
@@ -220,17 +225,25 @@ function renderScalarLikeField(
   const editor = property.editor ?? (property.allowedValues?.length ? 'select' : undefined);
 
   if (editor === 'toggle' || property.valueKind === 'Boolean') {
+    // Wrapped in .field-block like every other field type below — a bare <label
+    // class="field-toggle"> plus a sibling .field-help span would otherwise be two separate
+    // top-level grid items in the parent .field-grid, not one field, leaving the help text with
+    // no visual grouping with its own toggle and only the *next* field's own top margin (if any)
+    // separating it from the following field's label — confirmed live: this produced almost no
+    // visible gap at all between a toggle's help text and the next field's heading.
     return html`
-      <label class="field-toggle">
-        <input
-          type="checkbox"
-          id=${fieldId}
-          .checked=${Boolean(value)}
-          @change=${(event: Event) => onChange(path, (event.currentTarget as HTMLInputElement).checked)}
-        />
-        <span>${property.title}${property.required ? ' *' : ''}</span>
-      </label>
-      ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
+      <div class="field-block">
+        <label class="field-toggle">
+          <input
+            type="checkbox"
+            id=${fieldId}
+            .checked=${Boolean(value)}
+            @change=${(event: Event) => onChange(path, (event.currentTarget as HTMLInputElement).checked)}
+          />
+          <span>${property.title}${property.required ? ' *' : ''}</span>
+        </label>
+        ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
+      </div>
     `;
   }
 

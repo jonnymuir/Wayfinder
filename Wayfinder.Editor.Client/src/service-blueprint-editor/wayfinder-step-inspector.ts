@@ -1909,6 +1909,31 @@ export class WayfinderStepInspectorElement extends LitElement {
       font-size: 0.8125rem;
     }
 
+    /*
+     * .field-help/.field-toggle were never defined here — the schema-driven property editor
+     * (component-property-editor.ts) renders both, but Shadow DOM styles don't cross component
+     * boundaries, so reusing wayfinder-stage-action-editor.ts's own class names silently
+     * inherited none of its styling: .field-help rendered as an unstyled inline span sitting
+     * directly against the next field's label with no gap at all (only .field-block's own grid
+     * gap separates elements within one field; nothing separated one field-block from the next
+     * help text bleeding into it). Matches wayfinder-stage-action-editor.ts's own rules.
+     */
+    .field-help {
+      color: #475569;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .field-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      min-height: 2.5rem;
+      color: #111827;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
     .field-control:focus-visible,
     .secondary-button:focus-visible,
     .icon-button:focus-visible,

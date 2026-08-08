@@ -245,6 +245,12 @@ const COMPONENT_CATALOG_FIXTURE: ComponentDescriptor[] = [
     category: 'Input',
     clrType: 'TextInputComponent',
     isInput: true,
+    // Keys/propertyName below are camelCase, matching what a live host actually sends: the
+    // server holds the real CLR property name internally (e.g. "FieldKey", via nameof() in
+    // BuiltInComponentDescriptors.cs — needed for reflection and compile-time rename-safety) but
+    // converts it to camelCase at the JSON boundary (ComponentDescriptor.cs's
+    // PropertyNameJsonConverter) specifically so neither this fixture nor the editor code that
+    // consumes it ever has to think about the C#-internal casing.
     properties: [
       { key: 'fieldKey', title: 'Field key', valueKind: 'String', required: true },
       { key: 'label', title: 'Label', valueKind: 'String', required: true },
@@ -297,7 +303,7 @@ const COMPONENT_CATALOG_FIXTURE: ComponentDescriptor[] = [
     clrType: 'FieldsetComponent',
     isInput: false,
     properties: [{ key: 'legend', title: 'Legend', valueKind: 'String', required: false }],
-    containment: { kind: 'ChildList', propertyName: 'Children' },
+    containment: { kind: 'ChildList', propertyName: 'children' },
   },
 ];
 

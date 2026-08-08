@@ -100,14 +100,10 @@ function componentSchema(descriptor: ComponentDescriptor): JsonSchemaValue {
   // though the live linter (deliberately, see this file's own module doc comment) doesn't
   // recurse into it via this schema representation.
   if (descriptor.containment.kind === 'ChildList' && descriptor.containment.propertyName) {
-    const key = lowerFirst(descriptor.containment.propertyName);
-    properties[key] = { type: 'array', items: { $ref: '#/$defs/component' } };
+    properties[descriptor.containment.propertyName] = { type: 'array', items: { $ref: '#/$defs/component' } };
   } else if (descriptor.containment.kind === 'NamedSections' && descriptor.containment.propertyName) {
-    const key = lowerFirst(descriptor.containment.propertyName);
-    const childrenKey = descriptor.containment.sectionChildrenPropertyName
-      ? lowerFirst(descriptor.containment.sectionChildrenPropertyName)
-      : 'children';
-    properties[key] = {
+    const childrenKey = descriptor.containment.sectionChildrenPropertyName ?? 'children';
+    properties[descriptor.containment.propertyName] = {
       type: 'array',
       items: {
         type: 'object',
@@ -120,8 +116,7 @@ function componentSchema(descriptor: ComponentDescriptor): JsonSchemaValue {
       },
     };
   } else if (descriptor.containment.kind === 'KeyedChildren' && descriptor.containment.propertyName) {
-    const key = lowerFirst(descriptor.containment.propertyName);
-    properties[key] = {
+    properties[descriptor.containment.propertyName] = {
       type: 'object',
       additionalProperties: { type: 'array', items: { $ref: '#/$defs/component' } },
     };
@@ -134,10 +129,6 @@ function componentSchema(descriptor: ComponentDescriptor): JsonSchemaValue {
     properties,
     required,
   };
-}
-
-function lowerFirst(text: string): string {
-  return text.length === 0 ? text : text.charAt(0).toLowerCase() + text.slice(1);
 }
 
 /**

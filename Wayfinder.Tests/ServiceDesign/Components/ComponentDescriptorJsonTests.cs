@@ -54,4 +54,52 @@ public class ComponentDescriptorJsonTests
 
         json.Should().Contain("\"clrType\":\"AccordionComponent\"");
     }
+
+    /// <summary>
+    /// A second real bug found only by driving the properties-panel editor UI (phase 6) against
+    /// a live host, not by any test: <see cref="ComponentPropertyDescriptor.Key"/> is the raw C#
+    /// CLR property name (e.g. "FieldKey", set via <see langword="nameof"/> in
+    /// BuiltInComponentDescriptors.cs, deliberately, for compile-time rename-safety and because
+    /// ComponentPropertyValidator reflects against it at runtime). The editor client read/wrote
+    /// that value directly against real component JSON, which uses the camelCase wire property
+    /// ("fieldKey") — every field in the add/edit form appeared blank, and an edit never reached
+    /// the property the runtime actually reads. Fixed with <see cref="PropertyNameJsonConverter"/>,
+    /// converting once at the JSON boundary rather than asking every client call site to
+    /// remember to camelCase it itself.
+    /// </summary>
+    [Fact]
+    public void Serialize_PropertyDescriptorKey_WritesAsCamelCase_NotTheRawClrPropertyName()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var descriptor = ComponentTypeRegistry.All.Single(d => d.Discriminator == "email");
+
+        var json = JsonSerializer.Serialize(descriptor, options);
+
+        json.Should().Contain("\"key\":\"fieldKey\"");
+        json.Should().Contain("\"key\":\"label\"");
+        json.Should().NotContain("\"key\":\"FieldKey\"");
+        json.Should().NotContain("\"key\":\"Label\"");
+    }
+
+    /// <summary>
+    /// Same conversion, same reason, for <see cref="ComponentContainment"/>'s own property-name
+    /// fields — a container's <c>propertyName</c>/<c>sectionChildrenPropertyName</c>/
+    /// <c>keySourceProperty</c> address real component JSON exactly like
+    /// <see cref="ComponentPropertyDescriptor.Key"/> does, and hit the identical bug.
+    /// </summary>
+    [Fact]
+    public void Serialize_ContainmentPropertyNames_WriteAsCamelCase()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var fieldset = ComponentTypeRegistry.All.Single(d => d.Discriminator == "fieldset");
+        var radio = ComponentTypeRegistry.All.Single(d => d.Discriminator == "radio");
+
+        var fieldsetJson = JsonSerializer.Serialize(fieldset, options);
+        fieldsetJson.Should().Contain("\"propertyName\":\"children\"");
+        fieldsetJson.Should().NotContain("\"propertyName\":\"Children\"");
+
+        var radioJson = JsonSerializer.Serialize(radio, options);
+        radioJson.Should().Contain("\"propertyName\":\"conditionalChildren\"");
+        radioJson.Should().Contain("\"keySourceProperty\":\"options\"");
+    }
 }
