@@ -1573,7 +1573,6 @@ public class ProcessManagerEngine : IProcessManager
             {
                 TextInputComponent text => text.Pattern,
                 EmailComponent email => email.Pattern,
-                TelComponent tel => tel.Pattern,
                 _ => null
             },
             Min = input switch
@@ -1639,7 +1638,6 @@ public class ProcessManagerEngine : IProcessManager
         CheckboxesComponent => "checkboxlist",
         DateInputComponent => "date",
         EmailComponent => "email",
-        TelComponent => "tel",
         TextareaComponent => "textarea",
         BooleanComponent => "boolean",
         SliderComponent => "slider",

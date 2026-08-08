@@ -192,15 +192,6 @@ public sealed record EmailComponent : InputComponent
 }
 
 /// <summary>
-/// GDS telephone input component.
-/// </summary>
-public sealed record TelComponent : InputComponent
-{
-    /// <summary>HTML5 pattern (regex) attribute value.</summary>
-    public string? Pattern { get; init; }
-}
-
-/// <summary>
 /// GDS textarea component: multi-line text input.
 /// </summary>
 public sealed record TextareaComponent : InputComponent

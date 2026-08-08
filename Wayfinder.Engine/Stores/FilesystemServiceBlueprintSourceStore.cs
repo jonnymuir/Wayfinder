@@ -20,22 +20,6 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
     // UPDATE ... WHERE Version = @expectedVersion instead of a lock at all.
     private readonly SemaphoreSlim _saveLock = new(1, 1);
 
-    private static readonly JsonSerializerOptions ReadOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        // Component is a [JsonPolymorphic] type; not every seed file's components have
-        // "type" written first (e.g. information-request.json), so this must be relaxed —
-        // matches ReferenceWorkflowRepository's production JsonOptions.
-        AllowOutOfOrderMetadataProperties = true
-    };
-
-    private static readonly JsonSerializerOptions WriteOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = true
-    };
-
     private string ResolveSafePath(string fileName)
     {
         var combined = Path.Combine(basePath, fileName);
@@ -63,7 +47,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
             // some buffer boundaries. The sync string overload (used throughout the rest of the codebase,
             // e.g. FilesystemServiceBlueprintStore) doesn't have this issue.
             var json = await File.ReadAllTextAsync(path, ct);
-            var blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(json, ReadOptions);
+            var blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(json, ServiceBlueprintJson.ReadOptions);
             if (blueprint is not null)
             {
                 summaries.Add(new ServiceBlueprintSourceSummary(blueprint.DefinitionKey, blueprint.DisplayName));
@@ -82,7 +66,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
             return null;
 
         var json = await File.ReadAllTextAsync(path, ct);
-        return JsonSerializer.Deserialize<ServiceBlueprint>(json, ReadOptions);
+        return JsonSerializer.Deserialize<ServiceBlueprint>(json, ServiceBlueprintJson.ReadOptions);
     }
 
     public async Task<ServiceBlueprintSaveResult> SaveAsync(ServiceBlueprint blueprint, int expectedVersion, CancellationToken ct = default)
@@ -104,7 +88,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
 
             var path = ResolveSafePath($"{blueprint.DefinitionKey}.json");
             await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
-            await JsonSerializer.SerializeAsync(stream, toSave, WriteOptions, ct);
+            await JsonSerializer.SerializeAsync(stream, toSave, ServiceBlueprintJson.WriteOptions, ct);
             return new ServiceBlueprintSaveResult(Saved: true, CurrentVersion: newVersion, Location: path);
         }
         finally
