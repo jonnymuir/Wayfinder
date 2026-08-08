@@ -376,10 +376,11 @@ export const ComponentAddEditDelete: Story = {
   },
 };
 
-// A container type's (fieldset's) own flat properties are still editable through this UI; only
-// its children stay JSON-editor-only in this phase — proves the notice renders and the legend
-// field itself is genuinely editable.
-export const ComponentEditorContainerNotice: Story = {
+// Phase 6b: a container type's (fieldset's) own flat properties AND its actual child
+// components are both genuinely editable through this UI — add a fieldset, add a text child
+// inside it, edit both the fieldset's own legend and the child's label, confirm both round-trip
+// into the right nested position in the real data (children[0].label, not some sibling slot).
+export const ComponentRecursiveChildEditing: Story = {
   args: {
     serviceBlueprint: STUB_SERVICE_BLUEPRINT,
     selectedStageKey: 'reviewer-assessment',
@@ -397,9 +398,60 @@ export const ComponentEditorContainerNotice: Story = {
     addButton.click();
     await el.updateComplete;
 
-    const editor = root.querySelector<HTMLElement>('[data-wayfinder-component-index="0"] .component-editor')!;
-    await expect(editor).not.toBeNull();
-    await expect(editor.textContent).toContain('This component contains other components');
-    await expect(editor.querySelector('input')).not.toBeNull();
+    const componentItem = root.querySelector<HTMLElement>('[data-wayfinder-component-index="0"]')!;
+    await expect(componentItem).not.toBeNull();
+
+    // The fieldset's own "legend" property field is still there, alongside its children UI —
+    // the only <input> at this point, before any child has been added.
+    const legendField = componentItem.querySelector<HTMLInputElement>('.component-editor input')!;
+    await expect(legendField).not.toBeNull();
+    legendField.value = 'Applicant details';
+    legendField.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    const childContainer = componentItem.querySelector<HTMLElement>('.child-container')!;
+    await expect(childContainer).not.toBeNull();
+    const childTypeSelect = childContainer.querySelector<HTMLSelectElement>('[data-wayfinder-add-child-type]')!;
+    const childAddButton = childContainer.querySelector<HTMLButtonElement>('.component-add-row .secondary-button')!;
+    childTypeSelect.value = 'text';
+    childAddButton.click();
+    await el.updateComplete;
+
+    let stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    let fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
+    await expect(fieldset.legend).toBe('Applicant details');
+    await expect(fieldset.children?.length).toBe(1);
+    await expect(fieldset.children?.[0].type).toBe('text');
+
+    // Expand the newly-added child (a native <details>, so a plain click on its <summary> is
+    // real keyboard-equivalent activation — Enter/Space on a focused summary does the same) and
+    // edit its "label" field specifically (the child's own second declared property).
+    const childDetails = componentItem.querySelector<HTMLDetailsElement>('.child-editor')!;
+    childDetails.querySelector('summary')!.click();
+    await el.updateComplete;
+
+    const childInputs = childDetails.querySelectorAll<HTMLInputElement>('.component-editor input');
+    await expect(childInputs.length).toBeGreaterThan(1);
+    const childLabelField = childInputs[1]; // fieldKey, then label, per COMPONENT_CATALOG_FIXTURE's 'text' properties order
+    childLabelField.value = 'Full name';
+    childLabelField.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
+    await expect(fieldset.children?.[0].label).toBe('Full name');
+
+    // Delete the child — the surviving parent's own "+ Add component" control (inside the same
+    // child-list container) must receive focus, never <body>, per this file's own WCAG-risk
+    // handling for a delete whose subtree contained the current focus.
+    const deleteChildButton = childContainer.querySelector<HTMLButtonElement>('.component-item-actions .danger-button')!;
+    deleteChildButton.click();
+    await el.updateComplete;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
+    await expect(fieldset.children?.length).toBe(0);
+    await expect(root.activeElement?.closest('.component-add-row')).not.toBeNull();
   },
 };
