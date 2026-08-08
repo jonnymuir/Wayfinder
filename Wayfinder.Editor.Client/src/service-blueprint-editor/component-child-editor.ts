@@ -189,7 +189,7 @@ function renderChildList(
                       <span class="field-item-label">${describeChildLabel(child)}</span>
                       <span class="field-item-meta">${child.type}</span>
                     </summary>
-                    <div class="component-editor">
+                    <div class="component-editor field-grid">
                       ${renderComponentNode(child, [...childrenPath, index], ctx)}
                     </div>
                   </details>
