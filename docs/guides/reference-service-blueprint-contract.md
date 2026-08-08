@@ -171,25 +171,52 @@ returns per step) carries a `responseState` — what the client should do next:
 ## Components
 
 `stages[].components` is a list of `Component` — a polymorphic type
-discriminated by `"type"`. The full catalog:
+discriminated by `"type"`. The catalog below is **not** fixed forever — see
+[Extending the component catalog](./extending-the-component-catalog.md) for how a
+toolkit user registers a genuinely new type. This table lists only the types
+Wayfinder itself ships; a locked-in test
+(`Wayfinder.Tests.ServiceDesign.Components.ComponentCatalogDocsTests`) keeps it in
+sync with the live `ComponentTypeRegistry` — a `list_component_types` MCP call, or
+`ComponentTypeRegistry.All` in code, is the authoritative source at runtime;
+this table is a human-readable snapshot of the same data.
 
-**Input components** (declare a `fieldKey`, participate in the calculation scope —
-see [calculation-language.md](./calculation-language.md#where-it-lives-in-a-service blueprint)):
-`text`, `number`, `decimal`, `select`, `radio`, `checkboxlist`, `date`, `email`,
-`textarea`, `boolean`, `slider`, `file-upload`, `guidance-checklist`.
+<!-- component-catalog:start -->
+| `type` | Category | Description |
+|---|---|---|
+| `accordion` | Container | Collapsible sections, each with their own child components. |
+| `body` | Content | A paragraph of body text. |
+| `boolean` | Input | A single checkbox (Yes/No-style capture). |
+| `chart` | Data display | Declarative chart bound to a calculation series. |
+| `checkboxlist` | Input | Checkbox group with optional conditional child components. |
+| `date` | Input | Day/month/year date capture. |
+| `decimal` | Input | Floating-point values. |
+| `details` | Content | Expandable/collapsible section. |
+| `email` | Input | Email address capture, validated server-side. |
+| `fieldset` | Container | Groups related fields with an optional legend. |
+| `file-upload` | Input | A single named document slot — one component per document a blueprint needs. |
+| `guidance-checklist` | Input | Linked guidance articles, each with its own acknowledgement checkbox — `required` means every item must be acknowledged. |
+| `heading` | Content | A heading, levels 1-6. |
+| `inset-text` | Content | Highlights important content in an inset box. |
+| `notification-banner` | Content | Info/success/warning banner. |
+| `number` | Input | Integer values. |
+| `panel` | Content | Confirmation-style panel, typically the heading of an outcome stage. |
+| `radio` | Input | Radio button group with optional conditional child components. |
+| `select` | Input | A single-choice dropdown. |
+| `slider` | Input | Range slider input; submits like a number field. |
+| `stat-group` | Data display | A group of headline statistic tiles, resolved from instance/calculated field values. |
+| `summary-list` | Data display | Displays a list of field values with optional "Change" links — GOV.UK's check-your-answers pattern. |
+| `task-list` | Data display | Displays a list of blueprint tasks grouped by section — auto-generated from stages if `sections` is omitted. |
+| `text` | Input | Single-line text capture. |
+| `textarea` | Input | Multi-line text input. |
+| `warning-text` | Content | Displays a warning message with an exclamation icon. |
+| `waiting` | Flow control | Displays a message while the blueprint is paused pending external processing. Used at Join gateways. |
+<!-- component-catalog:end -->
 
-**Content components** (no `fieldKey`, purely presentational):
-`body`, `heading`, `inset-text`, `warning-text`, `details`, `notification-banner`,
-`panel`.
-
-**Structural components** (contain other components):
-`fieldset`, `accordion`.
-
-**Data-display components** (bind to calculated values):
-`summary-list`, `task-list`, `stat-group` (binds items by `fieldKey` to calculated
-fields), `chart` (binds to a `calculations.series` entry).
-
-**Flow-control component**: `waiting` (used at Join gateways).
+**Input components** declare a `fieldKey` and participate in the calculation
+scope — see [calculation-language.md](./calculation-language.md#where-it-lives-in-a-service blueprint).
+**Content components** have no `fieldKey`, purely presentational. **Container
+components** (`fieldset`, `accordion`) contain other components. **Data
+display components** bind to calculated or captured values.
 
 An input component (`text`, `number`, etc.) never displays a calculated value, however
 it's labelled — only `stat-group` and `chart` render one. `validate_service_blueprint`/
@@ -265,21 +292,23 @@ types for that queue today. Use `list_queue_capabilities` to discover a
 queue's supported types before drafting a stage for it.
 
 Capabilities are a contract each host declares about itself, never a runtime
-call to another host's process. `ComponentTypeCatalog`
-(`Wayfinder`) reflects `Component`'s closed, compile-time-fixed
-set of `[JsonDerivedType]` discriminators — since that assembly is shared by
-every Wayfinder host, `ComponentTypeCatalog.AllDiscriminators` is a
-ready-made, honest declaration of "I'm a stock Wayfinder web host", provable
-locally with no dependency on any other app actually running. A host with
-bespoke rendering (like Umbraco.Prism's `UmbracoPrism.MockBusinessApp` admin
-surface, or this repo's own `Wayfinder.ReferenceApp`) declares its own
-smaller, hand-maintained list instead, matching exactly what it implements.
-
-**Known limitation:** there is no mechanism today for a host to extend the
-component catalog itself with genuinely new types beyond what
-`Wayfinder` ships — the `[JsonDerivedType]` list is fixed at compile
-time. If that ever becomes possible, a host with real extensions would need
-its own way to publish an extended declaration; nothing exercises this today.
+call to another host's process. `ComponentTypeRegistry` (`Wayfinder`) is the
+live, host-process-wide list of every component type actually registered —
+every Wayfinder built-in, plus any type a specific host has registered its
+own via `ComponentTypeRegistry.Register<T>()` (see
+[Extending the component catalog](./extending-the-component-catalog.md)) —
+so `ComponentTypeRegistry.AllDiscriminators` is a ready-made, honest
+declaration of exactly what *this* host actually knows how to render,
+provable locally with no dependency on any other app actually running. A
+host with bespoke or extended rendering (like Umbraco.Prism's
+`UmbracoPrism.MockBusinessApp` admin surface, or this repo's own
+`Wayfinder.ReferenceApp`, which registers a `rating` type of its own — see
+`Wayfinder.ReferenceApp/Services/CustomComponents.cs`) declares its own
+smaller or extended list instead, matching exactly what it implements. A
+declared discriminator that doesn't actually exist in `ComponentTypeRegistry`
+— a typo, or a type registered too late — is itself flagged
+(`QUEUE_CAPABILITY_UNKNOWN_COMPONENT_TYPE`) the next time any blueprint is
+validated, independent of what that blueprint actually contains.
 
 ## Saving and conflicts
 

@@ -39,6 +39,7 @@
     <EmbeddedResource Include="../docs/guides/reference-service-blueprint-contract.md" LogicalName="Wayfinder.Engine.Mcp.docs.reference-service-blueprint-contract.md" />
     <EmbeddedResource Include="../docs/guides/service-design-principles.md" LogicalName="Wayfinder.Engine.Mcp.docs.service-design-principles.md" />
     <EmbeddedResource Include="../docs/guides/ai-service-blueprint-authoring.md" LogicalName="Wayfinder.Engine.Mcp.docs.ai-service-blueprint-authoring.md" />
+    <EmbeddedResource Include="../docs/guides/extending-the-component-catalog.md" LogicalName="Wayfinder.Engine.Mcp.docs.extending-the-component-catalog.md" />
   </ItemGroup>
 
   <ItemGroup>
