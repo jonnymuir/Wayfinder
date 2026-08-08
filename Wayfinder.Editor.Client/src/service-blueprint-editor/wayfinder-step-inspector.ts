@@ -13,12 +13,8 @@ import type {
 } from './types.js';
 import { serviceBlueprintGateways, serviceBlueprintStages } from './types.js';
 import { NODE_ICONS, defaultIconForGateway, defaultIconForStage, type NodeIconDef, type NodeIconName } from './graph/node-icons.js';
-import {
-  blankComponentFor,
-  renderComponentPropertyFields,
-  setAtPath,
-  type PropertyPath,
-} from './component-property-editor.js';
+import { blankComponentFor, setAtPath, type PropertyPath } from './component-property-editor.js';
+import { renderComponentNode } from './component-child-editor.js';
 
 function renderNodeIconSvg(icon: NodeIconDef) {
   return svg`
@@ -706,21 +702,38 @@ export class WayfinderStepInspectorElement extends LitElement {
     this._announce(`${descriptor.displayName} component added.`);
   }
 
-  private _handleComponentPropertyChange(index: number, path: PropertyPath, value: unknown) {
+  /**
+   * `path` is rooted at the stage's own `components` array (e.g. `[0, 'children', 2, 'label']`
+   * addresses the 3rd child of the 1st component's ChildList) — the phase 6b recursive
+   * container-children editor (component-child-editor.ts) reaches arbitrarily deep components
+   * the same way phase 6a reached a single component's own flat properties, via the same
+   * `setAtPath` utility.
+   */
+  private _handleComponentTreeChange(path: PropertyPath, value: unknown) {
     const stage = this._selectedStage;
     if (!stage) {
       return;
     }
 
     const components = stage.components ?? [];
-    const current = components[index];
-    if (!current) {
-      return;
-    }
-
-    const nextComponent = setAtPath(current as unknown as Record<string, unknown>, path, value) as unknown as AuthoredComponent;
-    const nextComponents = components.map((component, i) => (i === index ? nextComponent : component));
+    const nextComponents = setAtPath(components, path, value);
     this._replaceSelectedStageComponents(nextComponents);
+  }
+
+  /**
+   * Refocuses the "+ Add component" control of the child-list container at `containerPath` —
+   * called after a nested child delete, so focus never falls through to `<body>` when the
+   * deleted subtree contained it. The container itself is always structurally present (it
+   * renders its own "+ Add component" row even with zero children), so this reliably finds a
+   * surviving target; the top-level "+ Add component" control is the final fallback.
+   */
+  private _focusChildContainer(containerPath: PropertyPath) {
+    const key = containerPath.join('-');
+    requestAnimationFrame(() => {
+      const container = this.shadowRoot?.querySelector<HTMLElement>(`[data-wayfinder-child-container="${key}"]`);
+      const addButton = container?.querySelector<HTMLElement>('.component-add-row .secondary-button');
+      (addButton ?? this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-add-component-type]'))?.focus();
+    });
   }
 
   private _handleDeleteComponent(index: number) {
@@ -1633,30 +1646,21 @@ export class WayfinderStepInspectorElement extends LitElement {
             >Delete</button>
           </div>
         </div>
-        ${expanded && descriptor ? this._renderComponentEditor(component, descriptor, index, editorId) : nothing}
+        ${expanded && descriptor ? this._renderComponentEditor(component, index, editorId) : nothing}
       </li>
     `;
   }
 
-  private _renderComponentEditor(component: AuthoredComponent, descriptor: ComponentDescriptor, index: number, editorId: string) {
-    const childrenProperty = descriptor.containment.propertyName;
-    const childrenJsonKey = childrenProperty ? childrenProperty.charAt(0).toLowerCase() + childrenProperty.slice(1) : 'children';
-
+  private _renderComponentEditor(component: AuthoredComponent, index: number, editorId: string) {
     return html`
       <div id=${editorId} class="component-editor field-grid">
-        ${renderComponentPropertyFields(descriptor.properties, {
-          value: component,
-          onChange: (path, value) => this._handleComponentPropertyChange(index, path, value),
+        ${renderComponentNode(component, [index], {
+          catalog: this.componentCatalog,
+          onChange: (path, value) => this._handleComponentTreeChange(path, value),
+          onAnnounce: message => this._announce(message),
+          onFocusContainer: containerPath => this._focusChildContainer(containerPath),
           idPrefix: `component-${index}`,
         })}
-        ${descriptor.containment.kind !== 'None'
-          ? html`
-              <p class="section-empty field-block-full">
-                This component contains other components. Switch to the <strong>Definition</strong> tab to edit
-                its <code>${childrenJsonKey}</code> block in the JSON editor.
-              </p>
-            `
-          : nothing}
       </div>
     `;
   }
@@ -2090,6 +2094,46 @@ export class WayfinderStepInspectorElement extends LitElement {
       margin-top: 0.75rem;
       padding-top: 0.75rem;
       border-top: 1px solid #d8dde3;
+    }
+
+    .child-container {
+      grid-column: 1 / -1;
+      margin-top: 0.5rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #d8dde3;
+    }
+
+    .child-container > summary {
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.8125rem;
+      color: #334155;
+    }
+
+    .child-section {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px dashed #d8dde3;
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .child-list {
+      margin-top: 0.5rem;
+    }
+
+    .child-item {
+      display: block;
+    }
+
+    .child-editor {
+      flex: 1;
+    }
+
+    .child-editor > summary {
+      cursor: pointer;
     }
 
     .property-array,
