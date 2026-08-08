@@ -1,4 +1,4 @@
-import type { AuthoredServiceBlueprint } from './types.js';
+import type { AuthoredServiceBlueprint, ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
 import { hydrateServiceBlueprintDefinition } from './types.js';
 
 export type DefinitionLint = {
@@ -18,7 +18,165 @@ function findLine(source: string, needle: string): number | undefined {
   return source.slice(0, index).split('\n').length;
 }
 
-export function lintAuthoredServiceBlueprintDocument(parsed: unknown, source: string): DefinitionLint[] {
+function lowerFirst(text: string): string {
+  return text.length === 0 ? text : text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/**
+ * Phase 7 — live, as-you-type component validation in the Definition tab, mirroring
+ * Wayfinder.Engine.Services.ComponentPropertyValidator's own checks (required/allowedValues/
+ * pattern/length/numeric constraints, plus a KeyedChildren key not matching its sibling Options)
+ * against the same live ComponentDescriptor catalog the properties-panel add/edit UI (phase 6)
+ * already fetches — so a mistake made by hand in the JSON editor is flagged before you even try
+ * to save, the same class of feedback validate_service_blueprint gives, just local and instant.
+ * Recurses into a container's own children the same way component-child-editor.ts (phase 6b)
+ * does, so a nested component gets checked too, not just top-level ones.
+ */
+function lintComponentTree(
+  components: unknown,
+  catalog: ComponentDescriptor[],
+  source: string,
+  pathPrefix: string,
+  issues: DefinitionLint[]
+): void {
+  if (!Array.isArray(components)) {
+    return;
+  }
+
+  components.forEach((rawComponent, index) => {
+    if (!rawComponent || typeof rawComponent !== 'object' || Array.isArray(rawComponent)) {
+      issues.push({ message: `Component at "${pathPrefix}[${index}]" must be an object.`, pathHint: `${pathPrefix}[${index}]` });
+      return;
+    }
+
+    const component = rawComponent as Record<string, unknown>;
+    const componentPath = `${pathPrefix}[${index}]`;
+    const discriminator = typeof component.type === 'string' ? component.type : '';
+    const descriptor = catalog.find(candidate => candidate.discriminator === discriminator);
+
+    if (!discriminator) {
+      issues.push({ message: `Component at "${componentPath}" is missing "type".`, pathHint: componentPath });
+      return;
+    }
+
+    if (!descriptor) {
+      issues.push({
+        message: `Unknown component type "${discriminator}" at "${componentPath}". Call list_component_types (MCP) or GET /component-types to see every registered discriminator.`,
+        pathHint: componentPath,
+        line: findLine(source, `"${discriminator}"`),
+      });
+      return;
+    }
+
+    lintComponentProperties(component, descriptor.properties, source, componentPath, issues);
+
+    const { containment } = descriptor;
+    if (containment.kind === 'ChildList' && containment.propertyName) {
+      const key = lowerFirst(containment.propertyName);
+      lintComponentTree(component[key], catalog, source, `${componentPath}.${key}`, issues);
+    } else if (containment.kind === 'NamedSections' && containment.propertyName) {
+      const key = lowerFirst(containment.propertyName);
+      const childrenKey = containment.sectionChildrenPropertyName ? lowerFirst(containment.sectionChildrenPropertyName) : 'children';
+      const sections = component[key];
+      if (Array.isArray(sections)) {
+        sections.forEach((rawSection, sectionIndex) => {
+          if (rawSection && typeof rawSection === 'object' && !Array.isArray(rawSection)) {
+            const section = rawSection as Record<string, unknown>;
+            lintComponentTree(section[childrenKey], catalog, source, `${componentPath}.${key}[${sectionIndex}].${childrenKey}`, issues);
+          }
+        });
+      }
+    } else if (containment.kind === 'KeyedChildren' && containment.propertyName && containment.keySourceProperty) {
+      const key = lowerFirst(containment.propertyName);
+      const optionsKey = lowerFirst(containment.keySourceProperty);
+      const byKey = component[key];
+      const options = Array.isArray(component[optionsKey]) ? (component[optionsKey] as unknown[]).map(String) : [];
+      if (byKey && typeof byKey === 'object' && !Array.isArray(byKey)) {
+        for (const [optionKey, children] of Object.entries(byKey as Record<string, unknown>)) {
+          if (!options.includes(optionKey)) {
+            issues.push({
+              message: `"${optionKey}" is a key in "${componentPath}.${key}" but not one of the values declared in "${componentPath}.${optionsKey}" — this branch can never be shown.`,
+              pathHint: `${componentPath}.${key}.${optionKey}`,
+              line: findLine(source, `"${optionKey}"`),
+            });
+          }
+          lintComponentTree(children, catalog, source, `${componentPath}.${key}.${optionKey}`, issues);
+        }
+      }
+    }
+  });
+}
+
+function lintComponentProperties(
+  component: Record<string, unknown>,
+  properties: ComponentPropertyDescriptor[],
+  source: string,
+  path: string,
+  issues: DefinitionLint[]
+): void {
+  for (const property of properties) {
+    const value = component[property.key];
+    const propertyPath = `${path}.${property.key}`;
+    const isMissing = value === undefined || value === null
+      || (typeof value === 'string' && value.trim() === '')
+      || (Array.isArray(value) && value.length === 0);
+
+    if (isMissing) {
+      if (property.required) {
+        issues.push({ message: `"${property.title}" is required at "${propertyPath}" but is missing or empty.`, pathHint: propertyPath });
+      }
+      continue;
+    }
+
+    if (typeof value === 'string') {
+      if (property.allowedValues?.length && !property.allowedValues.includes(value)) {
+        issues.push({
+          message: `"${property.title}" at "${propertyPath}" is "${value}", which isn't one of: ${property.allowedValues.join(', ')}.`,
+          pathHint: propertyPath,
+          line: findLine(source, `"${value}"`),
+        });
+      }
+      if (property.pattern) {
+        try {
+          if (!new RegExp(property.pattern).test(value)) {
+            issues.push({ message: `"${property.title}" at "${propertyPath}" does not match the required pattern.`, pathHint: propertyPath });
+          }
+        } catch {
+          // An invalid regex is a descriptor-authoring bug, not something this document can fix.
+        }
+      }
+      if (property.minLength != null && value.length < property.minLength) {
+        issues.push({ message: `"${property.title}" at "${propertyPath}" must be at least ${property.minLength} character(s) long.`, pathHint: propertyPath });
+      }
+      if (property.maxLength != null && value.length > property.maxLength) {
+        issues.push({ message: `"${property.title}" at "${propertyPath}" must be at most ${property.maxLength} character(s) long.`, pathHint: propertyPath });
+      }
+    } else if (typeof value === 'number') {
+      if (property.minimum != null && value < property.minimum) {
+        issues.push({ message: `"${property.title}" at "${propertyPath}" must be at least ${property.minimum}.`, pathHint: propertyPath });
+      }
+      if (property.maximum != null && value > property.maximum) {
+        issues.push({ message: `"${property.title}" at "${propertyPath}" must be at most ${property.maximum}.`, pathHint: propertyPath });
+      }
+    }
+
+    if (property.valueKind === 'Array' && Array.isArray(value) && property.items?.properties) {
+      value.forEach((item, itemIndex) => {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          lintComponentProperties(item as Record<string, unknown>, property.items!.properties!, source, `${propertyPath}[${itemIndex}]`, issues);
+        }
+      });
+    } else if (property.valueKind === 'Object' && value && typeof value === 'object' && !Array.isArray(value) && property.properties) {
+      lintComponentProperties(value as Record<string, unknown>, property.properties, source, propertyPath, issues);
+    }
+  }
+}
+
+export function lintAuthoredServiceBlueprintDocument(
+  parsed: unknown,
+  source: string,
+  componentCatalog: ComponentDescriptor[] = []
+): DefinitionLint[] {
   const issues: DefinitionLint[] = [];
 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -91,6 +249,10 @@ export function lintAuthoredServiceBlueprintDocument(parsed: unknown, source: st
 
       if (state.routes !== undefined && !Array.isArray(state.routes)) {
         issues.push({ message: `State "${stateKey || index}" has a non-array "routes" value.` });
+      }
+
+      if (componentCatalog.length > 0 && state.components !== undefined) {
+        lintComponentTree(state.components, componentCatalog, source, `stages[${index}].components`, issues);
       }
     });
   }

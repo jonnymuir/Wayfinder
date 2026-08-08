@@ -82,6 +82,10 @@ jobs:
         working-directory: Wayfinder.Editor.Client
         run: npm run test:graph-layout
 
+      - name: Component schema/lint tests
+        working-directory: Wayfinder.Editor.Client
+        run: npm run test:component-schema
+
       - name: Install Playwright browsers
         working-directory: Wayfinder.Editor.Client
         run: npx playwright install --with-deps
