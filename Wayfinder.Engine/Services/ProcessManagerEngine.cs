@@ -1628,23 +1628,17 @@ public class ProcessManagerEngine : IProcessManager
         };
     }
 
-    private static string InputFieldType(InputComponent input) => input switch
-    {
-        TextInputComponent => "text",
-        NumberInputComponent => "number",
-        DecimalInputComponent => "decimal",
-        SelectComponent => "select",
-        RadiosComponent => "radio",
-        CheckboxesComponent => "checkboxlist",
-        DateInputComponent => "date",
-        EmailComponent => "email",
-        TextareaComponent => "textarea",
-        BooleanComponent => "boolean",
-        SliderComponent => "slider",
-        FileUploadComponent => "file-upload",
-        GuidanceChecklistComponent => "guidance-checklist",
-        _ => "text"
-    };
+    /// <summary>
+    /// The <see cref="FieldRenderPayload.FieldType"/> a host's <c>GovUkComponentRenderer</c>
+    /// dispatches rendering on for this input — its registered discriminator (e.g.
+    /// <c>"text"</c>, <c>"radio"</c>), from <see cref="ComponentTypeRegistry"/>. Was previously a
+    /// hand-written switch over the built-in CLR types (kept exactly in sync with the registry's
+    /// own discriminators by luck, not by construction) — meaning a third-party InputComponent
+    /// subtype fell through to its <c>_ =&gt; "text"</c> fallback and could never reach a
+    /// <c>RegisterField</c> override registered under its own type name, quietly breaking the
+    /// extensibility this registry exists to provide.
+    /// </summary>
+    private static string InputFieldType(InputComponent input) => ComponentTypeRegistry.DiscriminatorFor(input);
 
     private static object? GetDisplayValue(
         InputComponent input,
