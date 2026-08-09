@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from '../../src/service-blueprint-editor/editor-shortcuts';
+import { captureDocScreenshot } from './support/canvas-helpers';
 // TODO Slice E: re-cert after gateway-pill rendering + simulation reshape. See .squad/decisions/inbox/copilot-slice-d-close-out.md.
+
+const DOCS_DIR = 'docs/skills/help-tab/screenshots';
 
 function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
@@ -103,5 +106,28 @@ test.describe('ServiceBlueprint editor help and shortcut reference', () => {
 
     await page.locator('[data-wayfinder-help]').click();
     await expect(dialog).toBeVisible();
+  });
+
+  // The tests above cover the keyboard-shortcut dialog (opened via the toolbar help button /
+  // F1) — a different feature from the Help *tab* itself (<wayfinder-help-panel>, slot="help"
+  // in wayfinder-service-blueprint-editor.ts), which had no test coverage at all until now.
+  test('the Help tab shows keyboard shortcuts, quick tips, and a getting-started guide', async ({ page }) => {
+    await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
+
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('tab', { name: 'Help' }).click();
+
+    const helpPanel = page.locator('wayfinder-help-panel');
+    await expect(helpPanel).toBeVisible();
+    await expect(helpPanel).toContainText('Service Blueprint editor help');
+
+    // Same shortcut data the toolbar dialog above reads from, so this can never drift from it.
+    const firstGroup = SERVICE_BLUEPRINT_SHORTCUT_GROUPS[0];
+    await expect(helpPanel).toContainText(firstGroup.title);
+    await expect(helpPanel).toContainText(firstGroup.shortcuts[0].command);
+
+    await expect(helpPanel).toContainText('Quick tips');
+    await expect(helpPanel).toContainText('Getting started');
+    await captureDocScreenshot(helpPanel, `${DOCS_DIR}/help-tab.png`);
   });
 });

@@ -5,7 +5,8 @@
   "description": "End-to-end Playwright suite against the transient Wayfinder.ReferenceApp — doubles as narrated documentation of the citizen/caseworker journeys and the authoring surface.",
   "scripts": {
     "test:playwright": "playwright test",
-    "test:playwright:ui": "playwright test --ui"
+    "test:playwright:ui": "playwright test --ui",
+    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test calculations-editor.spec.ts --workers=1"
   },
   "devDependencies": {
     "@playwright/test": "^1.46.1"

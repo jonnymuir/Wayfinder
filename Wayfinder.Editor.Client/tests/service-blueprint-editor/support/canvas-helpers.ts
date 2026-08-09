@@ -1,3 +1,5 @@
+import { mkdirSync } from 'fs';
+import { dirname, resolve } from 'path';
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
@@ -12,6 +14,25 @@ import { expect } from '@playwright/test';
 
 /** Pinned viewport for the entire visual suite. */
 export const VISUAL_VIEWPORT = { width: 1440, height: 900 } as const;
+
+/**
+ * Writes a screenshot for the docs/skills/ library — a side effect of a real behavioural
+ * assertion, never a screenshot with no assertion behind it (see docs/skills/README.md).
+ * A no-op unless CAPTURE_DOC_SCREENSHOTS is set, so routine CI runs stay deterministic and
+ * don't rewrite committed images on every run (cross-runner font/anti-aliasing differences
+ * would otherwise produce meaningless diffs) — run `npm run docs:screenshots` locally to
+ * regenerate after a real UI change, then commit the result like any other generated asset.
+ * `relativePathFromRepoRoot` is relative to the repo root, e.g.
+ * `docs/skills/canvas-editor/screenshots/lane-overview.png`.
+ */
+export async function captureDocScreenshot(target: Page | Locator, relativePathFromRepoRoot: string): Promise<void> {
+  if (!process.env.CAPTURE_DOC_SCREENSHOTS) {
+    return;
+  }
+  const absolutePath = resolve(process.cwd(), '..', relativePathFromRepoRoot);
+  mkdirSync(dirname(absolutePath), { recursive: true });
+  await target.screenshot({ path: absolutePath });
+}
 
 /** Canonical scenarios exposed as Storybook stories. */
 export type CanonicalScenario = {

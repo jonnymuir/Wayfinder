@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { captureDocScreenshot } from './support/canvas-helpers';
+
+const DOCS_DIR = 'docs/skills/canvas-editor/screenshots';
 
 function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
@@ -43,6 +46,7 @@ test.describe('ServiceBlueprint action editor', () => {
 
     await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(5);
     await expect(page.locator('[data-wayfinder-stage-action="0"] .action-summary')).toContainText('Assign to role planning-officers');
+    await captureDocScreenshot(page.locator('wayfinder-step-inspector'), `${DOCS_DIR}/stage-action-editor.png`);
   });
 
   test('transition action picker filters to transition scope and validates email parameters with keyboard input', async ({ page }) => {
