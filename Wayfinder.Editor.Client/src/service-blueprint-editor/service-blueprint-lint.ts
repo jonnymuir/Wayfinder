@@ -1,6 +1,8 @@
 import type { AuthoredComponent, AuthoredServiceBlueprint, ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
 import { hydrateServiceBlueprintDefinition } from './types.js';
 import { collectStageInputFields } from './component-property-references.js';
+import { extractReferencedNames, tryParseExpression } from './calculation-runtime.js';
+import { computeStableFieldOrder, type FieldInput } from './calculation-ordering.js';
 
 export type DefinitionLint = {
   message: string;
@@ -212,6 +214,132 @@ function lintComponentProperties(
   }
 }
 
+/**
+ * Mirrors the checks the Calculations tab (wayfinder-calculations-editor.ts) enforces live for
+ * anyone hand-editing `calculations` as raw JSON in the Definition tab instead: a field/series
+ * expression that doesn't parse, an identifier that isn't a known input field/earlier field/
+ * table, and a `fields` declaration order that isn't already valid (forward references or a
+ * genuine cycle) — the same "field must be declared before it's referenced" rule
+ * docs/guides/calculation-language.md documents and calculation-ordering.ts enforces
+ * automatically in the visual editor. Reuses calculation-runtime.ts/calculation-ordering.ts
+ * directly rather than a second hand-written check.
+ */
+function lintCalculations(
+  root: Record<string, unknown>,
+  source: string,
+  componentCatalog: ComponentDescriptor[],
+  issues: DefinitionLint[]
+): void {
+  if (!root.calculations || typeof root.calculations !== 'object' || Array.isArray(root.calculations)) {
+    return;
+  }
+  const calculations = root.calculations as Record<string, unknown>;
+
+  const tableNames = new Set(
+    calculations.tables && typeof calculations.tables === 'object' && !Array.isArray(calculations.tables)
+      ? Object.keys(calculations.tables as Record<string, unknown>)
+      : []
+  );
+
+  const allInputFieldKeys = new Set(
+    Array.isArray(root.stages)
+      ? root.stages.flatMap(rawState => {
+          if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
+            return [];
+          }
+          const components = (rawState as Record<string, unknown>).components;
+          return collectStageInputFields(components as AuthoredComponent[] | undefined, componentCatalog).map(field => field.fieldKey);
+        })
+      : []
+  );
+
+  function lintExpression(expr: string, pathHint: string): void {
+    const parseResult = tryParseExpression(expr);
+    if (!parseResult.ok) {
+      issues.push({ message: `"${pathHint}": ${parseResult.message}`, pathHint, line: findLine(source, `"${expr}"`) });
+      return;
+    }
+
+    const referenced = extractReferencedNames(expr);
+    if (!referenced) {
+      return;
+    }
+    for (const name of referenced.scopeNames) {
+      if (!fieldNames.includes(name) && !allInputFieldKeys.has(name)) {
+        issues.push({
+          message: `"${pathHint}" references "${name}", which is not a known input field or calculation field.`,
+          pathHint,
+          line: findLine(source, `"${expr}"`),
+        });
+      }
+    }
+    for (const tableName of referenced.tableNames) {
+      if (!tableNames.has(tableName)) {
+        issues.push({
+          message: `"${pathHint}" calls lookup() against unknown table "${tableName}".`,
+          pathHint,
+          line: findLine(source, `"${expr}"`),
+        });
+      }
+    }
+  }
+
+  const fields =
+    calculations.fields && typeof calculations.fields === 'object' && !Array.isArray(calculations.fields)
+      ? (calculations.fields as Record<string, Record<string, unknown>>)
+      : {};
+  const fieldNames = Object.keys(fields);
+  const fieldInputs: FieldInput[] = [];
+
+  for (const [name, field] of Object.entries(fields)) {
+    const isService = (typeof field.source === 'string' ? field.source : '').toLowerCase() === 'service';
+    const expr = typeof field.expr === 'string' ? field.expr : '';
+    fieldInputs.push({ name, expr });
+
+    if (!isService && expr.trim()) {
+      lintExpression(expr, `calculations.fields.${name}`);
+    }
+  }
+
+  const orderResult = computeStableFieldOrder(fieldInputs, fieldNames);
+  if (!orderResult.ok) {
+    issues.push({
+      message: `calculations.fields: circular dependency between ${orderResult.cycle.join(', ')} — these fields reference each other in a loop and can never be evaluated.`,
+      pathHint: 'calculations.fields',
+    });
+  } else if (JSON.stringify(orderResult.order) !== JSON.stringify(fieldNames)) {
+    const firstMove = orderResult.moved[0];
+    issues.push({
+      message: `calculations.fields are declared out of dependency order${
+        firstMove ? ` — "${firstMove.name}" must be declared after "${firstMove.movedAfter}"` : ''
+      }. A field must be declared before anything that references it.`,
+      pathHint: 'calculations.fields',
+    });
+  }
+
+  const series =
+    calculations.series && typeof calculations.series === 'object' && !Array.isArray(calculations.series)
+      ? (calculations.series as Record<string, Record<string, unknown>>)
+      : {};
+  for (const [name, definition] of Object.entries(series)) {
+    if (typeof definition.from === 'string' && definition.from.trim()) {
+      lintExpression(definition.from, `calculations.series.${name}.from`);
+    }
+    if (typeof definition.to === 'string' && definition.to.trim()) {
+      lintExpression(definition.to, `calculations.series.${name}.to`);
+    }
+    const values =
+      definition.values && typeof definition.values === 'object' && !Array.isArray(definition.values)
+        ? (definition.values as Record<string, unknown>)
+        : {};
+    for (const [column, expr] of Object.entries(values)) {
+      if (typeof expr === 'string' && expr.trim()) {
+        lintExpression(expr, `calculations.series.${name}.values.${column}`);
+      }
+    }
+  }
+}
+
 export function lintAuthoredServiceBlueprintDocument(
   parsed: unknown,
   source: string,
@@ -239,6 +367,8 @@ export function lintAuthoredServiceBlueprintDocument(
   if (!Array.isArray(root.queues)) {
     issues.push({ message: '"queues" must be an array.', pathHint: 'queues' });
   }
+
+  lintCalculations(root, source, componentCatalog, issues);
 
   const calculationFieldNames = new Set(
     root.calculations && typeof root.calculations === 'object'

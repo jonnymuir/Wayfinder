@@ -147,7 +147,18 @@ export function serializeAuthoredServiceBlueprint(serviceBlueprint: AuthoredServ
   const top = orderTopLevel(serialisableServiceBlueprint(serviceBlueprint));
   const canonical: Record<string, unknown> = {};
   for (const key of Object.keys(top)) {
-    canonical[key] = sortKeys(top[key]);
+    // `calculations` is deliberately NOT run through sortKeys. calculations.fields' own key
+    // order IS the declaration/evaluation order (docs/guides/calculation-language.md: "Fields
+    // are evaluated once, in declaration order" — a forward reference is a hard error) —
+    // calculation-ordering.ts computes and preserves that order deliberately when the
+    // Calculations tab authors it. Alphabetising it here would silently reorder any blueprint
+    // whose fields rely on evaluation order, which is effectively all of them — found live: a
+    // save through this exact path turned a working calculation set into one where nearly
+    // every field errored with "Unknown name", since the field it depended on now sorted after
+    // it. tables/series don't strictly require this, but are left untouched for the same
+    // reason: this key isn't a "make it comparable" concern the way stage/gateway shape is —
+    // it's real, order-sensitive content the author (human or the ordering algorithm) controls.
+    canonical[key] = key === 'calculations' ? top[key] : sortKeys(top[key]);
   }
   return JSON.stringify(canonical, null, 2);
 }

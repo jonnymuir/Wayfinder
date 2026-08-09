@@ -27,6 +27,7 @@ import { flattenRoutes, newRouteId } from './route-model.js';
 import { findServiceBlueprintShortcut, matchesShortcut, SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
 import './wayfinder-service-blueprint-graph.js';
 import './wayfinder-step-inspector.js';
+import './wayfinder-calculations-editor.js';
 import './wayfinder-stage-preview.js';
 import './wayfinder-service-blueprint-simulation.js';
 import './wayfinder-service-blueprint-outline.js';
@@ -1921,6 +1922,16 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     `;
   }
 
+  private _renderCalculationsPanel() {
+    return html`
+      <wayfinder-calculations-editor
+        .serviceBlueprint=${this._serviceBlueprint}
+        .componentCatalog=${this._componentCatalog}
+        @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
+      ></wayfinder-calculations-editor>
+    `;
+  }
+
   private _renderValidationPanel() {
     if (!this._serviceBlueprint) {
       return html`<div class="validation-empty-panel">No serviceBlueprint loaded</div>`;
@@ -2538,6 +2549,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           </div>
 
           <!-- Other tabs -->
+          <div slot="calculations">${this._renderCalculationsPanel()}</div>
           <div slot="validation">${this._renderValidationPanel()}</div>
           <div slot="preview">${this._renderStagePreview()}</div>
           <div slot="simulation">${this._renderSimulationPanel()}</div>

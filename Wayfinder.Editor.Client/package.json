@@ -20,7 +20,10 @@
     "test:playwright:ui": "playwright test --ui",
     "test:graph-layout": "node scripts/run-graph-layout-tests.mjs",
     "test:component-schema": "node scripts/run-component-schema-tests.mjs",
-    "test:property-references": "node scripts/run-property-references-tests.mjs"
+    "test:property-references": "node scripts/run-property-references-tests.mjs",
+    "test:calculation-runtime": "node scripts/run-calculation-runtime-tests.mjs",
+    "test:calculation-ordering": "node scripts/run-calculation-ordering-tests.mjs",
+    "test:canonical-json": "node scripts/run-canonical-json-tests.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

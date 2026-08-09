@@ -173,7 +173,14 @@ function parse(expression) {
   return node;
 }
 
-function tokenize(text) {
+/**
+ * Exported (in addition to being used internally by `parse`) so a syntax-highlighting
+ * consumer — e.g. the service blueprint editor's Calculations tab — can drive token
+ * classification directly off the real tokenizer instead of a second, hand-written one
+ * that could drift from the actual grammar. Token shape: `{ kind: 'number'|'identifier'|
+ * 'string'|'op', value: string, position: number }`.
+ */
+export function tokenize(text) {
   const tokens = [];
   let i = 0;
   while (i < text.length) {
