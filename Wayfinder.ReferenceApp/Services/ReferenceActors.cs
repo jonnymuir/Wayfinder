@@ -17,39 +17,17 @@ public static class ReferenceActors
     public const string CaseworkerQueue = "caseworker";
     public const string TenantId = "reference";
 
-    // Each queue's own curated allow-list — deliberately a subset, not "everything the catalog
-    // supports" (a caseworker's read-only review page has no business rendering a slider or a
-    // file-upload control, say), so this can't just be ComponentTypeRegistry.AllDiscriminators.
-    // But every entry still comes FROM the registry via a real CLR type, not a bare string
-    // literal — a rename or a typo breaks the build instead of silently drifting out of sync
-    // with the real catalog, the exact failure mode ValidateQueueCapabilityDeclarations exists
-    // to catch at runtime, caught earlier here at compile time instead.
-    private static readonly IReadOnlyList<string> CitizenComponentTypes =
-        [
-            ComponentTypeRegistry.DiscriminatorFor<FieldsetComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<TextInputComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<EmailComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<DateInputComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<NumberInputComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<DecimalInputComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<BooleanComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<RadiosComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<SliderComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<PanelComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<BodyComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<SummaryListComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<StatGroupComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<ChartComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<InsetTextComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<WarningTextComponent>(),
-            ComponentTypeRegistry.DiscriminatorFor<FileUploadComponent>(),
-            // "rating" is a toolkit-extension component, not one of Wayfinder's own built-ins —
-            // see Services/CustomComponents.cs. Kept as a plain discriminator constant (not a
-            // ComponentTypeRegistry.DiscriminatorFor<T>() call) since it lives outside this
-            // assembly's compile-time reach anyway; the point still stands either way — a nice
-            // touch showing different queues can declare genuinely different capabilities.
-            CustomComponents.RatingDiscriminator,
-        ];
+    // The citizen (frontstage) lane can render anything in the catalog — built-in or a toolkit
+    // extension's own — so its capability declaration is genuinely "everything currently
+    // registered", not a curated subset: ComponentTypeRegistry.AllDiscriminators already
+    // includes "rating" too by the time this is ever read, since Program.cs calls
+    // CustomComponents.Register() as literally its first statement, well before any request (and
+    // therefore any ReferenceActors static-field access) can happen. Compare with
+    // CaseworkerComponentTypes below, which genuinely IS a deliberate subset — the caseworker's
+    // read-only review page has no business rendering a slider or a file-upload control — so
+    // that one still lists its types out one by one, each a real registered CLR type rather than
+    // a bare string literal.
+    private static readonly IReadOnlyList<string> CitizenComponentTypes = ComponentTypeRegistry.AllDiscriminators;
 
     // Was previously just ["panel", "body", "summary-list"] — accurate for under-review's own
     // top-level components, but not for the text/email/date/number/boolean/file-upload fields
