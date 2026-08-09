@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { captureDocScreenshot } from './support/canvas-helpers';
+
+const DOCS_DIR = 'docs/skills/canvas-editor/screenshots';
 
 function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
@@ -29,6 +32,7 @@ test.describe('ServiceBlueprint graph behavioural rendering', () => {
 
     await expect(storyEl.locator('.lane-header').first()).toBeVisible();
     await expect(storyEl.locator('.graph-canvas')).toBeVisible();
+    await captureDocScreenshot(storyEl, `${DOCS_DIR}/graph-overview.png`);
   });
 
   // Slice D: single-route Split gateways render as a thin pill so a plain
@@ -57,6 +61,14 @@ test.describe('ServiceBlueprint graph behavioural rendering', () => {
       const firstPill = pills.first();
       await expect(firstPill).toHaveAttribute('data-wayfinder-gateway-node', /.+/);
       await expect(firstPill.locator('button')).toHaveAttribute('aria-label', /single-route gateway/);
+    }
+    // This story's own gateways are all multi-route/Join (0 pills, per the assertion above) —
+    // capture the diamond shape itself (a focused sub-element, not the whole scrolled graph,
+    // since the graph is taller than the viewport and a full-graph shot doesn't reliably frame
+    // any one gateway).
+    if (await diamonds.count()) {
+      await diamonds.first().scrollIntoViewIfNeeded();
+      await captureDocScreenshot(diamonds.first(), `${DOCS_DIR}/gateway-shapes.png`);
     }
   });
 

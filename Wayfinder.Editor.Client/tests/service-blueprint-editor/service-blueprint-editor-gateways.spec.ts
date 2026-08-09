@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { captureDocScreenshot } from './support/canvas-helpers';
+
+const DOCS_DIR = 'docs/skills/canvas-editor/screenshots';
 
 function graphStoryUrl(): string {
   return '/iframe.html?id=service-blueprint-editor-service-blueprint-graph--gateway-representation&viewMode=story';
@@ -75,6 +78,7 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await expect(inspector.locator('[data-wayfinder-field="kind"]')).toContainText('Split gateway');
     await expect(page.getByRole('tab', { name: 'Canvas' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('[data-wayfinder-preview-stage-name]')).toHaveCount(0);
+    await captureDocScreenshot(inspector, `${DOCS_DIR}/gateway-inspector.png`);
   });
 
   test('surfaces gateways as gateway nodes in the canvas matrix', async ({ page }) => {

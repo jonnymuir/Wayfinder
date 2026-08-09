@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { captureDocScreenshot } from './support/canvas-helpers';
+
+const DOCS_DIR = 'docs/skills/preview-tab/screenshots';
 
 function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
@@ -52,6 +55,7 @@ test.describe('ServiceBlueprint editor stage preview', () => {
     await expect(preview.locator('[data-wayfinder-preview-action="continue"]')).toBeDisabled();
     await expect(preview.locator('[data-wayfinder-preview-assignment]')).toContainText('Assigned to Applicant');
     await expect(preview.locator('[data-wayfinder-preview-selector]')).toHaveCount(0);
+    await captureDocScreenshot(preview, `${DOCS_DIR}/stage-preview.png`);
   });
 
   test.fixme('updates the preview when stage edits change the projected runtime', async ({ page }) => {

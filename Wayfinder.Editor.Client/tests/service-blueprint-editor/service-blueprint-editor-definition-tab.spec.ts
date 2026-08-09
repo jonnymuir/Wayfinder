@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { captureDocScreenshot } from './support/canvas-helpers';
+
+const DOCS_DIR = 'docs/skills/definition-tab/screenshots';
 
 function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
@@ -57,6 +60,7 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     expect(text).toContain('"stages"');
     // 2-space indent — first nested key sits at two spaces.
     expect(text).toMatch(/\n {2}"/);
+    await captureDocScreenshot(page.locator('[data-wayfinder-definition-panel]'), `${DOCS_DIR}/definition-json-view.png`);
   });
 
   test('Editing JSON to rename a stage updates the visual pane after debounce', async ({ page }) => {
@@ -96,6 +100,7 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     await expect(banner).toBeVisible();
     await expect(banner).toContainText("Definition can't be applied");
     await expect(page.locator('[data-wayfinder-definition-apply]')).toBeDisabled();
+    await captureDocScreenshot(page.locator('[data-wayfinder-definition-panel]'), `${DOCS_DIR}/parse-error-banner.png`);
 
     // Visual pane stays on the previous service blueprint.
     const editor = page.locator('wayfinder-service-blueprint-editor');
@@ -118,6 +123,7 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('unsupported stageType "Waiting"');
     await expect(page.locator('[data-wayfinder-definition-apply]')).toBeDisabled();
+    await captureDocScreenshot(page.locator('[data-wayfinder-definition-panel]'), `${DOCS_DIR}/schema-violation-banner.png`);
   });
 
   test('Visual change (rename a gateway) shows up in Definition tab', async ({ page }) => {

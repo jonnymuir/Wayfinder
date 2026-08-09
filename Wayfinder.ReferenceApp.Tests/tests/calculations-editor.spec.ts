@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { DEMO_USERS, loginAs, resetApp } from './fixtures';
+import { captureDocScreenshot, DEMO_USERS, loginAs, resetApp } from './fixtures';
+
+const DOCS_DIR = 'docs/skills/calculations-editor/screenshots';
 
 test.describe('Calculations tab', () => {
   test.beforeEach(async ({ request }) => {
@@ -46,10 +48,18 @@ test.describe('Calculations tab', () => {
     await expect(calcTab.locator('[data-wayfinder-calc-field-preview]').first()).toBeVisible({ timeout: 5_000 });
     const previewTexts = await calcTab.locator('[data-wayfinder-calc-field-preview]').allTextContents();
     expect(previewTexts.every(text => text.startsWith('= '))).toBe(true);
+    await captureDocScreenshot(calcTab, `${DOCS_DIR}/fields-live-preview.png`);
 
+    const seriesSection = calcTab.locator('.calc-section', { hasText: 'Series' });
     const seriesRow = calcTab.locator('[data-wayfinder-calc-series="premiumByFrequency"]');
-    await page.locator('.calc-section', { hasText: 'Series' }).locator('summary').click();
+    await seriesSection.locator('summary').click();
     await expect(seriesRow).toBeVisible();
+    await expect(seriesRow.locator('.calc-series-column-row')).toHaveCount(3);
+    // The full section (all 3 columns) is taller than the shell's scrollable content pane, so a
+    // single element screenshot only captures whatever portion is currently composited within
+    // it — this shows the section's real structure (name/loop-variable/from/to plus its first
+    // two repeatable column rows), not every row.
+    await captureDocScreenshot(seriesSection, `${DOCS_DIR}/series-live-preview.png`);
   });
 
   test('a field name is not flagged as colliding with an input that has no default, but is flagged against one that does', async ({ page }) => {
@@ -81,6 +91,7 @@ test.describe('Calculations tab', () => {
 
     const renamedRow = calcTab.locator('[data-wayfinder-calc-field="averageAudienceSize"]');
     await expect(renamedRow).toContainText('Collides with an input field\'s own fieldKey ("averageAudienceSize").');
+    await captureDocScreenshot(renamedRow, `${DOCS_DIR}/field-collision-error.png`);
   });
 
   test('a genuine calc collision appears in the Validation tab and blocks Save before it ever reaches the server', async ({ page }) => {
@@ -114,6 +125,10 @@ test.describe('Calculations tab', () => {
       hasText: 'Calculation field “averageAudienceSize” collides with an input field\'s own fieldKey.',
     });
     await expect(collisionIssue).toBeVisible();
+    await captureDocScreenshot(
+      page.locator('[data-wayfinder-validation-rail]'),
+      `${DOCS_DIR}/validation-tab-blocked-save.png`
+    );
 
     await page.getByRole('tab', { name: 'Canvas' }).click();
     await expect(page.locator('[data-wayfinder-save]')).toBeDisabled();
@@ -147,13 +162,24 @@ test.describe('Calculations tab', () => {
 
     // Make the first-added field depend on the second-added one — a forward reference.
     const firstCm = calcTab.locator(`[data-wayfinder-calc-field="${first}"] wayfinder-calculation-expression-editor`).first().locator('.cm-content');
+    // Typed with the reference last, not "${second} + 1" — as soon as a live-typed expression
+    // contains a valid reference to a field declared later, _setFieldExpr fires on that
+    // keystroke and _updateFields reorders the DOM immediately (mid-typing), which resets
+    // CodeMirror's cursor to 0 and scrambles anything typed afterward. Typing the
+    // reorder-triggering identifier last means nothing is left to land in the wrong place.
     await firstCm.click();
-    await firstCm.pressSequentially(`${second} + 1`);
+    await firstCm.pressSequentially(`1+${second}`);
     await page.waitForTimeout(400);
 
     const reordered = await fieldRows.evaluateAll(elements => elements.map(el => el.getAttribute('data-wayfinder-calc-field')));
     expect(reordered.indexOf(second)).toBeLessThan(reordered.indexOf(first));
     await expect(calcTab.locator('#calc-announcer')).toContainText(`Moved "${first}" after "${second}"`);
+    // #calc-announcer is an sr-only ARIA live region (the on-screen evidence of the reorder is
+    // the field's own new position and its expression referencing a field declared earlier) —
+    // scroll the moved field into view since it was just appended near the end of a long list.
+    const movedFieldRow = calcTab.locator(`[data-wayfinder-calc-field="${first}"]`);
+    await movedFieldRow.scrollIntoViewIfNeeded();
+    await captureDocScreenshot(movedFieldRow, `${DOCS_DIR}/auto-reorder-explained.png`);
 
     // Now make it a genuine cycle.
     const secondCm = calcTab.locator(`[data-wayfinder-calc-field="${second}"] wayfinder-calculation-expression-editor`).first().locator('.cm-content');
@@ -165,6 +191,8 @@ test.describe('Calculations tab', () => {
     await expect(cycleBanner).toBeVisible();
     await expect(cycleBanner).toContainText(first!);
     await expect(cycleBanner).toContainText(second!);
+    await cycleBanner.scrollIntoViewIfNeeded();
+    await captureDocScreenshot(cycleBanner, `${DOCS_DIR}/cycle-banner.png`);
   });
 
   test('an edit reaches the saved blueprint with the correct dependency order', async ({ page, request }) => {
@@ -206,6 +234,7 @@ test.describe('Calculations tab', () => {
       await page.getByRole('tab', { name: 'Canvas' }).click();
       await page.locator('[data-wayfinder-save]').click();
       await expect(page.locator('[data-wayfinder-toast]')).toContainText(/saved/i, { timeout: 5_000 });
+      await captureDocScreenshot(page.locator('[data-wayfinder-toast]'), `${DOCS_DIR}/save-confirmation.png`);
 
       const saved = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-insurance-modeller')).json();
       const fieldNames = Object.keys(saved.calculations.fields);
@@ -227,5 +256,43 @@ test.describe('Calculations tab', () => {
         data: { ...original, version: current.version },
       });
     }
+  });
+
+  test('a table can be added, with interpolate and row values reflected in the UI', async ({ page }) => {
+    // Neither seed blueprint declares any calculations.tables — this is the only coverage of
+    // the Tables section, added specifically so its docs/skills screenshot has real content
+    // behind a real assertion, not a screenshot with nothing verifying it.
+    await loginAs(page, DEMO_USERS.caseworker);
+    await page.getByRole('link', { name: 'Editor' }).click();
+
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+    await shell.waitFor({ timeout: 15_000 });
+
+    await selectInsuranceModeller(page);
+    await page.getByRole('tab', { name: 'Calculations' }).click();
+
+    const calcTab = page.locator('wayfinder-calculations-editor');
+    await calcTab.waitFor({ timeout: 10_000 });
+
+    const tablesSection = calcTab.locator('.calc-section', { hasText: 'Tables' });
+    await tablesSection.locator('summary').click();
+    await tablesSection.getByRole('button', { name: '+ Add table' }).click();
+
+    const tableRow = calcTab.locator('[data-wayfinder-calc-table="table1"]');
+    await expect(tableRow).toBeVisible();
+
+    await tableRow.locator('select').selectOption('step');
+    await tableRow.getByRole('button', { name: '+ Add row' }).click();
+
+    const keyInput = tableRow.locator('table tbody tr').first().locator('input').first();
+    const valueInput = tableRow.locator('table tbody tr').first().locator('input').nth(1);
+    await keyInput.fill('1');
+    await keyInput.dispatchEvent('change');
+    await valueInput.fill('1.15');
+    await valueInput.dispatchEvent('change');
+
+    await expect(tableRow.locator('table tbody tr')).toHaveCount(1);
+    await expect(valueInput).toHaveValue('1.15');
+    await captureDocScreenshot(tablesSection, `${DOCS_DIR}/tables-section.png`);
   });
 });

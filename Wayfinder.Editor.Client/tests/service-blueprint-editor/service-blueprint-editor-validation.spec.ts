@@ -1,4 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
+import { captureDocScreenshot } from './support/canvas-helpers';
+
+const DOCS_DIR = 'docs/skills/validation-tab/screenshots';
 
 function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
@@ -141,6 +144,11 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await expect(validationTab).toBeVisible();
     await page.locator('[data-wayfinder-open-validation]').click();
     await expect(validationTab).toHaveAttribute('aria-selected', 'true');
+    // The rail's own panel isn't visible/paintable until its tab is actually active — the
+    // earlier toContainText assertions above only need DOM presence, not visibility, so they
+    // pass even while Canvas is the active tab; a screenshot needs the real thing on-screen.
+    await expect(validationRail).toBeVisible();
+    await captureDocScreenshot(validationRail, `${DOCS_DIR}/validation-rail-issues.png`);
     await page.locator('[data-wayfinder-validation-issue]').filter({ hasText: 'Site visit' }).first().click();
     await expect(page.locator('[data-wayfinder-stage-detail="site-visit"]')).toBeVisible();
   });
@@ -230,6 +238,7 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await expect(page.locator('[data-wayfinder-save-status]')).toContainText(
       structuredSaveFailure.summary
     );
+    await captureDocScreenshot(saveError, `${DOCS_DIR}/save-error-panel.png`);
   });
 
   test('keeps save failures visible and copyable for support handoff', async ({ page }) => {

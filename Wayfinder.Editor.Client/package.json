@@ -24,7 +24,8 @@
     "test:calculation-runtime": "node scripts/run-calculation-runtime-tests.mjs",
     "test:calculation-ordering": "node scripts/run-calculation-ordering-tests.mjs",
     "test:calculation-diagnostics": "node scripts/run-calculation-diagnostics-tests.mjs",
-    "test:canonical-json": "node scripts/run-canonical-json-tests.mjs"
+    "test:canonical-json": "node scripts/run-canonical-json-tests.mjs",
+    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts service-blueprint-editor-validation.spec.ts service-blueprint-editor-stage-preview.spec.ts service-blueprint-editor-simulation.spec.ts service-blueprint-editor-definition-tab.spec.ts service-blueprint-editor-help.spec.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
