@@ -52,6 +52,37 @@ test.describe('Calculations tab', () => {
     await expect(seriesRow).toBeVisible();
   });
 
+  test('a field name is not flagged as colliding with an input that has no default, but is flagged against one that does', async ({ page }) => {
+    // Regression test: totalPremium is also the fieldKey of a summary-list display row (the
+    // standard check-your-answers pattern) with no `default` — CalculationScopeBuilder.Build
+    // never adds an input with neither a submission nor a default to the calc scope, so this
+    // is not a real collision. averageAudienceSize DOES have a default, so it genuinely would
+    // collide if a field were named after it.
+    await loginAs(page, DEMO_USERS.caseworker);
+    await page.getByRole('link', { name: 'Editor' }).click();
+
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+    await shell.waitFor({ timeout: 15_000 });
+
+    await selectInsuranceModeller(page);
+    await page.getByRole('tab', { name: 'Calculations' }).click();
+
+    const calcTab = page.locator('wayfinder-calculations-editor');
+    await calcTab.waitFor({ timeout: 10_000 });
+
+    const totalPremiumRow = calcTab.locator('[data-wayfinder-calc-field="totalPremium"]');
+    await totalPremiumRow.waitFor({ timeout: 10_000 });
+    await expect(totalPremiumRow).not.toContainText('Collides with an input');
+
+    const nameInput = totalPremiumRow.locator('input').first();
+    await nameInput.fill('averageAudienceSize');
+    await nameInput.dispatchEvent('change');
+    await page.waitForTimeout(300);
+
+    const renamedRow = calcTab.locator('[data-wayfinder-calc-field="averageAudienceSize"]');
+    await expect(renamedRow).toContainText('Collides with an input field\'s own fieldKey ("averageAudienceSize").');
+  });
+
   test('a forward reference is fixed automatically and explained, and a genuine cycle is flagged and blocks reordering', async ({ page }) => {
     await loginAs(page, DEMO_USERS.caseworker);
     await page.getByRole('link', { name: 'Editor' }).click();

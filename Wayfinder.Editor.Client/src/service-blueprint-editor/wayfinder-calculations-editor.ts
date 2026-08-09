@@ -200,7 +200,15 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     const fields = this._calculations.fields;
     const order = Object.keys(fields);
     const preview = tryEvaluateFieldsForPreview(this._calculations, this._sampleInputs);
-    const inputFieldKeys = new Set(this._allInputFields.map(field => field.fieldKey));
+    // Only an input that ALSO has a declared default can be statically known to occupy the
+    // calculation scope (CalculationScopeBuilder.Build: an input with no submission and no
+    // default is simply absent from scope, not an error) — matches the same limitation
+    // validate_service_blueprint's own static check has, documented in
+    // docs/guides/calculation-language.md. Without this, a summary-list child that legitimately
+    // reuses a calc field's own name to display its value (the standard check-your-answers
+    // pattern — see e.g. juggling-insurance-modeller.json's "totalPremium" row) would be
+    // wrongly flagged as a collision it can never actually cause at runtime.
+    const inputFieldKeys = new Set(this._allInputFields.filter(field => field.default).map(field => field.fieldKey));
     const tableNames = Object.keys(this._calculations.tables ?? {});
 
     return html`
