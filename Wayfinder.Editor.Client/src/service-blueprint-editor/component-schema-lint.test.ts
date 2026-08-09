@@ -299,6 +299,65 @@ export function run(): number {
       JSON.stringify(issues));
   }
 
+  // ── field-name/loop-variable collision (shared with the Calculations tab and the Validation
+  // tab via calculation-diagnostics.ts — see PR #40 and the validation-unification follow-up) ──
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { age: { expr: '1' } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [
+        { type: 'text', fieldKey: 'age', label: 'Age', default: '30' },
+      ] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a calculations.fields name colliding with a WITH-default input fieldKey is flagged',
+      issues.some(issue => issue.pathHint === 'calculations.fields.age' && issue.message.includes('collides with an input')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { totalPremium: { expr: '1' } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [
+        { type: 'text', fieldKey: 'totalPremium', label: 'Total premium' },
+      ] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a calculations.fields name matching a NO-default input fieldKey is NOT flagged as a collision',
+      !issues.some(issue => issue.message.includes('collides with an input')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: {
+        fields: { total: { expr: '1' } },
+        series: { s: { over: 'total', from: '1', to: '3', values: {} } },
+      },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a series loop variable colliding with an earlier field name is flagged',
+      issues.some(issue => issue.pathHint === 'calculations.series.s.over' && issue.message.includes('collides with an existing')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: {
+        series: { premiumByFrequency: { over: 'performances', from: '0', to: '50', values: { frequency: 'round(performances * 1.25)' } } },
+      },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check("lint: a series' own loop variable is valid inside its values columns (real juggling-insurance-modeller.json shape)",
+      issues.length === 0,
+      JSON.stringify(issues));
+  }
+
   {
     const parsed = {
       definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],

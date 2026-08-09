@@ -83,6 +83,46 @@ test.describe('Calculations tab', () => {
     await expect(renamedRow).toContainText('Collides with an input field\'s own fieldKey ("averageAudienceSize").');
   });
 
+  test('a genuine calc collision appears in the Validation tab and blocks Save before it ever reaches the server', async ({ page }) => {
+    // The Calculations tab's own inline check is advisory only — the Validation tab
+    // (service-blueprint-validation.ts, shared with the Calculations tab and the Definition-tab
+    // lint via calculation-diagnostics.ts) is what actually gates the Save button, mirroring
+    // exactly what the server's own SaveAsync -> Validate() would reject the save for anyway.
+    await loginAs(page, DEMO_USERS.caseworker);
+    await page.getByRole('link', { name: 'Editor' }).click();
+
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+    await shell.waitFor({ timeout: 15_000 });
+
+    await selectInsuranceModeller(page);
+    await page.getByRole('tab', { name: 'Validation' }).click();
+    await expect(page.locator('[data-wayfinder-save]')).toBeEnabled();
+
+    await page.getByRole('tab', { name: 'Calculations' }).click();
+    const calcTab = page.locator('wayfinder-calculations-editor');
+    await calcTab.waitFor({ timeout: 10_000 });
+
+    const totalPremiumRow = calcTab.locator('[data-wayfinder-calc-field="totalPremium"]');
+    await totalPremiumRow.waitFor({ timeout: 10_000 });
+    const nameInput = totalPremiumRow.locator('input').first();
+    await nameInput.fill('averageAudienceSize');
+    await nameInput.dispatchEvent('change');
+    await page.waitForTimeout(300);
+
+    await page.getByRole('tab', { name: 'Validation' }).click();
+    const collisionIssue = page.locator('[data-wayfinder-validation-issue]', {
+      hasText: 'Calculation field “averageAudienceSize” collides with an input field\'s own fieldKey.',
+    });
+    await expect(collisionIssue).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Canvas' }).click();
+    await expect(page.locator('[data-wayfinder-save]')).toBeDisabled();
+
+    await page.getByRole('tab', { name: 'Validation' }).click();
+    await collisionIssue.click();
+    await expect(page.getByRole('tab', { name: 'Calculations', selected: true })).toBeVisible();
+  });
+
   test('a forward reference is fixed automatically and explained, and a genuine cycle is flagged and blocks reordering', async ({ page }) => {
     await loginAs(page, DEMO_USERS.caseworker);
     await page.getByRole('link', { name: 'Editor' }).click();

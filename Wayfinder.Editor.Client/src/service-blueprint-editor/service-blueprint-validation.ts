@@ -1,7 +1,10 @@
-import type { ActionCatalogEntry, AuthoredAction, AuthoredStage, AuthoredServiceBlueprint, RouteView } from './types.js';
+import type { ActionCatalogEntry, AuthoredAction, AuthoredStage, AuthoredServiceBlueprint, ComponentDescriptor, RouteView } from './types.js';
 import { stageActions, stageKind, serviceBlueprintGateways, serviceBlueprintStages } from './types.js';
 import { findCatalogEntry, validateAction } from './action-editing.js';
 import { flattenRoutes, outgoingRouteViews, inboundRouteViews } from './route-model.js';
+import { collectStageInputFields } from './component-property-references.js';
+import { inScopeInputFieldKeys } from './calculation-runtime.js';
+import { computeCalculationDiagnostics, type CalculationDiagnostic } from './calculation-diagnostics.js';
 
 const TERMINAL_STAGE_KINDS = new Set<AuthoredStage['metadata'] extends never ? never : ReturnType<typeof stageKind>>(['Confirmation']);
 
@@ -18,7 +21,8 @@ export type ServiceBlueprintValidationLocation =
       actionIndex: number;
       fieldKey?: string;
       formFieldIndex?: number;
-    };
+    }
+  | { kind: 'calculation'; field?: string; series?: string };
 
 export interface ServiceBlueprintValidationIssue {
   id: string;
@@ -29,7 +33,14 @@ export interface ServiceBlueprintValidationIssue {
     | 'stage-dead-end'
     | 'route-missing-stage'
     | 'route-duplicate'
-    | 'action-configuration';
+    | 'action-configuration'
+    | 'calculation-parse-error'
+    | 'calculation-unknown-reference'
+    | 'calculation-unknown-table'
+    | 'calculation-name-collision'
+    | 'calculation-cycle'
+    | 'calculation-order'
+    | 'calculation-loop-variable-collision';
   severity: ServiceBlueprintValidationSeverity;
   message: string;
   blocking: boolean;
@@ -197,7 +208,130 @@ function actionValidationIssues(
   return [...propertyIssues, ...formFieldIssues];
 }
 
-export function validateServiceBlueprint(serviceBlueprint: AuthoredServiceBlueprint, actionCatalog: ActionCatalogEntry[] = []): ServiceBlueprintValidationIssue[] {
+/**
+ * Every diagnostic computeCalculationDiagnostics produces corresponds to something
+ * CalculationEvaluator.cs/CalculationScopeBuilder.cs genuinely rejects at Save time (see
+ * calculation-diagnostics.ts's own doc comment), so every one is reported here as a blocking
+ * error — proactively surfacing, before Save is even attempted, exactly what SaveAsync's own
+ * server-side Validate() call would otherwise reject it for. Shared with the Definition tab's
+ * lint (service-blueprint-lint.ts) and the Calculations tab (wayfinder-calculations-editor.ts)
+ * so none of the three re-derives its own subset of the same rules.
+ */
+function calculationValidationIssues(
+  serviceBlueprint: AuthoredServiceBlueprint,
+  componentCatalog: ComponentDescriptor[]
+): ServiceBlueprintValidationIssue[] {
+  const calculations = serviceBlueprint.calculations;
+  if (!calculations) {
+    return [];
+  }
+
+  const allComponents = serviceBlueprint.stages.flatMap(stage => stage.components ?? []);
+  const allInputFields = collectStageInputFields(allComponents, componentCatalog);
+  const scopedInputFieldKeys = inScopeInputFieldKeys(allInputFields);
+
+  const diagnostics = computeCalculationDiagnostics({
+    fields: calculations.fields,
+    series: calculations.series ?? {},
+    tableNames: new Set(Object.keys(calculations.tables ?? {})),
+    inScopeInputFieldKeys: scopedInputFieldKeys,
+  });
+
+  return diagnostics.map((diagnostic, index) => calculationDiagnosticToIssue(diagnostic, index));
+}
+
+function calculationDiagnosticToIssue(diagnostic: CalculationDiagnostic, index: number): ServiceBlueprintValidationIssue {
+  const base = { severity: 'error' as const, blocking: true };
+
+  switch (diagnostic.kind) {
+    case 'field-parse-error':
+      return {
+        ...base,
+        id: `calculation-field-parse-error-${diagnostic.field}`,
+        code: 'calculation-parse-error',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” has an invalid expression: ${diagnostic.message}`,
+      };
+    case 'field-unknown-reference':
+      return {
+        ...base,
+        id: `calculation-field-unknown-reference-${diagnostic.field}-${diagnostic.name}`,
+        code: 'calculation-unknown-reference',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” references “${diagnostic.name}”, which is not a known input field or calculation field.`,
+      };
+    case 'field-unknown-table':
+      return {
+        ...base,
+        id: `calculation-field-unknown-table-${diagnostic.field}-${diagnostic.table}`,
+        code: 'calculation-unknown-table',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” calls lookup() against unknown table “${diagnostic.table}”.`,
+      };
+    case 'field-name-collision':
+      return {
+        ...base,
+        id: `calculation-field-name-collision-${diagnostic.field}`,
+        code: 'calculation-name-collision',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” collides with an input field's own fieldKey.`,
+      };
+    case 'field-cycle':
+      return {
+        ...base,
+        id: `calculation-field-cycle-${diagnostic.fields.join('-')}`,
+        code: 'calculation-cycle',
+        location: { kind: 'calculation' },
+        message: `Calculation fields ${diagnostic.fields.join(' → ')} → ${diagnostic.fields[0]} form a circular dependency and can never be evaluated.`,
+      };
+    case 'field-order':
+      return {
+        ...base,
+        id: `calculation-field-order-${diagnostic.field}`,
+        code: 'calculation-order',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” must be declared after “${diagnostic.mustFollow}” — a field must be declared before anything that references it.`,
+      };
+    case 'series-parse-error':
+      return {
+        ...base,
+        id: `calculation-series-parse-error-${diagnostic.series}-${diagnostic.part}-${diagnostic.column ?? index}`,
+        code: 'calculation-parse-error',
+        location: { kind: 'calculation', series: diagnostic.series },
+        message: `Calculation series “${diagnostic.series}” (${diagnostic.column ?? diagnostic.part}) has an invalid expression: ${diagnostic.message}`,
+      };
+    case 'series-unknown-reference':
+      return {
+        ...base,
+        id: `calculation-series-unknown-reference-${diagnostic.series}-${diagnostic.part}-${diagnostic.column ?? index}-${diagnostic.name}`,
+        code: 'calculation-unknown-reference',
+        location: { kind: 'calculation', series: diagnostic.series },
+        message: `Calculation series “${diagnostic.series}” (${diagnostic.column ?? diagnostic.part}) references “${diagnostic.name}”, which is not a known input field or calculation field.`,
+      };
+    case 'series-unknown-table':
+      return {
+        ...base,
+        id: `calculation-series-unknown-table-${diagnostic.series}-${diagnostic.part}-${diagnostic.column ?? index}-${diagnostic.table}`,
+        code: 'calculation-unknown-table',
+        location: { kind: 'calculation', series: diagnostic.series },
+        message: `Calculation series “${diagnostic.series}” (${diagnostic.column ?? diagnostic.part}) calls lookup() against unknown table “${diagnostic.table}”.`,
+      };
+    case 'series-loop-variable-collision':
+      return {
+        ...base,
+        id: `calculation-series-loop-variable-collision-${diagnostic.series}`,
+        code: 'calculation-loop-variable-collision',
+        location: { kind: 'calculation', series: diagnostic.series },
+        message: `Calculation series “${diagnostic.series}”'s loop variable “${diagnostic.variable}” collides with an existing field or input name.`,
+      };
+  }
+}
+
+export function validateServiceBlueprint(
+  serviceBlueprint: AuthoredServiceBlueprint,
+  actionCatalog: ActionCatalogEntry[] = [],
+  componentCatalog: ComponentDescriptor[] = []
+): ServiceBlueprintValidationIssue[] {
   const initialStageExists = serviceBlueprint.stages.some(stage => stage.stateKey === serviceBlueprint.initialStage);
   const initialStageIssues = initialStageExists || serviceBlueprint.stages.length === 0
     ? []
@@ -308,5 +442,6 @@ export function validateServiceBlueprint(serviceBlueprint: AuthoredServiceBluepr
     ...missingStageRouteIssues,
     ...stageActionIssues,
     ...routeActionIssues,
+    ...calculationValidationIssues(serviceBlueprint, componentCatalog),
   ];
 }
