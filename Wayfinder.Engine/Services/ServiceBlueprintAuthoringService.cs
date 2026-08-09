@@ -82,9 +82,10 @@ public sealed class ServiceBlueprintAuthoringService(
 
     /// <summary>
     /// Validates gateway routing, every stat-group/chart binding against the fields and series
-    /// that actually exist, the <c>calculations</c> block, and every component's
-    /// <c>showWhen</c> expression, collecting every diagnostic rather than stopping at the
-    /// first. A declared <c>source: "service"</c> field not covered by
+    /// that actually exist, every field's conditionalOn/defaultFrom against the calculation
+    /// scope and its own stage's other fields, the <c>calculations</c> block, and every
+    /// component's <c>showWhen</c> expression, collecting every diagnostic rather than stopping
+    /// at the first. A declared <c>source: "service"</c> field not covered by
     /// <paramref name="mockServiceInputs"/> can't be verified statically — it's reported as a
     /// <see cref="ServiceBlueprintDiagnosticSeverity.Warning"/>, not an error, and (since the calculated
     /// fields and any showWhen depending on them can't be evaluated without it) the rest of the
@@ -97,6 +98,7 @@ public sealed class ServiceBlueprintAuthoringService(
     {
         var diagnostics = new List<ServiceBlueprintDiagnostic>(blueprint.ValidateGatewayRouting());
         diagnostics.AddRange(blueprint.ValidateDataDisplayBindings());
+        diagnostics.AddRange(blueprint.ValidateFieldReferences());
         diagnostics.AddRange(blueprint.ValidateReachability());
         diagnostics.AddRange(blueprint.ValidateStageVocabulary());
         diagnostics.AddRange(ValidateComponentProperties(blueprint));

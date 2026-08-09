@@ -102,4 +102,37 @@ public class ComponentDescriptorJsonTests
         radioJson.Should().Contain("\"propertyName\":\"conditionalChildren\"");
         radioJson.Should().Contain("\"keySourceProperty\":\"options\"");
     }
+
+    /// <summary>
+    /// Reference-aware property fields (2026-08-09): a handful of <see cref="InputComponent"/>
+    /// properties are tagged with a <see cref="ComponentPropertyDescriptor.Format"/> naming which
+    /// smart <c>&lt;select&gt;</c> the editor client should render instead of a plain text box —
+    /// see docs/guides/extending-the-component-catalog.md. Locks the tag values in so a future
+    /// rename doesn't silently fall back to a blank text input.
+    /// </summary>
+    [Fact]
+    public void ReferenceAwareProperties_CarryTheExpectedFormatTag()
+    {
+        var email = ComponentTypeRegistry.All.Single(d => d.Discriminator == "email");
+        Property(email, nameof(InputComponent.ConditionalOn)).Format.Should().Be("field-ref");
+        Property(email, nameof(InputComponent.VisibleWhen)).Format.Should().Be("conditional-value-ref");
+        Property(email, nameof(InputComponent.DefaultFrom)).Format.Should().Be("calculation-ref");
+        Property(email, nameof(InputComponent.ChangeStateKey)).Format.Should().Be("stage-ref");
+        Property(email, nameof(InputComponent.Default)).Format.Should().BeNull();
+        Property(email, nameof(EmailComponent.Pattern)).Format.Should().Be("pattern");
+
+        var radio = ComponentTypeRegistry.All.Single(d => d.Discriminator == "radio");
+        Property(radio, nameof(InputComponent.Default)).Format.Should().Be("own-options-ref");
+
+        var summaryList = ComponentTypeRegistry.All.Single(d => d.Discriminator == "summary-list");
+        Property(summaryList, nameof(SummaryListComponent.ChangeStateKey)).Format.Should().Be("stage-ref");
+
+        var statGroup = ComponentTypeRegistry.All.Single(d => d.Discriminator == "stat-group");
+        var items = statGroup.Properties.Single(p => p.Key == nameof(StatGroupComponent.Items));
+        items.Items!.Properties!.Single(p => p.Key == nameof(StatItemDefinition.FieldKey)).Format
+            .Should().Be("field-or-calc-ref");
+    }
+
+    private static ComponentPropertyDescriptor Property(ComponentDescriptor descriptor, string key) =>
+        descriptor.Properties.Single(p => p.Key == key);
 }

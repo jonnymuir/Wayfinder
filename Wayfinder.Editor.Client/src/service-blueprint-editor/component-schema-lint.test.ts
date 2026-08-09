@@ -12,6 +12,9 @@ const CATALOG: ComponentDescriptor[] = [
     properties: [
       { key: 'fieldKey', title: 'Field key', valueKind: 'String', required: true },
       { key: 'label', title: 'Label', valueKind: 'String', required: true },
+      { key: 'conditionalOn', title: 'Conditional on field', valueKind: 'String', required: false, format: 'field-ref' },
+      { key: 'defaultFrom', title: 'Default from calculation', valueKind: 'String', required: false, format: 'calculation-ref' },
+      { key: 'changeStateKey', title: 'Change link target stage', valueKind: 'String', required: false, format: 'stage-ref' },
     ],
     containment: { kind: 'None' },
   },
@@ -163,6 +166,61 @@ export function run(): number {
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed));
     check('lint: component checks are skipped entirely when no catalog is supplied (back-compat default)',
       issues.length === 0);
+  }
+
+  // ── field-ref/calculation-ref/stage-ref dangling-reference checks ────────
+  {
+    const parsed = minimalBlueprint([
+      { type: 'text', fieldKey: 'name', label: 'Name' },
+      { type: 'text', fieldKey: 'nickname', label: 'Nickname', conditionalOn: 'nam' },
+    ]);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a conditionalOn not matching a sibling fieldKey is flagged',
+      issues.some(issue => issue.pathHint?.includes('[1].conditionalOn') && issue.message.includes('"nam"')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = minimalBlueprint([
+      { type: 'text', fieldKey: 'name', label: 'Name' },
+      { type: 'text', fieldKey: 'nickname', label: 'Nickname', conditionalOn: 'name' },
+    ]);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a conditionalOn matching a real sibling fieldKey produces no issue for it',
+      !issues.some(issue => issue.pathHint?.includes('conditionalOn')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { suggestedName: { expr: '1' } } },
+      stages: [{
+        stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question',
+        components: [{ type: 'text', fieldKey: 'name', label: 'Name', defaultFrom: 'suggestdName' }],
+      }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a defaultFrom not matching a calculations.fields name is flagged',
+      issues.some(issue => issue.pathHint?.includes('defaultFrom') && issue.message.includes('"suggestdName"')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'first', queues: [], gateways: [],
+      stages: [
+        { stageKey: 'first', displayName: 'First', queueKey: 'citizen', stageType: 'Question', components: [] },
+        {
+          stageKey: 'second', displayName: 'Second', queueKey: 'citizen', stageType: 'Question',
+          components: [{ type: 'text', fieldKey: 'name', label: 'Name', changeStateKey: 'frist' }],
+        },
+      ],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a changeStateKey not matching a real stage key is flagged',
+      issues.some(issue => issue.pathHint?.includes('changeStateKey') && issue.message.includes('"frist"')),
+      JSON.stringify(issues));
   }
 
   if (failures > 0) {

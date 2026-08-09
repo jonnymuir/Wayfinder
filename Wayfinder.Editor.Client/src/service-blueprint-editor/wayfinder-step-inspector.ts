@@ -15,6 +15,7 @@ import { serviceBlueprintGateways, serviceBlueprintStages } from './types.js';
 import { NODE_ICONS, defaultIconForGateway, defaultIconForStage, type NodeIconDef, type NodeIconName } from './graph/node-icons.js';
 import { blankComponentFor, setAtPath, type PropertyPath } from './component-property-editor.js';
 import { renderComponentNode } from './component-child-editor.js';
+import { buildPropertyReferenceContext } from './component-property-references.js';
 
 function renderNodeIconSvg(icon: NodeIconDef) {
   return svg`
@@ -1652,6 +1653,12 @@ export class WayfinderStepInspectorElement extends LitElement {
   }
 
   private _renderComponentEditor(component: AuthoredComponent, index: number, editorId: string) {
+    const references = buildPropertyReferenceContext(
+      this.serviceBlueprint,
+      this._selectedStage?.components,
+      this.componentCatalog
+    );
+
     return html`
       <div id=${editorId} class="component-editor field-grid">
         ${renderComponentNode(component, [index], {
@@ -1660,6 +1667,7 @@ export class WayfinderStepInspectorElement extends LitElement {
           onAnnounce: message => this._announce(message),
           onFocusContainer: containerPath => this._focusChildContainer(containerPath),
           idPrefix: `component-${index}`,
+          references,
         })}
       </div>
     `;
@@ -1932,6 +1940,24 @@ export class WayfinderStepInspectorElement extends LitElement {
       min-height: 2.5rem;
       color: #111827;
       font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .pattern-field {
+      gap: 0.875rem;
+      padding: 0.75rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+
+    .pattern-tester-pass {
+      color: #166534;
+      font-weight: 600;
+    }
+
+    .pattern-tester-fail {
+      color: #b91c1c;
       font-weight: 600;
     }
 

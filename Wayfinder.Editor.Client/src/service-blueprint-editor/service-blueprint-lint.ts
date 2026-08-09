@@ -1,5 +1,6 @@
-import type { AuthoredServiceBlueprint, ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
+import type { AuthoredComponent, AuthoredServiceBlueprint, ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
 import { hydrateServiceBlueprintDefinition } from './types.js';
+import { collectStageInputFields } from './component-property-references.js';
 
 export type DefinitionLint = {
   message: string;
@@ -9,6 +10,21 @@ export type DefinitionLint = {
 
 const ALLOWED_STAGE_KINDS = new Set(['Question', 'CheckAnswers', 'Confirmation', 'TaskList']);
 const ALLOWED_GATEWAY_KINDS = new Set(['Split', 'Join']);
+
+/**
+ * Blueprint-wide reference data for the three dangling-reference checks below — mirrors what
+ * `ServiceBlueprint.ValidateFieldReferences` (Wayfinder/Models/ServiceDesign/ServiceBlueprint.cs)
+ * checks server-side, so a mistake made by hand in the Definition tab is flagged before you even
+ * try to save, the same class of feedback `validate_service_blueprint` gives, just local and
+ * instant. `siblingFieldKeys` is stage-scoped (ConditionalOn/VisibleWhen are only ever checked
+ * against the current stage's own submitted values); `calculationFieldNames`/`stageKeys` are
+ * blueprint-wide.
+ */
+interface ReferenceLintContext {
+  siblingFieldKeys: Set<string>;
+  calculationFieldNames: Set<string>;
+  stageKeys: Set<string>;
+}
 
 function findLine(source: string, needle: string): number | undefined {
   const index = source.indexOf(needle);
@@ -33,7 +49,8 @@ function lintComponentTree(
   catalog: ComponentDescriptor[],
   source: string,
   pathPrefix: string,
-  issues: DefinitionLint[]
+  issues: DefinitionLint[],
+  refs?: ReferenceLintContext
 ): void {
   if (!Array.isArray(components)) {
     return;
@@ -64,12 +81,12 @@ function lintComponentTree(
       return;
     }
 
-    lintComponentProperties(component, descriptor.properties, source, componentPath, issues);
+    lintComponentProperties(component, descriptor.properties, source, componentPath, issues, refs);
 
     const { containment } = descriptor;
     if (containment.kind === 'ChildList' && containment.propertyName) {
       const key = containment.propertyName;
-      lintComponentTree(component[key], catalog, source, `${componentPath}.${key}`, issues);
+      lintComponentTree(component[key], catalog, source, `${componentPath}.${key}`, issues, refs);
     } else if (containment.kind === 'NamedSections' && containment.propertyName) {
       const key = containment.propertyName;
       const childrenKey = containment.sectionChildrenPropertyName ?? 'children';
@@ -78,7 +95,7 @@ function lintComponentTree(
         sections.forEach((rawSection, sectionIndex) => {
           if (rawSection && typeof rawSection === 'object' && !Array.isArray(rawSection)) {
             const section = rawSection as Record<string, unknown>;
-            lintComponentTree(section[childrenKey], catalog, source, `${componentPath}.${key}[${sectionIndex}].${childrenKey}`, issues);
+            lintComponentTree(section[childrenKey], catalog, source, `${componentPath}.${key}[${sectionIndex}].${childrenKey}`, issues, refs);
           }
         });
       }
@@ -96,7 +113,7 @@ function lintComponentTree(
               line: findLine(source, `"${optionKey}"`),
             });
           }
-          lintComponentTree(children, catalog, source, `${componentPath}.${key}.${optionKey}`, issues);
+          lintComponentTree(children, catalog, source, `${componentPath}.${key}.${optionKey}`, issues, refs);
         }
       }
     }
@@ -108,7 +125,8 @@ function lintComponentProperties(
   properties: ComponentPropertyDescriptor[],
   source: string,
   path: string,
-  issues: DefinitionLint[]
+  issues: DefinitionLint[],
+  refs?: ReferenceLintContext
 ): void {
   for (const property of properties) {
     const value = component[property.key];
@@ -131,6 +149,32 @@ function lintComponentProperties(
           pathHint: propertyPath,
           line: findLine(source, `"${value}"`),
         });
+      }
+      // Dangling-reference checks — mirrors ServiceBlueprint.ValidateFieldReferences/
+      // ValidateDataDisplayBindings server-side, so a mistake made by hand here is caught before
+      // Save, not just downstream at validate_service_blueprint.
+      if (refs) {
+        if (property.format === 'field-ref' && !refs.siblingFieldKeys.has(value)) {
+          issues.push({
+            message: `"${property.title}" at "${propertyPath}" is "${value}", which isn't another field's fieldKey in this stage — visibility is only ever checked against the current stage's own submitted values, so this field would always stay hidden.`,
+            pathHint: propertyPath,
+            line: findLine(source, `"${value}"`),
+          });
+        }
+        if (property.format === 'calculation-ref' && !refs.calculationFieldNames.has(value)) {
+          issues.push({
+            message: `"${property.title}" at "${propertyPath}" is "${value}", which is not a name declared in this blueprint's calculations.fields — it would never resolve.`,
+            pathHint: propertyPath,
+            line: findLine(source, `"${value}"`),
+          });
+        }
+        if (property.format === 'stage-ref' && !refs.stageKeys.has(value)) {
+          issues.push({
+            message: `"${property.title}" at "${propertyPath}" is "${value}", which is not a stage in this blueprint.`,
+            pathHint: propertyPath,
+            line: findLine(source, `"${value}"`),
+          });
+        }
       }
       if (property.pattern) {
         try {
@@ -159,11 +203,11 @@ function lintComponentProperties(
     if (property.valueKind === 'Array' && Array.isArray(value) && property.items?.properties) {
       value.forEach((item, itemIndex) => {
         if (item && typeof item === 'object' && !Array.isArray(item)) {
-          lintComponentProperties(item as Record<string, unknown>, property.items!.properties!, source, `${propertyPath}[${itemIndex}]`, issues);
+          lintComponentProperties(item as Record<string, unknown>, property.items!.properties!, source, `${propertyPath}[${itemIndex}]`, issues, refs);
         }
       });
     } else if (property.valueKind === 'Object' && value && typeof value === 'object' && !Array.isArray(value) && property.properties) {
-      lintComponentProperties(value as Record<string, unknown>, property.properties, source, propertyPath, issues);
+      lintComponentProperties(value as Record<string, unknown>, property.properties, source, propertyPath, issues, refs);
     }
   }
 }
@@ -195,6 +239,25 @@ export function lintAuthoredServiceBlueprintDocument(
   if (!Array.isArray(root.queues)) {
     issues.push({ message: '"queues" must be an array.', pathHint: 'queues' });
   }
+
+  const calculationFieldNames = new Set(
+    root.calculations && typeof root.calculations === 'object'
+      ? Object.keys((root.calculations as Record<string, unknown>).fields ?? {})
+      : []
+  );
+  const stageKeys = new Set(
+    Array.isArray(root.stages)
+      ? root.stages
+          .map(rawState => {
+            if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
+              return undefined;
+            }
+            const state = rawState as Record<string, unknown>;
+            return typeof state.stageKey === 'string' ? state.stageKey : undefined;
+          })
+          .filter((key): key is string => Boolean(key))
+      : []
+  );
 
   if (!Array.isArray(root.stages)) {
     issues.push({ message: '"stages" must be an array.', pathHint: 'stages' });
@@ -248,7 +311,14 @@ export function lintAuthoredServiceBlueprintDocument(
       }
 
       if (componentCatalog.length > 0 && state.components !== undefined) {
-        lintComponentTree(state.components, componentCatalog, source, `stages[${index}].components`, issues);
+        const siblingFieldKeys = new Set(
+          collectStageInputFields(state.components as AuthoredComponent[], componentCatalog).map(field => field.fieldKey)
+        );
+        lintComponentTree(state.components, componentCatalog, source, `stages[${index}].components`, issues, {
+          siblingFieldKeys,
+          calculationFieldNames,
+          stageKeys,
+        });
       }
     });
   }
