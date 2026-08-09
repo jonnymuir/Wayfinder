@@ -19,8 +19,11 @@ public static class BuiltInComponentDescriptors
 {
     // Shared by every InputComponent-derived descriptor — FieldKey/Label/Hint/Required/
     // ConditionalOn/VisibleWhen/Default/DefaultFrom/ChangeStateKey all live on the InputComponent
-    // base, not any one derived type.
-    private static IReadOnlyList<ComponentPropertyDescriptor> InputBaseProperties() =>
+    // base, not any one derived type. `hasOwnOptions` is true only for select/radio/checkboxlist —
+    // it's the one case where "Default value" has a real closed set (the component's own
+    // Options), so those three call sites tag Default with "own-options-ref"; every other input
+    // type has no useful closed set for its default, so it stays untagged (free text).
+    private static IReadOnlyList<ComponentPropertyDescriptor> InputBaseProperties(bool hasOwnOptions = false) =>
     [
         new()
         {
@@ -49,32 +52,38 @@ public static class BuiltInComponentDescriptors
         new()
         {
             Key = nameof(InputComponent.ConditionalOn), Title = "Conditional on field",
-            Description = "The field key this field depends on for visibility.",
-            ValueKind = ComponentPropertyValueKind.String,
+            Description = "Must be another input field's fieldKey declared in this SAME stage — visibility is " +
+                "only ever checked against the current stage's own submitted values, so a fieldKey from a " +
+                "different stage (or a typo) leaves this field always hidden.",
+            ValueKind = ComponentPropertyValueKind.String, Format = "field-ref",
         },
         new()
         {
             Key = nameof(InputComponent.VisibleWhen), Title = "Visible when value",
-            Description = "The value that makes this field visible when Conditional on field is set.",
-            ValueKind = ComponentPropertyValueKind.String,
+            Description = "The value that makes this field visible when Conditional on field is set — compared " +
+                "case-insensitively against the referenced field's submitted value (\"true\"/\"false\" for a " +
+                "boolean field, or one of its declared options).",
+            ValueKind = ComponentPropertyValueKind.String, Format = "conditional-value-ref",
         },
         new()
         {
             Key = nameof(InputComponent.Default), Title = "Default value",
             Description = "Used when the instance has no saved value for this field yet.",
-            ValueKind = ComponentPropertyValueKind.String,
+            ValueKind = ComponentPropertyValueKind.String, Format = hasOwnOptions ? "own-options-ref" : null,
         },
         new()
         {
             Key = nameof(InputComponent.DefaultFrom), Title = "Default from calculation",
-            Description = "Names a calculation-scope value to use as this field's default instead of the static default.",
-            ValueKind = ComponentPropertyValueKind.String,
+            Description = "Names a calculation-scope value to use as this field's default instead of the static " +
+                "default. Must be a name declared in this blueprint's calculations.fields.",
+            ValueKind = ComponentPropertyValueKind.String, Format = "calculation-ref",
         },
         new()
         {
             Key = nameof(InputComponent.ChangeStateKey), Title = "Change link target stage",
-            Description = "When this field appears in a summary-list, the stage its own \"Change\" link navigates back to.",
-            ValueKind = ComponentPropertyValueKind.String,
+            Description = "When this field appears in a summary-list, the stage its own \"Change\" link " +
+                "navigates back to. Must be an existing stage's stageKey.",
+            ValueKind = ComponentPropertyValueKind.String, Format = "stage-ref",
         },
     ];
 
@@ -199,7 +208,7 @@ public static class BuiltInComponentDescriptors
                 .. InputBaseProperties(),
                 Prop(nameof(TextInputComponent.MinLength), "Minimum length", ComponentPropertyValueKind.Integer),
                 Prop(nameof(TextInputComponent.MaxLength), "Maximum length", ComponentPropertyValueKind.Integer),
-                Prop(nameof(TextInputComponent.Pattern), "Pattern (regex)", ComponentPropertyValueKind.String),
+                Prop(nameof(TextInputComponent.Pattern), "Pattern (regex)", ComponentPropertyValueKind.String, format: "pattern"),
                 Prop(nameof(TextInputComponent.Prefix), "Prefix", ComponentPropertyValueKind.String, "e.g. \"£\"."),
             ],
         });
@@ -238,7 +247,7 @@ public static class BuiltInComponentDescriptors
             ClrType = typeof(SelectComponent), IsInput = true,
             Properties =
             [
-                .. InputBaseProperties(),
+                .. InputBaseProperties(hasOwnOptions: true),
                 Prop(nameof(SelectComponent.Options), "Options", ComponentPropertyValueKind.StringArray, required: true),
             ],
         });
@@ -250,7 +259,7 @@ public static class BuiltInComponentDescriptors
             ClrType = typeof(RadiosComponent), IsInput = true,
             Properties =
             [
-                .. InputBaseProperties(),
+                .. InputBaseProperties(hasOwnOptions: true),
                 Prop(nameof(RadiosComponent.Options), "Options", ComponentPropertyValueKind.StringArray, required: true),
             ],
             Containment = ComponentContainment.KeyedChildren(
@@ -264,7 +273,7 @@ public static class BuiltInComponentDescriptors
             ClrType = typeof(CheckboxesComponent), IsInput = true,
             Properties =
             [
-                .. InputBaseProperties(),
+                .. InputBaseProperties(hasOwnOptions: true),
                 Prop(nameof(CheckboxesComponent.Options), "Options", ComponentPropertyValueKind.StringArray, required: true),
             ],
             Containment = ComponentContainment.KeyedChildren(
@@ -285,7 +294,7 @@ public static class BuiltInComponentDescriptors
             Properties =
             [
                 .. InputBaseProperties(),
-                Prop(nameof(EmailComponent.Pattern), "Pattern (regex)", ComponentPropertyValueKind.String),
+                Prop(nameof(EmailComponent.Pattern), "Pattern (regex)", ComponentPropertyValueKind.String, format: "pattern"),
             ],
         });
 
@@ -360,7 +369,9 @@ public static class BuiltInComponentDescriptors
                         [
                             Prop(nameof(StatItemDefinition.Label), "Label", ComponentPropertyValueKind.String, required: true),
                             Prop(nameof(StatItemDefinition.FieldKey), "Field key", ComponentPropertyValueKind.String,
-                                "The instance/calculated field this tile's value is read from.", required: true),
+                                "The instance/calculated field this tile's value is read from. Must be a " +
+                                "calculations.fields name or an input field's fieldKey captured anywhere in the " +
+                                "blueprint (not just this stage).", format: "field-or-calc-ref", required: true),
                             Prop(nameof(StatItemDefinition.Qualifier), "Qualifier", ComponentPropertyValueKind.String, "e.g. \"a year, for life\"."),
                             Prop(nameof(StatItemDefinition.Emphasis), "Emphasis", ComponentPropertyValueKind.Boolean, editor: "toggle"),
                         ],
@@ -430,7 +441,7 @@ public static class BuiltInComponentDescriptors
             Properties =
             [
                 Prop(nameof(SummaryListComponent.Title), "Title", ComponentPropertyValueKind.String),
-                Prop(nameof(SummaryListComponent.ChangeStateKey), "Change link target stage", ComponentPropertyValueKind.String),
+                Prop(nameof(SummaryListComponent.ChangeStateKey), "Change link target stage", ComponentPropertyValueKind.String, format: "stage-ref"),
             ],
             Containment = ComponentContainment.ChildList(nameof(SummaryListComponent.Children)),
         });

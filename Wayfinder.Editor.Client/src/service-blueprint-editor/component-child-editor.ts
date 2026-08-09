@@ -33,7 +33,13 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import type { AuthoredComponent, ComponentDescriptor } from './types.js';
-import { blankComponentFor, renderComponentPropertyFields, type PropertyPath } from './component-property-editor.js';
+import {
+  blankComponentFor,
+  renderComponentPropertyFields,
+  type PropertyPath,
+  type ResolvedPropertyReferences,
+} from './component-property-editor.js';
+import type { PropertyReferenceContext } from './component-property-references.js';
 
 export interface ChildEditorContext {
   /** Every registered component type — a child's own descriptor is looked up here by discriminator. */
@@ -43,6 +49,8 @@ export interface ChildEditorContext {
   /** Refocuses the "+ Add component" control of the child-list container at this path, after a delete. */
   onFocusContainer: (containerPath: PropertyPath) => void;
   idPrefix: string;
+  /** Reference data (sibling fields, stages, calculation fields) for the reference-aware property fields. */
+  references: PropertyReferenceContext;
 }
 
 function describeChildLabel(component: AuthoredComponent): string {
@@ -68,11 +76,52 @@ export function renderComponentNode(
   }
 
   const idPrefix = `${ctx.idPrefix}-${path.join('-')}`;
+  const references = resolveInstanceReferences(component, ctx.references);
 
   return html`
-    ${renderComponentPropertyFields(descriptor.properties, { value: component, path, onChange: ctx.onChange, idPrefix })}
+    ${renderComponentPropertyFields(descriptor.properties, { value: component, path, onChange: ctx.onChange, idPrefix, references })}
     ${renderContainment(component, descriptor, path, ctx)}
   `;
+}
+
+/**
+ * The bits of the reference context that depend on THIS specific component instance, which the
+ * stage-level `PropertyReferenceContext` can't know in advance: this component's own fieldKey is
+ * excluded from its own "Conditional on field" choices (depending on yourself is nonsensical),
+ * what VisibleWhen's legal values are (resolved from whichever sibling field ConditionalOn
+ * currently names), and what this component's own `options` array is (for Default on
+ * select/radio/checkboxlist).
+ */
+function resolveInstanceReferences(
+  component: AuthoredComponent,
+  references: PropertyReferenceContext
+): ResolvedPropertyReferences {
+  const record = component as unknown as Record<string, unknown>;
+  const ownFieldKey = typeof record.fieldKey === 'string' ? record.fieldKey : undefined;
+  const siblingFields = ownFieldKey
+    ? references.siblingFields.filter(field => field.fieldKey !== ownFieldKey)
+    : references.siblingFields;
+
+  const conditionalOn = typeof record.conditionalOn === 'string' ? record.conditionalOn : undefined;
+  const target = conditionalOn ? references.siblingFields.find(field => field.fieldKey === conditionalOn) : undefined;
+
+  const conditionalTargetKind: ResolvedPropertyReferences['conditionalTargetKind'] = !target
+    ? 'text'
+    : target.options?.length
+      ? 'options'
+      : target.type === 'boolean'
+        ? 'boolean'
+        : 'text';
+
+  const ownOptions = Array.isArray(record.options) ? (record.options as unknown[]).map(String) : undefined;
+
+  return {
+    ...references,
+    siblingFields,
+    conditionalTargetOptions: target?.options,
+    conditionalTargetKind,
+    ownOptions,
+  };
 }
 
 function renderContainment(

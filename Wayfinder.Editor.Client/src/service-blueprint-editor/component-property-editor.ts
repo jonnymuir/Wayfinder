@@ -16,8 +16,24 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import type { ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
+import type { PropertyReferenceContext } from './component-property-references.js';
+import { REGEX_PRESETS } from './regex-presets.js';
 
 export type PropertyPath = Array<string | number>;
+
+/**
+ * `PropertyReferenceContext` plus the bits that depend on the *specific component instance*
+ * being edited right now, which the generic stage-level context can't know in advance —
+ * component-child-editor.ts's `renderComponentNode` resolves these once per component (reading
+ * its own live `conditionalOn`/`options` values) before calling into this module.
+ */
+export interface ResolvedPropertyReferences extends PropertyReferenceContext {
+  /** Legal values for VisibleWhen, resolved from whatever ConditionalOn currently points at. */
+  conditionalTargetOptions?: string[];
+  conditionalTargetKind?: 'options' | 'boolean' | 'text';
+  /** This component's own `options` array, for Default on select/radio/checkboxlist. */
+  ownOptions?: string[];
+}
 
 // ComponentPropertyDescriptor.Key arrives already camelCased to match the real component JSON
 // this module reads/writes (e.g. "fieldKey") — server-side, PropertyNameJsonConverter
@@ -129,17 +145,18 @@ export interface RenderPropertyFieldsOptions {
   path?: PropertyPath;
   onChange: (path: PropertyPath, value: unknown) => void;
   idPrefix: string;
+  references?: ResolvedPropertyReferences;
 }
 
 export function renderComponentPropertyFields(
   properties: ComponentPropertyDescriptor[],
   options: RenderPropertyFieldsOptions
 ): TemplateResult {
-  const { value, path = [], onChange, idPrefix } = options;
+  const { value, path = [], onChange, idPrefix, references } = options;
 
   return html`
     ${properties.map(property =>
-      renderPropertyField(property, getAtPath(value, [property.key]), [...path, property.key], onChange, idPrefix)
+      renderPropertyField(property, getAtPath(value, [property.key]), [...path, property.key], onChange, idPrefix, references)
     )}
   `;
 }
@@ -149,7 +166,8 @@ function renderPropertyField(
   value: unknown,
   path: PropertyPath,
   onChange: (path: PropertyPath, value: unknown) => void,
-  idPrefix: string
+  idPrefix: string,
+  references?: ResolvedPropertyReferences
 ): TemplateResult {
   const fieldId = `${idPrefix}-${pathKey(path)}`;
 
@@ -172,13 +190,15 @@ function renderPropertyField(
                       path: [...path, index],
                       onChange,
                       idPrefix,
+                      references,
                     })
                   : renderScalarLikeField(
                       property.items ?? { key: 'value', title: itemLabel, valueKind: 'String', required: false },
                       item,
                       [...path, index],
                       onChange,
-                      `${fieldId}-${index}`
+                      `${fieldId}-${index}`,
+                      references
                     )}
               </div>
               <button
@@ -206,13 +226,146 @@ function renderPropertyField(
         <legend class="field-label">${property.title}${property.required ? ' *' : ''}</legend>
         ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
         ${property.properties
-          ? renderComponentPropertyFields(property.properties, { value, path, onChange, idPrefix })
+          ? renderComponentPropertyFields(property.properties, { value, path, onChange, idPrefix, references })
           : nothing}
       </fieldset>
     `;
   }
 
-  return renderScalarLikeField(property, value, path, onChange, fieldId);
+  return renderScalarLikeField(property, value, path, onChange, fieldId, references);
+}
+
+/**
+ * Resolves a `Format`-tagged property's legal-value list against the live reference context —
+ * `undefined` means "not a reference-aware format, or the context needed to resolve it wasn't
+ * supplied," which falls back to the plain text/number input below; an empty array is a genuine
+ * "no candidates yet" (e.g. this is the first field in the stage) and still renders as a select
+ * with only "-- Not set --", which is more honest than a text box that can't be filled correctly
+ * either way.
+ */
+function referenceSelectOptions(
+  property: ComponentPropertyDescriptor,
+  references: ResolvedPropertyReferences | undefined
+): Array<{ value: string; label: string }> | undefined {
+  if (!references) {
+    return undefined;
+  }
+
+  switch (property.format) {
+    case 'field-ref':
+      return references.siblingFields.map(field => ({ value: field.fieldKey, label: `${field.label} (${field.fieldKey})` }));
+    case 'conditional-value-ref':
+      if (references.conditionalTargetKind === 'boolean') {
+        return [{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }];
+      }
+      if (references.conditionalTargetKind === 'options' && references.conditionalTargetOptions) {
+        return references.conditionalTargetOptions.map(option => ({ value: option, label: option }));
+      }
+      return undefined;
+    case 'own-options-ref':
+      return (references.ownOptions ?? []).map(option => ({ value: option, label: option }));
+    case 'calculation-ref':
+      return references.calculationFieldNames.map(name => ({ value: name, label: name }));
+    case 'stage-ref':
+      return references.stageOptions.map(stage => ({ value: stage.key, label: stage.label }));
+    case 'field-or-calc-ref':
+      return [
+        ...references.allFields.map(field => ({ value: field.fieldKey, label: `${field.label} (${field.fieldKey})` })),
+        ...references.calculationFieldNames.map(name => ({ value: name, label: `${name} (calculation)` })),
+      ];
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The regex text input, unchanged, plus two design-time-only affordances: a preset-insert
+ * `<select>` (writes a chosen preset's pattern through the normal `onChange`, still hand-editable
+ * afterwards) and a live "test a sample value" input. The tester's result is NOT part of the
+ * component's own saved value — it's scratch-only — so it's a plain DOM `@input` handler that
+ * writes straight into a sibling `<span>` by id, rather than adding new Lit reactive state to
+ * this otherwise-stateless render module.
+ */
+function renderPatternField(
+  property: ComponentPropertyDescriptor,
+  value: unknown,
+  path: PropertyPath,
+  onChange: (path: PropertyPath, value: unknown) => void,
+  fieldId: string
+): TemplateResult {
+  const presetId = `${fieldId}-preset`;
+  const testerId = `${fieldId}-tester`;
+  const testerResultId = `${fieldId}-tester-result`;
+
+  return html`
+    <div class="field-block pattern-field">
+      <label class="field-block" for=${fieldId}>
+        <span class="field-label">${property.title}${property.required ? ' *' : ''}</span>
+        <input
+          id=${fieldId}
+          class="field-control"
+          type="text"
+          ?required=${property.required}
+          .value=${value === undefined || value === null ? '' : String(value)}
+          @input=${(event: Event) => onChange(path, (event.currentTarget as HTMLInputElement).value)}
+        />
+        ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
+      </label>
+      <label class="field-block" for=${presetId}>
+        <span class="field-label">Insert a common pattern</span>
+        <select
+          id=${presetId}
+          class="field-control"
+          @change=${(event: Event) => {
+            const select = event.currentTarget as HTMLSelectElement;
+            if (select.value) {
+              onChange(path, select.value);
+            }
+            select.value = '';
+          }}
+        >
+          <option value="">-- Choose a preset --</option>
+          ${REGEX_PRESETS.map(preset => html`<option value=${preset.pattern}>${preset.label}</option>`)}
+        </select>
+      </label>
+      <label class="field-block" for=${testerId}>
+        <span class="field-label">Test a sample value</span>
+        <input
+          id=${testerId}
+          class="field-control"
+          type="text"
+          placeholder="Type a sample value to test against the pattern above"
+          @input=${(event: Event) => {
+            const sample = (event.currentTarget as HTMLInputElement).value;
+            // getElementById on `document` can't reach elements inside a shadow root — this
+            // whole tree renders inside wayfinder-step-inspector's (possibly nested) shadow DOM,
+            // so look up from the input's own root node instead.
+            const root = (event.currentTarget as HTMLElement).getRootNode() as Document | ShadowRoot;
+            const resultEl = root.getElementById(testerResultId);
+            if (!resultEl) {
+              return;
+            }
+            const currentPattern = root.getElementById(fieldId) as HTMLInputElement | null;
+            const pattern = currentPattern?.value ?? '';
+            if (sample === '' || pattern === '') {
+              resultEl.textContent = '';
+              resultEl.className = 'field-help';
+              return;
+            }
+            try {
+              const matches = new RegExp(pattern).test(sample);
+              resultEl.textContent = matches ? 'Matches the pattern.' : 'Does not match the pattern.';
+              resultEl.className = matches ? 'field-help pattern-tester-pass' : 'field-help pattern-tester-fail';
+            } catch {
+              resultEl.textContent = 'Invalid pattern — this is not a valid regular expression.';
+              resultEl.className = 'field-help pattern-tester-fail';
+            }
+          }}
+        />
+        <span id=${testerResultId} class="field-help" data-wayfinder-pattern-tester-result></span>
+      </label>
+    </div>
+  `;
 }
 
 function renderScalarLikeField(
@@ -220,9 +373,35 @@ function renderScalarLikeField(
   value: unknown,
   path: PropertyPath,
   onChange: (path: PropertyPath, value: unknown) => void,
-  fieldId: string
+  fieldId: string,
+  references?: ResolvedPropertyReferences
 ): TemplateResult {
   const editor = property.editor ?? (property.allowedValues?.length ? 'select' : undefined);
+  const referenceOptions = referenceSelectOptions(property, references);
+
+  if (property.format === 'pattern') {
+    return renderPatternField(property, value, path, onChange, fieldId);
+  }
+
+  if (referenceOptions) {
+    return html`
+      <label class="field-block" for=${fieldId}>
+        <span class="field-label">${property.title}${property.required ? ' *' : ''}</span>
+        <select
+          id=${fieldId}
+          class="field-control"
+          ?required=${property.required}
+          @change=${(event: Event) => onChange(path, (event.currentTarget as HTMLSelectElement).value)}
+        >
+          ${!property.required ? html`<option value="" ?selected=${!value}>-- Not set --</option>` : nothing}
+          ${referenceOptions.map(option => html`
+            <option value=${option.value} ?selected=${String(value ?? '') === option.value}>${option.label}</option>
+          `)}
+        </select>
+        ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
+      </label>
+    `;
+  }
 
   if (editor === 'toggle' || property.valueKind === 'Boolean') {
     // Wrapped in .field-block like every other field type below — a bare <label

@@ -255,6 +255,8 @@ const COMPONENT_CATALOG_FIXTURE: ComponentDescriptor[] = [
       { key: 'fieldKey', title: 'Field key', valueKind: 'String', required: true },
       { key: 'label', title: 'Label', valueKind: 'String', required: true },
       { key: 'required', title: 'Required', valueKind: 'Boolean', required: false, editor: 'toggle' },
+      { key: 'conditionalOn', title: 'Conditional on field', valueKind: 'String', required: false, format: 'field-ref' },
+      { key: 'pattern', title: 'Pattern (regex)', valueKind: 'String', required: false, format: 'pattern' },
     ],
     containment: { kind: 'None' },
   },
@@ -379,6 +381,71 @@ export const ComponentAddEditDelete: Story = {
     stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
     await expect(stage.components?.length).toBe(1);
     await expect(stage.components?.[0].type).toBe('stat-group');
+  },
+};
+
+// The "reference-aware" property fields (2026-08-09): a property tagged with a Format like
+// `field-ref`/`pattern` renders a live `<select>`/preset-and-tester instead of a blank text box —
+// see component-property-references.ts and component-property-editor.ts's `referenceSelectOptions`/
+// `renderPatternField`. Proves: (1) a second field's "Conditional on field" dropdown is populated
+// with the first field's real fieldKey, not free text, and a selection reaches the real saved
+// component; (2) inserting a regex preset writes the real pattern string.
+export const ComponentReferenceAwareFields: Story = {
+  args: {
+    serviceBlueprint: STUB_SERVICE_BLUEPRINT,
+    selectedStageKey: 'reviewer-assessment',
+    componentCatalog: COMPONENT_CATALOG_FIXTURE,
+  },
+  play: async ({ canvasElement }) => {
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
+    await el.updateComplete;
+    const root = el.shadowRoot!;
+
+    const typeSelect = root.querySelector<HTMLSelectElement>('[data-wayfinder-add-component-type]')!;
+    const addButton = root.querySelector<HTMLButtonElement>('.component-add-row .secondary-button')!;
+
+    // First field — no siblings yet, so its own "Conditional on field" dropdown has nothing to
+    // offer beyond "-- Not set --".
+    typeSelect.value = 'text';
+    addButton.click();
+    await el.updateComplete;
+    const firstFieldKey = root.querySelector<HTMLInputElement>('[data-wayfinder-component-index="0"] .component-editor input')!;
+    firstFieldKey.value = 'firstName';
+    firstFieldKey.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    // Second field — its "Conditional on field" dropdown must now list "firstName" as a real
+    // option, not a blank text input.
+    typeSelect.value = 'text';
+    addButton.click();
+    await el.updateComplete;
+
+    const secondItem = root.querySelector<HTMLElement>('[data-wayfinder-component-index="1"]')!;
+    const conditionalOnSelect = Array.from(secondItem.querySelectorAll<HTMLSelectElement>('.component-editor select'))
+      .find(select => select.id.endsWith('-conditionalOn'))!;
+    await expect(conditionalOnSelect).not.toBeUndefined();
+    const optionValues = Array.from(conditionalOnSelect.options).map(option => option.value);
+    await expect(optionValues).toContain('firstName');
+
+    conditionalOnSelect.value = 'firstName';
+    conditionalOnSelect.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    let stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    await expect((stage.components?.[1] as { conditionalOn?: string }).conditionalOn).toBe('firstName');
+
+    // Insert the "Letters only" regex preset into the second field's Pattern property.
+    const presetSelect = Array.from(secondItem.querySelectorAll<HTMLSelectElement>('.component-editor select'))
+      .find(select => select.id.endsWith('-pattern-preset'))!;
+    await expect(presetSelect).not.toBeUndefined();
+    const lettersOnlyOption = Array.from(presetSelect.options).find(option => option.textContent === 'Letters only')!;
+    presetSelect.value = lettersOnlyOption.value;
+    presetSelect.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    await expect((stage.components?.[1] as { pattern?: string }).pattern).toBe('^[A-Za-z]+$');
   },
 };
 

@@ -104,7 +104,18 @@ test.describe('Service blueprint editor', () => {
       await emailSummary.scrollIntoViewIfNeeded();
       await emailSummary.click();
 
-      const emailChild = inspector.locator('.child-item', { hasText: 'Email address' });
+      // Scoped via the CSS :has() pseudo-class against `.field-item-meta` (the component's raw
+      // discriminator, "email" — stable and never user-edited), not `.child-item`'s whole text
+      // content, not the *label* ("Email address" — this very test edits it below, so a locator
+      // anchored on the label breaks the moment it changes and the next action on it hangs
+      // retrying forever), and not Playwright's own `.filter({has})` (which doesn't reliably
+      // pierce this app's nested custom-element shadow DOM, confirmed live — it returns zero
+      // matches here even though the target element genuinely exists). A reference-aware dropdown
+      // elsewhere in the tree (e.g. "Full name"'s own "Conditional on field" select) can
+      // legitimately contain the string "Email address" too, as one of its own options — and a
+      // closed native <details> still has its content in the DOM, just hidden — so a looser
+      // `hasText` match on the whole `.child-item` grabs the wrong sibling.
+      const emailChild = inspector.locator('.child-item:has(.field-item-meta:text-is("email"))');
       const fieldKeyInput = emailChild.locator('input').first();
       const labelInput = emailChild.locator('input').nth(1);
 
@@ -125,6 +136,71 @@ test.describe('Service blueprint editor', () => {
       expect(email.label).toBe('Email address (edited)');
       // The edit must have landed on the real "label" property, not created a stray "Label" one.
       expect(email.Label).toBeUndefined();
+    } finally {
+      const current = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+      await request.put(`/wayfinder/service-blueprint-authoring/blueprints/juggling-licence`, {
+        data: { ...original, version: current.version },
+      });
+    }
+  });
+
+  test('reference-aware property fields render as populated dropdowns and the choices reach the saved blueprint', async ({
+    page,
+    request,
+  }) => {
+    // Same restore-afterwards pattern as the test above — this shares the same seeded
+    // definition/process across a single-worker run.
+    const original = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+
+    try {
+      await loginAs(page, DEMO_USERS.caseworker);
+      await page.getByRole('link', { name: 'Editor' }).click();
+
+      const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+      await expect(shell).toHaveAttribute('data-wayfinder-active-service-blueprint', 'juggling-licence', {
+        timeout: 15_000,
+      });
+
+      await page.locator('.react-flow').getByText('Your details', { exact: true }).click();
+
+      const inspector = page.locator('wayfinder-step-inspector');
+      await inspector.getByRole('button', { name: 'Edit' }).first().click();
+
+      // "Email address" — set "Conditional on field" via the dropdown (not free text) to its
+      // sibling "applicantName", proving the dropdown is populated with real sibling field keys
+      // and that a selection actually reaches the saved component.
+      const emailSummary = inspector.locator('.child-editor summary', { hasText: 'Email address' });
+      await emailSummary.scrollIntoViewIfNeeded();
+      await emailSummary.click();
+      // Scoped via CSS :has() against `.field-item-meta` (the stable discriminator, "email") —
+      // see the comment on the equivalent locator in the test above for why both a looser
+      // `.child-item` `hasText` match, an exact match against the *label*, and Playwright's own
+      // `.filter({has})` are all unsafe/unreliable here.
+      const emailChild = inspector.locator('.child-item:has(.field-item-meta:text-is("email"))');
+      const conditionalOnSelect = emailChild.locator('select[id$="conditionalOn"]').first();
+      await expect(conditionalOnSelect.locator('option', { hasText: 'applicantName' })).toHaveCount(1);
+      await conditionalOnSelect.selectOption({ label: 'Full name (applicantName)' });
+
+      // "Full name" — insert the "Letters only" regex preset into Pattern, proving the preset
+      // select actually writes into the field's real saved value.
+      const fullNameSummary = inspector.locator('.child-editor summary', { hasText: 'Full name' });
+      await fullNameSummary.scrollIntoViewIfNeeded();
+      await fullNameSummary.click();
+      const fullNameChild = inspector.locator('.child-item:has(.field-item-meta:text-is("text"))');
+      const presetSelect = fullNameChild.locator('select[id$="-pattern-preset"]').first();
+      await presetSelect.selectOption({ label: 'Letters only' });
+
+      await page.locator('[data-wayfinder-save]').click();
+      await expect(page.locator('[data-wayfinder-toast]')).toContainText(/saved/i, { timeout: 5_000 });
+
+      const saved = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+      const yourDetails = saved.stages.find((s: { stageKey: string }) => s.stageKey === 'your-details');
+      const children = yourDetails.components[0].children;
+      const email = children.find((c: { type: string }) => c.type === 'email');
+      const fullName = children.find((c: { fieldKey: string }) => c.fieldKey === 'applicantName');
+
+      expect(email.conditionalOn).toBe('applicantName');
+      expect(fullName.pattern).toBe('^[A-Za-z]+$');
     } finally {
       const current = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
       await request.put(`/wayfinder/service-blueprint-authoring/blueprints/juggling-licence`, {

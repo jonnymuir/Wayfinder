@@ -136,7 +136,7 @@ understand once.
 | `Title` | Human-readable label, e.g. "Field key". |
 | `Description` | Longer help text. |
 | `ValueKind` | `String` \| `Number` \| `Integer` \| `Boolean` \| `StringArray` \| `Object` \| `Array`. |
-| `Format` | Semantic hint, e.g. `"email"`, `"date"`, `"color"`. |
+| `Format` | Semantic hint, e.g. `"email"`, `"date"`, `"color"`, or one of the [reference-aware tags](#reference-aware-properties) below. |
 | `Editor` | Explicit editor widget hint, e.g. `"textarea"`, `"select"`, `"toggle"`. `null` infers from `ValueKind`/`AllowedValues`. |
 | `AllowedValues` | Closed set of legal string values, if any. |
 | `Required` | Whether this property must have a real (non-null, non-empty) value — see [Validation](#validation-comes-for-free). |
@@ -207,6 +207,34 @@ for the implementation if you want the exact diagnostic codes
 (`COMPONENT_PROPERTY_REQUIRED`, `COMPONENT_PROPERTY_INVALID_VALUE`,
 `COMPONENT_PROPERTY_PATTERN_MISMATCH`, `COMPONENT_PROPERTY_TOO_SHORT`/`_TOO_LONG`/
 `_TOO_SMALL`/`_TOO_LARGE`, `COMPONENT_CONDITIONAL_CHILD_KEY_MISMATCH`).
+
+## Reference-aware properties
+
+Some properties are really references to something else that already exists in the
+same blueprint — `ConditionalOn` must be a sibling input field's `fieldKey`, `DefaultFrom`
+must be a name in `Calculations.Fields`, `ChangeStateKey` must be a real stage key. The
+built-in catalog tags these with a `Format` value so the properties-panel editor UI
+offers a `<select>` populated from the live blueprint instead of a blank text box, and so
+`ServiceBlueprint.ValidateFieldReferences`/`ValidateDataDisplayBindings` (surfaced through
+`validate_service_blueprint`) can catch a dangling one:
+
+| `Format` | Meaning |
+|---|---|
+| `field-ref` | Another input field's `fieldKey`, declared in the **same stage** — visibility is only ever checked against the current stage's own submitted values. |
+| `conditional-value-ref` | Legal values are whatever the sibling `field-ref` property currently points at (that field's own `AllowedValues`/options, or `"true"`/`"false"` for a boolean field). |
+| `own-options-ref` | One of this same component's own declared options (e.g. `Default` on `select`/`radio`/`checkboxlist`). |
+| `calculation-ref` | A name declared in the blueprint's `Calculations.Fields`. |
+| `stage-ref` | An existing stage's key — blueprint-wide, not stage-scoped (a "Change" link typically points back at an *earlier* stage). |
+| `field-or-calc-ref` | Either of the above two field kinds, blueprint-wide (e.g. a stat-group tile's `FieldKey`, which typically reads a value captured on an earlier stage). |
+
+**Known limitation:** this is currently a hand-wired mechanism, not a generic plugin
+point — `Wayfinder.Editor.Client/src/service-blueprint-editor/component-property-editor.ts`'s
+`renderScalarLikeField` dispatches on exactly these six tag values, and
+`ServiceBlueprint.ValidateFieldReferences` only checks `field-ref`/`calculation-ref`
+(`stage-ref` is already covered by `ValidateDataDisplayBindings` wherever it matters). A
+third-party component using its own new `Format` value won't get a smart `<select>` or a
+validation check without extending those two places yourself — the same honest boundary
+as the `RegisterField` limitation below, not an oversight.
 
 ## Known limitation: a `RegisterField` override only sees `FieldRenderPayload`
 
