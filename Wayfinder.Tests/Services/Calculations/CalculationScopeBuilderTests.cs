@@ -1,4 +1,6 @@
+using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Models.ServiceDesign.Calculations;
 using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Services.Calculations;
 
@@ -76,5 +78,62 @@ public class CalculationScopeBuilderTests
 
         var falseScope = CalculationScopeBuilder.Build(definition, new Dictionary<string, object?> { ["hasDangerousProps"] = false });
         Assert.Equal(false, evaluator.EvaluateExpression("hasDangerousProps", falseScope));
+    }
+
+    /// <summary>
+    /// Real bug, found via Umbraco.Prism's own MoneyModellerCalculationTests once a Wayfinder
+    /// release finally reached a summary-list that echoes a calculated field's own name (the
+    /// standard check-your-answers pattern: a <c>SummaryListComponent</c> child reuses an
+    /// <c>InputComponent</c>-derived type purely for its rendering shape, never as a genuine
+    /// second input). Before <see cref="ComponentExtensions.GetSubmittableInputs"/> existed,
+    /// <see cref="CalculationScopeBuilder.DescribeInputs"/> used <see cref="ComponentExtensions.GetAllInputs"/>,
+    /// which reached the summary-list child too — so a resubmitted formatted display value
+    /// (exactly what the engine itself writes back to a client) landed in the scope under the
+    /// same key as the calculated field, and evaluating that field then threw "Field 'x' collides
+    /// with an input or earlier field."
+    /// </summary>
+    [Fact]
+    public void Build_SummaryListChildEchoingACalculatedFieldsOwnName_DoesNotAddItToScope()
+    {
+        var definition = new ServiceBlueprint
+        {
+            DefinitionKey = "summary-echo-test",
+            DisplayName = "Summary echo test",
+            InitialStage = "result",
+            Calculations = new ServiceBlueprintCalculationSet
+            {
+                Fields = new Dictionary<string, ServiceBlueprintCalculationField>
+                {
+                    ["total"] = new() { Expr = "100" },
+                },
+            },
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "result",
+                    DisplayName = "Result",
+                    Components =
+                    [
+                        new SummaryListComponent
+                        {
+                            Title = "Your result",
+                            Children = [new TextInputComponent { FieldKey = "total", Label = "Total" }],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        // Simulates the engine's own write-back: a formatted display value resubmitted under
+        // the same key as the calculated field it echoes.
+        var fieldValues = new Dictionary<string, object?> { ["total"] = "£100" };
+
+        var scope = CalculationScopeBuilder.Build(definition, fieldValues);
+        Assert.False(scope.ContainsKey("total"));
+
+        var evaluator = new CalculationEvaluator();
+        var result = evaluator.Evaluate(definition.Calculations!, scope);
+        Assert.Equal(100m, (decimal)result.Fields["total"]!);
     }
 }

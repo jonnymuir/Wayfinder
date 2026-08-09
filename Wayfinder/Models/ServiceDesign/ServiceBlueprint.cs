@@ -372,9 +372,7 @@ public record ServiceBlueprint
         var calculatedSeriesNames = Calculations?.Series?.Keys.ToHashSet(StringComparer.Ordinal)
             ?? new HashSet<string>(StringComparer.Ordinal);
         var inputFieldKeys = Stages
-            .SelectMany(s => s.Components.FlattenWithPaths(""))
-            .Select(c => c.Component)
-            .OfType<InputComponent>()
+            .SelectMany(s => s.Components.GetSubmittableInputs())
             .Select(c => c.FieldKey)
             .Where(key => !string.IsNullOrWhiteSpace(key))
             .ToHashSet(StringComparer.Ordinal);
@@ -563,9 +561,7 @@ public record ServiceBlueprint
         foreach (var stage in Stages)
         {
             var stageFieldKeys = stage.Components
-                .FlattenWithPaths("")
-                .Select(entry => entry.Component)
-                .OfType<InputComponent>()
+                .GetSubmittableInputs()
                 .Select(c => c.FieldKey)
                 .Where(key => !string.IsNullOrWhiteSpace(key))
                 .ToHashSet(StringComparer.Ordinal);

@@ -162,6 +162,37 @@ public class ServiceBlueprintFieldReferenceValidationTests
         blueprint.ValidateFieldReferences().Should().ContainSingle(d => d.Code == "COMPONENT_UNKNOWN_DEFAULT_FROM");
     }
 
+    /// <summary>
+    /// Same root cause as the summary-list/data-display bug fixed alongside this test (see
+    /// <see cref="Wayfinder.Extensions.ComponentExtensions.GetSubmittableInputs"/>) — a
+    /// summary-list child is never a genuine input <see cref="Wayfinder.Services.Validation.FieldValueValidator"/>
+    /// could actually resolve <c>conditionalOn</c> against at runtime (it's read-only, never
+    /// submitted), so it must not satisfy this check just because an <c>InputComponent</c>-derived
+    /// type happens to declare the same fieldKey there.
+    /// </summary>
+    [Fact]
+    public void ConditionalOn_PointingOnlyAtASummaryListChildsFieldKey_IsStillFlagged()
+    {
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "test",
+            DisplayName = "Test",
+            InitialStage = "only",
+            Stages =
+            [
+                Stage("only",
+                    new SummaryListComponent
+                    {
+                        Title = "Echo",
+                        Children = [new TextInputComponent { FieldKey = "hasPet", Label = "Do you have a pet?" }],
+                    },
+                    new TextInputComponent { FieldKey = "petName", Label = "Pet's name", ConditionalOn = "hasPet", VisibleWhen = "true" }),
+            ],
+        };
+
+        blueprint.ValidateFieldReferences().Should().ContainSingle(d => d.Code == "COMPONENT_UNKNOWN_CONDITIONAL_FIELD");
+    }
+
     [Fact]
     public void EmptyConditionalOnAndDefaultFrom_ProduceNoDiagnostics()
     {
