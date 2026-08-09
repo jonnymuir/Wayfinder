@@ -874,7 +874,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   private get _validationIssues(): ServiceBlueprintValidationIssue[] {
-    return this._serviceBlueprint ? validateServiceBlueprint(this._serviceBlueprint, this._actionCatalog) : [];
+    return this._serviceBlueprint
+      ? validateServiceBlueprint(this._serviceBlueprint, this._actionCatalog, this._componentCatalog)
+      : [];
   }
 
   private get _blockingValidationIssues() {
@@ -1683,6 +1685,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   private _jumpToValidationIssue(issue: ServiceBlueprintValidationIssue) {
     if (!this._serviceBlueprint) {
+      return;
+    }
+
+    if (issue.location.kind === 'calculation') {
+      this._activeConfidenceTab = 'calculations';
       return;
     }
 

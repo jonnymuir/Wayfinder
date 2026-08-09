@@ -24,8 +24,21 @@ import {
   type CalculationSet,
   type CalculationSeriesDefinition,
 } from '../../../Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-calculations.js';
+import type { FieldReference } from './component-property-references.js';
 
 export type { CalculationNode, CalculationSet, CalculationSeriesDefinition };
+
+/**
+ * Which input fieldKeys CalculationScopeBuilder.Build (C#) can statically guarantee occupy the
+ * calc scope: only an input with a declared `default` — one with neither a submission nor a
+ * default is simply absent from scope (`continue`d past, not an error). Every static check that
+ * needs to know "is this name resolvable" — a field/loop-variable name collision, an unknown
+ * scope reference — must use this set, not every input's fieldKey, or it drifts from what
+ * CalculationScopeBuilder/CalculationEvaluator actually do at Save time.
+ */
+export function inScopeInputFieldKeys(allInputFields: FieldReference[]): Set<string> {
+  return new Set(allInputFields.filter(field => field.default).map(field => field.fieldKey));
+}
 
 /** Mirrors the real (non-exported) MAX_SERIES_ROWS in wayfinder-calculations.js — a defensive
  * cap for this module's own hand-rolled series preview loop, not the real engine's own check. */

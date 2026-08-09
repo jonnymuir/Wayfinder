@@ -23,6 +23,7 @@
     "test:property-references": "node scripts/run-property-references-tests.mjs",
     "test:calculation-runtime": "node scripts/run-calculation-runtime-tests.mjs",
     "test:calculation-ordering": "node scripts/run-calculation-ordering-tests.mjs",
+    "test:calculation-diagnostics": "node scripts/run-calculation-diagnostics-tests.mjs",
     "test:canonical-json": "node scripts/run-canonical-json-tests.mjs"
   },
   "dependencies": {

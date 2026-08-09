@@ -1,8 +1,8 @@
 import type { AuthoredComponent, AuthoredServiceBlueprint, ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
 import { hydrateServiceBlueprintDefinition } from './types.js';
 import { collectStageInputFields } from './component-property-references.js';
-import { extractReferencedNames, tryParseExpression } from './calculation-runtime.js';
-import { computeStableFieldOrder, type FieldInput } from './calculation-ordering.js';
+import { inScopeInputFieldKeys } from './calculation-runtime.js';
+import { computeCalculationDiagnostics, type CalculationDiagnostic } from './calculation-diagnostics.js';
 
 export type DefinitionLint = {
   message: string;
@@ -215,14 +215,17 @@ function lintComponentProperties(
 }
 
 /**
- * Mirrors the checks the Calculations tab (wayfinder-calculations-editor.ts) enforces live for
- * anyone hand-editing `calculations` as raw JSON in the Definition tab instead: a field/series
- * expression that doesn't parse, an identifier that isn't a known input field/earlier field/
- * table, and a `fields` declaration order that isn't already valid (forward references or a
- * genuine cycle) — the same "field must be declared before it's referenced" rule
- * docs/guides/calculation-language.md documents and calculation-ordering.ts enforces
- * automatically in the visual editor. Reuses calculation-runtime.ts/calculation-ordering.ts
- * directly rather than a second hand-written check.
+ * Mirrors the checks the Calculations tab and the Validation tab enforce, for anyone hand-editing
+ * `calculations` as raw JSON in the Definition tab instead: a field/series expression that
+ * doesn't parse, an identifier that isn't a known input field/earlier field/table, a field or
+ * series loop-variable name that collides with an input's own fieldKey, and a `fields`
+ * declaration order that isn't already valid (forward references or a genuine cycle) — the same
+ * "field must be declared before it's referenced" rule docs/guides/calculation-language.md
+ * documents. This function's only job is coercing raw, possibly-malformed JSON into
+ * calculation-diagnostics.ts's structured input shape and turning its result back into
+ * DefinitionLint messages with a source line — the actual checks live in
+ * computeCalculationDiagnostics, shared with the Calculations tab and the Validation tab so none
+ * of the three re-derives its own subset of the same rules.
  */
 function lintCalculations(
   root: Record<string, unknown>,
@@ -241,103 +244,162 @@ function lintCalculations(
       : []
   );
 
-  const allInputFieldKeys = new Set(
-    Array.isArray(root.stages)
-      ? root.stages.flatMap(rawState => {
-          if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
-            return [];
-          }
-          const components = (rawState as Record<string, unknown>).components;
-          return collectStageInputFields(components as AuthoredComponent[] | undefined, componentCatalog).map(field => field.fieldKey);
-        })
-      : []
-  );
-
-  function lintExpression(expr: string, pathHint: string): void {
-    const parseResult = tryParseExpression(expr);
-    if (!parseResult.ok) {
-      issues.push({ message: `"${pathHint}": ${parseResult.message}`, pathHint, line: findLine(source, `"${expr}"`) });
-      return;
-    }
-
-    const referenced = extractReferencedNames(expr);
-    if (!referenced) {
-      return;
-    }
-    for (const name of referenced.scopeNames) {
-      if (!fieldNames.includes(name) && !allInputFieldKeys.has(name)) {
-        issues.push({
-          message: `"${pathHint}" references "${name}", which is not a known input field or calculation field.`,
-          pathHint,
-          line: findLine(source, `"${expr}"`),
-        });
-      }
-    }
-    for (const tableName of referenced.tableNames) {
-      if (!tableNames.has(tableName)) {
-        issues.push({
-          message: `"${pathHint}" calls lookup() against unknown table "${tableName}".`,
-          pathHint,
-          line: findLine(source, `"${expr}"`),
-        });
-      }
-    }
-  }
+  const allInputFields = Array.isArray(root.stages)
+    ? root.stages.flatMap(rawState => {
+        if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
+          return [];
+        }
+        const components = (rawState as Record<string, unknown>).components;
+        return collectStageInputFields(components as AuthoredComponent[] | undefined, componentCatalog);
+      })
+    : [];
+  const scopedInputFieldKeys = inScopeInputFieldKeys(allInputFields);
 
   const fields =
     calculations.fields && typeof calculations.fields === 'object' && !Array.isArray(calculations.fields)
       ? (calculations.fields as Record<string, Record<string, unknown>>)
       : {};
-  const fieldNames = Object.keys(fields);
-  const fieldInputs: FieldInput[] = [];
-
-  for (const [name, field] of Object.entries(fields)) {
-    const isService = (typeof field.source === 'string' ? field.source : '').toLowerCase() === 'service';
-    const expr = typeof field.expr === 'string' ? field.expr : '';
-    fieldInputs.push({ name, expr });
-
-    if (!isService && expr.trim()) {
-      lintExpression(expr, `calculations.fields.${name}`);
-    }
-  }
-
-  const orderResult = computeStableFieldOrder(fieldInputs, fieldNames);
-  if (!orderResult.ok) {
-    issues.push({
-      message: `calculations.fields: circular dependency between ${orderResult.cycle.join(', ')} — these fields reference each other in a loop and can never be evaluated.`,
-      pathHint: 'calculations.fields',
-    });
-  } else if (JSON.stringify(orderResult.order) !== JSON.stringify(fieldNames)) {
-    const firstMove = orderResult.moved[0];
-    issues.push({
-      message: `calculations.fields are declared out of dependency order${
-        firstMove ? ` — "${firstMove.name}" must be declared after "${firstMove.movedAfter}"` : ''
-      }. A field must be declared before anything that references it.`,
-      pathHint: 'calculations.fields',
-    });
-  }
-
   const series =
     calculations.series && typeof calculations.series === 'object' && !Array.isArray(calculations.series)
       ? (calculations.series as Record<string, Record<string, unknown>>)
       : {};
+
+  const normalisedFields: Record<string, { expr?: string; source?: string }> = {};
+  for (const [name, field] of Object.entries(fields)) {
+    normalisedFields[name] = {
+      expr: typeof field.expr === 'string' ? field.expr : undefined,
+      source: typeof field.source === 'string' ? field.source : undefined,
+    };
+  }
+
+  const normalisedSeries: Record<string, { over?: string; from?: string; to?: string; values?: Record<string, string> }> = {};
   for (const [name, definition] of Object.entries(series)) {
-    if (typeof definition.from === 'string' && definition.from.trim()) {
-      lintExpression(definition.from, `calculations.series.${name}.from`);
-    }
-    if (typeof definition.to === 'string' && definition.to.trim()) {
-      lintExpression(definition.to, `calculations.series.${name}.to`);
-    }
     const values =
       definition.values && typeof definition.values === 'object' && !Array.isArray(definition.values)
         ? (definition.values as Record<string, unknown>)
         : {};
+    const normalisedValues: Record<string, string> = {};
     for (const [column, expr] of Object.entries(values)) {
-      if (typeof expr === 'string' && expr.trim()) {
-        lintExpression(expr, `calculations.series.${name}.values.${column}`);
+      if (typeof expr === 'string') {
+        normalisedValues[column] = expr;
       }
     }
+    normalisedSeries[name] = {
+      over: typeof definition.over === 'string' ? definition.over : undefined,
+      from: typeof definition.from === 'string' ? definition.from : undefined,
+      to: typeof definition.to === 'string' ? definition.to : undefined,
+      values: normalisedValues,
+    };
   }
+
+  const diagnostics = computeCalculationDiagnostics({
+    fields: normalisedFields,
+    series: normalisedSeries,
+    tableNames,
+    inScopeInputFieldKeys: scopedInputFieldKeys,
+  });
+
+  for (const diagnostic of diagnostics) {
+    issues.push(diagnosticToDefinitionLint(diagnostic, source, normalisedFields, normalisedSeries));
+  }
+}
+
+function diagnosticToDefinitionLint(
+  diagnostic: CalculationDiagnostic,
+  source: string,
+  fields: Record<string, { expr?: string; source?: string }>,
+  series: Record<string, { over?: string; from?: string; to?: string; values?: Record<string, string> }>
+): DefinitionLint {
+  switch (diagnostic.kind) {
+    case 'field-parse-error': {
+      const pathHint = `calculations.fields.${diagnostic.field}`;
+      const expr = fields[diagnostic.field]?.expr ?? '';
+      return { message: `"${pathHint}": ${diagnostic.message}`, pathHint, line: findLine(source, `"${expr}"`) };
+    }
+    case 'field-unknown-reference': {
+      const pathHint = `calculations.fields.${diagnostic.field}`;
+      const expr = fields[diagnostic.field]?.expr ?? '';
+      return {
+        message: `"${pathHint}" references "${diagnostic.name}", which is not a known input field or calculation field.`,
+        pathHint,
+        line: findLine(source, `"${expr}"`),
+      };
+    }
+    case 'field-unknown-table': {
+      const pathHint = `calculations.fields.${diagnostic.field}`;
+      const expr = fields[diagnostic.field]?.expr ?? '';
+      return {
+        message: `"${pathHint}" calls lookup() against unknown table "${diagnostic.table}".`,
+        pathHint,
+        line: findLine(source, `"${expr}"`),
+      };
+    }
+    case 'field-name-collision': {
+      const pathHint = `calculations.fields.${diagnostic.field}`;
+      return {
+        message: `"${pathHint}" collides with an input field's own fieldKey ("${diagnostic.field}").`,
+        pathHint,
+        line: findLine(source, `"${diagnostic.field}"`),
+      };
+    }
+    case 'field-cycle':
+      return {
+        message: `calculations.fields: circular dependency between ${diagnostic.fields.join(', ')} — these fields reference each other in a loop and can never be evaluated.`,
+        pathHint: 'calculations.fields',
+      };
+    case 'field-order':
+      return {
+        message: `calculations.fields are declared out of dependency order — "${diagnostic.field}" must be declared after "${diagnostic.mustFollow}". A field must be declared before anything that references it.`,
+        pathHint: 'calculations.fields',
+      };
+    case 'series-parse-error': {
+      const pathHint = `calculations.series.${diagnostic.series}.${diagnostic.part}${diagnostic.column ? `.${diagnostic.column}` : ''}`;
+      const expr = seriesExpr(series, diagnostic.series, diagnostic.part, diagnostic.column);
+      return { message: `"${pathHint}": ${diagnostic.message}`, pathHint, line: findLine(source, `"${expr}"`) };
+    }
+    case 'series-unknown-reference': {
+      const pathHint = `calculations.series.${diagnostic.series}.${diagnostic.part}${diagnostic.column ? `.${diagnostic.column}` : ''}`;
+      const expr = seriesExpr(series, diagnostic.series, diagnostic.part, diagnostic.column);
+      return {
+        message: `"${pathHint}" references "${diagnostic.name}", which is not a known input field or calculation field.`,
+        pathHint,
+        line: findLine(source, `"${expr}"`),
+      };
+    }
+    case 'series-unknown-table': {
+      const pathHint = `calculations.series.${diagnostic.series}.${diagnostic.part}${diagnostic.column ? `.${diagnostic.column}` : ''}`;
+      const expr = seriesExpr(series, diagnostic.series, diagnostic.part, diagnostic.column);
+      return {
+        message: `"${pathHint}" calls lookup() against unknown table "${diagnostic.table}".`,
+        pathHint,
+        line: findLine(source, `"${expr}"`),
+      };
+    }
+    case 'series-loop-variable-collision': {
+      const pathHint = `calculations.series.${diagnostic.series}.over`;
+      return {
+        message: `"${pathHint}": loop variable "${diagnostic.variable}" collides with an existing field or input name.`,
+        pathHint,
+        line: findLine(source, `"${diagnostic.variable}"`),
+      };
+    }
+  }
+}
+
+function seriesExpr(
+  series: Record<string, { over?: string; from?: string; to?: string; values?: Record<string, string> }>,
+  name: string,
+  part: 'from' | 'to' | 'values',
+  column?: string
+): string {
+  const definition = series[name];
+  if (!definition) {
+    return '';
+  }
+  if (part === 'values') {
+    return (column && definition.values?.[column]) ?? '';
+  }
+  return definition[part] ?? '';
 }
 
 export function lintAuthoredServiceBlueprintDocument(

@@ -5,7 +5,8 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { AuthoredServiceBlueprint, ComponentDescriptor, ServiceBlueprintCalculationsBlock } from './types.js';
 import { collectStageInputFields, type FieldReference } from './component-property-references.js';
 import { computeStableFieldOrder, type FieldInput } from './calculation-ordering.js';
-import { tryEvaluateFieldsForPreview, tryEvaluateSeriesForPreview } from './calculation-runtime.js';
+import { inScopeInputFieldKeys, tryEvaluateFieldsForPreview, tryEvaluateSeriesForPreview } from './calculation-runtime.js';
+import { computeCalculationDiagnostics } from './calculation-diagnostics.js';
 import './wayfinder-calculation-expression-editor.js';
 import type { WayfinderCalculationExpressionEditorElement } from './wayfinder-calculation-expression-editor.js';
 
@@ -39,7 +40,6 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   componentCatalog: ComponentDescriptor[] = [];
 
   @state() private _statusMessage: string | null = null;
-  @state() private _cycleError: string[] | null = null;
 
   private get _calculations(): ServiceBlueprintCalculationsBlock {
     return this.serviceBlueprint?.calculations ?? { fields: {} };
@@ -48,6 +48,24 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   private get _allInputFields(): FieldReference[] {
     const allComponents = (this.serviceBlueprint?.stages ?? []).flatMap(stage => stage.components ?? []);
     return collectStageInputFields(allComponents, this.componentCatalog);
+  }
+
+  /** Every rule CalculationEvaluator.cs/CalculationScopeBuilder.cs would genuinely reject at
+   * Save time, computed once here and reused wherever this tab needs to say something's wrong —
+   * see calculation-diagnostics.ts, shared with the Definition tab's lint and the Validation tab
+   * so none of the three re-derives its own subset of the same rules. Not every diagnostic kind
+   * this can produce is rendered here: expression parse errors already show live via the
+   * CodeMirror linter (calculation-expression-editor-codemirror.ts), and a series loop-variable
+   * collision already shows live via tryEvaluateSeriesForPreview's own scope-based check — this
+   * getter is only consulted for field-name collisions and the fields cycle banner, which have no
+   * other live mechanism. */
+  private get _diagnostics() {
+    return computeCalculationDiagnostics({
+      fields: this._calculations.fields,
+      series: this._calculations.series ?? {},
+      tableNames: new Set(Object.keys(this._calculations.tables ?? {})),
+      inScopeInputFieldKeys: inScopeInputFieldKeys(this._allInputFields),
+    });
   }
 
   /** Every input's own declared default, coerced to the type the calculation scope expects —
@@ -97,8 +115,9 @@ export class WayfinderCalculationsEditorElement extends LitElement {
    * topological order (calculation-ordering.ts) and rewrites the record's own key order to
    * match, so the persisted JSON's declaration order is always correct without the designer
    * ever having to think about it. A genuine cycle blocks reordering (there's no valid order)
-   * but still accepts the edit itself — Save stays enabled/disabled by the existing Validation
-   * tab's own check, which would flag the same cycle as an unresolvable-name error either way. */
+   * but still accepts the edit itself — the cycle banner (_diagnostics, below) and the
+   * Validation tab both derive the same cycle straight from the persisted fields, so there's
+   * nothing further to record here. */
   private _updateFields(nextFields: CalcFields, currentOrder: string[]) {
     const fieldInputs: FieldInput[] = Object.entries(nextFields).map(([name, field]) => ({
       name,
@@ -107,12 +126,10 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     const orderResult = computeStableFieldOrder(fieldInputs, currentOrder);
 
     if (!orderResult.ok) {
-      this._cycleError = orderResult.cycle;
       this._updateCalculations({ ...this._calculations, fields: nextFields });
       return;
     }
 
-    this._cycleError = null;
     if (orderResult.moved.length > 0) {
       this._announce(
         orderResult.moved.map(move => `Moved "${move.name}" after "${move.movedAfter}" because it now depends on it.`).join(' ')
@@ -183,11 +200,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     this._updateFields(fields, order);
   }
 
-  private _fieldNameError(name: string, order: string[], inputFieldKeys: Set<string>): string | null {
+  private _fieldNameError(name: string, order: string[], collidingFieldNames: Set<string>): string | null {
     if (!name.trim()) {
       return 'Name is required.';
     }
-    if (inputFieldKeys.has(name)) {
+    if (collidingFieldNames.has(name)) {
       return `Collides with an input field's own fieldKey ("${name}").`;
     }
     if (order.filter(existing => existing === name).length > 1) {
@@ -200,15 +217,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     const fields = this._calculations.fields;
     const order = Object.keys(fields);
     const preview = tryEvaluateFieldsForPreview(this._calculations, this._sampleInputs);
-    // Only an input that ALSO has a declared default can be statically known to occupy the
-    // calculation scope (CalculationScopeBuilder.Build: an input with no submission and no
-    // default is simply absent from scope, not an error) — matches the same limitation
-    // validate_service_blueprint's own static check has, documented in
-    // docs/guides/calculation-language.md. Without this, a summary-list child that legitimately
-    // reuses a calc field's own name to display its value (the standard check-your-answers
-    // pattern — see e.g. juggling-insurance-modeller.json's "totalPremium" row) would be
-    // wrongly flagged as a collision it can never actually cause at runtime.
-    const inputFieldKeys = new Set(this._allInputFields.filter(field => field.default).map(field => field.fieldKey));
+    const diagnostics = this._diagnostics;
+    const collidingFieldNames = new Set(
+      diagnostics.filter(d => d.kind === 'field-name-collision').map(d => d.field)
+    );
+    const cycle = diagnostics.find(d => d.kind === 'field-cycle');
     const tableNames = Object.keys(this._calculations.tables ?? {});
 
     return html`
@@ -218,10 +231,10 @@ export class WayfinderCalculationsEditorElement extends LitElement {
           <span class="calc-section-meta">${order.length}</span>
         </summary>
 
-        ${this._cycleError
+        ${cycle
           ? html`
               <div class="calc-cycle-banner" role="alert">
-                Circular dependency: ${this._cycleError.join(' → ')} → ${this._cycleError[0]}.
+                Circular dependency: ${cycle.fields.join(' → ')} → ${cycle.fields[0]}.
                 These fields reference each other in a loop and can never be ordered — fix one of
                 these expressions before saving.
               </div>
@@ -233,7 +246,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
             order,
             name => name,
             (name, index) =>
-              this._renderFieldRow(name, fields[name], order, index, preview.results[name], inputFieldKeys, tableNames)
+              this._renderFieldRow(name, fields[name], order, index, preview.results[name], collidingFieldNames, tableNames)
           )}
         </ul>
 
@@ -248,11 +261,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     order: string[],
     index: number,
     result: ReturnType<typeof tryEvaluateFieldsForPreview>['results'][string] | undefined,
-    inputFieldKeys: Set<string>,
+    collidingFieldNames: Set<string>,
     tableNames: string[]
   ) {
     const isService = (field.source ?? '').toLowerCase() === 'service';
-    const nameError = this._fieldNameError(name, order, inputFieldKeys);
+    const nameError = this._fieldNameError(name, order, collidingFieldNames);
     const exprRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
 
     const insertOptions = [
