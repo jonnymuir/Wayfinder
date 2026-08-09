@@ -26,7 +26,7 @@ public static class CalculationScopeBuilder
         var inputs = new Dictionary<string, (string, string?)>(StringComparer.Ordinal);
         foreach (var stage in definition.Stages)
         {
-            foreach (var input in stage.Components.GetAllInputs())
+            foreach (var input in stage.Components.GetSubmittableInputs())
             {
                 if (string.IsNullOrWhiteSpace(input.FieldKey) || inputs.ContainsKey(input.FieldKey))
                 {

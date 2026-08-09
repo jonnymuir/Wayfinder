@@ -130,9 +130,72 @@ public static class ComponentExtensions
 
     /// <summary>
     /// Returns every <see cref="InputComponent"/> in the tree, regardless of nesting depth.
+    /// Includes components nested inside a <see cref="ComponentCategory.DataDisplay"/> container
+    /// (e.g. <c>SummaryListComponent.Children</c>) — for most callers (rendering a radio's
+    /// conditional children, generic tree inspection) that's correct. For anything treating the
+    /// result as "the set of fieldKeys that can genuinely receive a submitted value" — a
+    /// calculation scope, or a dangling-reference check — use <see cref="GetSubmittableInputs"/>
+    /// instead; see its own remarks for why the distinction matters.
     /// </summary>
     public static IEnumerable<InputComponent> GetAllInputs(this IEnumerable<Component> components)
         => components.Flatten().OfType<InputComponent>();
+
+    /// <summary>
+    /// Returns every <see cref="InputComponent"/> in the tree that represents a genuinely
+    /// submittable value — excluding any nested inside a <see cref="ComponentCategory.DataDisplay"/>
+    /// container (e.g. <c>SummaryListComponent.Children</c>, GOV.UK's check-your-answers pattern).
+    /// A summary-list child reuses an <see cref="InputComponent"/>-derived type purely for
+    /// rendering convenience (the same label/value row shape a real form field uses) — it never
+    /// receives a submission of its own; it only ever projects a value that already exists
+    /// elsewhere (an input captured on an earlier stage, or a calculated field), under the same
+    /// fieldKey. Treating it as a second, genuine input double-counts one logical value, and —
+    /// when that fieldKey also happens to be a <c>calculations.fields</c> entry, the standard way
+    /// to echo a calculated result — caused two real bugs before this method existed:
+    /// <see cref="Wayfinder.Services.Calculations.CalculationScopeBuilder.DescribeInputs"/> would
+    /// add the echoed fieldKey to the calc scope from a resubmitted display value, so evaluating
+    /// the same-named calculated field then threw "Field 'x' collides with an input or earlier
+    /// field"; and <see cref="Wayfinder.Models.ServiceDesign.ServiceBlueprint.ValidateDataDisplayBindings"/>'s
+    /// "is this a known field" check considered a summary-list child's own fieldKey self-evidently valid (it's
+    /// right there in the "known inputs" set, because it put itself there), so a genuinely
+    /// dangling binding — one that doesn't resolve to any real input or calculated field — was
+    /// silently never flagged. Every caller that needs "can this fieldKey actually hold a
+    /// submitted value" — not just "does an <see cref="InputComponent"/> exist with this name
+    /// somewhere in the tree" — should use this instead of <see cref="GetAllInputs"/>.
+    /// </summary>
+    public static IEnumerable<InputComponent> GetSubmittableInputs(this IEnumerable<Component> components)
+    {
+        foreach (var component in components)
+        {
+            foreach (var found in WalkSubmittableInputs(component))
+            {
+                yield return found;
+            }
+        }
+    }
+
+    private static IEnumerable<InputComponent> WalkSubmittableInputs(Component component)
+    {
+        if (component is InputComponent input)
+        {
+            yield return input;
+        }
+
+        // A DataDisplay container's children exist purely to project an already-known value —
+        // never to receive one of their own — so don't descend into them here, regardless of
+        // what CLR type they happen to reuse for rendering.
+        if (ComponentTypeRegistry.DescriptorFor(component).Category == ComponentCategory.DataDisplay)
+        {
+            yield break;
+        }
+
+        foreach (var (child, _) in DirectChildren(component, ""))
+        {
+            foreach (var found in WalkSubmittableInputs(child))
+            {
+                yield return found;
+            }
+        }
+    }
 
     /// <summary>
     /// Recursively walks the component tree like <see cref="Flatten"/>, but also yields each
