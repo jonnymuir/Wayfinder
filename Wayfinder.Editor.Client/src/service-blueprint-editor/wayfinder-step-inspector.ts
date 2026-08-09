@@ -1817,6 +1817,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     .field-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
       gap: 0.875rem;
       margin-bottom: 0.875rem;
     }
