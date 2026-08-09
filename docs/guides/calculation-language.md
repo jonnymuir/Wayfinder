@@ -35,6 +35,17 @@ so an AI agent authoring service blueprints through the MCP toolkit can fetch it
 needing filesystem access to this repo — see
 [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md).
 
+**Authoring this visually:** the service blueprint editor's own **Calculations** tab
+(`Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-calculations-editor.ts`) is a
+schema-driven, human-facing alternative to hand-typing this JSON — live syntax highlighting and
+inline error positions (reusing this exact grammar's own tokenizer/parser, not a second
+implementation), an "insert a reference" affordance for every input/field/table name instead of
+having to remember exact spelling, and fully automatic field declaration ordering (see
+[Where it lives in a service blueprint](#where-it-lives-in-a-service-blueprint) below on why
+declaration order matters) — a field is never asked to be manually reordered, and a genuine
+circular dependency is caught and named immediately. It writes the exact same JSON described in
+this document; nothing below is specific to either authoring surface.
+
 ## Where it lives in a service blueprint
 
 A `ServiceBlueprint` may carry a top-level `calculations` block:

@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-export type ConfidenceTab = 'canvas' | 'validation' | 'preview' | 'simulation' | 'definition' | 'help';
+export type ConfidenceTab = 'canvas' | 'calculations' | 'validation' | 'preview' | 'simulation' | 'definition' | 'help';
 
 /**
  * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
@@ -17,7 +17,7 @@ export class WayfinderConfidenceTabs extends LitElement {
   @property({ type: Number, attribute: 'warning-count' })
   warningCount = 0;
 
-  private static readonly _tabs: ConfidenceTab[] = ['canvas', 'validation', 'preview', 'simulation', 'definition', 'help'];
+  private static readonly _tabs: ConfidenceTab[] = ['canvas', 'calculations', 'validation', 'preview', 'simulation', 'definition', 'help'];
 
   private _handleTabClick(tab: ConfidenceTab) {
     if (this.activeTab !== tab) {
@@ -107,6 +107,7 @@ export class WayfinderConfidenceTabs extends LitElement {
       <div class="tabs-root" data-wayfinder-confidence-tabs>
         <div class="tab-bar" role="tablist" aria-label="Editor tools">
           ${this._renderTabButton('canvas', 'Canvas')}
+          ${this._renderTabButton('calculations', 'Calculations')}
           ${this._renderTabButton('validation', 'Validation', validationBadge)}
           ${this._renderTabButton('preview', 'Preview')}
           ${this._renderTabButton('simulation', 'Simulation')}
@@ -124,6 +125,17 @@ export class WayfinderConfidenceTabs extends LitElement {
             ?hidden=${this.activeTab !== 'canvas'}
           >
             <slot name="canvas"></slot>
+          </div>
+
+          <div
+            id="confidence-panel-calculations"
+            class="tab-panel ${this.activeTab === 'calculations' ? 'tab-panel-active' : ''}"
+            role="tabpanel"
+            aria-labelledby="confidence-tab-calculations"
+            data-wayfinder-confidence-panel="calculations"
+            ?hidden=${this.activeTab !== 'calculations'}
+          >
+            <slot name="calculations"></slot>
           </div>
 
           <div

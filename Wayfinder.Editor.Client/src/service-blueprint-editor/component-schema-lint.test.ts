@@ -223,6 +223,94 @@ export function run(): number {
       JSON.stringify(issues));
   }
 
+  // ── calculations.fields/series checks (mirror the Calculations tab's own live checks) ────
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { a: { expr: '1 +' } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: an unparseable calculations.fields expression is flagged',
+      issues.some(issue => issue.pathHint === 'calculations.fields.a'),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { a: { expr: 'nosuchname + 1' } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a calculations.fields expression referencing an unknown name is flagged',
+      issues.some(issue => issue.message.includes('"nosuchname"')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { a: { expr: "lookup(nosuchtable, 1)" } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a lookup() call against an unknown table is flagged',
+      issues.some(issue => issue.message.includes('unknown table "nosuchtable"')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { b: { expr: 'a + 1' }, a: { expr: '1' } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: calculations.fields declared out of dependency order is flagged',
+      issues.some(issue => issue.pathHint === 'calculations.fields' && issue.message.includes('out of dependency order')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { a: { expr: 'b + 1' }, b: { expr: 'a + 1' } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a genuine calculations.fields cycle is flagged by name',
+      issues.some(issue => issue.pathHint === 'calculations.fields' && issue.message.includes('circular dependency')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: {
+        fields: { a: { expr: '1' } },
+        series: { s: { over: 'i', from: '1', to: '3', values: { x: 'nosuchname2' } } },
+      },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a series value expression referencing an unknown name is flagged',
+      issues.some(issue => issue.pathHint === 'calculations.series.s.values.x' && issue.message.includes('"nosuchname2"')),
+      JSON.stringify(issues));
+  }
+
+  {
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { a: { expr: '1' }, b: { expr: 'a + 1' } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a valid, already-correctly-ordered calculations.fields block produces no issues',
+      !issues.some(issue => issue.pathHint?.startsWith('calculations')),
+      JSON.stringify(issues));
+  }
+
   if (failures > 0) {
     console.error(`\n${failures} component schema/lint check(s) failed.`);
   } else {

@@ -46,10 +46,10 @@ export interface ServiceBlueprintNodePosition {
 }
 
 /**
- * The definition's declarative calculations block (tables + fields + series).
- * The editor does not author this yet — it must round-trip it untouched; the
- * authoritative schema lives in Wayfinder.Models.ServiceDesign.Calculations
- * (ServiceBlueprintCalculationSet).
+ * The definition's declarative calculations block (tables + fields + series) — authored
+ * visually via the Calculations tab (wayfinder-calculations-editor.ts) or by hand in the
+ * Definition tab; the authoritative schema lives in Wayfinder.Models.ServiceDesign.Calculations
+ * (ServiceBlueprintCalculationSet). See docs/guides/calculation-language.md.
  */
 export interface ServiceBlueprintCalculationsBlock {
   tables?: Record<string, { interpolate?: string; values: Record<string, number> }>;

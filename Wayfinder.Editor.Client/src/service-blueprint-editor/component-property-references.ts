@@ -17,6 +17,11 @@ export interface FieldReference {
   label: string;
   options?: string[];
   type: string;
+  /** The field's own declared default (always a raw string on the wire, regardless of the
+   * field's real value kind — see BuiltInComponentDescriptors.cs's InputComponent.Default).
+   * Used by the Calculations tab to seed a live-preview sample scope, the same source
+   * `validate_service_blueprint`'s own static check relies on. */
+  default?: string;
 }
 
 export interface PropertyReferenceContext {
@@ -70,6 +75,7 @@ function walkComponents(
         label: typeof record.label === 'string' && record.label ? record.label : record.fieldKey,
         options,
         type: component.type,
+        default: typeof record.default === 'string' ? record.default : undefined,
       });
     }
 
