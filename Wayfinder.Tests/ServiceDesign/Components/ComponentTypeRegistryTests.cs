@@ -203,4 +203,26 @@ public class ComponentTypeRegistryTests
             ComponentTypeRegistry.ResetForTests();
         }
     }
+
+    /// <summary>
+    /// Lets a call site declaring a per-queue/per-host component-type allow-list (e.g.
+    /// <see cref="Wayfinder.ReferenceApp.Services.ReferenceActors"/>'s own capability
+    /// declarations) reference a real registered CLR type instead of a bare string literal —
+    /// a typo or a stale entry after a rename breaks the build instead of silently drifting.
+    /// </summary>
+    [Fact]
+    public void DiscriminatorFor_GenericOverload_ReturnsTheRegisteredDiscriminator_WithNoInstanceNeeded()
+    {
+        ComponentTypeRegistry.DiscriminatorFor<TextInputComponent>().Should().Be("text");
+        ComponentTypeRegistry.DiscriminatorFor<EmailComponent>().Should().Be("email");
+    }
+
+    [Fact]
+    public void DiscriminatorFor_GenericOverload_UnregisteredType_Throws()
+    {
+        var act = () => ComponentTypeRegistry.DiscriminatorFor<UnregisteredFixtureComponent>();
+        act.Should().Throw<InvalidOperationException>().WithMessage("*UnregisteredFixtureComponent*");
+    }
+
+    private sealed record UnregisteredFixtureComponent : Component;
 }

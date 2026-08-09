@@ -146,6 +146,30 @@ public static class ComponentTypeRegistry
     public static string DiscriminatorFor(Component component) => DescriptorFor(component).Discriminator;
 
     /// <summary>
+    /// The discriminator string for a registered CLR type, e.g. <c>DiscriminatorFor&lt;TextInputComponent&gt;()</c>
+    /// → <c>"text"</c> — without needing a live instance. Lets call sites that declare a
+    /// per-queue/per-host allow-list of component types (e.g. <c>IQueueCapabilitiesProvider</c>
+    /// declarations) reference the real registered type instead of a bare string literal, so a
+    /// typo or a stale entry after a rename breaks the build instead of silently drifting — the
+    /// exact failure mode <c>ValidateQueueCapabilityDeclarations</c> exists to catch at runtime;
+    /// this catches the same class of mistake earlier, at compile time, for anyone who chooses to
+    /// use it. Freezes the registry.
+    /// </summary>
+    /// <exception cref="InvalidOperationException"><typeparamref name="TComponent"/> was never registered.</exception>
+    public static string DiscriminatorFor<TComponent>() where TComponent : Component
+    {
+        lock (Lock)
+        {
+            _frozen = true;
+            return ByClrType.TryGetValue(typeof(TComponent), out var descriptor)
+                ? descriptor.Discriminator
+                : throw new InvalidOperationException(
+                    $"{typeof(TComponent).Name} has no registered ComponentDescriptor — every Component-derived " +
+                    $"type must be registered via {nameof(ComponentTypeRegistry)}.{nameof(Register)}.");
+        }
+    }
+
+    /// <summary>
     /// An <see cref="IJsonTypeInfoResolver"/> that makes <see cref="Component"/>'s polymorphic
     /// (de)serialization recognise every currently-registered discriminator — built-ins and any
     /// custom types registered before first use. Wire into
