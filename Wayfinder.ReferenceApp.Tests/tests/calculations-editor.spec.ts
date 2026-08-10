@@ -258,6 +258,52 @@ test.describe('Calculations tab', () => {
     }
   });
 
+  test('the reference picker sits next to the expression editor and filters/inserts correctly', async ({ page }) => {
+    // Regression test: the "Insert a reference" control used to be a single below-the-editor
+    // <select> — obtuse, and would only get more unwieldy as a blueprint's field/table count
+    // grows. Now a filterable <input list> combobox sitting beside its own expression editor.
+    await loginAs(page, DEMO_USERS.caseworker);
+    await page.getByRole('link', { name: 'Editor' }).click();
+
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+    await shell.waitFor({ timeout: 15_000 });
+
+    await selectInsuranceModeller(page);
+    await page.getByRole('tab', { name: 'Calculations' }).click();
+
+    const calcTab = page.locator('wayfinder-calculations-editor');
+    await calcTab.waitFor({ timeout: 10_000 });
+
+    const addFieldButton = calcTab.locator('.calc-section', { hasText: 'Fields' }).getByRole('button', { name: '+ Add field' });
+    await addFieldButton.click();
+    await page.waitForTimeout(200);
+
+    const newRow = calcTab.locator('[data-wayfinder-calc-field="field1"]');
+    await expect(newRow).toBeVisible();
+
+    // Sits in the same row as the expression editor, to its right — not below it.
+    const expressionRow = newRow.locator('.calc-expression-row');
+    await expect(expressionRow.locator('wayfinder-calculation-expression-editor')).toHaveCount(1);
+    await expect(expressionRow.locator('.reference-picker')).toHaveCount(1);
+
+    // A real Tab-triggered blur, not dispatchEvent('change') — see stage-validations-editor.spec.ts
+    // for why a synthetic dispatch double-inserts here specifically (insertAtCursor's own
+    // focus() call blurs this input a second time).
+    const pickerInput = expressionRow.locator('.reference-picker-input');
+    await pickerInput.fill('Average audience size (averageAudienceSize)');
+    await pickerInput.press('Tab');
+    await page.waitForTimeout(200);
+
+    // Exact text, not just toContainText — a double-fired insert would still "contain" the
+    // substring, which is exactly how the original version of this test missed the bug.
+    await expect(expressionRow.locator('.cm-content')).toHaveText('averageAudienceSize');
+    // Clears itself back to empty after inserting, ready for the next reference.
+    await expect(pickerInput).toHaveValue('');
+
+    await expressionRow.scrollIntoViewIfNeeded();
+    await captureDocScreenshot(expressionRow, `${DOCS_DIR}/field-reference-picker.png`);
+  });
+
   test('a table can be added, with interpolate and row values reflected in the UI', async ({ page }) => {
     // Neither seed blueprint declares any calculations.tables — this is the only coverage of
     // the Tables section, added specifically so its docs/skills screenshot has real content
