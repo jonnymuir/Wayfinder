@@ -29,8 +29,15 @@ async function completeYourDetailsAndEventDetails(page: import('@playwright/test
 test.describe('File upload: risk assessment', () => {
   test.beforeEach(async ({ request }) => resetApp(request));
 
-  test('the upload is optional even when dangerous props are declared, and shows "Not provided" when skipped', async ({ page }) => {
+  test('the upload is optional even when dangerous props are declared, provided mitigation notes cover it instead', async ({ page }) => {
+    // The upload itself stays optional (this stage's own field-level `required` never changes) —
+    // but juggling-licence.json now carries a cross-stage StageDefinition.Validations rule
+    // (StageValidationTests.cs / citizen-journey.spec.ts's dedicated test cover the rule itself):
+    // dangerousProps + no upload requires the mitigation notes to say something concrete instead.
+    // Skipping BOTH is covered separately; this proves the "upload OR notes" relationship, not
+    // "neither is ever required".
     await completeYourDetailsAndEventDetails(page, { dangerousProps: true });
+    await page.getByLabel('How are you mitigating the risk?').fill('15 metres exclusion zone maintained throughout.');
     await page.getByRole('button', { name: 'Continue' }).click();
 
     await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();

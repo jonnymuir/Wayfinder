@@ -620,6 +620,24 @@ function evaluateCall(node, scope, set, context) {
       return lookup(tableRef.path, num(1), set, context);
     }
 
+    case 'matches': {
+      requireArgs(2);
+      const text = toStr(arg(0), context);
+      const pattern = toStr(arg(1), context);
+      // No evaluation timeout here (unlike the authoritative C# runtime's RegexPolicy.Timeout) —
+      // JS RegExp has no built-in cutoff. Harmless: this runtime is a non-authoritative preview
+      // accelerator only (see the calculation-language guide), so a pathological pattern is at
+      // worst a slow tab, never a trusted decision or a server-side hang.
+      let re;
+      try {
+        re = new RegExp(pattern);
+      } catch (ex) {
+        throw new CalculationError(`matches() has an invalid pattern '${pattern}' in ${context}: ${ex.message}`);
+      }
+
+      return re.test(text);
+    }
+
     default:
       throw new CalculationError(`Unknown function '${node.name}' in ${context}.`);
   }
@@ -697,6 +715,13 @@ function toBool(value, context) {
   if (typeof value === 'boolean') return value;
   throw new CalculationError(
     `Expected true/false but got ${value === null || value === undefined ? 'nothing' : `'${value}'`} in ${context}.`,
+  );
+}
+
+function toStr(value, context) {
+  if (typeof value === 'string') return value;
+  throw new CalculationError(
+    `Expected a string but got ${value === null || value === undefined ? 'nothing' : `'${value}'`} in ${context}.`,
   );
 }
 

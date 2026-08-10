@@ -1,4 +1,4 @@
-import type { AuthoredGateway, AuthoredRoute, AuthoredStage, AuthoredServiceBlueprint } from './types.js';
+import type { AuthoredGateway, AuthoredRoute, AuthoredStage, AuthoredStageValidation, AuthoredServiceBlueprint } from './types.js';
 
 /**
  * Stable, deterministic JSON serialization for the flattened serviceBlueprint definition
@@ -34,6 +34,16 @@ function serialisableRoute(route: AuthoredRoute): Record<string, unknown> {
   };
 }
 
+function serialisableStageValidation(rule: AuthoredStageValidation): Record<string, unknown> {
+  return {
+    code: rule.code,
+    when: rule.when,
+    rule: rule.rule,
+    field: rule.field,
+    message: rule.message,
+  };
+}
+
 function serialisableState(stage: AuthoredStage): Record<string, unknown> {
   return {
     stageKey: stage.stateKey,
@@ -48,6 +58,9 @@ function serialisableState(stage: AuthoredStage): Record<string, unknown> {
     roleGates: stage.roleGates,
     editorComment: stage.editorComment,
     icon: stage.icon,
+    validations: (stage.validations ?? []).length > 0
+      ? (stage.validations ?? []).map(serialisableStageValidation)
+      : undefined,
   };
 }
 

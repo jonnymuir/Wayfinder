@@ -139,6 +139,7 @@ between runtimes or feed into a currency display, wrap it in `round()`.
 | `round` | `round(x)` or `round(x, places)` | Rounds **away from zero** at the midpoint (`round(2.5) = 3`, `round(-2.5) = -3`), not banker's rounding. `places` defaults to `0`. |
 | `pow` | `pow(x, y)` | `x` raised to the power `y`. Round-trips through `double` — see [Numeric semantics](#numeric-semantics). |
 | `lookup` | `lookup(tableName, key)` | Looks up `key` in a `tables` entry. The first argument must be a bare table name, not an expression. See [Tables and `lookup()`](#tables-and-lookup). |
+| `matches` | `matches(text, pattern)` | Regex predicate — `true` if `pattern` matches anywhere in `text`, `false` otherwise. Both arguments must be strings. `pattern` is always author-supplied (blueprint content, never end-user input), so there's no injection surface from a submission; a pathological pattern is bounded by a 100ms timeout in the authoritative C# runtime and fails the expression (`CalculationException`) rather than hanging. The JS preview runtime has no such timeout — harmless there, since (as above) it's never trusted for a real decision, only re-verified server-side on submit. An invalid pattern is also a `CalculationException`. |
 
 Calling an unknown function, or calling a known one with the wrong argument count,
 is a `CalculationException` — see [Errors](#errors).
@@ -212,6 +213,85 @@ without a full page round-trip. `showWhen` must evaluate to a boolean — a `sho
 that evaluates to a number or string is a `CalculationException`, same as any other
 type mismatch.
 
+## Stage validations
+
+A `StageDefinition` may carry a `validations` list — declarative, cross-field business rules
+checked before that stage is allowed to advance. This is the engine-native alternative to a host
+overriding `ProcessManagerEngine.ValidateAdvance` with bespoke C#: the rule lives in the blueprint
+itself, visible to the editor, to `validate_service_blueprint`, and to anyone reading the JSON,
+instead of only existing as compiled code in a host repository.
+
+```json
+"stages": [
+  {
+    "stageKey": "risk-assessment",
+    "validations": [
+      {
+        "code": "risk-mitigation-evidence-required",
+        "when": "hasDangerousProps",
+        "rule": "riskAssessment <> '' or mitigationHasEvidence",
+        "field": "riskMitigationNotes",
+        "message": "Attach a risk assessment above, or describe your mitigation with a measurable detail — a safety distance in metres, or a recognised body (HSE, IOSH, NOABA)."
+      }
+    ]
+  }
+]
+```
+
+- **`code`** — machine-readable identifier, surfaced on the resulting problem's `code` (e.g. so a
+  host can route on it).
+- **`when`** (optional) — a guard expression; must evaluate to a boolean. When present and
+  evaluates to `false`, this rule is skipped entirely — no failure, not evaluated. Kept separate
+  from `rule` deliberately, rather than folded into a single implication (`not (when) or rule`):
+  an author only ever writes an affirmative "what must hold", never has to hand-negate an
+  applicability condition — a common, hard-to-spot class of authoring bug — and an editor or
+  `validate_service_blueprint` gets a distinct expression to reason about "does this rule even
+  apply" separately from "is it satisfied". Omit for a rule that always applies.
+- **`rule`** — must evaluate to `true` for the stage to be allowed to advance. Positive phrasing
+  only, matching `showWhen`'s convention — there is no separate "failWhen".
+- **`field`** (optional) — a fieldKey on this same stage to attach the failure to, GDS
+  error-summary style. Omit for a stage-level problem not tied to one field.
+- **`message`** — shown to the user when the rule fails.
+
+Both `when` and `rule` are ordinary expressions in this same language, evaluated against the
+identical scope `calculations.fields`/`showWhen` already use — which spans every stage the
+instance has reached, not just the one the rule is declared on. In the example above,
+`hasDangerousProps` is captured on an earlier stage (`event-details`) than the rule that reads it
+(`risk-assessment`) — no extra wiring is needed for a rule to reference a field captured earlier
+in the journey. `mitigationHasEvidence` is an ordinary calculated field using `matches()`:
+
+```json
+"calculations": {
+  "fields": {
+    "mitigationHasEvidence": {
+      "expr": "matches(riskMitigationNotes, '\\b\\d+\\s?(m|metres|meters)\\b') or matches(riskMitigationNotes, '\\b(HSE|IOSH|NOABA)\\b')"
+    }
+  }
+}
+```
+
+See the real, worked version of this in
+[`juggling-licence.json`](https://github.com/jonnymuir/Wayfinder/blob/main/Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json)
+(the `risk-assessment` stage) — Wayfinder's own reference app, not an external example this time.
+
+**Evaluation is server-side only, and biased toward blocking.** `ProcessManagerEngine.Advance`
+evaluates `validations` after field-level validation passes, on the merge of persisted and
+just-submitted values — never on stale data, never on anything a client claims was already
+validated. Unlike `showWhen` (a display hint, tolerant of any non-`false` result), this is a hard
+gate: a `when` that doesn't evaluate to exactly `false` is treated as applying, a `rule` that
+doesn't evaluate to exactly `true` is treated as failed, and a rule whose expressions throw
+(`CalculationException`) is treated as failed rather than skipped. A calculated field that fails
+only affects the specific rules that actually reference it, not every validation on the stage.
+This should be rare in practice — `validate_service_blueprint` already statically checks every
+`when`/`rule` before a blueprint can be saved, including that the result is genuinely a boolean
+(a rule that evaluates cleanly to a number or string is flagged there too, since the engine would
+otherwise silently treat it as "not exactly true" and fail on every submission).
+
+**Authoring this visually:** the Calculations tab's Validations section groups rules by the stage
+they're declared on, reuses the same expression editor (with its "insert a reference" affordance)
+`calculations.fields` gets, and offers a dropdown of the owning stage's own fieldKeys for `field`
+— nothing here asks an author to remember exact field spelling or hand-write the grammar.
+
 ## Service-sourced fields
 
 A field with no `expr` and `"source": "service"` instead is supplied by the *host
@@ -255,6 +335,7 @@ evaluation errors (`"Field 'x' has no expression and no service source."`,
 | Field name collides with an input or earlier field | `Field 'x' collides with an input or earlier field.` |
 | Unresolved service field | `Field 'member' is service-sourced but the host did not supply it.` |
 | Unknown table | `Unknown table 'foo' in ...` |
+| Invalid regex pattern to `matches()` | `matches() has an invalid pattern '(' in ...` |
 | Series too large | `Series 's' would produce 2000 rows; the limit is 1000.` |
 
 When authoring through the MCP toolkit, `validate_service_blueprint` surfaces these against

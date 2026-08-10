@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
+using Wayfinder.Models.ServiceDesign.Calculations;
 using Wayfinder.Services.Calculations;
 using Wayfinder.Engine.Abstractions;
 
@@ -185,10 +186,66 @@ public sealed class ServiceBlueprintAuthoringService(
                     diagnostics.Add(new ServiceBlueprintDiagnostic("SHOW_WHEN_EVAL_ERROR", $"{path}.showWhen", ex.Message));
                 }
             }
+
+            var validationIndex = 0;
+            foreach (var rule in stage.Validations ?? [])
+            {
+                var path = $"stages.{stage.StageKey}.validations[{validationIndex}]";
+                validationIndex++;
+
+                if (!string.IsNullOrWhiteSpace(rule.When))
+                {
+                    CheckStageValidationExpression(
+                        evaluator, rule.When, showWhenScope, blueprint.Calculations,
+                        "STAGE_VALIDATION_WHEN_EVAL_ERROR", $"{path}.when", diagnostics);
+                }
+
+                CheckStageValidationExpression(
+                    evaluator, rule.Rule, showWhenScope, blueprint.Calculations,
+                    "STAGE_VALIDATION_RULE_EVAL_ERROR", $"{path}.rule", diagnostics);
+            }
         }
 
         return new ServiceBlueprintValidationOutcome(
             !diagnostics.Any(d => d.Severity == ServiceBlueprintDiagnosticSeverity.Error), diagnostics);
+    }
+
+    /// <summary>
+    /// Statically evaluates one <c>StageDefinition.Validations</c> <c>when</c>/<c>rule</c>
+    /// expression against the same scope <c>showWhen</c> is checked with, reporting a parse/type/
+    /// reference error (<c>CalculationException</c>) exactly like <c>ValidateShowWhen</c> does.
+    /// Additionally requires the result to be a real boolean — unlike <c>showWhen</c> (a display
+    /// hint, tolerant of any non-<c>false</c> result), a rule that evaluates cleanly to a number
+    /// or string is still an authoring mistake: <c>ProcessManagerEngine</c> would silently treat
+    /// it as "not exactly true" and fail the rule on every submission, a much harder bug to spot
+    /// than a diagnostic caught here at save time.
+    /// </summary>
+    private static void CheckStageValidationExpression(
+        CalculationEvaluator evaluator,
+        string expression,
+        IReadOnlyDictionary<string, object?> scope,
+        ServiceBlueprintCalculationSet? calculations,
+        string code,
+        string path,
+        List<ServiceBlueprintDiagnostic> diagnostics)
+    {
+        try
+        {
+            var result = evaluator.EvaluateExpression(expression, scope, calculations);
+            if (result is not bool)
+            {
+                diagnostics.Add(new ServiceBlueprintDiagnostic(
+                    code,
+                    path,
+                    $"Expression '{expression}' evaluates to {(result is null ? "nothing" : $"'{result}'")}, " +
+                    "not true/false. Stage validations are boolean gates — fix the expression so it always " +
+                    "resolves to a real boolean."));
+            }
+        }
+        catch (CalculationException ex)
+        {
+            diagnostics.Add(new ServiceBlueprintDiagnostic(code, path, ex.Message));
+        }
     }
 
     /// <summary>

@@ -1,10 +1,12 @@
 import {
   extractReferencedNames,
+  inScopeInputFieldKeys,
   tryEvaluateFieldsForPreview,
   tryEvaluateSeriesForPreview,
   tryParseExpression,
   type CalculationSet,
 } from './calculation-runtime.js';
+import type { FieldReference } from './component-property-references.js';
 
 let failures = 0;
 
@@ -29,6 +31,25 @@ export function run(): number {
   {
     const result = tryParseExpression('1 + ');
     check('an invalid expression reports ok:false with a message', result.ok === false, JSON.stringify(result));
+  }
+
+  // ── inScopeInputFieldKeys ──────────────────────────────────────────────────
+  {
+    const fields: FieldReference[] = [
+      { fieldKey: 'withDefault', label: 'With default', type: 'text', default: 'hello' },
+      // Regression: a declared default of "" is still a real default — CalculationScopeBuilder.cs
+      // only excludes a field from scope when it has NEITHER a submission NOR a default; an empty
+      // string is a legitimate default, not "no default". A plain truthy check on field.default
+      // (`field.default` alone) would wrongly treat this as absent, producing a false
+      // "unknown reference" for a correctly-defaulted textarea/text input — exactly the false
+      // positive real juggling-licence.json's riskMitigationNotes field (default: "") hit live.
+      { fieldKey: 'withEmptyStringDefault', label: 'With empty default', type: 'textarea', default: '' },
+      { fieldKey: 'noDefault', label: 'No default', type: 'text' },
+    ];
+    const inScope = inScopeInputFieldKeys(fields);
+    check('a field with a non-empty declared default is in scope', inScope.has('withDefault'));
+    check('a field with a declared EMPTY STRING default is still in scope', inScope.has('withEmptyStringDefault'));
+    check('a field with no declared default is not in scope', !inScope.has('noDefault'));
   }
 
   // ── extractReferencedNames ────────────────────────────────────────────────

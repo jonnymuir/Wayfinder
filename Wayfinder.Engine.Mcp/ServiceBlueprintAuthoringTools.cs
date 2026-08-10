@@ -55,9 +55,14 @@ public static class ServiceBlueprintAuthoringTools
         "(e.g. a lookup), and doing this to your own captured input makes it permanently unresolvable. A " +
         "gateway needs a real, unique `key` (a keyless one can never be a route target), and every route's " +
         "`target` must actually match an existing gateway/stage key — an empty target is fine mid-edit but " +
-        "must be wired up before you consider the blueprint finished. " +
+        "must be wired up before you consider the blueprint finished. A `StageDefinition` may also carry " +
+        "its own `validations`: [{ \"code\", \"when\"?, \"rule\", \"field\"?, \"message\" }] — cross-field " +
+        "business rules checked before that stage can advance (the declarative alternative to a host " +
+        "writing custom validation code), evaluated against the same blueprint-wide scope, so `rule` may " +
+        "reference a field captured on an earlier stage. `when`/`rule` are both plain calculation-language " +
+        "expressions and must evaluate to a boolean. " +
         "Read service-blueprint-docs://calculation-language before writing or editing a calculations block; it " +
-        "has the full grammar and a worked example.";
+        "has the full grammar and a worked example, including a \"Stage validations\" section for this.";
 
     [McpServerTool(Name = "list_queue_capabilities")]
     [Description(
@@ -92,6 +97,9 @@ public static class ServiceBlueprintAuthoringTools
     [Description(
         "Validate a service blueprint JSON — checks that every stage route targets a gateway " +
         "(never another stage directly), that any calculations block evaluates cleanly, that " +
+        "every stage's own `validations` when/rule expressions evaluate cleanly and to a real " +
+        "boolean (STAGE_VALIDATION_WHEN_EVAL_ERROR/_RULE_EVAL_ERROR) and that any `field` they " +
+        "name is a real fieldKey on that same stage (STAGE_VALIDATION_UNKNOWN_FIELD), that " +
         "every stat-group/chart/summary-list component's bound field or series actually exists, " +
         "and that every component's own properties satisfy its registered type's requirements " +
         "(COMPONENT_PROPERTY_REQUIRED/_INVALID_VALUE/_PATTERN_MISMATCH/_TOO_SHORT/_TOO_LONG/" +

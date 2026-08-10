@@ -6,7 +6,11 @@
   "initialStage": "your-details",
   "requestPolicy": "single",
   "calculations": {
-    "fields": {}
+    "fields": {
+      "mitigationHasEvidence": {
+        "expr": "matches(riskMitigationNotes, '\\b\\d+\\s?(m|metres|meters)\\b') or matches(riskMitigationNotes, '\\b(HSE|IOSH|NOABA)\\b')"
+      }
+    }
   },
   "stages": [
     {
@@ -149,6 +153,11 @@
           "content": "If your act involves fire, knives, or other dangerous props, upload a risk assessment or public liability insurance certificate. This is optional for every other act."
         },
         {
+          "type": "details",
+          "heading": "Wayfinder demo note: what's being shown on this stage",
+          "content": "This stage demonstrates cross-stage validation. Ticking \"fire, knives or other dangerous props\" on the previous stage adds a declarative rule here, checked server-side with no custom code: if you don't attach a file, your mitigation notes below must contain a measurable detail (a distance in metres) or name a recognised body (HSE, IOSH, NOABA) before you can continue. See docs/guides/calculation-language.md's \"Stage validations\" section."
+        },
+        {
           "type": "file-upload",
           "acceptedFileTypes": [".pdf", ".jpg", ".png"],
           "maxSizeBytes": 5242880,
@@ -158,9 +167,30 @@
           "required": false,
           "conditionalOn": null,
           "visibleWhen": null,
-          "default": null,
+          "default": "",
           "defaultFrom": null,
           "changeStateKey": null
+        },
+        {
+          "type": "textarea",
+          "fieldKey": "riskMitigationNotes",
+          "label": "How are you mitigating the risk?",
+          "hint": "If you're not attaching a file above, describe your mitigation here — a safety distance, or a recognised body overseeing the act (e.g. HSE, IOSH, NOABA).",
+          "required": false,
+          "conditionalOn": null,
+          "visibleWhen": null,
+          "default": "",
+          "defaultFrom": null,
+          "changeStateKey": null
+        }
+      ],
+      "validations": [
+        {
+          "code": "risk-mitigation-evidence-required",
+          "when": "hasDangerousProps",
+          "rule": "riskAssessment <> '' or mitigationHasEvidence",
+          "field": "riskMitigationNotes",
+          "message": "Attach a risk assessment or insurance certificate above, or describe your mitigation with a measurable detail below — a safety distance in metres, or a recognised body (HSE, IOSH, NOABA). This event was flagged as involving fire, knives, or other dangerous props on the previous stage."
         }
       ],
       "routes": [
@@ -271,6 +301,18 @@
               "maxSizeBytes": null,
               "fieldKey": "riskAssessment",
               "label": "Risk assessment / insurance certificate",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": "risk-assessment"
+            },
+            {
+              "type": "textarea",
+              "fieldKey": "riskMitigationNotes",
+              "label": "How are you mitigating the risk?",
               "hint": null,
               "required": false,
               "conditionalOn": null,
@@ -412,6 +454,18 @@
               "maxSizeBytes": null,
               "fieldKey": "riskAssessment",
               "label": "Risk assessment / insurance certificate",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "riskMitigationNotes",
+              "label": "How are you mitigating the risk?",
               "hint": null,
               "required": false,
               "conditionalOn": null,

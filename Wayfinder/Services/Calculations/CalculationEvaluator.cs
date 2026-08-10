@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Wayfinder.Models.ServiceDesign.Calculations;
 
 namespace Wayfinder.Services.Calculations;
@@ -363,6 +364,25 @@ public sealed class CalculationEvaluator
 
                 return Lookup(tableRef.Path, Num(1), calculations, context);
 
+            case "matches":
+            {
+                RequireArgs(2);
+                var text = ToStr(Arg(0), context);
+                var pattern = ToStr(Arg(1), context);
+                try
+                {
+                    return Regex.IsMatch(text, pattern, RegexOptions.None, RegexPolicy.Timeout);
+                }
+                catch (RegexParseException ex)
+                {
+                    throw new CalculationException($"matches() has an invalid pattern '{pattern}' in {context}: {ex.Message}");
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    throw new CalculationException($"matches() pattern '{pattern}' took too long to evaluate in {context}.");
+                }
+            }
+
             default:
                 throw new CalculationException($"Unknown function '{call.Name}' in {context}.");
         }
@@ -469,6 +489,13 @@ public sealed class CalculationEvaluator
         bool b => b,
         _ => throw new CalculationException(
             $"Expected true/false but got {(value is null ? "nothing" : $"'{value}'")} in {context}.")
+    };
+
+    private static string ToStr(object? value, string context) => value switch
+    {
+        string s => s,
+        _ => throw new CalculationException(
+            $"Expected a string but got {(value is null ? "nothing" : $"'{value}'")} in {context}.")
     };
 
     private static int ToInteger(object? value, string context)

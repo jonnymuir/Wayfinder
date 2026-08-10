@@ -37,7 +37,13 @@ export type { CalculationNode, CalculationSet, CalculationSeriesDefinition };
  * CalculationScopeBuilder/CalculationEvaluator actually do at Save time.
  */
 export function inScopeInputFieldKeys(allInputFields: FieldReference[]): Set<string> {
-  return new Set(allInputFields.filter(field => field.default).map(field => field.fieldKey));
+  // A DECLARED default of "" still guarantees the field is in scope — CalculationScopeBuilder.cs's
+  // own check is `string.IsNullOrWhiteSpace(raw)` falling back to `defaultValue`, then only
+  // `continue`s past the field if THAT is still null; an empty-string default is not null, so it
+  // resolves cleanly server-side. A plain truthy check on field.default (`field.default` alone)
+  // would treat "" as "no default" and wrongly flag a real, correctly-defaulted field as unknown —
+  // exactly the false positive this must not produce.
+  return new Set(allInputFields.filter(field => field.default !== undefined).map(field => field.fieldKey));
 }
 
 /** Mirrors the real (non-exported) MAX_SERIES_ROWS in wayfinder-calculations.js — a defensive

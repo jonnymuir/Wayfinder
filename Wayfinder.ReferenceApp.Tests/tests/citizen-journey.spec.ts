@@ -63,6 +63,50 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     });
   });
 
+  test('dangerous-props cross-stage validation is demonstrated live and actually enforced through the real HTML journey', async ({ page }) => {
+    // Proves both halves of what juggling-licence.json's "Wayfinder demo note" on the Risk
+    // assessment stage tells a visitor: the rule exists (the demo note itself renders), and it's
+    // genuinely enforced (StageDefinition.Validations, not just a UI hint) — driven through the
+    // real citizen-facing HTML forms, not the engine API directly.
+    await loginAs(page, DEMO_USERS.applicant);
+    await page.getByLabel('Full name').fill('Alex Applicant');
+    await page.getByLabel('Email address').fill('alex@example.test');
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await page.getByLabel('Name of the event').fill('Fire and Blades Spectacular');
+    await page.getByLabel('Day').fill('1');
+    await page.getByLabel('Month').fill('9');
+    await page.getByLabel('Year').fill('2026');
+    await page.getByLabel('Number of jugglers taking part').fill('4');
+    await page.getByLabel('This act involves fire, knives, or other dangerous props').check();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
+    // The demo note is a collapsed GDS <details> — expand it to prove it's genuinely there for a
+    // curious visitor to read, not just present in the DOM.
+    await page.getByText("Wayfinder demo note: what's being shown on this stage").click();
+    await expect(page.getByText(/demonstrates cross-stage validation/)).toBeVisible();
+
+    await test.step('vague mitigation notes are rejected by the cross-stage rule', async () => {
+      await page.getByLabel('How are you mitigating the risk?').fill('We will be careful.');
+      await page.getByRole('button', { name: 'Continue' }).click();
+
+      await expect(page.getByText('There is a problem')).toBeVisible();
+      await expect(
+        page.locator('.govuk-error-message', { hasText: /measurable detail/ })
+      ).toBeVisible();
+      // Rejected before advancing — still on Risk assessment.
+      await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
+    });
+
+    await test.step('a measurable detail satisfies the rule and the journey continues', async () => {
+      await page.getByLabel('How are you mitigating the risk?').fill('10 metres safety distance maintained throughout.');
+      await page.getByRole('button', { name: 'Continue' }).click();
+
+      await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    });
+  });
+
   test('a "Change" link on the check-your-answers page lets the applicant go back and edit an earlier answer', async ({ page }) => {
     await loginAs(page, DEMO_USERS.applicant);
     await page.getByLabel('Full name').fill('Alex Applicant');
