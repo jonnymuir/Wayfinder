@@ -847,10 +847,16 @@ export class WayfinderCalculationsEditorElement extends LitElement {
           @change=${(event: Event) => {
             const input = event.currentTarget as HTMLInputElement;
             const match = insertOptions.find(option => option.label === input.value);
+            // Clear BEFORE inserting, not after: insertAtCursor() focuses the CodeMirror view,
+            // which synchronously blurs this input — and a blur after a genuine value change
+            // fires another native "change" event, re-entering this same handler before the
+            // outer call returns. Clearing first means that reentrant call reads an already-empty
+            // input.value, finds no match, and no-ops — otherwise it would find the same match
+            // again and double-insert. Caught by a real (not synthetic) interaction in tests.
+            input.value = '';
             if (match) {
               targetRef.value?.insertAtCursor(match.value);
             }
-            input.value = '';
           }}
         />
         <datalist id=${listId}>

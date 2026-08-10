@@ -130,13 +130,16 @@ export const AddFieldAndInsertReference: Story = {
     // do anything.
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    const insertSelect = newRow!.querySelector('select') as HTMLSelectElement;
-    await expect(insertSelect).not.toBeNull();
-    const optionValues = Array.from(insertSelect.options).map(option => option.value);
-    await expect(optionValues).toContain('age');
+    const insertInput = newRow!.querySelector('.reference-picker-input') as HTMLInputElement;
+    await expect(insertInput).not.toBeNull();
+    const datalistId = insertInput.getAttribute('list')!;
+    const datalist = newRow!.querySelector(`#${datalistId}`) as HTMLDataListElement;
+    const optionValues = Array.from(datalist.options).map(option => option.value);
+    await expect(optionValues.some(value => value.includes('(age)'))).toBe(true);
 
-    insertSelect.value = 'age';
-    insertSelect.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    const ageOption = optionValues.find(value => value.includes('(age)'))!;
+    insertInput.value = ageOption;
+    insertInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await el.updateComplete;
     await new Promise(resolve => setTimeout(resolve, 100));
 
