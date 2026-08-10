@@ -12,8 +12,6 @@ namespace Wayfinder.Services.Validation;
 /// </summary>
 public static class FieldValueValidator
 {
-    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(100);
-
     /// <summary>
     /// Validates the submitted form values against the current stage's authoritative field
     /// definitions.
@@ -313,7 +311,7 @@ public static class FieldValueValidator
         {
             try
             {
-                if (!Regex.IsMatch(raw, field.Pattern, RegexOptions.None, RegexTimeout))
+                if (!Regex.IsMatch(raw, field.Pattern, RegexOptions.None, RegexPolicy.Timeout))
                 {
                     return $"{field.Label} is not in the expected format.";
                 }

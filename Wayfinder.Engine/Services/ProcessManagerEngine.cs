@@ -377,6 +377,18 @@ public class ProcessManagerEngine : IProcessManager
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
                 return BuildEnvelope(previewInstance, definition, accessProfile) with { Problems = problems };
             }
+
+            // Declarative cross-field business rules (StageDefinition.Validations) — the
+            // engine-native alternative to a host's ValidateAdvance override, checked once
+            // field-level validation has already passed. Evaluated on the same merge of
+            // persisted + just-submitted values FieldValueValidator above just accepted, never
+            // on stale persisted data or on anything the client could claim was pre-checked.
+            var stageValidationProblems = EvaluateStageValidations(instance, definition, currentStage, fieldValues);
+            if (stageValidationProblems.Count > 0)
+            {
+                var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
+                return BuildEnvelope(previewInstance, definition, accessProfile) with { Problems = stageValidationProblems };
+            }
         }
 
         if (ValidateAdvance(instance, definition, fieldValues) is { } validationEnvelope)
@@ -1233,6 +1245,90 @@ public class ProcessManagerEngine : IProcessManager
             Logger.LogWarning(exception, "showWhen expression '{Expr}' failed; component stays visible.", showWhen);
             return true;
         }
+    }
+
+    /// <summary>
+    /// Evaluates <paramref name="stage"/>'s declarative <see cref="StageDefinition.Validations"/>
+    /// against the merge of persisted + just-submitted field values — the same trust boundary
+    /// <see cref="Advance(string, string, string, ActorProfile, string, int, Dictionary{string, object?})"/>
+    /// already applies to field-level validation: never the stale persisted instance alone, never
+    /// anything the client could claim was pre-validated.
+    ///
+    /// Failure is deliberately biased toward blocking, not toward permissiveness, unlike
+    /// <see cref="EvaluateShowWhen"/>'s "stays visible" default: a <c>when</c> that doesn't
+    /// evaluate to exactly <c>false</c> is treated as applying (ambiguous → check it), a
+    /// <c>rule</c> that doesn't evaluate to exactly <c>true</c> is treated as failed (ambiguous →
+    /// block), and a rule whose expressions throw is treated as failed rather than skipped — this
+    /// is a hard gate, not a display hint, so an expression this engine can't confirm holds must
+    /// never silently let a submission through. This should be rare in practice:
+    /// <c>ServiceBlueprintAuthoringService.Validate</c> already statically checks every
+    /// <c>when</c>/<c>rule</c> expression before a blueprint can be saved. A calculated field that
+    /// fails only affects the specific rules that actually reference it (via
+    /// <see cref="CalculationEvaluator.EvaluateCollectingErrors"/>), not every validation on the
+    /// stage.
+    /// </summary>
+    private IReadOnlyList<ServiceRequestProblem> EvaluateStageValidations(
+        ServiceRequest instance,
+        ServiceBlueprint definition,
+        StageDefinition stage,
+        Dictionary<string, object?>? fieldValues)
+    {
+        if (stage.Validations is not { Count: > 0 } rules)
+        {
+            return [];
+        }
+
+        var serviceInputs = ResolveServiceInputs(instance, definition, stage);
+        var mergedFieldValues = Merge(instance.FieldValues, fieldValues);
+        var baseScope = CalculationScopeBuilder.Build(definition, mergedFieldValues, serviceInputs);
+
+        var scope = baseScope;
+        if (definition.Calculations is not null)
+        {
+            var evaluation = _calculationEvaluator.EvaluateCollectingErrors(definition.Calculations, baseScope);
+            var fullScope = new Dictionary<string, object?>(baseScope, StringComparer.Ordinal);
+            foreach (var (name, value) in evaluation.Result.Fields)
+            {
+                fullScope[name] = value;
+            }
+
+            scope = fullScope;
+        }
+
+        var problems = new List<ServiceRequestProblem>();
+        foreach (var rule in rules)
+        {
+            bool failed;
+            try
+            {
+                var applies = string.IsNullOrWhiteSpace(rule.When)
+                    || _calculationEvaluator.EvaluateExpression(rule.When, scope, definition.Calculations) is not false;
+                failed = applies
+                    && _calculationEvaluator.EvaluateExpression(rule.Rule, scope, definition.Calculations) is not true;
+            }
+            catch (CalculationException exception)
+            {
+                Logger.LogWarning(
+                    exception,
+                    "Stage validation rule '{Code}' failed to evaluate for blueprint {Key}, stage {State}; treating as failed.",
+                    rule.Code,
+                    definition.DefinitionKey,
+                    stage.StageKey);
+                failed = true;
+            }
+
+            if (failed)
+            {
+                problems.Add(new ServiceRequestProblem
+                {
+                    FieldKey = rule.Field ?? stage.StageKey,
+                    Message = rule.Message,
+                    Code = rule.Code
+                });
+            }
+        }
+
+        return problems;
     }
 
     private ComponentRenderPayload[] BuildComponents(

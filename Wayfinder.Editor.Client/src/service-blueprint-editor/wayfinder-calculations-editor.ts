@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { ref, createRef, type Ref } from 'lit/directives/ref.js';
 import { repeat } from 'lit/directives/repeat.js';
-import type { AuthoredServiceBlueprint, ComponentDescriptor, ServiceBlueprintCalculationsBlock } from './types.js';
+import type { AuthoredServiceBlueprint, AuthoredStage, AuthoredStageValidation, ComponentDescriptor, ServiceBlueprintCalculationsBlock } from './types.js';
 import { collectStageInputFields, type FieldReference } from './component-property-references.js';
 import { computeStableFieldOrder, type FieldInput } from './calculation-ordering.js';
 import { inScopeInputFieldKeys, tryEvaluateFieldsForPreview, tryEvaluateSeriesForPreview } from './calculation-runtime.js';
@@ -75,7 +75,9 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   private get _sampleInputs(): Record<string, unknown> {
     const inputs: Record<string, unknown> = {};
     for (const field of this._allInputFields) {
-      if (!field.default) {
+      // A declared default of "" still counts — see inScopeInputFieldKeys in
+      // calculation-runtime.ts for why a plain truthy check on field.default is wrong here.
+      if (field.default === undefined) {
         continue;
       }
       if (NUMERIC_INPUT_TYPES.has(field.type)) {
@@ -752,6 +754,184 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     `;
   }
 
+  // ── Validations ─────────────────────────────────────────────────────────────
+  //
+  // Unlike fields/tables/series (one blueprint-wide `calculations` block), a `StageDefinition`'s
+  // `validations` are per-stage — see Wayfinder/Models/ServiceDesign/ServiceBlueprintStageValidationRule.cs
+  // and docs/guides/calculation-language.md's "Stage validations" section. `when`/`rule` are
+  // ordinary expressions in this same calculation language, evaluated against the identical
+  // blueprint-wide scope fields/showWhen already use — a rule may freely reference a field
+  // captured on an earlier stage, so this reuses `_allInputFields`/`_calculations` exactly as the
+  // Fields section above does, just grouped one subsection per stage instead of one flat list.
+
+  private _updateStage(stageKey: string, patch: Partial<AuthoredStage>) {
+    if (!this.serviceBlueprint) {
+      return;
+    }
+    const stages = this.serviceBlueprint.stages.map(stage =>
+      stage.stateKey === stageKey ? { ...stage, ...patch } : stage
+    );
+    this._emitServiceBlueprintUpdated({ ...this.serviceBlueprint, stages });
+  }
+
+  private _updateStageValidations(stageKey: string, next: AuthoredStageValidation[]) {
+    this._updateStage(stageKey, { validations: next });
+  }
+
+  private _addValidation(stage: AuthoredStage) {
+    // Starts empty, same as _addField's { expr: '' } — an incomplete row is expected to be
+    // transiently invalid while being authored (same tolerance the Validation tab already
+    // extends to a field mid-edit), not pre-seeded with a placeholder that's easy to forget to
+    // actually replace.
+    const next = [...(stage.validations ?? []), { code: '', rule: '', message: '' }];
+    this._updateStageValidations(stage.stateKey, next);
+    this._announce(`Validation rule added to ${stage.displayName}.`);
+  }
+
+  private _deleteValidation(stage: AuthoredStage, index: number) {
+    const next = (stage.validations ?? []).filter((_, i) => i !== index);
+    this._updateStageValidations(stage.stateKey, next);
+    this._announce(`Validation rule removed from ${stage.displayName}.`);
+  }
+
+  private _setValidation(stage: AuthoredStage, index: number, patch: Partial<AuthoredStageValidation>) {
+    const next = (stage.validations ?? []).map((rule, i) => (i === index ? { ...rule, ...patch } : rule));
+    this._updateStageValidations(stage.stateKey, next);
+  }
+
+  private _renderValidationsSection() {
+    const stages = this.serviceBlueprint?.stages ?? [];
+    const totalRules = stages.reduce((sum, stage) => sum + (stage.validations ?? []).length, 0);
+
+    return html`
+      <details class="calc-section">
+        <summary class="calc-section-summary">
+          <h3 class="calc-section-title">Validations</h3>
+          <span class="calc-section-meta">${totalRules}</span>
+        </summary>
+        <p class="calc-section-hint">
+          Cross-field business rules checked before a stage can advance — the declarative
+          alternative to a host writing custom validation code. A rule may reference any input or
+          calculated field, including one captured on an earlier stage.
+        </p>
+
+        ${stages.map(
+          stage => html`
+            <div class="calc-validations-stage">
+              <h4 class="calc-validations-stage-title">${stage.displayName} <span class="calc-section-meta">(${stage.stateKey})</span></h4>
+              <ul class="calc-field-list">
+                ${repeat(
+                  stage.validations ?? [],
+                  (_, index) => `${stage.stateKey}-${index}`,
+                  (rule, index) => this._renderValidationRow(stage, rule, index)
+                )}
+              </ul>
+              <button type="button" class="secondary-button" @click=${() => this._addValidation(stage)}>+ Add validation rule</button>
+            </div>
+          `
+        )}
+      </details>
+    `;
+  }
+
+  private _renderValidationRow(stage: AuthoredStage, rule: AuthoredStageValidation, index: number) {
+    const whenRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
+    const ruleRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
+    const stageFields = collectStageInputFields(stage.components, this.componentCatalog);
+    const insertOptions = [
+      ...this._allInputFields.map(input => ({ value: input.fieldKey, label: `${input.label} (${input.fieldKey})` })),
+      ...Object.keys(this._calculations.fields).map(name => ({ value: name, label: `${name} (field)` })),
+    ];
+
+    return html`
+      <li class="calc-field-row" data-wayfinder-calc-validation=${`${stage.stateKey}-${index}`}>
+        <div class="calc-field-row-header">
+          <label class="field-block">
+            <span class="field-label">Code</span>
+            <input
+              class="field-control"
+              .value=${rule.code}
+              @change=${(event: Event) => this._setValidation(stage, index, { code: (event.currentTarget as HTMLInputElement).value })}
+            />
+          </label>
+
+          <label class="field-block">
+            <span class="field-label">Attach to field (optional)</span>
+            <select
+              class="field-control"
+              @change=${(event: Event) => {
+                const value = (event.currentTarget as HTMLSelectElement).value;
+                this._setValidation(stage, index, { field: value || undefined });
+              }}
+            >
+              <option value="" ?selected=${!rule.field}>-- Stage-level (no field) --</option>
+              ${stageFields.map(
+                field => html`<option value=${field.fieldKey} ?selected=${field.fieldKey === rule.field}>${field.label} (${field.fieldKey})</option>`
+              )}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            class="icon-button danger-button"
+            aria-label="Delete validation rule ${rule.code || index}"
+            @click=${() => this._deleteValidation(stage, index)}
+          >Delete</button>
+        </div>
+
+        <div class="calc-field-row-body">
+          <div class="field-block calc-expression-block">
+            <span class="field-label">When (optional guard — skips this rule entirely if false)</span>
+            <wayfinder-calculation-expression-editor
+              ${ref(whenRef)}
+              .value=${rule.when ?? ''}
+              label-text="${rule.code || 'validation'} when"
+              @expression-input=${(event: CustomEvent<{ value: string }>) =>
+                this._setValidation(stage, index, { when: event.detail.value || undefined })}
+            ></wayfinder-calculation-expression-editor>
+          </div>
+
+          <div class="field-block calc-expression-block">
+            <span class="field-label">Rule (must evaluate to true)</span>
+            <wayfinder-calculation-expression-editor
+              ${ref(ruleRef)}
+              .value=${rule.rule}
+              label-text="${rule.code || 'validation'} rule"
+              @expression-input=${(event: CustomEvent<{ value: string }>) => this._setValidation(stage, index, { rule: event.detail.value })}
+            ></wayfinder-calculation-expression-editor>
+          </div>
+
+          <label class="field-block">
+            <span class="field-label">Insert a reference (when / rule)</span>
+            <select
+              class="field-control"
+              @change=${(event: Event) => {
+                const select = event.currentTarget as HTMLSelectElement;
+                if (select.value) {
+                  (document.activeElement === whenRef.value ? whenRef.value : ruleRef.value)?.insertAtCursor(select.value);
+                }
+                select.value = '';
+              }}
+            >
+              <option value="">-- Insert into whichever expression was last focused --</option>
+              ${insertOptions.map(option => html`<option value=${option.value}>${option.label}</option>`)}
+            </select>
+          </label>
+
+          <label class="field-block">
+            <span class="field-label">Message</span>
+            <textarea
+              class="field-control"
+              rows="2"
+              .value=${rule.message}
+              @change=${(event: Event) => this._setValidation(stage, index, { message: (event.currentTarget as HTMLTextAreaElement).value })}
+            ></textarea>
+          </label>
+        </div>
+      </li>
+    `;
+  }
+
   render() {
     if (!this.serviceBlueprint) {
       return html`<div class="calc-empty">No service blueprint loaded.</div>`;
@@ -765,6 +945,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
         ${this._renderFieldsSection()}
         ${this._renderTablesSection()}
         ${this._renderSeriesSection(fieldScope)}
+        ${this._renderValidationsSection()}
       </div>
     `;
   }
@@ -997,6 +1178,28 @@ export class WayfinderCalculationsEditorElement extends LitElement {
       clip: rect(0, 0, 0, 0);
       white-space: nowrap;
       border: 0;
+    }
+
+    .calc-section-hint {
+      margin: 0.5rem 0 0.75rem;
+      font-size: 0.8125rem;
+      color: #475569;
+    }
+
+    .calc-validations-stage {
+      margin: 0.75rem 0;
+      padding-top: 0.75rem;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .calc-validations-stage:first-of-type {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    .calc-validations-stage-title {
+      margin: 0 0 0.5rem;
+      font-size: 0.9375rem;
     }
   `;
 }

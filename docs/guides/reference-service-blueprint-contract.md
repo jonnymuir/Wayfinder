@@ -64,6 +64,9 @@ A stage (`StageDefinition`) is one stage of the service blueprint:
   "components": [ /* Component[] — see Components */ ],
   "routes": [
     { "id": "model--recalculate--recalculate-loop", "target": "recalculate-loop", "trigger": "recalculate", "label": "Recalculate", "style": "secondary" }
+  ],
+  "validations": [
+    { "code": "...", "when": "...", "rule": "...", "field": "...", "message": "..." }
   ]
 }
 ```
@@ -71,6 +74,12 @@ A stage (`StageDefinition`) is one stage of the service blueprint:
 - **`components`** are what renders on this stage — see [Components](#components).
 - **`routes`** are the actions available from this stage. Each route's `trigger` is
   the action key the client submits to advance; `target` is where it goes next.
+- **`validations`** (optional) are declarative, cross-field business rules checked
+  before this stage can advance — see
+  [Stage validations](./calculation-language.md#stage-validations). `when`/`rule`
+  are expressions in the same calculation language as `showWhen`, evaluated
+  against the same blueprint-wide scope, so a rule may reference a field captured
+  on an earlier stage.
 
 ### The gateway routing rule
 

@@ -206,4 +206,107 @@ public class ServiceBlueprintFieldReferenceValidationTests
 
         blueprint.ValidateFieldReferences().Should().BeEmpty();
     }
+
+    [Fact]
+    public void StageValidationField_PointingAtARealSiblingFieldInTheSameStage_ProducesNoDiagnostic()
+    {
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "test",
+            DisplayName = "Test",
+            InitialStage = "only",
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "only",
+                    DisplayName = "only",
+                    QueueKey = "citizen",
+                    Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes" }],
+                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "true", "Message", Field: "notes")],
+                },
+            ],
+        };
+
+        blueprint.ValidateFieldReferences().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void StageValidationField_PointingAtANonExistentField_ProducesUnknownFieldDiagnostic()
+    {
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "test",
+            DisplayName = "Test",
+            InitialStage = "only",
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "only",
+                    DisplayName = "only",
+                    QueueKey = "citizen",
+                    Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes" }],
+                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "true", "Message", Field: "notess")],
+                },
+            ],
+        };
+
+        var diagnostics = blueprint.ValidateFieldReferences();
+
+        diagnostics.Should().ContainSingle(d =>
+            d.Code == "STAGE_VALIDATION_UNKNOWN_FIELD" &&
+            d.Path == "stages.only.validations[0].field" &&
+            d.Message.Contains("notess"));
+    }
+
+    [Fact]
+    public void StageValidationField_PointingAtAFieldOnADifferentStage_IsStillFlagged()
+    {
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "test",
+            DisplayName = "Test",
+            InitialStage = "first",
+            Stages =
+            [
+                Stage("first", new TextInputComponent { FieldKey = "notes", Label = "Notes" }),
+                new StageDefinition
+                {
+                    StageKey = "second",
+                    DisplayName = "second",
+                    QueueKey = "citizen",
+                    Components = [],
+                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "true", "Message", Field: "notes")],
+                },
+            ],
+        };
+
+        blueprint.ValidateFieldReferences().Should().ContainSingle(d => d.Code == "STAGE_VALIDATION_UNKNOWN_FIELD");
+    }
+
+    [Fact]
+    public void StageValidationWithNoField_ProducesNoDiagnostic()
+    {
+        // Omitting field entirely is a stage-level (not field-attached) problem — valid on its own.
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "test",
+            DisplayName = "Test",
+            InitialStage = "only",
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "only",
+                    DisplayName = "only",
+                    QueueKey = "citizen",
+                    Components = [],
+                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "true", "Message")],
+                },
+            ],
+        };
+
+        blueprint.ValidateFieldReferences().Should().BeEmpty();
+    }
 }

@@ -594,6 +594,23 @@ public record ServiceBlueprint
                         "add it to calculations, or remove defaultFrom."));
                 }
             }
+
+            var validationIndex = 0;
+            foreach (var rule in stage.Validations ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(rule.Field) && !stageFieldKeys.Contains(rule.Field))
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "STAGE_VALIDATION_UNKNOWN_FIELD",
+                        $"stages.{stage.StageKey}.validations[{validationIndex}].field",
+                        $"Validation '{rule.Code}' has field '{rule.Field}', which isn't another field's " +
+                        $"fieldKey declared in stage '{stage.StageKey}'. A failure is only ever rendered against " +
+                        "the current stage's own inputs, so this would have nothing to attach to. Fix the " +
+                        "fieldKey, or remove field for a stage-level (non-field) problem."));
+                }
+
+                validationIndex++;
+            }
         }
 
         return diagnostics;
@@ -738,6 +755,15 @@ public record StageDefinition
         get => _routes;
         init => _routes = value;
     }
+
+    /// <summary>
+    /// Declarative cross-field business rules checked before this stage is allowed to advance —
+    /// see <see cref="ServiceBlueprintStageValidationRule"/>. Evaluated by
+    /// <c>ProcessManagerEngine.Advance</c> after field-level validation passes, in addition to
+    /// (and ahead of) the <c>ValidateAdvance</c> host hook.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ServiceBlueprintStageValidationRule>? Validations { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StageMetadata? Metadata { get; init; }

@@ -102,5 +102,42 @@ export function run(): number {
     check('two structurally-identical blueprints (including calculations) compare equal', authoredServiceBlueprintJsonEquals(blueprint, clone));
   }
 
+  // ── Stage validations round-trip ──────────────────────────────────────────
+  {
+    const blueprint = minimalBlueprint({
+      stages: [
+        {
+          stateKey: 'only',
+          displayName: 'Only',
+          queueKey: 'citizen',
+          components: [],
+          validations: [
+            { code: 'evidence-required', when: 'hasIssue', rule: 'hasEvidence', field: 'notes', message: 'Add detail.' },
+          ],
+        },
+      ],
+    });
+
+    const json = serializeAuthoredServiceBlueprint(blueprint);
+    const parsed = JSON.parse(json);
+    const rule = parsed.stages[0].validations?.[0];
+    check(
+      'a stage validation rule serializes with its when/rule/field/message intact',
+      rule?.code === 'evidence-required' &&
+        rule?.when === 'hasIssue' &&
+        rule?.rule === 'hasEvidence' &&
+        rule?.field === 'notes' &&
+        rule?.message === 'Add detail.',
+      JSON.stringify(rule)
+    );
+  }
+
+  {
+    const blueprint = minimalBlueprint();
+    const json = serializeAuthoredServiceBlueprint(blueprint);
+    const parsed = JSON.parse(json);
+    check('a stage with no validations omits the key entirely', !('validations' in parsed.stages[0]));
+  }
+
   return failures;
 }

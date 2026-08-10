@@ -103,6 +103,25 @@ export interface AuthoredStage {
   metadata?: ServiceBlueprintStateMetadata;
   /** Curated icon-set key (see graph/node-icons.ts). Falls back to a kind-based default when unset. */
   icon?: string;
+  /**
+   * Declarative cross-field business rules checked before this stage can advance — see
+   * docs/guides/calculation-language.md's "Stage validations" section and
+   * Wayfinder/Models/ServiceDesign/ServiceBlueprintStageValidationRule.cs. `when`/`rule` are
+   * expressions in the same calculation language as `expr`/`showWhen`, evaluated against the
+   * same blueprint-wide scope — a rule may freely reference a field captured on an earlier stage.
+   */
+  validations?: AuthoredStageValidation[];
+}
+
+export interface AuthoredStageValidation {
+  code: string;
+  /** Guard expression; when present and evaluates to false, this rule is skipped entirely. */
+  when?: string;
+  /** Must evaluate to true for the stage to be allowed to advance. */
+  rule: string;
+  /** Optional fieldKey (on this same stage) to attach a failure to. */
+  field?: string;
+  message: string;
 }
 
 export interface ServiceBlueprintStateMetadata {
@@ -650,7 +669,22 @@ function normaliseStage(
     roleGates: asStringArray(rawStage.roleGates ?? metadata.roleGates),
     editorComment: firstString(rawStage.editorComment, metadata.editorComment),
     icon: firstString(rawStage.icon),
+    validations: normaliseStageValidations(rawStage.validations),
   });
+}
+
+function normaliseStageValidations(value: unknown): AuthoredStageValidation[] {
+  // No "drop if empty" filter here, deliberately — the shell round-trips serviceBlueprint through
+  // this exact normalisation on every edit (see hydrateServiceBlueprintDefinition's callers), so
+  // filtering out an all-blank entry would delete a rule the instant it's added, before an author
+  // has typed anything into it. Same tolerance routes/fields already get mid-edit.
+  return asArray<Record<string, unknown>>(value).map(raw => ({
+    code: firstString(raw.code) ?? '',
+    when: firstString(raw.when),
+    rule: firstString(raw.rule) ?? '',
+    field: firstString(raw.field),
+    message: firstString(raw.message) ?? '',
+  }));
 }
 
 function normaliseGateway(
@@ -716,6 +750,7 @@ function hydrateStage(stage: AuthoredStage): AuthoredStage {
     actions: stage.actions ?? [],
     roleGates: stage.roleGates ?? [],
     routes: stage.routes ?? [],
+    validations: stage.validations ?? [],
   } as AuthoredStage;
 
   defineCompatGetter(hydrated, 'stageKey', () => hydrated.stateKey);

@@ -37,6 +37,13 @@
     { "name": "pow integer exponent", "expr": "pow(2, 10)", "expect": "1024" },
     { "name": "pow fractional result rounded", "expr": "round(pow(1.05, 19) * 10000)", "expect": "25270" },
 
+    { "name": "matches finds a substring match", "expr": "matches('call ERR-42 for details', '\\bERR-\\d+\\b')", "expect": true },
+    { "name": "matches returns false with no match", "expr": "matches('nothing to see here', '\\bERR-\\d+\\b')", "expect": false },
+    { "name": "matches on empty text", "expr": "matches('', '\\d+')", "expect": false },
+    { "name": "matches requires string arguments, not numbers", "expr": "matches(1, 'x')", "expectError": true },
+    { "name": "matches with an invalid pattern is an error", "expr": "matches('x', '(')", "expectError": true },
+    { "name": "matches wrong argument count is an error", "expr": "matches('x')", "expectError": true },
+
     { "name": "dotted path resolution", "inputs": { "member": { "age": 47, "active": true } }, "expr": "member.age + 1", "expect": "48" },
     { "name": "boolean input through logic", "inputs": { "member": { "active": true }, "quoteMode": false }, "expr": "member.active and not quoteMode", "expect": true },
     { "name": "unknown name is an error", "expr": "nosuchthing + 1", "expectError": true },
