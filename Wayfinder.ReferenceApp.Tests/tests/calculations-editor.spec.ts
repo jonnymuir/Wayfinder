@@ -258,10 +258,51 @@ test.describe('Calculations tab', () => {
     }
   });
 
-  test('the reference picker sits next to the expression editor and filters/inserts correctly', async ({ page }) => {
-    // Regression test: the "Insert a reference" control used to be a single below-the-editor
-    // <select> — obtuse, and would only get more unwieldy as a blueprint's field/table count
-    // grows. Now a filterable <input list> combobox sitting beside its own expression editor.
+  test('inline autocomplete lists a real field once, never duplicated by its own summary-list echoes', async ({ page }) => {
+    // Regression test: applicantName is captured once (your-details, a real input) and echoed
+    // read-only on two summary-lists (declaration, under-review) — collectStageInputFields
+    // recursed into those DataDisplay children too, offering it three times as a suggestion.
+    // (An earlier side-panel picker version of this UI also had a layout bug — a picker column
+    // next to a long, non-wrapping expression box would visually collide with it — which inline
+    // autocomplete sidesteps structurally: it needs no side column at all.)
+    await loginAs(page, DEMO_USERS.caseworker);
+    await page.getByRole('link', { name: 'Editor' }).click();
+
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+    await expect(shell).toHaveAttribute('data-wayfinder-active-service-blueprint', 'juggling-licence', {
+      timeout: 15_000,
+    });
+    await page.getByRole('tab', { name: 'Calculations' }).click();
+
+    const calcTab = page.locator('wayfinder-calculations-editor');
+    await calcTab.waitFor({ timeout: 10_000 });
+
+    const addFieldButton = calcTab.locator('.calc-section', { hasText: 'Fields' }).getByRole('button', { name: '+ Add field' });
+    await addFieldButton.click();
+    await page.waitForTimeout(200);
+
+    const newRow = calcTab.locator('[data-wayfinder-calc-field="field1"]');
+    await expect(newRow).toBeVisible();
+
+    const editor = newRow.locator('wayfinder-calculation-expression-editor');
+    const cm = editor.locator('.cm-content');
+    await cm.click();
+    await cm.pressSequentially('full');
+
+    const tooltip = editor.locator('.cm-tooltip-autocomplete');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip.getByRole('option', { name: /applicantName/ })).toHaveCount(1);
+
+    await tooltip.scrollIntoViewIfNeeded();
+    await captureDocScreenshot(newRow, `${DOCS_DIR}/field-autocomplete-no-duplicates.png`);
+  });
+
+  test('inline autocomplete filters as you type and inserts the selected field, in place of a side-panel picker', async ({ page }) => {
+    // The Calculations tab previously placed an "Insert a reference" control beside/below each
+    // expression box — a plain <select>, then a filterable picker column. Both got unwieldy as a
+    // blueprint's field/table count grows, and the picker column specifically collided with a
+    // long expression (this editor is deliberately single-line, no wrapping). Inline autocomplete
+    // needs no extra layout space and scales the same way regardless of expression length.
     await loginAs(page, DEMO_USERS.caseworker);
     await page.getByRole('link', { name: 'Editor' }).click();
 
@@ -281,27 +322,24 @@ test.describe('Calculations tab', () => {
     const newRow = calcTab.locator('[data-wayfinder-calc-field="field1"]');
     await expect(newRow).toBeVisible();
 
-    // Sits in the same row as the expression editor, to its right — not below it.
-    const expressionRow = newRow.locator('.calc-expression-row');
-    await expect(expressionRow.locator('wayfinder-calculation-expression-editor')).toHaveCount(1);
-    await expect(expressionRow.locator('.reference-picker')).toHaveCount(1);
+    const editor = newRow.locator('wayfinder-calculation-expression-editor');
+    const cm = editor.locator('.cm-content');
+    await cm.click();
+    await cm.pressSequentially('averageAud');
 
-    // A real Tab-triggered blur, not dispatchEvent('change') — see stage-validations-editor.spec.ts
-    // for why a synthetic dispatch double-inserts here specifically (insertAtCursor's own
-    // focus() call blurs this input a second time).
-    const pickerInput = expressionRow.locator('.reference-picker-input');
-    await pickerInput.fill('Average audience size (averageAudienceSize)');
-    await pickerInput.press('Tab');
+    const tooltip = editor.locator('.cm-tooltip-autocomplete');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText('averageAudienceSize');
+    await page.keyboard.press('Enter');
     await page.waitForTimeout(200);
 
-    // Exact text, not just toContainText — a double-fired insert would still "contain" the
-    // substring, which is exactly how the original version of this test missed the bug.
-    await expect(expressionRow.locator('.cm-content')).toHaveText('averageAudienceSize');
-    // Clears itself back to empty after inserting, ready for the next reference.
-    await expect(pickerInput).toHaveValue('');
+    // Exact text, not just toContainText — a double-inserted value would still "contain" the
+    // substring, which is exactly how an earlier version of this test missed a real double-fire
+    // bug in the side-panel picker this replaced.
+    await expect(cm).toHaveText('averageAudienceSize');
 
-    await expressionRow.scrollIntoViewIfNeeded();
-    await captureDocScreenshot(expressionRow, `${DOCS_DIR}/field-reference-picker.png`);
+    await newRow.scrollIntoViewIfNeeded();
+    await captureDocScreenshot(newRow, `${DOCS_DIR}/field-autocomplete.png`);
   });
 
   test('a table can be added, with interpolate and row values reflected in the UI', async ({ page }) => {

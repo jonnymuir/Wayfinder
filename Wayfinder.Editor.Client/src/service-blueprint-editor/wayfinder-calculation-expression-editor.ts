@@ -1,14 +1,26 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import type { ExpressionCompletionItem } from './calculation-expression-editor-codemirror.js';
+
+export type { ExpressionCompletionItem };
 
 /**
  * @internal A single calculation-language expression field — the syntax-highlighted,
  * inline-diagnostic CodeMirror editor used throughout the Calculations tab (a field's own
- * expression, a series' from/to/values). Loads CodeMirror 6 lazily on first connection, same as
- * <wayfinder-definition-editor>, so authors who never open a tab using this pay nothing for it.
- * Reused per-row: each instance owns exactly one CM6 view, and Lit's own rendering handles
- * creating/destroying instances as rows are added/removed/reordered — no manual instance
- * bookkeeping needed in the parent.
+ * expression, a series' from/to/values, a stage validation's when/rule). Loads CodeMirror 6
+ * lazily on first connection, same as <wayfinder-definition-editor>, so authors who never open a
+ * tab using this pay nothing for it. Reused per-row: each instance owns exactly one CM6 view, and
+ * Lit's own rendering handles creating/destroying instances as rows are added/removed/reordered —
+ * no manual instance bookkeeping needed in the parent.
+ *
+ * Reference discovery (which field/table names exist to reference) is inline autocomplete —
+ * see `completions` below — not a separate picker widget beside the box. A prior version of this
+ * properties panel used exactly that (a picker beside the box), which broke down on a genuinely
+ * long expression: this editor is deliberately single-line with no wrapping (see the
+ * transactionFilter in calculation-expression-editor-codemirror.ts), so a long expression simply
+ * overflowed past its column and visually collided with the picker sitting next to it.
+ * Autocomplete needs no extra layout space — it opens as a tooltip at the cursor — so it scales
+ * the same way regardless of expression length or how many references a blueprint has.
  *
  * Output event: `expression-input` { value: string } — fires after every user-visible change.
  * The host owns debounce/commit-point handling (blur/change), matching every other field in
@@ -24,6 +36,10 @@ export class WayfinderCalculationExpressionEditorElement extends LitElement {
 
   @property({ type: String, attribute: 'label-text' })
   ariaLabelText = 'Calculation expression';
+
+  /** Insertable field/table/series names offered as the author types — see the class doc above. */
+  @property({ attribute: false })
+  completions: ExpressionCompletionItem[] = [];
 
   @state() private _ready = false;
   @state() private _loadError: string | null = null;
@@ -59,6 +75,7 @@ export class WayfinderCalculationExpressionEditorElement extends LitElement {
         doc: this.value,
         readOnly: this.readOnly,
         ariaLabel: this.ariaLabelText,
+        getCompletionItems: () => this.completions,
         onChange: next => {
           if (this._suppressInputEvent) {
             return;
@@ -89,22 +106,6 @@ export class WayfinderCalculationExpressionEditorElement extends LitElement {
     }
   }
 
-  /** Imperative: inserts `text` at the current cursor position (or replaces the current
-   * selection) — used by the "Insert a reference" control, which can't just replace the whole
-   * value the way a preset-insert `<select>` does elsewhere in this properties panel, since an
-   * expression's reference can appear anywhere inside a larger expression. */
-  insertAtCursor(text: string) {
-    if (!this._view) {
-      return;
-    }
-    const { from, to } = this._view.state.selection.main;
-    this._view.dispatch({
-      changes: { from, to, insert: text },
-      selection: { anchor: from + text.length },
-    });
-    this._view.focus();
-  }
-
   focus(options?: FocusOptions) {
     if (this._view) {
       this._view.focus();
@@ -120,7 +121,9 @@ export class WayfinderCalculationExpressionEditorElement extends LitElement {
         ? html`<p class="load-error" role="alert">Couldn't load the expression editor: ${this._loadError}</p>`
         : !this._ready
           ? html`<p class="loading" role="status">Loading…</p>`
-          : ''}
+          : this.completions.length > 0
+            ? html`<p class="hint">Start typing a name, or press Ctrl+Space, to insert a reference.</p>`
+            : nothing}
     `;
   }
 
@@ -171,6 +174,12 @@ export class WayfinderCalculationExpressionEditorElement extends LitElement {
       margin: 0;
       padding: 0.625rem 0.75rem;
       font-size: 0.875rem;
+      color: #475569;
+    }
+
+    .hint {
+      margin: 0.25rem 0 0;
+      font-size: 0.75rem;
       color: #475569;
     }
   `;

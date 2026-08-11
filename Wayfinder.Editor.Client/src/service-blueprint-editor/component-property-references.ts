@@ -79,6 +79,18 @@ function walkComponents(
       });
     }
 
+    // A DataDisplay container's children (e.g. SummaryListComponent.Children, GOV.UK's
+    // check-your-answers pattern) reuse an input-shaped CLR type purely for rendering
+    // convenience — they never receive a submission of their own, only ever echo a value
+    // captured elsewhere under the same fieldKey. Descending into them here duplicated every
+    // echoed field once per summary-list/stat-group it appeared in (confirmed live: a real
+    // field echoed on two summary-lists plus its own real input showed "triplicate" in the
+    // reference picker) — mirrors ComponentExtensions.cs's GetSubmittableInputs, which stops at
+    // exactly this same boundary for exactly this same reason.
+    if (descriptor?.category === 'DataDisplay') {
+      continue;
+    }
+
     const containment = descriptor?.containment;
     if (!containment || containment.kind === 'None' || !containment.propertyName) {
       continue;

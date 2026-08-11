@@ -51,10 +51,12 @@ test.describe('Validations section (Calculations tab)', () => {
     await captureDocScreenshot(rule, `${DOCS_DIR}/stage-validation-rule.png`);
   });
 
-  test('the reference picker sits next to its own expression editor and inserts into the right one', async ({ page }) => {
-    // Regression test for a real UX complaint: a single shared "insert a reference" dropdown
-    // below both when/rule, targeting "whichever was last focused", was ambiguous — this proves
-    // each expression editor now has its own dedicated, correctly-wired picker.
+  test('inline autocomplete offers a real field name in "when" and "rule" independently, with no side-panel picker needed', async ({ page }) => {
+    // Regression test for two real UX complaints against an earlier version of this section:
+    // (1) a single shared "insert a reference" dropdown below both when/rule, targeting
+    // "whichever was last focused", was ambiguous; (2) a side-by-side picker column visually
+    // collided with a long expression, since this editor is deliberately single-line with no
+    // wrapping. Inline CodeMirror autocomplete (no side panel at all) resolves both.
     const calcTab = await openCalculationsTabOnJugglingLicence(page);
 
     const validationsSection = calcTab.locator('.calc-section', { hasText: 'Validations' });
@@ -67,43 +69,38 @@ test.describe('Validations section (Calculations tab)', () => {
     const newRule = eventDetailsStage.locator('[data-wayfinder-calc-validation]').last();
     await expect(newRule).toBeVisible();
 
-    const whenRow = newRule.locator('.calc-expression-row').nth(0);
-    const ruleRow = newRule.locator('.calc-expression-row').nth(1);
+    const whenEditor = newRule.locator('wayfinder-calculation-expression-editor').nth(0);
+    const ruleEditor = newRule.locator('wayfinder-calculation-expression-editor').nth(1);
 
-    // Sits to the right of its expression editor, not below both — same row, two children.
-    await expect(whenRow.locator('wayfinder-calculation-expression-editor')).toHaveCount(1);
-    await expect(whenRow.locator('.reference-picker')).toHaveCount(1);
-
-    // A real Tab-triggered blur, not a synthetic dispatchEvent('change') — insertAtCursor()
-    // focuses the CodeMirror view, which blurs this input; a synthetic dispatch doesn't clear
-    // the browser's own internal "value changed since focus" bookkeeping the way a real native
-    // change does, so that blur would then fire a second, genuinely native change and double the
-    // insert. A real user typing + tabbing away never hits this (the browser only tracks one
-    // genuine edit), so this is the faithful way to exercise it.
-    const hasDangerousPropsLabel = 'This act involves fire, knives, or other dangerous props (hasDangerousProps)';
-    const whenPickerInput = whenRow.locator('.reference-picker-input');
-    await whenPickerInput.fill(hasDangerousPropsLabel);
-    await whenPickerInput.press('Tab');
+    const whenCm = whenEditor.locator('.cm-content');
+    await whenCm.click();
+    await whenCm.pressSequentially('hasDangerous');
+    const whenTooltip = whenEditor.locator('.cm-tooltip-autocomplete');
+    await expect(whenTooltip).toBeVisible();
+    await expect(whenTooltip).toContainText('hasDangerousProps');
+    await page.keyboard.press('Enter');
     await page.waitForTimeout(200);
 
-    // Landed in the "when" editor specifically, not "rule" (proves per-editor wiring, not just
-    // "inserts somewhere") — and the picker input clears itself back to empty after inserting.
-    await expect(whenRow.locator('.cm-content')).toHaveText('hasDangerousProps');
-    await expect(ruleRow.locator('.cm-content')).not.toContainText('hasDangerousProps');
-    await expect(whenPickerInput).toHaveValue('');
+    // Landed in "when" specifically, not "rule" — proves per-editor wiring, not just "inserts
+    // somewhere". Exact text (not just toContainText), matching what's actually typed+accepted.
+    await expect(whenCm).toHaveText('hasDangerousProps');
+    await expect(ruleEditor.locator('.cm-content')).not.toContainText('hasDangerousProps');
 
-    const jugglerCountLabel = 'Number of jugglers taking part (jugglerCount)';
-    const rulePickerInput = ruleRow.locator('.reference-picker-input');
-    await rulePickerInput.fill(jugglerCountLabel);
-    await rulePickerInput.press('Tab');
+    const ruleCm = ruleEditor.locator('.cm-content');
+    await ruleCm.click();
+    await ruleCm.pressSequentially('jugglerCoun');
+    const ruleTooltip = ruleEditor.locator('.cm-tooltip-autocomplete');
+    await expect(ruleTooltip).toBeVisible();
+    await expect(ruleTooltip).toContainText('jugglerCount');
+    await page.keyboard.press('Enter');
     await page.waitForTimeout(200);
 
-    await expect(ruleRow.locator('.cm-content')).toHaveText('jugglerCount');
-    // The earlier "when" insert is untouched by inserting into "rule" afterwards.
-    await expect(whenRow.locator('.cm-content')).toHaveText('hasDangerousProps');
+    await expect(ruleCm).toHaveText('jugglerCount');
+    // The earlier "when" insert is untouched by autocompleting "rule" afterwards.
+    await expect(whenCm).toHaveText('hasDangerousProps');
 
     await newRule.scrollIntoViewIfNeeded();
-    await captureDocScreenshot(newRule, `${DOCS_DIR}/stage-validation-reference-pickers.png`);
+    await captureDocScreenshot(newRule, `${DOCS_DIR}/stage-validation-autocomplete.png`);
   });
 
   test('a new validation rule can be authored and reaches the saved blueprint', async ({ page, request }) => {
