@@ -1847,7 +1847,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       min-height: 0;
       background: #f8fafc;
       border: 1px solid #d1d5db;
-      border-radius: 12px;
       overflow: hidden;
     }
 

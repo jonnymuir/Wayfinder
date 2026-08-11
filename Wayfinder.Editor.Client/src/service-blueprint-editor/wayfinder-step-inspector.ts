@@ -1713,7 +1713,6 @@ export class WayfinderStepInspectorElement extends LitElement {
       overflow-y: auto;
       background: #ffffff;
       border: 1px solid #d1d5db;
-      border-radius: 12px;
     }
 
     .empty-state {

@@ -243,7 +243,6 @@ export class WayfinderServiceBlueprintSimulationElement extends LitElement {
     .simulation-panel {
       padding: 1rem;
       border: 1px solid #d8dde3;
-      border-radius: 12px;
       background: #ffffff;
       display: grid;
       gap: 0.875rem;

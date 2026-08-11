@@ -1,9 +1,11 @@
 # Editor skill docs
 
 This directory documents every tab in the service blueprint editor's confidence-tab shell
-(`Canvas`, `Calculations`, `Validation`, `Preview`, `Simulation`, `Definition`, `Help` — see
+(`Canvas`, `Calculations`, `Validation`, `Preview`, `Simulation`, `Definition` — see
 `ConfidenceTab` in `Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-confidence-tabs.ts`),
-one topic per subfolder:
+one topic per subfolder. Help and keyboard shortcuts live in a dialog reachable from every tab
+(the toolbar's help button, or F1) rather than a tab of their own — see
+`service-blueprint-editor-help.spec.ts`.
 
 ```
 docs/skills/<topic>/SKILL.md
