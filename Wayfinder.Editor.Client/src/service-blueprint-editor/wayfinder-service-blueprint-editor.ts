@@ -32,7 +32,6 @@ import './wayfinder-stage-preview.js';
 import './wayfinder-service-blueprint-simulation.js';
 import './wayfinder-service-blueprint-outline.js';
 import './wayfinder-confidence-tabs.js';
-import './wayfinder-help-panel.js';
 import { serializeAuthoredServiceBlueprint, authoredServiceBlueprintJsonEquals } from './service-blueprint-canonical-json.js';
 import {
   coerceParsedAuthoredServiceBlueprint,
@@ -2146,6 +2145,30 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               </section>
             `)}
           </div>
+
+          <section class="shortcut-group" data-wayfinder-shortcut-group="quick-tips">
+            <h3 class="shortcut-group-title">Quick tips</h3>
+            <ul class="help-tip-list">
+              <li>Each queue is one <strong>vertical service column</strong>. Read the service blueprint <strong>top to bottom</strong>.</li>
+              <li>Stages are the work cards. Gateways are the diamond routing points between them.</li>
+              <li>Use the <strong>Outline</strong> panel on the left to jump between queue columns and stages quickly.</li>
+              <li>Reorder stages in <strong>List view</strong> with <strong>Move up</strong>, <strong>Move down</strong>, or <strong>Alt + Arrow</strong>. The canvas keeps its automatic layout in this first pass.</li>
+              <li>Use the <strong>Validation</strong> tab for issues, the <strong>Preview</strong> tab for runtime shape, and <strong>Simulation</strong> to walk the route.</li>
+              <li>All structural changes support <strong>Undo/Redo</strong> — experiment safely.</li>
+            </ul>
+          </section>
+
+          <section class="shortcut-group" data-wayfinder-shortcut-group="getting-started">
+            <h3 class="shortcut-group-title">Getting started</h3>
+            <ol class="help-tip-list">
+              <li>Start on the <strong>Canvas</strong> tab and add the first stage for the queue that owns the work.</li>
+              <li>Add the next stage that should happen in the service flow, then open the <strong>Inspector</strong> to shape its details.</li>
+              <li>Add a <strong>routing gateway</strong> when the service blueprint needs to branch or wait for multiple paths to join.</li>
+              <li>Create routes so the canvas reads as <strong>stage → gateway → stage</strong> or <strong>gateway → gateway</strong>.</li>
+              <li>Check <strong>Validation</strong>, then use <strong>Preview</strong> and <strong>Simulation</strong> before saving.</li>
+              <li>Save your service blueprint when ready — changes will be published to the runtime.</li>
+            </ol>
+          </section>
         </section>
       </div>
     `;
@@ -2242,6 +2265,49 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           warning-count="${this._warningValidationIssues.length}"
           @tab-changed=${this._handleConfidenceTabChanged}
         >
+          <!-- Save/undo/redo act on the whole serviceBlueprint, not just the canvas — sit in the
+               tab bar's own row (slot="actions") so they stay visible regardless of which tab is
+               active, unlike the canvas-specific tools below (copy/paste, add stage/gateway,
+               zoom) which only make sense with the graph on screen. Slotted into the tab bar
+               rather than a row of their own so they cost no extra vertical space. -->
+          <div slot="actions" role="toolbar" aria-label="ServiceBlueprint editor actions">
+            <button
+              class="toolbar-btn toolbar-btn--icon govuk-button${this._saveState === 'saving' ? ' toolbar-btn--spinning' : ''}"
+              data-wayfinder-save
+              ?disabled=${!this._canSave}
+              aria-label=${this._saveState === 'saving' ? 'Saving' : 'Save'}
+              title=${!this._canSaveByContext
+                ? 'Saving is disabled for the current author.'
+                : `${this._dirtyStateSummary} — ${this._saveState === 'saving' ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`}
+              aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
+              @click=${this._handleSave}
+            >
+              ${this._saveState === 'saving' ? renderToolbarIcon('saving') : renderToolbarIcon('save')}
+            </button>
+            <button
+              class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+              data-wayfinder-undo
+              ?disabled=${!this._canUndo}
+              aria-label="Undo"
+              title=${`Undo${UNDO_SHORTCUT ? ` (${UNDO_SHORTCUT.labels[0]})` : ''}`}
+              aria-keyshortcuts=${UNDO_SHORTCUT?.ariaKeys ?? nothing}
+              @click=${this._undo}
+            >
+              ${renderToolbarIcon('undo')}
+            </button>
+            <button
+              class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
+              data-wayfinder-redo
+              ?disabled=${!this._canRedo}
+              aria-label="Redo"
+              title=${`Redo${REDO_SHORTCUT ? ` (${REDO_SHORTCUT.labels[0]})` : ''}`}
+              aria-keyshortcuts=${REDO_SHORTCUT?.ariaKeys ?? nothing}
+              @click=${this._redo}
+            >
+              ${renderToolbarIcon('redo')}
+            </button>
+          </div>
+
           <!-- Canvas tab: main workspace -->
           <div slot="canvas" class="canvas-workspace">
             <div
@@ -2303,41 +2369,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     ${this._serviceBlueprint?.displayName ?? 'Service Blueprint Editor'}
                   </h1>
                   <div class="editor-toolbar" role="toolbar" aria-label="ServiceBlueprint editor tools">
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button${this._saveState === 'saving' ? ' toolbar-btn--spinning' : ''}"
-                      data-wayfinder-save
-                      ?disabled=${!this._canSave}
-                      aria-label=${this._saveState === 'saving' ? 'Saving' : 'Save'}
-                      title=${!this._canSaveByContext
-                        ? 'Saving is disabled for the current author.'
-                        : `${this._dirtyStateSummary} — ${this._saveState === 'saving' ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`}
-                      aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
-                      @click=${this._handleSave}
-                    >
-                      ${this._saveState === 'saving' ? renderToolbarIcon('saving') : renderToolbarIcon('save')}
-                    </button>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-undo
-                      ?disabled=${!this._canUndo}
-                      aria-label="Undo"
-                      title=${`Undo${UNDO_SHORTCUT ? ` (${UNDO_SHORTCUT.labels[0]})` : ''}`}
-                      aria-keyshortcuts=${UNDO_SHORTCUT?.ariaKeys ?? nothing}
-                      @click=${this._undo}
-                    >
-                      ${renderToolbarIcon('undo')}
-                    </button>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-redo
-                      ?disabled=${!this._canRedo}
-                      aria-label="Redo"
-                      title=${`Redo${REDO_SHORTCUT ? ` (${REDO_SHORTCUT.labels[0]})` : ''}`}
-                      aria-keyshortcuts=${REDO_SHORTCUT?.ariaKeys ?? nothing}
-                      @click=${this._redo}
-                    >
-                      ${renderToolbarIcon('redo')}
-                    </button>
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
                       data-wayfinder-copy
@@ -2561,7 +2592,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           <div slot="preview">${this._renderStagePreview()}</div>
           <div slot="simulation">${this._renderSimulationPanel()}</div>
           <div slot="definition">${this._renderDefinitionPanel()}</div>
-          <wayfinder-help-panel slot="help"></wayfinder-help-panel>
         </wayfinder-confidence-tabs>
         </div>
 
@@ -3586,6 +3616,22 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       padding: 0;
       display: grid;
       gap: 0.75rem;
+    }
+
+    .help-tip-list {
+      margin: 0;
+      padding-left: 1.5rem;
+      color: #0b0c0c;
+      line-height: 1.6;
+    }
+
+    .help-tip-list li {
+      margin-bottom: 0.75rem;
+      font-size: 0.9375rem;
+    }
+
+    .help-tip-list li:last-child {
+      margin-bottom: 0;
     }
 
     .shortcut-item {
