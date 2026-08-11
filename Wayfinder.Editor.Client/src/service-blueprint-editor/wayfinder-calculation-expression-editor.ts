@@ -1,4 +1,4 @@
-import { LitElement, html, css, nothing } from 'lit';
+import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { ExpressionCompletionItem } from './calculation-expression-editor-codemirror.js';
 
@@ -13,10 +13,13 @@ export type { ExpressionCompletionItem };
  * Lit's own rendering handles creating/destroying instances as rows are added/removed/reordered —
  * no manual instance bookkeeping needed in the parent.
  *
- * Reference discovery (which field/table names exist to reference) is inline autocomplete —
- * see `completions` below — not a separate picker widget beside the box. A prior version of this
- * properties panel used exactly that (a picker beside the box), which broke down on a genuinely
- * long expression: this editor is deliberately single-line with no wrapping (see the
+ * Autocomplete is inline IntelliSense for the whole calculation language, not just reference
+ * lookup — see `completions` below for the blueprint-specific half (field/table/series names);
+ * calculation-expression-editor-codemirror.ts always also offers the language's own fixed
+ * vocabulary alongside it (every operator, boolean literal, and built-in function, with a
+ * snippet template for a function's own arguments). Not a separate picker widget beside the box:
+ * a prior version of this properties panel used exactly that, which broke down on a genuinely
+ * long expression — this editor is deliberately single-line with no wrapping (see the
  * transactionFilter in calculation-expression-editor-codemirror.ts), so a long expression simply
  * overflowed past its column and visually collided with the picker sitting next to it.
  * Autocomplete needs no extra layout space — it opens as a tooltip at the cursor — so it scales
@@ -121,9 +124,7 @@ export class WayfinderCalculationExpressionEditorElement extends LitElement {
         ? html`<p class="load-error" role="alert">Couldn't load the expression editor: ${this._loadError}</p>`
         : !this._ready
           ? html`<p class="loading" role="status">Loading…</p>`
-          : this.completions.length > 0
-            ? html`<p class="hint">Start typing a name, or press Ctrl+Space, to insert a reference.</p>`
-            : nothing}
+          : html`<p class="hint">Start typing, or press Ctrl+Space, for fields, functions, and keywords.</p>`}
     `;
   }
 
