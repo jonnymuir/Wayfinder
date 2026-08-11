@@ -30,6 +30,7 @@ import { linter, type Diagnostic } from '@codemirror/lint';
 import {
   autocompletion,
   completionKeymap,
+  snippetCompletion,
   startCompletion,
   type Completion,
   type CompletionContext,
@@ -47,8 +48,38 @@ export interface ExpressionCompletionItem {
 }
 
 const KEYWORDS = new Set(['and', 'or', 'not', 'true', 'false']);
-const FUNCTIONS = new Set(['if', 'min', 'max', 'clamp', 'abs', 'floor', 'round', 'pow', 'lookup']);
+const FUNCTIONS = new Set(['if', 'min', 'max', 'clamp', 'abs', 'floor', 'round', 'pow', 'lookup', 'matches']);
 const PUNCTUATION = new Set(['(', ')', ',']);
+
+/**
+ * The language's own vocabulary — operators, boolean literals, and every built-in function —
+ * offered as completions alongside blueprint-specific fields/tables, so autocomplete covers the
+ * whole grammar (docs/guides/calculation-language.md), not just reference lookup. Kept in step
+ * with that doc's own Functions table and Grammar section by hand, same as FUNCTIONS/KEYWORDS
+ * above already are for highlighting.
+ */
+const KEYWORD_COMPLETIONS: Completion[] = [
+  { label: 'and', type: 'keyword', detail: 'a and b — logical AND, short-circuits' },
+  { label: 'or', type: 'keyword', detail: 'a or b — logical OR, short-circuits' },
+  { label: 'not', type: 'keyword', detail: 'not a — logical NOT' },
+  { label: 'true', type: 'constant', detail: 'boolean literal' },
+  { label: 'false', type: 'constant', detail: 'boolean literal' },
+];
+
+const FUNCTION_COMPLETIONS: Completion[] = [
+  snippetCompletion('if(${cond}, ${then}, ${else})', { label: 'if', type: 'function', detail: 'ternary — cond must be boolean' }),
+  snippetCompletion('min(${a}, ${b})', { label: 'min', type: 'function', detail: 'numeric min, 2+ args' }),
+  snippetCompletion('max(${a}, ${b})', { label: 'max', type: 'function', detail: 'numeric max, 2+ args' }),
+  snippetCompletion('clamp(${value}, ${lo}, ${hi})', { label: 'clamp', type: 'function', detail: 'min(max(value, lo), hi)' }),
+  snippetCompletion('abs(${x})', { label: 'abs', type: 'function', detail: 'absolute value' }),
+  snippetCompletion('floor(${x})', { label: 'floor', type: 'function', detail: 'round toward negative infinity' }),
+  snippetCompletion('round(${x})', { label: 'round', type: 'function', detail: 'round(x) or round(x, places) — away from zero' }),
+  snippetCompletion('pow(${x}, ${y})', { label: 'pow', type: 'function', detail: 'x raised to the power y' }),
+  snippetCompletion('lookup(${tableName}, ${key})', { label: 'lookup', type: 'function', detail: 'table lookup — tableName is a bare name' }),
+  snippetCompletion('matches(${text}, ${pattern})', { label: 'matches', type: 'function', detail: 'regex predicate — true if pattern matches text' }),
+];
+
+const LANGUAGE_COMPLETIONS: Completion[] = [...KEYWORD_COMPLETIONS, ...FUNCTION_COMPLETIONS];
 
 interface CalcTokenizerState {
   tokens: CalculationToken[] | null;
@@ -124,7 +155,10 @@ const singleLineFilter = EditorState.transactionFilter.of(tr =>
  * Reads the live item list via a getter (not a captured array) so completions stay correct as
  * the row's own available references change after this view was created — an author adding a
  * new field, renaming one, or adding a table must be reflected the next time completion opens,
- * not frozen at whatever existed when this specific expression editor first mounted.
+ * not frozen at whatever existed when this specific expression editor first mounted. Always
+ * offers the language's own vocabulary too (LANGUAGE_COMPLETIONS) — this is IntelliSense for the
+ * whole grammar, not just reference lookup, so `if`/`matches`/`and`/`clamp`/... show up
+ * alongside whatever fields this row can see.
  *
  * Filters against both the identifier (Completion.label — what CM6 matches by default) AND its
  * human-readable detail text, since a real author is just as likely to type a fragment of a
@@ -141,19 +175,19 @@ function referenceCompletionSource(getItems: () => ExpressionCompletionItem[]) {
       return null;
     }
 
-    const query = word.text.toLowerCase();
-    const matches = getItems().filter(
-      item => item.name.toLowerCase().includes(query) || item.detail.toLowerCase().includes(query)
-    );
-    if (matches.length === 0) {
-      return null;
-    }
-
-    const options: Completion[] = matches.map(item => ({
+    const fieldOptions: Completion[] = getItems().map(item => ({
       label: item.name,
       detail: item.detail,
       type: 'variable',
     }));
+
+    const query = word.text.toLowerCase();
+    const options = [...fieldOptions, ...LANGUAGE_COMPLETIONS].filter(
+      option => option.label.toLowerCase().includes(query) || (option.detail ?? '').toLowerCase().includes(query)
+    );
+    if (options.length === 0) {
+      return null;
+    }
 
     return { from: word.from, options, filter: false };
   };
