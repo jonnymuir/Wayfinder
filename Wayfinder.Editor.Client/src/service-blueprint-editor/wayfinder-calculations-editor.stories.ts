@@ -104,8 +104,14 @@ export const Default: Story = {
 
 /**
  * Adding a field that depends on an existing one — no reordering needed since the new field is
- * appended after everything it could reference — then using "insert a reference" to add a real
- * field name into its expression without having to remember the exact spelling.
+ * appended after everything it could reference. Reference discovery is inline CodeMirror
+ * autocomplete (calculation-expression-editor-codemirror.ts), not a separate picker widget —
+ * the full, real interaction (typing, the completion tooltip opening, accepting a suggestion) is
+ * verified end to end by Wayfinder.ReferenceApp.Tests/tests/calculations-editor.spec.ts, which
+ * drives an actual browser via Playwright directly. testing-library's synthetic typing (this
+ * harness's own interaction layer) doesn't reliably drive a shadow-DOM-hosted CodeMirror
+ * contenteditable, so what's meaningful to verify at this layer is the wiring this story exists
+ * to cover: the new row's expression editor receives a real, non-empty completions list.
  */
 export const AddFieldAndInsertReference: Story = {
   play: async ({ canvasElement }) => {
@@ -125,25 +131,10 @@ export const AddFieldAndInsertReference: Story = {
     const newRow = root.querySelector('[data-wayfinder-calc-field="field1"]');
     await expect(newRow).not.toBeNull();
 
-    // The new field's expression editor loads CodeMirror via a dynamic import — give it a
-    // moment to finish mounting before insert-a-reference (which needs the real CM6 view) can
-    // do anything.
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    const insertInput = newRow!.querySelector('.reference-picker-input') as HTMLInputElement;
-    await expect(insertInput).not.toBeNull();
-    const datalistId = insertInput.getAttribute('list')!;
-    const datalist = newRow!.querySelector(`#${datalistId}`) as HTMLDataListElement;
-    const optionValues = Array.from(datalist.options).map(option => option.value);
-    await expect(optionValues.some(value => value.includes('(age)'))).toBe(true);
-
-    const ageOption = optionValues.find(value => value.includes('(age)'))!;
-    insertInput.value = ageOption;
-    insertInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-    await el.updateComplete;
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const calcFields = el.serviceBlueprint!.calculations!.fields as Record<string, { expr?: string }>;
-    await expect(calcFields.field1.expr).toBe('age');
+    const exprEditor = newRow!.querySelector('wayfinder-calculation-expression-editor') as HTMLElement & {
+      completions: Array<{ name: string; detail: string }>;
+    };
+    await expect(exprEditor).not.toBeNull();
+    await expect(exprEditor.completions.some(item => item.name === 'age')).toBe(true);
   },
 };

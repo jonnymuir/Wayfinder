@@ -1,6 +1,5 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { ref, createRef, type Ref } from 'lit/directives/ref.js';
 import { repeat } from 'lit/directives/repeat.js';
 import type { AuthoredServiceBlueprint, AuthoredStage, AuthoredStageValidation, ComponentDescriptor, ServiceBlueprintCalculationsBlock } from './types.js';
 import { collectStageInputFields, type FieldReference } from './component-property-references.js';
@@ -8,7 +7,7 @@ import { computeStableFieldOrder, type FieldInput } from './calculation-ordering
 import { inScopeInputFieldKeys, tryEvaluateFieldsForPreview, tryEvaluateSeriesForPreview } from './calculation-runtime.js';
 import { computeCalculationDiagnostics } from './calculation-diagnostics.js';
 import './wayfinder-calculation-expression-editor.js';
-import type { WayfinderCalculationExpressionEditorElement } from './wayfinder-calculation-expression-editor.js';
+import type { ExpressionCompletionItem } from './wayfinder-calculation-expression-editor.js';
 
 type CalcFields = ServiceBlueprintCalculationsBlock['fields'];
 type CalcFieldDefinition = CalcFields[string];
@@ -268,12 +267,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   ) {
     const isService = (field.source ?? '').toLowerCase() === 'service';
     const nameError = this._fieldNameError(name, order, collidingFieldNames);
-    const exprRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
 
-    const insertOptions = [
-      ...this._allInputFields.map(input => ({ value: input.fieldKey, label: `${input.label} (${input.fieldKey})` })),
-      ...order.slice(0, index).map(earlier => ({ value: earlier, label: `${earlier} (field)` })),
-      ...tableNames.map(table => ({ value: table, label: `${table} (table)` })),
+    const completions: ExpressionCompletionItem[] = [
+      ...this._allInputFields.map(input => ({ name: input.fieldKey, detail: input.label })),
+      ...order.slice(0, index).map(earlier => ({ name: earlier, detail: 'field' })),
+      ...tableNames.map(table => ({ name: table, detail: 'table' })),
     ];
 
     return html`
@@ -311,23 +309,20 @@ export class WayfinderCalculationsEditorElement extends LitElement {
               from a system of record) — no expression to author here.</p>`
           : html`
               <div class="calc-field-row-body">
-                <div class="calc-expression-row">
-                  <div class="field-block calc-expression-block">
-                    <span class="field-label" id="${name}-expr-label">Expression</span>
-                    <wayfinder-calculation-expression-editor
-                      ${ref(exprRef)}
-                      .value=${field.expr ?? ''}
-                      label-text="${name} expression"
-                      @expression-input=${(event: CustomEvent<{ value: string }>) =>
-                        this._setFieldExpr(name, event.detail.value, order)}
-                    ></wayfinder-calculation-expression-editor>
-                    ${result?.status === 'ok'
-                      ? html`<span class="calc-preview calc-preview-ok" data-wayfinder-calc-field-preview>= ${result.display}</span>`
-                      : result?.status === 'error'
-                        ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-field-preview>${result.message}</span>`
-                        : nothing}
-                  </div>
-                  ${this._renderReferencePicker(`field-${name}`, exprRef, insertOptions)}
+                <div class="field-block calc-expression-block">
+                  <span class="field-label" id="${name}-expr-label">Expression</span>
+                  <wayfinder-calculation-expression-editor
+                    .value=${field.expr ?? ''}
+                    .completions=${completions}
+                    label-text="${name} expression"
+                    @expression-input=${(event: CustomEvent<{ value: string }>) =>
+                      this._setFieldExpr(name, event.detail.value, order)}
+                  ></wayfinder-calculation-expression-editor>
+                  ${result?.status === 'ok'
+                    ? html`<span class="calc-preview calc-preview-ok" data-wayfinder-calc-field-preview>= ${result.display}</span>`
+                    : result?.status === 'error'
+                      ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-field-preview>${result.message}</span>`
+                      : nothing}
                 </div>
 
                 <label class="field-block">
@@ -651,8 +646,19 @@ export class WayfinderCalculationsEditorElement extends LitElement {
 
   private _renderSeriesRow(name: string, definition: CalcSeriesDefinition, fieldScope: Record<string, unknown>) {
     const preview = tryEvaluateSeriesForPreview(definition, fieldScope, this._calculations);
-    const fromRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
-    const toRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
+
+    // Series are evaluated after every field, so (unlike a field's own expression, which can
+    // only see earlier-declared fields) all of them are always in scope here — no order slicing
+    // needed.
+    const completions: ExpressionCompletionItem[] = [
+      ...this._allInputFields.map(input => ({ name: input.fieldKey, detail: input.label })),
+      ...Object.keys(this._calculations.fields).map(field => ({ name: field, detail: 'field' })),
+      ...Object.keys(this._calculations.tables ?? {}).map(table => ({ name: table, detail: 'table' })),
+    ];
+    const valuesCompletions: ExpressionCompletionItem[] = [
+      ...completions,
+      { name: definition.over, detail: 'loop variable' },
+    ];
 
     return html`
       <li class="calc-field-row" data-wayfinder-calc-series=${name}>
@@ -678,8 +684,8 @@ export class WayfinderCalculationsEditorElement extends LitElement {
           <label class="field-block">
             <span class="field-label">From</span>
             <wayfinder-calculation-expression-editor
-              ${ref(fromRef)}
               .value=${definition.from}
+              .completions=${completions}
               label-text="${name} from"
               @expression-input=${(event: CustomEvent<{ value: string }>) => this._setSeriesField(name, 'from', event.detail.value)}
             ></wayfinder-calculation-expression-editor>
@@ -688,8 +694,8 @@ export class WayfinderCalculationsEditorElement extends LitElement {
           <label class="field-block">
             <span class="field-label">To</span>
             <wayfinder-calculation-expression-editor
-              ${ref(toRef)}
               .value=${definition.to}
+              .completions=${completions}
               label-text="${name} to"
               @expression-input=${(event: CustomEvent<{ value: string }>) => this._setSeriesField(name, 'to', event.detail.value)}
             ></wayfinder-calculation-expression-editor>
@@ -700,9 +706,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
           ${repeat(
             Object.entries(definition.values),
             ([column]) => column,
-            ([column, expr]) => {
-              const columnRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
-              return html`
+            ([column, expr]) => html`
                 <li class="calc-series-column-row">
                   <label class="field-block">
                     <span class="field-label">Column</span>
@@ -715,16 +719,15 @@ export class WayfinderCalculationsEditorElement extends LitElement {
                   <label class="field-block calc-expression-block">
                     <span class="field-label">Expression</span>
                     <wayfinder-calculation-expression-editor
-                      ${ref(columnRef)}
                       .value=${expr}
+                      .completions=${valuesCompletions}
                       label-text="${name} ${column} expression"
                       @expression-input=${(event: CustomEvent<{ value: string }>) => this._setSeriesColumnExpr(name, column, event.detail.value)}
                     ></wayfinder-calculation-expression-editor>
                   </label>
                   <button type="button" class="text-button" aria-label="Remove column ${column} from series ${name}" @click=${() => this._deleteSeriesColumn(name, column)}>Remove</button>
                 </li>
-              `;
-            }
+              `
           )}
         </ul>
         <button type="button" class="secondary-button" @click=${() => this._addSeriesColumn(name)}>+ Add column</button>
@@ -820,59 +823,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     `;
   }
 
-  /**
-   * A filterable reference picker tied to exactly one expression editor — sits to that
-   * expression's right (calc-expression-row is a flex row), not shared between when/rule the way
-   * a single dropdown below both used to be (ambiguous "whichever was last focused" targeting).
-   * Native `<input list>` + `<datalist>` rather than a plain `<select>`: as a blueprint grows,
-   * the option list (every input field, plus every calculated field) grows with it, and a giant
-   * `<select>` has no way to filter — typing here narrows the suggestions the way every other
-   * autocomplete in this properties panel already behaves.
-   */
-  private _renderReferencePicker(
-    idBase: string,
-    targetRef: Ref<WayfinderCalculationExpressionEditorElement>,
-    insertOptions: Array<{ value: string; label: string }>
-  ) {
-    const listId = `${idBase}-options`;
-    return html`
-      <div class="field-block reference-picker">
-        <span class="field-label">Insert reference</span>
-        <input
-          type="text"
-          class="field-control reference-picker-input"
-          list=${listId}
-          placeholder="Search fields…"
-          autocomplete="off"
-          @change=${(event: Event) => {
-            const input = event.currentTarget as HTMLInputElement;
-            const match = insertOptions.find(option => option.label === input.value);
-            // Clear BEFORE inserting, not after: insertAtCursor() focuses the CodeMirror view,
-            // which synchronously blurs this input — and a blur after a genuine value change
-            // fires another native "change" event, re-entering this same handler before the
-            // outer call returns. Clearing first means that reentrant call reads an already-empty
-            // input.value, finds no match, and no-ops — otherwise it would find the same match
-            // again and double-insert. Caught by a real (not synthetic) interaction in tests.
-            input.value = '';
-            if (match) {
-              targetRef.value?.insertAtCursor(match.value);
-            }
-          }}
-        />
-        <datalist id=${listId}>
-          ${insertOptions.map(option => html`<option value=${option.label}></option>`)}
-        </datalist>
-      </div>
-    `;
-  }
-
   private _renderValidationRow(stage: AuthoredStage, rule: AuthoredStageValidation, index: number) {
-    const whenRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
-    const ruleRef: Ref<WayfinderCalculationExpressionEditorElement> = createRef();
     const stageFields = collectStageInputFields(stage.components, this.componentCatalog);
-    const insertOptions = [
-      ...this._allInputFields.map(input => ({ value: input.fieldKey, label: `${input.label} (${input.fieldKey})` })),
-      ...Object.keys(this._calculations.fields).map(name => ({ value: name, label: `${name} (field)` })),
+    const completions: ExpressionCompletionItem[] = [
+      ...this._allInputFields.map(input => ({ name: input.fieldKey, detail: input.label })),
+      ...Object.keys(this._calculations.fields).map(name => ({ name, detail: 'field' })),
     ];
 
     return html`
@@ -912,31 +867,25 @@ export class WayfinderCalculationsEditorElement extends LitElement {
         </div>
 
         <div class="calc-field-row-body">
-          <div class="calc-expression-row">
-            <div class="field-block calc-expression-block">
-              <span class="field-label">When (optional guard — skips this rule entirely if false)</span>
-              <wayfinder-calculation-expression-editor
-                ${ref(whenRef)}
-                .value=${rule.when ?? ''}
-                label-text="${rule.code || 'validation'} when"
-                @expression-input=${(event: CustomEvent<{ value: string }>) =>
-                  this._setValidation(stage, index, { when: event.detail.value || undefined })}
-              ></wayfinder-calculation-expression-editor>
-            </div>
-            ${this._renderReferencePicker(`${stage.stateKey}-${index}-when`, whenRef, insertOptions)}
+          <div class="field-block calc-expression-block">
+            <span class="field-label">When (optional guard — skips this rule entirely if false)</span>
+            <wayfinder-calculation-expression-editor
+              .value=${rule.when ?? ''}
+              .completions=${completions}
+              label-text="${rule.code || 'validation'} when"
+              @expression-input=${(event: CustomEvent<{ value: string }>) =>
+                this._setValidation(stage, index, { when: event.detail.value || undefined })}
+            ></wayfinder-calculation-expression-editor>
           </div>
 
-          <div class="calc-expression-row">
-            <div class="field-block calc-expression-block">
-              <span class="field-label">Rule (must evaluate to true)</span>
-              <wayfinder-calculation-expression-editor
-                ${ref(ruleRef)}
-                .value=${rule.rule}
-                label-text="${rule.code || 'validation'} rule"
-                @expression-input=${(event: CustomEvent<{ value: string }>) => this._setValidation(stage, index, { rule: event.detail.value })}
-              ></wayfinder-calculation-expression-editor>
-            </div>
-            ${this._renderReferencePicker(`${stage.stateKey}-${index}-rule`, ruleRef, insertOptions)}
+          <div class="field-block calc-expression-block">
+            <span class="field-label">Rule (must evaluate to true)</span>
+            <wayfinder-calculation-expression-editor
+              .value=${rule.rule}
+              .completions=${completions}
+              label-text="${rule.code || 'validation'} rule"
+              @expression-input=${(event: CustomEvent<{ value: string }>) => this._setValidation(stage, index, { rule: event.detail.value })}
+            ></wayfinder-calculation-expression-editor>
           </div>
 
           <label class="field-block">
@@ -1221,27 +1170,6 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     .calc-validations-stage-title {
       margin: 0 0 0.5rem;
       font-size: 0.9375rem;
-    }
-
-    .calc-expression-row {
-      display: flex;
-      gap: 0.75rem;
-      align-items: flex-end;
-      margin-bottom: 0.625rem;
-    }
-
-    .calc-expression-row .calc-expression-block {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-
-    .reference-picker {
-      flex: 0 0 13rem;
-    }
-
-    .reference-picker-input {
-      width: 100%;
-      box-sizing: border-box;
     }
   `;
 }
