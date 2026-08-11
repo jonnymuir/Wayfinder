@@ -342,6 +342,72 @@ test.describe('Calculations tab', () => {
     await captureDocScreenshot(newRow, `${DOCS_DIR}/field-autocomplete.png`);
   });
 
+  test('inline autocomplete covers the whole calculation language, not just field references', async ({ page }) => {
+    // IntelliSense for the grammar itself: every built-in function (as a snippet — accepting
+    // "clamp" inserts "clamp(value, lo, hi)" with the first argument selected, ready to overtype
+    // and Tab through, same as a real IDE) and every keyword/boolean literal, not only
+    // blueprint-specific field/table names.
+    await loginAs(page, DEMO_USERS.caseworker);
+    await page.getByRole('link', { name: 'Editor' }).click();
+
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+    await shell.waitFor({ timeout: 15_000 });
+
+    await selectInsuranceModeller(page);
+    await page.getByRole('tab', { name: 'Calculations' }).click();
+
+    const calcTab = page.locator('wayfinder-calculations-editor');
+    await calcTab.waitFor({ timeout: 10_000 });
+
+    const addFieldButton = calcTab.locator('.calc-section', { hasText: 'Fields' }).getByRole('button', { name: '+ Add field' });
+    await addFieldButton.click();
+    await page.waitForTimeout(200);
+
+    const newRow = calcTab.locator('[data-wayfinder-calc-field="field1"]');
+    await expect(newRow).toBeVisible();
+
+    const editor = newRow.locator('wayfinder-calculation-expression-editor');
+    const cm = editor.locator('.cm-content');
+    const tooltip = editor.locator('.cm-tooltip-autocomplete');
+
+    await test.step('a function completes as a snippet with tab-stops over its own arguments', async () => {
+      await cm.click();
+      await cm.pressSequentially('cla');
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toContainText('clamp');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(200);
+      await expect(cm).toHaveText('clamp(value, lo, hi)');
+
+      // The first placeholder ("value") is selected on insertion — typing overtypes it, not
+      // appends after it.
+      await page.keyboard.type('5');
+      await expect(cm).toHaveText('clamp(5, lo, hi)');
+
+      // Tab moves to the next placeholder ("lo"), which is likewise selected.
+      await page.keyboard.press('Tab');
+      await page.keyboard.type('10');
+      await expect(cm).toHaveText('clamp(5, 10, hi)');
+    });
+
+    await test.step('a keyword completes too, not only functions and fields', async () => {
+      await cm.click();
+      await page.keyboard.press('End');
+      await cm.pressSequentially(' or tr');
+      await expect(tooltip).toBeVisible();
+      // "tr" alone also substring-matches this blueprint's own "experienceDiscountRate" field
+      // (…cou**ntr**ate) — click the exact keyword option rather than trust Enter picks whichever
+      // one CM6 highlights by default among several real matches. The option's label/detail spans
+      // have no whitespace between them in the DOM, so the accessible name concatenates with no
+      // space ("truebooleanliteral") — anchor on the start only, not a \b word boundary.
+      const trueOption = tooltip.getByRole('option', { name: /^true/ });
+      await expect(trueOption).toBeVisible();
+      await trueOption.click();
+      await page.waitForTimeout(200);
+      await expect(cm).toHaveText('clamp(5, 10, hi) or true');
+    });
+  });
+
   test('a table can be added, with interpolate and row values reflected in the UI', async ({ page }) => {
     // Neither seed blueprint declares any calculations.tables — this is the only coverage of
     // the Tables section, added specifically so its docs/skills screenshot has real content
