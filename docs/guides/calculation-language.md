@@ -68,23 +68,29 @@ A `ServiceBlueprint` may carry a top-level `calculations` block:
   (e.g. "projected income for every age 66 to 90") — the standard way to drive a
   `chart` component.
 
-Every input component (`number`, `decimal`, `slider`, etc.) is automatically in
-scope under its `fieldKey`, typed as `decimal` for numeric field types and `string`
-otherwise (`CalculationScopeBuilder`), seeded from the submitted value or the
-component's own `default` if nothing's been submitted yet. Any component may also
-declare a `showWhen` expression (a plain string in this same language) to control
-its own visibility — see [Visibility (`showWhen`)](#visibility-showwhen) below.
+Every input component (`number`, `decimal`, `slider`, `boolean`, etc.) is
+automatically in scope under its `fieldKey`, typed as `decimal` for numeric field
+types, `boolean` for a `boolean` field, and `string` for everything else
+(`CalculationScopeBuilder`), seeded from the submitted value or the component's own
+`default` if nothing's been submitted yet. Any component may also declare a
+`showWhen` expression (a plain string in this same language) to control its own
+visibility — see [Visibility (`showWhen`)](#visibility-showwhen) below.
 
-**`validate_service_blueprint` has no submitted values to work with.** If an input has
-neither a real submission (there isn't one — it's a static check) nor a `default`,
-it's simply absent from scope, not an error — any field expression referencing it
-then fails with an unresolvable-reference diagnostic, which looks like the
-expression is wrong even when it isn't. Two ways to avoid this false alarm while
-authoring: give the input a sensible `default` (recommended — it also seeds the
-real form), or verify the calculation via `simulate_service_blueprint` instead, which takes
-real `fieldValues` per step and resolves cleanly regardless of defaults. Every
-worked example below (including `money-modeller.json`) declares a `default` on
-every input its calculations depend on for exactly this reason.
+**`validate_service_blueprint` has no submitted values to work with**, so it can
+only seed scope from each input's own `default`. A `string`/`boolean` field with no
+declared default still resolves — an unfilled text box already means `""` and an
+unticked checkbox already means `false` everywhere else in this system, so
+`CalculationScopeBuilder` gives it that same safe placeholder rather than treating
+it as unknown. A `number` field is the one case with no equally safe placeholder
+(`0` is a real, meaningful value a service might act on, not a stand-in for
+"nothing submitted yet"), so it's genuinely absent from scope with no default —
+any expression referencing it bare then fails static evaluation. This surfaces as a
+`Warning`-severity diagnostic (see [Errors](#errors)), not a blocking error: it's an
+expected limit of static validation, not an authoring mistake. Two
+ways to verify the expression anyway: give the numeric input a sensible `default`
+(recommended — it also seeds the real form), or verify via
+`simulate_service_blueprint` instead, which takes real `fieldValues` per step and
+resolves cleanly regardless of defaults.
 
 ## Grammar
 
@@ -344,6 +350,14 @@ the whole service blueprint (calculated fields, series, **and** every component'
 as structured diagnostics you can act on directly, rather than needing to run the
 service blueprint to discover a broken expression — see
 [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md).
+
+One class of `Unknown name` is downgraded from `Error` to `Warning` rather than
+blocking the save: an expression referencing a `number`-typed input with no
+declared default (see the callout above) — the same treatment already used for a
+service-sourced field validation can't supply a real value for statically. Both
+say plainly that they're a limit of static checking, not a broken expression, and
+name `simulate_service_blueprint` as the way to verify the expression with real
+values instead.
 
 ## Worked example: `money-modeller.json`
 

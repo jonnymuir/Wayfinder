@@ -38,18 +38,28 @@ export function run(): number {
     const fields: FieldReference[] = [
       { fieldKey: 'withDefault', label: 'With default', type: 'text', default: 'hello' },
       // Regression: a declared default of "" is still a real default — CalculationScopeBuilder.cs
-      // only excludes a field from scope when it has NEITHER a submission NOR a default; an empty
-      // string is a legitimate default, not "no default". A plain truthy check on field.default
-      // (`field.default` alone) would wrongly treat this as absent, producing a false
-      // "unknown reference" for a correctly-defaulted textarea/text input — exactly the false
-      // positive real juggling-licence.json's riskMitigationNotes field (default: "") hit live.
+      // only excludes a NUMERIC field from scope when it has NEITHER a submission NOR a default;
+      // an empty string is a legitimate default, not "no default". A plain truthy check on
+      // field.default (`field.default` alone) would wrongly treat this as absent, producing a
+      // false "unknown reference" for a correctly-defaulted textarea/text input — exactly the
+      // false positive real juggling-licence.json's riskMitigationNotes field (default: "") hit
+      // live.
       { fieldKey: 'withEmptyStringDefault', label: 'With empty default', type: 'textarea', default: '' },
-      { fieldKey: 'noDefault', label: 'No default', type: 'text' },
+      // A string/boolean field with no declared default still resolves — CalculationScopeBuilder.Build
+      // gives it a safe placeholder ("" / false) at design time, since an unfilled text box or
+      // unticked checkbox already means exactly that everywhere else in this system.
+      { fieldKey: 'noDefaultText', label: 'No default (text)', type: 'text' },
+      { fieldKey: 'noDefaultBoolean', label: 'No default (boolean)', type: 'boolean' },
+      // A numeric field is the one case with no safe placeholder for "nothing submitted yet" (0
+      // is a real, meaningful value) — it still needs a real submission or a declared default.
+      { fieldKey: 'noDefaultNumber', label: 'No default (number)', type: 'number' },
     ];
     const inScope = inScopeInputFieldKeys(fields);
     check('a field with a non-empty declared default is in scope', inScope.has('withDefault'));
     check('a field with a declared EMPTY STRING default is still in scope', inScope.has('withEmptyStringDefault'));
-    check('a field with no declared default is not in scope', !inScope.has('noDefault'));
+    check('a text field with no declared default is still in scope', inScope.has('noDefaultText'));
+    check('a boolean field with no declared default is still in scope', inScope.has('noDefaultBoolean'));
+    check('a numeric field with no declared default is not in scope', !inScope.has('noDefaultNumber'));
   }
 
   // ── extractReferencedNames ────────────────────────────────────────────────

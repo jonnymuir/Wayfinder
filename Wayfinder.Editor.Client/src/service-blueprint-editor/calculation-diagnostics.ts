@@ -25,10 +25,12 @@ export interface CalculationDiagnosticsInput {
   tableNames: Set<string>;
   /**
    * Only input fieldKeys CalculationScopeBuilder.Build can statically guarantee are in the calc
-   * scope — i.e. those with a declared `default` (an input with neither a submission nor a
-   * default is simply absent from scope, not an error — see docs/guides/calculation-language.md
-   * and the false-positive this exact distinction fixed in the Calculations tab). Never pass every
-   * input's fieldKey here; use calculation-runtime.ts's `inScopeInputFieldKeys` to build this.
+   * scope. A numeric input (slider/number/decimal) with neither a submission nor a declared
+   * default is genuinely absent from scope, not an error — there's no safe placeholder for a
+   * missing amount. Every other field type always resolves (an unfilled text box already means ""
+   * and an unticked checkbox already means false) even with no default — see
+   * docs/guides/calculation-language.md. Never pass every input's fieldKey here; use
+   * calculation-runtime.ts's `inScopeInputFieldKeys` to build this.
    */
   inScopeInputFieldKeys: Set<string>;
 }
