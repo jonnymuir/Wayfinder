@@ -70,24 +70,26 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   /** Every input's own declared default, coerced to the type the calculation scope expects —
    * mirrors CalculationScopeBuilder.cs's own coercion (numeric field types vs everything else)
    * exactly, so the live preview here matches what validate_service_blueprint's own static
-   * check would see. */
+   * check would see. A numeric field with no default is left out of the sample scope entirely
+   * (no safe placeholder for a missing amount); every other field type gets one regardless of
+   * whether a default was declared — an unfilled text box already means "" and an unticked
+   * checkbox already means false everywhere else in this system — see inScopeInputFieldKeys in
+   * calculation-runtime.ts for the same distinction applied to diagnostics. */
   private get _sampleInputs(): Record<string, unknown> {
     const inputs: Record<string, unknown> = {};
     for (const field of this._allInputFields) {
-      // A declared default of "" still counts — see inScopeInputFieldKeys in
-      // calculation-runtime.ts for why a plain truthy check on field.default is wrong here.
-      if (field.default === undefined) {
-        continue;
-      }
       if (NUMERIC_INPUT_TYPES.has(field.type)) {
+        if (field.default === undefined) {
+          continue;
+        }
         const numeric = Number(field.default);
         if (!Number.isNaN(numeric)) {
           inputs[field.fieldKey] = numeric;
         }
-      } else if (field.default === 'true' || field.default === 'false') {
+      } else if (field.type === 'boolean') {
         inputs[field.fieldKey] = field.default === 'true';
       } else {
-        inputs[field.fieldKey] = field.default;
+        inputs[field.fieldKey] = field.default ?? '';
       }
     }
     return inputs;

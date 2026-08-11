@@ -28,12 +28,21 @@ import type { FieldReference } from './component-property-references.js';
 
 export type { CalculationNode, CalculationSet, CalculationSeriesDefinition };
 
+/** Component-type discriminators (Component.cs's [JsonDerivedType] tags) that
+ * CalculationScopeBuilder.DescribeInputs (C#) classifies as a "number" scope value — the one
+ * category with no safe absent-value placeholder, see inScopeInputFieldKeys below. */
+const NUMERIC_COMPONENT_TYPES = new Set(['number', 'decimal', 'slider']);
+
 /**
  * Which input fieldKeys CalculationScopeBuilder.Build (C#) can statically guarantee occupy the
- * calc scope: only an input with a declared `default` — one with neither a submission nor a
- * default is simply absent from scope (`continue`d past, not an error). Every static check that
- * needs to know "is this name resolvable" — a field/loop-variable name collision, an unknown
- * scope reference — must use this set, not every input's fieldKey, or it drifts from what
+ * calc scope. A numeric field (slider/number/decimal) still needs a declared `default` — there's
+ * no safe placeholder for a missing amount (0 is a real, meaningful value), so one with neither a
+ * submission nor a default is genuinely absent from scope (`continue`d past, not an error).
+ * Every other field type (text, boolean, etc.) always resolves — an unfilled text box already
+ * means "" and an unticked checkbox already means false everywhere else in this system, so
+ * `Build` gives it that placeholder even with no declared default. Every static check that needs
+ * to know "is this name resolvable" — a field/loop-variable name collision, an unknown scope
+ * reference — must use this set, not every input's fieldKey, or it drifts from what
  * CalculationScopeBuilder/CalculationEvaluator actually do at Save time.
  */
 export function inScopeInputFieldKeys(allInputFields: FieldReference[]): Set<string> {
@@ -43,7 +52,11 @@ export function inScopeInputFieldKeys(allInputFields: FieldReference[]): Set<str
   // resolves cleanly server-side. A plain truthy check on field.default (`field.default` alone)
   // would treat "" as "no default" and wrongly flag a real, correctly-defaulted field as unknown —
   // exactly the false positive this must not produce.
-  return new Set(allInputFields.filter(field => field.default !== undefined).map(field => field.fieldKey));
+  return new Set(
+    allInputFields
+      .filter(field => field.default !== undefined || !NUMERIC_COMPONENT_TYPES.has(field.type))
+      .map(field => field.fieldKey)
+  );
 }
 
 /** Mirrors the real (non-exported) MAX_SERIES_ROWS in wayfinder-calculations.js — a defensive

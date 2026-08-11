@@ -75,13 +75,36 @@ function boot() {
       raw = model.defaults[key] ?? null;
     }
 
+    const type = model.inputTypes[key];
+
     if (raw === null) {
-      return undefined;
+      // Absent (nothing typed/ticked yet, no declared default) isn't the same as unknown — the
+      // field is genuinely declared on this stage, it just has no value in the browser right now.
+      // A number has no safe placeholder (0 is a real, meaningful value), so it stays out of scope
+      // and any expression referencing it bare simply doesn't evaluate yet (see the catch in
+      // update(), which leaves server-rendered values until it can). String/boolean fields DO have
+      // a safe "nothing here" value — an empty text box already means "" and an unticked checkbox
+      // already means false everywhere else in this system — matching CalculationScopeBuilder.Build's
+      // server-side rule (Wayfinder/Services/Calculations/CalculationScopeBuilder.cs).
+      if (type === 'number') {
+        return undefined;
+      }
+      return type === 'boolean' ? false : '';
     }
 
-    if (model.inputTypes[key] === 'number') {
+    if (type === 'number') {
       const cleaned = raw.replace(/£|,/g, '').trim();
       return /^-?\d+(\.\d+)?$/.test(cleaned) ? Dec.fromString(cleaned) : undefined;
+    }
+
+    if (type === 'boolean') {
+      // A checked GOV.UK checkbox's own value="true" (see GovUkFields.RenderBoolean) — or a
+      // string default authored the same way — needs coercing to a real boolean the same way
+      // CalculationScopeBuilder.Build does server-side; toBool() in wayfinder-calculations.js
+      // requires an actual boolean, not this string.
+      if (raw === 'true' || raw === 'True') return true;
+      if (raw === 'false' || raw === 'False') return false;
+      return raw;
     }
 
     return raw;

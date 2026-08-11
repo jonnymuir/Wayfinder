@@ -19,6 +19,18 @@ const CATALOG: ComponentDescriptor[] = [
     containment: { kind: 'None' },
   },
   {
+    discriminator: 'number',
+    displayName: 'Number input',
+    category: 'Input',
+    clrType: 'NumberInputComponent',
+    isInput: true,
+    properties: [
+      { key: 'fieldKey', title: 'Field key', valueKind: 'String', required: true },
+      { key: 'label', title: 'Label', valueKind: 'String', required: true },
+    ],
+    containment: { kind: 'None' },
+  },
+  {
     discriminator: 'heading',
     displayName: 'Heading',
     category: 'Content',
@@ -316,16 +328,37 @@ export function run(): number {
   }
 
   {
+    // A numeric input with no declared default is the one case CalculationScopeBuilder.Build
+    // still leaves genuinely absent from scope (no safe placeholder for a missing amount) — so a
+    // calc field sharing its name is not a real collision. A text/boolean field with no default
+    // WOULD now be a genuine collision (it always resolves, to "" / false), so this fixture must
+    // stay numeric to test what it claims to.
     const parsed = {
       definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
       calculations: { fields: { totalPremium: { expr: '1' } } },
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [
+        { type: 'number', fieldKey: 'totalPremium', label: 'Total premium' },
+      ] }],
+    };
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    check('lint: a calculations.fields name matching a NO-default NUMERIC input fieldKey is NOT flagged as a collision',
+      !issues.some(issue => issue.message.includes('collides with an input')),
+      JSON.stringify(issues));
+  }
+
+  {
+    // A text/boolean field with no declared default now IS a genuine collision — it always
+    // resolves in scope (to "" / false), matching CalculationScopeBuilder.Build server-side.
+    const parsed = {
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { totalPremium: { expr: "'1'" } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [
         { type: 'text', fieldKey: 'totalPremium', label: 'Total premium' },
       ] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a calculations.fields name matching a NO-default input fieldKey is NOT flagged as a collision',
-      !issues.some(issue => issue.message.includes('collides with an input')),
+    check('lint: a calculations.fields name matching a NO-default TEXT input fieldKey IS flagged as a collision',
+      issues.some(issue => issue.message.includes('collides with an input')),
       JSON.stringify(issues));
   }
 

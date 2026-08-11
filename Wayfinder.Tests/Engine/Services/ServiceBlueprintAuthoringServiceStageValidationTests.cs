@@ -95,6 +95,43 @@ public class ServiceBlueprintAuthoringServiceStageValidationTests
     }
 
     [Fact]
+    public void RuleReferencingANumericFieldWithNoDefault_ProducesUnverifiedWarningNotError()
+    {
+        // A numeric field genuinely can't be given a safe scope placeholder the way string/boolean
+        // fields can (see CalculationScopeBuilder.Build) — referencing one with no declared default
+        // is an expected static-validation limitation, not an authoring mistake, so it downgrades to
+        // a Warning rather than blocking the save the way an actually-broken expression does.
+        var blueprint = BlueprintWithRule(when: null, rule: "jugglerCount > 0") with
+        {
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "only",
+                    DisplayName = "only",
+                    QueueKey = "citizen",
+                    Components =
+                    [
+                        new TextInputComponent { FieldKey = "notes", Label = "Notes", Default = "" },
+                        new NumberInputComponent { FieldKey = "jugglerCount", Label = "Jugglers" },
+                    ],
+                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "jugglerCount > 0", "Message")],
+                },
+            ],
+        };
+
+        var outcome = Service.Validate(blueprint);
+
+        outcome.Diagnostics.Should().ContainSingle(d =>
+            d.Code == "STAGE_VALIDATION_RULE_UNVERIFIED" &&
+            d.Path == "stages.only.validations[0].rule" &&
+            d.Severity == ServiceBlueprintDiagnosticSeverity.Warning &&
+            d.Message.Contains("jugglerCount"));
+        outcome.Diagnostics.Should().NotContain(d => d.Code == "STAGE_VALIDATION_RULE_EVAL_ERROR");
+        outcome.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public void RuleReferencingACalculatedField_ResolvesAgainstTheCalculationScope()
     {
         var blueprint = BlueprintWithRule(when: "true", rule: "hasEvidence") with
