@@ -61,7 +61,7 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await expect(splitGateway).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('shows gateway details in the inspector without turning preview into gateway runtime', async ({ page }) => {
+  test('shows gateway details in the inspector', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(editorStoryUrl());
 
@@ -77,7 +77,6 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await expect(inspector.locator('[data-wayfinder-inspector-heading]')).toHaveText('Review split');
     await expect(inspector.locator('[data-wayfinder-field="kind"]')).toContainText('Split gateway');
     await expect(page.getByRole('tab', { name: 'Canvas' })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('[data-wayfinder-preview-stage-name]')).toHaveCount(0);
     await captureDocScreenshot(inspector, `${DOCS_DIR}/gateway-inspector.png`);
   });
 

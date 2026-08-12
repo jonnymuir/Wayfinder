@@ -13,7 +13,6 @@ import {
   serviceBlueprintGateways,
 } from './types.js';
 import { computeServiceBlueprintGraphLayout, parseGraphNodeId } from './graph/service-blueprint-graph-layout.js';
-import { projectServiceBlueprintLocally } from './service-request-runtime-projection.js';
 import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import { BuiltInServiceBlueprintActionCatalog } from './action-catalog.js';
@@ -22,14 +21,12 @@ import { HttpServiceBlueprintComponentCatalog } from './component-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
 import { availableContexts, contextForTiming, timingForContext, updateActionSummary } from './action-editing.js';
-import { isTerminalStage, validateServiceBlueprint, type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
+import { validateServiceBlueprint, type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
 import { flattenRoutes, newRouteId } from './route-model.js';
 import { findServiceBlueprintShortcut, matchesShortcut, SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
 import './wayfinder-service-blueprint-graph.js';
 import './wayfinder-step-inspector.js';
 import './wayfinder-calculations-editor.js';
-import './wayfinder-stage-preview.js';
-import './wayfinder-service-blueprint-simulation.js';
 import './wayfinder-service-blueprint-outline.js';
 import './wayfinder-confidence-tabs.js';
 import { serializeAuthoredServiceBlueprint, authoredServiceBlueprintJsonEquals } from './service-blueprint-canonical-json.js';
@@ -39,12 +36,6 @@ import {
   type DefinitionLint,
 } from './service-blueprint-lint.js';
 import type { ConfidenceTab } from './wayfinder-confidence-tabs.js';
-import type {
-  ServiceBlueprintSimulationHistoryEntry,
-  ServiceBlueprintSimulationStopReason,
-  ServiceBlueprintSimulationTransitionOption,
-} from './wayfinder-service-blueprint-simulation.js';
-import type { ProjectServiceBlueprintResult, ProjectedServiceBlueprintState, ProjectedServiceBlueprintTransition } from './service-request-runtime-projection.js';
 import { renderToolbarIcon } from './graph/toolbar-icons.js';
 
 type ServiceBlueprintSelection =
@@ -68,12 +59,6 @@ type ClipboardEntry =
   | { kind: 'action'; action: AuthoredAction; label: string; sourceTarget: 'stage' | 'transition' };
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-
-type SimulationState = {
-  currentStageKey: string;
-  history: ServiceBlueprintSimulationHistoryEntry[];
-  pathTransitionIndices: number[];
-};
 
 const HISTORY_LIMIT = 50;
 const SAVE_SHORTCUT = findServiceBlueprintShortcut('save');
@@ -222,11 +207,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @state() private _saveError: ServiceBlueprintSaveError | null = null;
   @state() private _saveErrorCopyStatus: string | null = null;
   @state() private _helpOpen = false;
-  @state() private _stagePreviewState: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
-  @state() private _stagePreviewError: string | null = null;
-  @state() private _projectedServiceBlueprintPreview: ProjectServiceBlueprintResult | null = null;
-  @state() private _simulation: SimulationState | null = null;
-  @state() private _simulationAnnouncement = '';
   @state() private _activeConfidenceTab: ConfidenceTab = 'canvas';
   // Both start collapsed — the canvas is the primary surface, and either panel is one click
   // away via its own toggle. The inspector auto-expands the moment something is selected (see
@@ -254,8 +234,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   private _savedServiceBlueprintSnapshot: AuthoredServiceBlueprint | null = null;
   private _helpReturnTarget: HTMLElement | null = null;
-  private _stagePreviewTimer: number | null = null;
-  private _stagePreviewRequestId = 0;
   private _lastLoadedBlueprintKey: string | null = null;
   private _serviceBlueprintLoadRequestId = 0;
   private _versionPollTimer: number | null = null;
@@ -323,7 +301,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   disconnectedCallback() {
     this.removeEventListener('keydown', this._handleEditorKeydown, true);
-    this._clearStagePreviewTimer();
     this._clearVersionPollTimer();
     if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(this._toastDismissTimer);
@@ -399,11 +376,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._saveMessage = null;
     this._saveError = null;
     this._saveErrorCopyStatus = null;
-    this._projectedServiceBlueprintPreview = null;
-    this._stagePreviewState = 'idle';
-    this._stagePreviewError = null;
-    this._simulation = null;
-    this._simulationAnnouncement = '';
     this._lastAppliedDefinitionCanonical = '';
     this._definitionParseError = null;
     this._definitionSchemaIssues = [];
@@ -423,169 +395,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     this.removeAttribute('data-wayfinder-service-blueprint-loaded');
-  }
-
-  private get _selectedStage(): AuthoredStage | null {
-    if (!this._serviceBlueprint || !this._selectedStageKey) {
-      return null;
-    }
-
-    return this._serviceBlueprint.stages.find(stage => stage.stateKey === this._selectedStageKey) ?? null;
-  }
-
-  private get _previewedStage(): ProjectedServiceBlueprintState | null {
-    const selectedStage = this._selectedStage;
-    if (!selectedStage || !this._projectedServiceBlueprintPreview) {
-      return null;
-    }
-
-    return this._projectedServiceBlueprintPreview.file.stages.find(state => state.stateKey === selectedStage.stateKey) ?? null;
-  }
-
-  private get _previewedTransitions(): ProjectedServiceBlueprintTransition[] {
-    const selectedStage = this._selectedStage;
-    if (!selectedStage || !this._projectedServiceBlueprintPreview || !this._serviceBlueprint) {
-      return [];
-    }
-
-    const gatewayMap = new Map(serviceBlueprintGateways(this._serviceBlueprint).map(g => [g.key, g]));
-    const stageRoutes = (this._projectedServiceBlueprintPreview.file.stages.find(stage => stage.stateKey === selectedStage.stateKey)?.routes ?? [])
-      .filter(route => route.target.trim().length > 0);
-
-    return stageRoutes.flatMap(route => {
-      const gateway = gatewayMap.get(route.target);
-      if (gateway) {
-        return (gateway.routes ?? []).filter(r => r.target.trim().length > 0);
-      }
-      return [route];
-    });
-  }
-
-  private get _initialSimulationStage(): AuthoredStage | null {
-    if (!this._serviceBlueprint) {
-      return null;
-    }
-
-    return this._serviceBlueprint.stages.find(stage => stage.stateKey === this._serviceBlueprint?.initialStage) ?? null;
-  }
-
-  private get _simulationCurrentStage(): AuthoredStage | null {
-    const simulation = this._simulation;
-    if (!this._serviceBlueprint || !simulation) {
-      return null;
-    }
-
-    return this._serviceBlueprint.stages.find(stage => stage.stateKey === simulation.currentStageKey) ?? null;
-  }
-
-  private _announceSimulation(message: string) {
-    this._simulationAnnouncement = '';
-    requestAnimationFrame(() => {
-      this._simulationAnnouncement = message;
-    });
-  }
-
-  private _resetSimulation(announcement?: string) {
-    if (!this._simulation && !announcement) {
-      return;
-    }
-
-    this._simulation = null;
-    if (announcement) {
-      this._announceSimulation(announcement);
-    } else {
-      this._simulationAnnouncement = '';
-    }
-  }
-
-  private get _simulationStartBlocker() {
-    const initialStage = this._initialSimulationStage;
-    if (initialStage) {
-      return '';
-    }
-
-    return this._validationIssues.find(issue => issue.code === 'initial-stage-missing')?.message
-      ?? 'Pick an initial stage before you simulate this service blueprint.';
-  }
-
-  private get _simulationCanStart() {
-    return Boolean(this._serviceBlueprint && this._initialSimulationStage);
-  }
-
-  private _simulationBlockersForTransition(transitionIndex: number) {
-    if (!this._serviceBlueprint) {
-      return [];
-    }
-
-    const transition = (flattenRoutes(this._serviceBlueprint))[transitionIndex];
-    if (!transition) {
-      return ['This transition is no longer available.'];
-    }
-
-    const targetStage = this._serviceBlueprint.stages.find(stage => stage.stateKey === transition.toStage);
-    const blockingIssues = this._blockingValidationIssues.filter(issue => {
-      if (issue.location.kind === 'route') {
-        return issue.location.routeId === transition.key
-          && issue.location.routeId === transition.routeId;
-      }
-
-      if (issue.location.kind === 'action' && issue.location.target === 'route') {
-        return issue.location.routeId === transition.key
-          && issue.location.routeId === transition.routeId
-          && issue.blocking;
-      }
-
-      if (issue.location.kind === 'stage') {
-        return issue.location.stageKey === transition.toStage;
-      }
-
-      return false;
-    });
-
-    const messages = blockingIssues.map(issue => issue.message);
-    if (!targetStage && messages.length === 0) {
-      messages.push(`Target stage “${transition.toStage}” is missing.`);
-    }
-
-    return messages;
-  }
-
-  private get _simulationStopReason(): ServiceBlueprintSimulationStopReason {
-    const currentStage = this._simulationCurrentStage;
-    if (!currentStage || !this._simulation) {
-      return null;
-    }
-
-    if (isTerminalStage(currentStage)) {
-      return 'terminal';
-    }
-
-    return this._simulationTransitionOptions.length === 0 ? 'no-transitions' : null;
-  }
-
-  private get _simulationTransitionOptions(): ServiceBlueprintSimulationTransitionOption[] {
-    if (!this._serviceBlueprint || !this._simulationCurrentStage) {
-      return [];
-    }
-
-    return (flattenRoutes(this._serviceBlueprint))
-      .map((transition, transitionIndex) => ({ transition, transitionIndex }))
-      .filter(({ transition }) => transition.fromStage === this._simulationCurrentStage?.stateKey)
-      .map(({ transition, transitionIndex }) => {
-        const targetStage = this._serviceBlueprint?.stages.find(stage => stage.stateKey === transition.toStage) ?? null;
-        const blockerMessages = this._simulationBlockersForTransition(transitionIndex);
-        return {
-          transitionIndex,
-          label: transition.action,
-          targetStageKey: transition.toStage,
-          targetStageLabel: targetStage?.displayName ?? transition.toStage,
-          targetStageKind: targetStage?.kind,
-          blocked: blockerMessages.length > 0,
-          blockerMessages,
-          conditionSummary: transition.condition ? `Condition: ${transition.condition}` : undefined,
-          roleSummary: transition.requiresRole ? `Role guard: ${transition.requiresRole}` : undefined,
-        };
-      });
   }
 
   private _currentSelection(): ServiceBlueprintSelection {
@@ -610,7 +419,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     if (!serviceBlueprint) {
       this._selection = null;
       this._selectedTransitionIndex = null;
-      this._syncStagePreview();
       return;
     }
 
@@ -619,7 +427,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       this._selection = exists ? { kind: 'stage', stageKey: selection.stageKey } : null;
       this._selectedTransitionIndex = null;
       this._expandInspectorForSelection();
-      this._syncStagePreview();
       return;
     }
 
@@ -628,13 +435,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       this._selection = exists ? { kind: 'gateway', gatewayKey: selection.gatewayKey } : null;
       this._selectedTransitionIndex = null;
       this._expandInspectorForSelection();
-      this._syncStagePreview();
       return;
     }
 
     this._selection = null;
     this._selectedTransitionIndex = null;
-    this._syncStagePreview();
   }
 
   /**
@@ -668,14 +473,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       : { kind: 'stage', stageKey: route.fromStage };
     this._selectedTransitionIndex = transitionIndex;
     this._expandInspectorForSelection();
-    this._syncStagePreview();
-  }
-
-  private _clearStagePreviewTimer() {
-    if (this._stagePreviewTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._stagePreviewTimer);
-    }
-    this._stagePreviewTimer = null;
   }
 
   /**
@@ -749,58 +546,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  private _syncStagePreview() {
-    this._clearStagePreviewTimer();
-
-    const selectedStage = this._selectedStage;
-    if (!selectedStage || !this._serviceBlueprint) {
-      this._stagePreviewState = 'idle';
-      this._stagePreviewError = null;
-      this._projectedServiceBlueprintPreview = null;
-      return;
-    }
-
-    if (typeof window === 'undefined') {
-      void this._refreshStagePreview();
-      return;
-    }
-
-    this._stagePreviewTimer = window.setTimeout(() => {
-      void this._refreshStagePreview();
-    }, 180);
-  }
-
-  private async _refreshStagePreview() {
-    if (!this._serviceBlueprint || !this._selectedStage) {
-      return;
-    }
-
-    const requestId = ++this._stagePreviewRequestId;
-    this._stagePreviewState = 'loading';
-    this._stagePreviewError = null;
-
-    try {
-      const preview = projectServiceBlueprintLocally(this._serviceBlueprint);
-      if (requestId !== this._stagePreviewRequestId) {
-        return;
-      }
-
-      this._projectedServiceBlueprintPreview = preview;
-      this._stagePreviewState = 'ready';
-
-      if (!preview.file.stages.some(state => state.stateKey === this._selectedStage?.stateKey)) {
-        this._stagePreviewState = 'error';
-        this._stagePreviewError = `The selected stage could not be found in the projected runtime preview.`;
-      }
-    } catch (error) {
-      if (requestId !== this._stagePreviewRequestId) {
-        return;
-      }
-
-      this._stagePreviewState = 'error';
-      this._stagePreviewError = error instanceof Error ? error.message : 'The runtime preview could not be rendered.';
-    }
-  }
 
   private _snapshotCurrentState(): ServiceBlueprintHistoryEntry | null {
     if (!this._serviceBlueprint) {
@@ -972,7 +717,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._serviceBlueprint = nextServiceBlueprint;
     this._saveState = 'idle';
     this._saveMessage = null;
-    this._resetSimulation(this._simulation ? 'Simulation reset because the service blueprint changed.' : undefined);
     this._applySelection(nextSelection, nextServiceBlueprint);
     this._announceHistory(`Change recorded. ${this._historyStatusSummary}`);
   }
@@ -1846,88 +1590,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._saveErrorCopyStatus = 'Clipboard access is unavailable. Select and copy the details manually.';
   }
 
-  private _startSimulation() {
-    const initialStage = this._initialSimulationStage;
-    if (!initialStage) {
-      this._announceSimulation(this._simulationStartBlocker);
-      return;
-    }
-
-    this._simulation = {
-      currentStageKey: initialStage.stateKey,
-      history: [{
-        stageKey: initialStage.stateKey,
-        stageLabel: initialStage.displayName,
-        enteredByTransitionIndex: null,
-      }],
-      pathTransitionIndices: [],
-    };
-    this._announceSimulation(`Simulation started at ${initialStage.displayName}.`);
-  }
-
-  private _handleSimulationTransitionSelected(e: CustomEvent<{ transitionIndex: number }>) {
-    if (!this._serviceBlueprint || !this._simulation) {
-      return;
-    }
-
-    const transition = (flattenRoutes(this._serviceBlueprint))[e.detail.transitionIndex];
-    if (!transition) {
-      return;
-    }
-
-    const blockers = this._simulationBlockersForTransition(e.detail.transitionIndex);
-    if (blockers.length > 0) {
-      this._announceSimulation(`Transition ${transition.action} is blocked by validation.`);
-      return;
-    }
-
-    const nextStage = this._serviceBlueprint.stages.find(stage => stage.stateKey === transition.toStage);
-    if (!nextStage) {
-      this._announceSimulation(`Transition ${transition.action} cannot continue because the target stage is missing.`);
-      return;
-    }
-
-    this._simulation = {
-      currentStageKey: nextStage.stateKey,
-      history: [
-        ...this._simulation.history,
-        {
-          stageKey: nextStage.stateKey,
-          stageLabel: nextStage.displayName,
-          enteredByLabel: transition.action,
-          enteredByTransitionIndex: e.detail.transitionIndex,
-        },
-      ],
-      pathTransitionIndices: [...this._simulation.pathTransitionIndices, e.detail.transitionIndex],
-    };
-
-    const stopReason = isTerminalStage(nextStage) ? 'terminal' : null;
-    this._announceSimulation(
-      stopReason === 'terminal'
-        ? `Simulation reached end stage ${nextStage.displayName}.`
-        : `Simulation moved to ${nextStage.displayName}.`
-    );
-  }
-
-  private _renderSimulationPanel() {
-    return html`
-      <wayfinder-service-blueprint-simulation
-        .initialStage=${this._initialSimulationStage}
-        .currentStage=${this._simulationCurrentStage}
-        .history=${this._simulation?.history ?? []}
-        .transitionOptions=${this._simulationStopReason ? [] : this._simulationTransitionOptions}
-        .active=${Boolean(this._simulation)}
-        .canStart=${this._simulationCanStart}
-        .startBlocker=${this._simulationStartBlocker}
-        .stopReason=${this._simulationStopReason}
-        .announcement=${this._simulationAnnouncement}
-        @simulation-started=${this._startSimulation}
-        @simulation-reset=${() => this._resetSimulation('Simulation cleared.')}
-        @simulation-transition-selected=${this._handleSimulationTransitionSelected}
-      ></wayfinder-service-blueprint-simulation>
-    `;
-  }
-
   private _renderCalculationsPanel() {
     return html`
       <wayfinder-calculations-editor
@@ -1998,22 +1660,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     const banner = this._renderDefinitionBanner();
-    const stageCount = this._serviceBlueprint.stages.length;
-    const gatewayCount = this._serviceBlueprint.metadata?.gateways?.length ?? 0;
 
     return html`
       <div class="definition-panel" data-wayfinder-definition-panel>
-        <div class="definition-header">
-          <div class="definition-header-copy">
-            <h2 class="definition-title">Definition</h2>
-            <p class="definition-subtitle">
-              Power-user view of the authored serviceBlueprint.
-              ${stageCount} ${stageCount === 1 ? 'stage' : 'stages'},
-              ${gatewayCount} ${gatewayCount === 1 ? 'gateway' : 'gateways'}.
-              Edits apply when valid (250&nbsp;ms after typing stops).
-            </p>
-          </div>
-        </div>
         ${banner}
         <div class="definition-editor-frame">
           ${this._definitionEditorLoaded
@@ -2153,7 +1802,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               <li>Stages are the work cards. Gateways are the diamond routing points between them.</li>
               <li>Use the <strong>Outline</strong> panel on the left to jump between queue columns and stages quickly.</li>
               <li>Reorder stages in <strong>List view</strong> with <strong>Move up</strong>, <strong>Move down</strong>, or <strong>Alt + Arrow</strong>. The canvas keeps its automatic layout in this first pass.</li>
-              <li>Use the <strong>Validation</strong> tab for issues, the <strong>Preview</strong> tab for runtime shape, and <strong>Simulation</strong> to walk the route.</li>
+              <li>Use the <strong>Validation</strong> tab to check for issues before you save.</li>
               <li>All structural changes support <strong>Undo/Redo</strong> — experiment safely.</li>
             </ul>
           </section>
@@ -2165,7 +1814,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               <li>Add the next stage that should happen in the service flow, then open the <strong>Inspector</strong> to shape its details.</li>
               <li>Add a <strong>routing gateway</strong> when the service blueprint needs to branch or wait for multiple paths to join.</li>
               <li>Create routes so the canvas reads as <strong>stage → gateway → stage</strong> or <strong>gateway → gateway</strong>.</li>
-              <li>Check <strong>Validation</strong>, then use <strong>Preview</strong> and <strong>Simulation</strong> before saving.</li>
+              <li>Check <strong>Validation</strong> before saving.</li>
               <li>Save your service blueprint when ready — changes will be published to the runtime.</li>
             </ol>
           </section>
@@ -2176,19 +1825,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   private get _canSaveByContext(): boolean {
     return this.authorContext?.canSave !== false;
-  }
-
-  private _renderStagePreview() {
-    const selectedStage = this._selectedStage;
-    return html`
-      <wayfinder-stage-preview
-        .stage=${selectedStage}
-        .projectedState=${this._previewedStage}
-        .outgoingTransitions=${this._previewedTransitions}
-        .previewState=${this._stagePreviewState}
-        .errorMessage=${this._stagePreviewError ?? ''}
-      ></wayfinder-stage-preview>
-    `;
   }
 
   private _toggleOutlineCollapsed = () => {
@@ -2255,22 +1891,16 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         ${this._renderSaveErrorSurface()}
         ${this._renderStaleServiceBlueprintBanner()}
 
-        <!-- Tab-based navigation -->
-        <div class="editor-content-wrapper">
-        ${this._renderStaleServiceBlueprintOverlay()}
-        <wayfinder-confidence-tabs
-          class="editor-tabs"
-          active-tab="${this._activeConfidenceTab}"
-          error-count="${this._blockingValidationIssues.length}"
-          warning-count="${this._warningValidationIssues.length}"
-          @tab-changed=${this._handleConfidenceTabChanged}
-        >
-          <!-- Save/undo/redo act on the whole serviceBlueprint, not just the canvas — sit in the
-               tab bar's own row (slot="actions") so they stay visible regardless of which tab is
-               active, unlike the canvas-specific tools below (copy/paste, add stage/gateway,
-               zoom) which only make sense with the graph on screen. Slotted into the tab bar
-               rather than a row of their own so they cost no extra vertical space. -->
-          <div slot="actions" role="toolbar" aria-label="ServiceBlueprint editor actions">
+        <!-- Toolbar header: sits above the whole tabbed area (not slotted into any one tab), so
+             save/undo/redo — which act on the whole serviceBlueprint, not just the canvas — stay
+             visible and usable no matter which tab is active. The rest of this bar (copy/paste,
+             add stage/gateway, zoom) only makes sense with the graph on screen, so it's shown
+             only while the Canvas tab is active rather than always present and disabled. -->
+        <div class="toolbar-header" role="none">
+          <h1 id="service-blueprint-editor-title" class="editor-title">
+            ${this._serviceBlueprint?.displayName ?? 'Service Blueprint Editor'}
+          </h1>
+          <div class="toolbar-actions" role="toolbar" aria-label="ServiceBlueprint editor tools">
             <button
               class="toolbar-btn toolbar-btn--icon govuk-button${this._saveState === 'saving' ? ' toolbar-btn--spinning' : ''}"
               data-wayfinder-save
@@ -2306,69 +1936,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             >
               ${renderToolbarIcon('redo')}
             </button>
-          </div>
 
-          <!-- Canvas tab: main workspace -->
-          <div slot="canvas" class="canvas-workspace">
-            <div
-              class=${`editor-shell ${this._inspectorResizing ? 'editor-shell-resizing' : ''}`}
-              style=${`--outline-width:${this._outlineCollapsed ? '3.5rem' : '240px'};--inspector-width:${this._inspectorCollapsed ? '3.5rem' : `${this._inspectorWidth}px`};`}
-            >
-              <!-- Left: outline -->
-              <section class=${`editor-outline-shell ${this._outlineCollapsed ? 'panel-collapsed' : ''}`}>
-                <div class="panel-header">
-                  <div class="panel-header-copy">
-                    <h2 class="panel-title">Outline</h2>
-                    ${this._outlineCollapsed
-                      ? nothing
-                      : html`
-                          <p class="panel-subtitle">
-                            ${(this._serviceBlueprint?.stages.length ?? 0)} ${(this._serviceBlueprint?.stages.length ?? 0) === 1 ? 'stage' : 'stages'}
-                            ${this._serviceBlueprint?.metadata?.gateways?.length ? ` · ${this._serviceBlueprint.metadata?.gateways.length} gateways` : ''}
-                          </p>
-                        `}
-                  </div>
-                  <button
-                    type="button"
-                    class="panel-toggle"
-                    data-wayfinder-outline-toggle
-                    aria-controls="service-blueprint-editor-outline-panel"
-                    aria-expanded=${String(!this._outlineCollapsed)}
-                    aria-label=${this._outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
-                    @click=${this._toggleOutlineCollapsed}
-                  >
-                    ${this._outlineCollapsed ? renderToolbarIcon('chevronRight') : renderToolbarIcon('chevronLeft')}
-                    <span class="sr-only">${this._outlineCollapsed ? 'Expand outline' : 'Collapse outline'}</span>
-                  </button>
-                </div>
-                <div
-                  id="service-blueprint-editor-outline-panel"
-                  class="panel-body"
-                  ?hidden=${this._outlineCollapsed}
-                >
-                  <wayfinder-service-blueprint-outline
-                    class="editor-outline"
-                    data-wayfinder-service-blueprint-outline
-                    .serviceBlueprint=${this._serviceBlueprint}
-                    .availableQueues=${this.availableQueues}
-                    .selectedStageKey=${this._selectedStageKey}
-                    .selectedGatewayKey=${this._selectedGatewayKey}
-                    .selectedTransitionIndex=${this._selectedTransitionIndex}
-                    .showHeader=${false}
-                    @outline-stage-selected=${this._handleOutlineStageSelected}
-                    @outline-gateway-selected=${this._handleOutlineGatewaySelected}
-                    @outline-transition-selected=${this._handleOutlineTransitionSelected}
-                  ></wayfinder-service-blueprint-outline>
-                </div>
-              </section>
-
-              <!-- Center: graph workspace + toolbar -->
-              <div class="editor-center">
-                <div class="editor-header" role="none">
-                  <h1 id="service-blueprint-editor-title" class="editor-title">
-                    ${this._serviceBlueprint?.displayName ?? 'Service Blueprint Editor'}
-                  </h1>
-                  <div class="editor-toolbar" role="toolbar" aria-label="ServiceBlueprint editor tools">
+            ${this._activeConfidenceTab === 'canvas'
+              ? html`
+                  <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
+                  <div class="editor-toolbar">
                     <button
                       class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
                       data-wayfinder-copy
@@ -2470,7 +2042,77 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       ${renderToolbarIcon('fitWidth')}
                     </button>
                   </div>
+                `
+              : nothing}
+          </div>
+        </div>
+
+        <!-- Tab-based navigation -->
+        <div class="editor-content-wrapper">
+        ${this._renderStaleServiceBlueprintOverlay()}
+        <wayfinder-confidence-tabs
+          class="editor-tabs"
+          active-tab="${this._activeConfidenceTab}"
+          error-count="${this._blockingValidationIssues.length}"
+          warning-count="${this._warningValidationIssues.length}"
+          @tab-changed=${this._handleConfidenceTabChanged}
+        >
+          <!-- Canvas tab: main workspace -->
+          <div slot="canvas" class="canvas-workspace">
+            <div
+              class=${`editor-shell ${this._inspectorResizing ? 'editor-shell-resizing' : ''}`}
+              style=${`--outline-width:${this._outlineCollapsed ? '3.5rem' : '240px'};--inspector-width:${this._inspectorCollapsed ? '3.5rem' : `${this._inspectorWidth}px`};`}
+            >
+              <!-- Left: outline -->
+              <section class=${`editor-outline-shell ${this._outlineCollapsed ? 'panel-collapsed' : ''}`}>
+                <div class="panel-header">
+                  <div class="panel-header-copy">
+                    <h2 class="panel-title">Outline</h2>
+                    ${this._outlineCollapsed
+                      ? nothing
+                      : html`
+                          <p class="panel-subtitle">
+                            ${(this._serviceBlueprint?.stages.length ?? 0)} ${(this._serviceBlueprint?.stages.length ?? 0) === 1 ? 'stage' : 'stages'}
+                            ${this._serviceBlueprint?.metadata?.gateways?.length ? ` · ${this._serviceBlueprint.metadata?.gateways.length} gateways` : ''}
+                          </p>
+                        `}
+                  </div>
+                  <button
+                    type="button"
+                    class="panel-toggle"
+                    data-wayfinder-outline-toggle
+                    aria-controls="service-blueprint-editor-outline-panel"
+                    aria-expanded=${String(!this._outlineCollapsed)}
+                    aria-label=${this._outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
+                    @click=${this._toggleOutlineCollapsed}
+                  >
+                    ${this._outlineCollapsed ? renderToolbarIcon('chevronRight') : renderToolbarIcon('chevronLeft')}
+                    <span class="sr-only">${this._outlineCollapsed ? 'Expand outline' : 'Collapse outline'}</span>
+                  </button>
                 </div>
+                <div
+                  id="service-blueprint-editor-outline-panel"
+                  class="panel-body"
+                  ?hidden=${this._outlineCollapsed}
+                >
+                  <wayfinder-service-blueprint-outline
+                    class="editor-outline"
+                    data-wayfinder-service-blueprint-outline
+                    .serviceBlueprint=${this._serviceBlueprint}
+                    .availableQueues=${this.availableQueues}
+                    .selectedStageKey=${this._selectedStageKey}
+                    .selectedGatewayKey=${this._selectedGatewayKey}
+                    .selectedTransitionIndex=${this._selectedTransitionIndex}
+                    .showHeader=${false}
+                    @outline-stage-selected=${this._handleOutlineStageSelected}
+                    @outline-gateway-selected=${this._handleOutlineGatewaySelected}
+                    @outline-transition-selected=${this._handleOutlineTransitionSelected}
+                  ></wayfinder-service-blueprint-outline>
+                </div>
+              </section>
+
+              <!-- Center: graph workspace -->
+              <div class="editor-center">
                 ${(() => {
                   const errorCount = this._blockingValidationIssues.length;
                   const warningCount = this._warningValidationIssues.length;
@@ -2506,9 +2148,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                   .selectedStageKey=${this._selectedStageKey}
                   .selectedGatewayKey=${this._selectedGatewayKey}
                   .selectedTransitionIndex=${this._selectedTransitionIndex}
-                  .simulationCurrentStageKey=${this._simulationCurrentStage?.stateKey ?? null}
-                  .simulationPathStageKeys=${this._simulation?.history.map(entry => entry.stageKey) ?? []}
-                  .simulationPathTransitionIndices=${this._simulation?.pathTransitionIndices ?? []}
                   .hideOwnToolbar=${true}
                   @stage-selected="${this._handleStageSelected}"
                   @gateway-selected="${this._handleGatewaySelected}"
@@ -2589,8 +2228,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           <!-- Other tabs -->
           <div slot="calculations">${this._renderCalculationsPanel()}</div>
           <div slot="validation">${this._renderValidationPanel()}</div>
-          <div slot="preview">${this._renderStagePreview()}</div>
-          <div slot="simulation">${this._renderSimulationPanel()}</div>
           <div slot="definition">${this._renderDefinitionPanel()}</div>
         </wayfinder-confidence-tabs>
         </div>
@@ -3194,7 +2831,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       overflow: hidden;
     }
 
-    .editor-header {
+    /* Sits above the whole tabbed area (canvas/calculations/validation/definition), not nested
+       inside any one tab's own content — save/undo/redo act on the whole serviceBlueprint, so
+       they need to stay reachable no matter which tab is active. */
+    .toolbar-header {
       display: flex;
       align-items: center;
       gap: 1rem;
@@ -3211,10 +2851,21 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       flex: 1;
     }
 
+    .toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+
+    /* The canvas-specific tool group (copy/paste, add stage/gateway, zoom) nested inside
+       .toolbar-actions, shown only while the Canvas tab is active — unlike save/undo/redo,
+       these only make sense with the graph on screen. */
     .editor-toolbar {
       display: flex;
       flex-wrap: wrap;
-      justify-content: flex-end;
+      align-items: center;
       gap: 0.5rem;
     }
 
@@ -3703,12 +3354,13 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         grid-template-columns: var(--outline-width, 240px) 1fr var(--inspector-width, 320px);
       }
 
-      .editor-header {
+      .toolbar-header {
         flex-direction: column;
         gap: 0.75rem;
         align-items: stretch;
       }
 
+      .toolbar-actions,
       .editor-toolbar {
         flex-wrap: wrap;
       }
@@ -3738,7 +3390,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         min-height: 8rem;
       }
 
-      .editor-header {
+      .toolbar-header {
         padding: 0.625rem 0.875rem;
       }
 
@@ -3746,6 +3398,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         font-size: 1.125rem;
       }
 
+      .toolbar-actions,
       .editor-toolbar {
         gap: 0.375rem;
       }
@@ -3764,23 +3417,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       height: 100%;
       min-height: 0;
       background: #ffffff;
-    }
-
-    .definition-header {
-      padding: 1rem 1.25rem 0.75rem;
-      border-bottom: 1px solid #b1b4b6;
-    }
-
-    .definition-title {
-      margin: 0 0 0.25rem;
-      font-size: 1.125rem;
-      font-weight: 700;
-    }
-
-    .definition-subtitle {
-      margin: 0;
-      font-size: 0.875rem;
-      color: #505a5f;
     }
 
     .definition-banner {
@@ -3819,7 +3455,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       min-height: 0;
       display: flex;
       flex-direction: column;
-      padding: 0 1.25rem 1.25rem;
+      padding: 1.25rem;
     }
 
     .definition-editor-frame wayfinder-definition-editor {

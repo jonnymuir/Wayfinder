@@ -1,11 +1,14 @@
 # Editor skill docs
 
 This directory documents every tab in the service blueprint editor's confidence-tab shell
-(`Canvas`, `Calculations`, `Validation`, `Preview`, `Simulation`, `Definition` — see
-`ConfidenceTab` in `Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-confidence-tabs.ts`),
-one topic per subfolder. Help and keyboard shortcuts live in a dialog reachable from every tab
-(the toolbar's help button, or F1) rather than a tab of their own — see
-`service-blueprint-editor-help.spec.ts`.
+(`Canvas`, `Calculations`, `Validation`, `Definition` — see `ConfidenceTab` in
+`Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-confidence-tabs.ts`), one topic
+per subfolder. Help and keyboard shortcuts live in a dialog reachable from every tab (the
+toolbar's help button, or F1) rather than a tab of their own — see
+`service-blueprint-editor-help.spec.ts`. Preview and Simulation tabs existed at one point but were
+removed — Preview only ever rendered one selected stage in isolation, and Simulation's own test
+suite already documented it as broken past its first step, with a TODO referencing a rework that
+never happened.
 
 ```
 docs/skills/<topic>/SKILL.md

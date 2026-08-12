@@ -146,6 +146,12 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   @property({ attribute: false })
   selectedGatewayKey: string | null = null;
 
+  // Simulation highlighting plumbing — no caller currently drives these (the Simulation tab that
+  // used to was removed; see wayfinder-service-blueprint-editor.ts). Left in place rather than
+  // torn out through graph-app.tsx/graph-bridge.ts/graph-callbacks.ts/graph-model.ts too: with no
+  // caller, these three always default, so the .simulation-path/.simulation-current CSS below
+  // never actually applies — inert, not broken. A future path-highlighting feature (recorded
+  // history playback, a real simulation rebuild) could reuse this rather than reinventing it.
   @property({ attribute: false })
   simulationCurrentStageKey: string | null = null;
 

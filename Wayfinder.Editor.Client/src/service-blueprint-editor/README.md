@@ -83,10 +83,9 @@ MockBusinessApp's `/mockapp/serviceBlueprints/*` endpoints lives at
 
 **Definition tab — JSON twin-pane**
 
-Alongside Canvas / Validation / Preview / Simulation / Help, the editor
-exposes a **Definition** tab containing an editable JSON view of the current
-`AuthoredServiceBlueprint`. Author-facing copy uses "Definition" — JSON is the
-implementation detail.
+Alongside Canvas / Calculations / Validation, the editor exposes a **Definition**
+tab containing an editable JSON view of the current `AuthoredServiceBlueprint`.
+Author-facing copy uses "Definition" — JSON is the implementation detail.
 
 * **Editor library:** [CodeMirror 6](https://codemirror.net/) (modules
   `@codemirror/{state,view,commands,language,lang-json,lint}`). Chosen for
@@ -180,7 +179,7 @@ the cards.
 | `selectedStageKey` | `string \| null` | Inbound selection — host sets this to drive the graph's highlight. |
 | `selectedGatewayKey` | `string \| null` | Inbound selection. |
 | `selectedTransitionIndex` | `number \| null` | Inbound transition highlight. |
-| `simulationCurrentStageKey` / `simulationPathStageKeys` / `simulationPathTransitionIndices` | various | Optional simulation overlay state. |
+| `simulationCurrentStageKey` / `simulationPathStageKeys` / `simulationPathTransitionIndices` | various | Path-highlighting overlay state. No current caller sets these (the Simulation tab that used to was removed) — always default, so the highlighting they drive never actually shows. Left in place for a future path-highlighting feature to reuse rather than reinventing. |
 
 **Events**
 
@@ -226,9 +225,6 @@ notice:
 
 * `<wayfinder-step-inspector>`
 * `<wayfinder-confidence-tabs>`
-* `<wayfinder-help-panel>`
-* `<wayfinder-stage-preview>`
-* `<wayfinder-service-blueprint-simulation>`
 * `<wayfinder-service-blueprint-outline>`
 * `<wayfinder-stage-action-editor>`
 * `<wayfinder-inline-help>`
