@@ -226,14 +226,7 @@ export const WithStageSelected: Story = {
     declarationStage.click();
 
     await waitFor(() =>
-      expect(
-        root
-          .querySelector('wayfinder-stage-preview')
-          ?.shadowRoot
-          ?.querySelector('[data-wayfinder-preview-stage-name]')
-          ?.textContent
-          ?.trim()
-      ).toBe('Declaration')
+      expect(inspector!.shadowRoot!.querySelector('[data-wayfinder-stage-detail="declaration"]')).not.toBeNull()
     );
   },
 };

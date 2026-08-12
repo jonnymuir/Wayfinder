@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-export type ConfidenceTab = 'canvas' | 'calculations' | 'validation' | 'preview' | 'simulation' | 'definition';
+export type ConfidenceTab = 'canvas' | 'calculations' | 'validation' | 'definition';
 
 /**
  * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
@@ -17,7 +17,7 @@ export class WayfinderConfidenceTabs extends LitElement {
   @property({ type: Number, attribute: 'warning-count' })
   warningCount = 0;
 
-  private static readonly _tabs: ConfidenceTab[] = ['canvas', 'calculations', 'validation', 'preview', 'simulation', 'definition'];
+  private static readonly _tabs: ConfidenceTab[] = ['canvas', 'calculations', 'validation', 'definition'];
 
   private _handleTabClick(tab: ConfidenceTab) {
     if (this.activeTab !== tab) {
@@ -105,21 +105,11 @@ export class WayfinderConfidenceTabs extends LitElement {
 
     return html`
       <div class="tabs-root" data-wayfinder-confidence-tabs>
-        <div class="tab-bar-row">
-          <div class="tab-bar" role="tablist" aria-label="Editor tools">
-            ${this._renderTabButton('canvas', 'Canvas')}
-            ${this._renderTabButton('calculations', 'Calculations')}
-            ${this._renderTabButton('validation', 'Validation', validationBadge)}
-            ${this._renderTabButton('preview', 'Preview')}
-            ${this._renderTabButton('simulation', 'Simulation')}
-            ${this._renderTabButton('definition', 'Definition')}
-          </div>
-          <!-- Not part of the tablist (role="tablist" should only ever contain role="tab"
-               children) — a separate sibling region on the same row for actions that apply
-               regardless of which tab is active, e.g. save/undo/redo. -->
-          <div class="tab-actions">
-            <slot name="actions"></slot>
-          </div>
+        <div class="tab-bar" role="tablist" aria-label="Editor tools">
+          ${this._renderTabButton('canvas', 'Canvas')}
+          ${this._renderTabButton('calculations', 'Calculations')}
+          ${this._renderTabButton('validation', 'Validation', validationBadge)}
+          ${this._renderTabButton('definition', 'Definition')}
         </div>
 
         <div class="tab-panel-container">
@@ -157,28 +147,6 @@ export class WayfinderConfidenceTabs extends LitElement {
           </div>
 
           <div
-            id="confidence-panel-preview"
-            class="tab-panel ${this.activeTab === 'preview' ? 'tab-panel-active' : ''}"
-            role="tabpanel"
-            aria-labelledby="confidence-tab-preview"
-            data-wayfinder-confidence-panel="preview"
-            ?hidden=${this.activeTab !== 'preview'}
-          >
-            <slot name="preview"></slot>
-          </div>
-
-          <div
-            id="confidence-panel-simulation"
-            class="tab-panel ${this.activeTab === 'simulation' ? 'tab-panel-active' : ''}"
-            role="tabpanel"
-            aria-labelledby="confidence-tab-simulation"
-            data-wayfinder-confidence-panel="simulation"
-            ?hidden=${this.activeTab !== 'simulation'}
-          >
-            <slot name="simulation"></slot>
-          </div>
-
-          <div
             id="confidence-panel-definition"
             class="tab-panel tab-panel-definition ${this.activeTab === 'definition' ? 'tab-panel-active' : ''}"
             role="tabpanel"
@@ -210,32 +178,11 @@ export class WayfinderConfidenceTabs extends LitElement {
       overflow: hidden;
     }
 
-    .tab-bar-row {
-      display: flex;
-      align-items: stretch;
-      justify-content: space-between;
-      gap: 1rem;
-      border-bottom: 2px solid #b1b4b6;
-      background: #f8f8f8;
-      flex-shrink: 0;
-    }
-
     .tab-bar {
       display: flex;
       gap: 0;
-      min-width: 0;
-    }
-
-    /* Blue to match the background these buttons were designed against (.editor-header in
-       wayfinder-service-blueprint-editor.ts) — .toolbar-btn is a white button with an
-       intentionally invisible white border that only reads as a button against that blue,
-       not against this row's light-grey tab-bar background. */
-    .tab-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0 1rem;
-      background: #1d70b8;
+      border-bottom: 2px solid #b1b4b6;
+      background: #f8f8f8;
       flex-shrink: 0;
     }
 

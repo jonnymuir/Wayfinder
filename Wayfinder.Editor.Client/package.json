@@ -2,7 +2,7 @@
   "name": "@wayfinder/editor-client",
   "private": true,
   "version": "0.1.0",
-  "description": "Wayfinder's service blueprint visual editor as host-agnostic Lit custom elements (graph canvas, definition JSON editor, validation, simulation) with no assumptions about hosting or persistence. Not published to a registry — consumed by other Wayfinder projects as a pre-built ES module bundle shipped inside the Wayfinder.Editor NuGet package's static web assets, the same way any Umbraco backoffice extension bundle is loaded by URL at runtime.",
+  "description": "Wayfinder's service blueprint visual editor as host-agnostic Lit custom elements (graph canvas, definition JSON editor, validation) with no assumptions about hosting or persistence. Not published to a registry — consumed by other Wayfinder projects as a pre-built ES module bundle shipped inside the Wayfinder.Editor NuGet package's static web assets, the same way any Umbraco backoffice extension bundle is loaded by URL at runtime.",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -25,7 +25,7 @@
     "test:calculation-ordering": "node scripts/run-calculation-ordering-tests.mjs",
     "test:calculation-diagnostics": "node scripts/run-calculation-diagnostics-tests.mjs",
     "test:canonical-json": "node scripts/run-canonical-json-tests.mjs",
-    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts service-blueprint-editor-validation.spec.ts service-blueprint-editor-stage-preview.spec.ts service-blueprint-editor-simulation.spec.ts service-blueprint-editor-definition-tab.spec.ts service-blueprint-editor-help.spec.ts"
+    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts service-blueprint-editor-validation.spec.ts service-blueprint-editor-definition-tab.spec.ts service-blueprint-editor-help.spec.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
