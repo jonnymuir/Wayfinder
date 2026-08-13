@@ -7,6 +7,7 @@ import {
   ServiceBlueprintSaveError,
   sanitiseServiceBlueprintSaveErrorLines,
   sanitiseServiceBlueprintSaveErrorText,
+  type ServiceBlueprintSaveErrorDetail,
   type ServiceBlueprintSource,
   type ServiceBlueprintSummary,
 } from '../service-blueprint-source.js';
@@ -28,28 +29,73 @@ type ProblemDetailsPayload = {
   };
 };
 
-// The shape Wayfinder.Engine.Services.ServiceBlueprintSaveOutcome serializes to — returned
-// by both /mockapp/service-blueprints/{key} and /wayfinder/service-blueprint-authoring/blueprints/{key} on a version
-// conflict (409). Not a ProblemDetails payload, so it's parsed separately.
+// The shape Wayfinder.Engine.Services.ServiceBlueprintSaveOutcome serializes to — returned by
+// both /mockapp/service-blueprints/{key} and
+// /wayfinder/service-blueprint-authoring/blueprints/{key} on EITHER a validation failure (400,
+// Status "Invalid") or a version conflict (409, Status "Conflict"). Not a ProblemDetails payload,
+// so it's parsed separately — see isServiceBlueprintSaveOutcomePayload/parseSaveOutcome below.
 type ServiceBlueprintSaveOutcomePayload = {
   status?: unknown;
-  errors?: unknown;
+  diagnostics?: unknown;
   currentVersion?: unknown;
   newVersion?: unknown;
 };
 
-function parseConflictOutcome(payload: ServiceBlueprintSaveOutcomePayload, blueprintKey: string): ServiceBlueprintSaveError {
+// The shape of each ServiceBlueprintDiagnostic in that array: Code, Path, Message, Severity —
+// see Wayfinder/Models/ServiceDesign/ServiceBlueprintDiagnostic.cs.
+type ServiceBlueprintDiagnosticPayload = {
+  code?: unknown;
+  path?: unknown;
+  message?: unknown;
+};
+
+function isServiceBlueprintSaveOutcomePayload(payload: unknown): payload is ServiceBlueprintSaveOutcomePayload {
+  return !!payload && typeof payload === 'object'
+    && typeof (payload as ServiceBlueprintSaveOutcomePayload).status === 'string'
+    && Array.isArray((payload as ServiceBlueprintSaveOutcomePayload).diagnostics);
+}
+
+/** `Path`s like `stages.review.validations[0].when` or `stages.review.components[2].showWhen`
+ * name a real stage the editor can jump to — see ServiceBlueprintSaveErrorDetail's doc comment. */
+function stageKeyFromDiagnosticPath(path: string): string | undefined {
+  return /^stages\.([^.[]+)/.exec(path)?.[1];
+}
+
+function readSaveOutcomeDiagnosticDetails(diagnostics: unknown): ServiceBlueprintSaveErrorDetail[] {
+  if (!Array.isArray(diagnostics)) {
+    return [];
+  }
+
+  return diagnostics
+    .filter((entry): entry is ServiceBlueprintDiagnosticPayload => !!entry && typeof entry === 'object')
+    .flatMap(entry => {
+      const message = sanitiseServiceBlueprintSaveErrorText(typeof entry.message === 'string' ? entry.message : null);
+      if (!message) {
+        return [];
+      }
+
+      const path = typeof entry.path === 'string' ? entry.path : '';
+      return [{ message, stageKey: path ? stageKeyFromDiagnosticPath(path) : undefined }];
+    });
+}
+
+function parseSaveOutcome(payload: ServiceBlueprintSaveOutcomePayload, statusCode: number, blueprintKey: string): ServiceBlueprintSaveError {
+  const isConflict = statusCode === 409;
   const currentVersion = typeof payload.currentVersion === 'number' ? payload.currentVersion : null;
-  const detailLines = readStructuredErrorLines(payload.errors);
+  const details = readSaveOutcomeDiagnosticDetails(payload.diagnostics);
+  const detailLines = details.map(detail => detail.message);
   const summary = sanitiseServiceBlueprintSaveErrorText(detailLines[0])
-    ?? `“${blueprintKey}” was changed elsewhere since you loaded it${currentVersion != null ? ` (now at version ${currentVersion})` : ''}.`;
+    ?? (isConflict
+      ? `“${blueprintKey}” was changed elsewhere since you loaded it${currentVersion != null ? ` (now at version ${currentVersion})` : ''}.`
+      : `The host app rejected the save request for “${blueprintKey}”.`);
 
   return new ServiceBlueprintSaveError({
-    title: 'This service blueprint changed elsewhere',
+    title: isConflict ? 'This service blueprint changed elsewhere' : 'We couldn’t save this service blueprint',
     summary,
+    details: details.filter(detail => detail.message !== summary),
     detailLines: detailLines.filter(line => line !== summary),
-    statusCode: 409,
-    isConflict: true,
+    statusCode,
+    isConflict,
     currentVersion,
   });
 }
@@ -118,12 +164,12 @@ async function buildSaveError(response: Response, blueprintKey: string): Promise
 
   if (contentType.includes('json') || payloadText.trim().startsWith('{')) {
     try {
-      if (response.status === 409) {
-        return parseConflictOutcome(JSON.parse(payloadText) as ServiceBlueprintSaveOutcomePayload, blueprintKey);
+      const payload = JSON.parse(payloadText) as unknown;
+      if (isServiceBlueprintSaveOutcomePayload(payload)) {
+        return parseSaveOutcome(payload, response.status, blueprintKey);
       }
 
-      const payload = JSON.parse(payloadText) as ProblemDetailsPayload;
-      return parseProblemDetails(payload, response.status, blueprintKey);
+      return parseProblemDetails(payload as ProblemDetailsPayload, response.status, blueprintKey);
     } catch {
       // Fall through to the plain-text fallback.
     }

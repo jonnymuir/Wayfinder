@@ -4,7 +4,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { AuthoredServiceBlueprint, AuthoredStage, AuthoredStageValidation, ComponentDescriptor, ServiceBlueprintCalculationsBlock } from './types.js';
 import { collectStageInputFields, type FieldReference } from './component-property-references.js';
 import { computeStableFieldOrder, type FieldInput } from './calculation-ordering.js';
-import { inScopeInputFieldKeys, tryEvaluateFieldsForPreview, tryEvaluateSeriesForPreview } from './calculation-runtime.js';
+import { inScopeInputFieldKeys, tryEvaluateFieldsForPreview, tryEvaluateSeriesForPreview, tryParseExpression } from './calculation-runtime.js';
 import { computeCalculationDiagnostics } from './calculation-diagnostics.js';
 import './wayfinder-calculation-expression-editor.js';
 import type { ExpressionCompletionItem } from './wayfinder-calculation-expression-editor.js';
@@ -832,6 +832,13 @@ export class WayfinderCalculationsEditorElement extends LitElement {
       ...Object.keys(this._calculations.fields).map(name => ({ name, detail: 'field' })),
     ];
 
+    // Same parse check stageValidationRuleIssues() (service-blueprint-validation.ts) blocks Save
+    // with — shown here too so the error is visible right where it was typed, not just in the
+    // Validation tab, matching how a calc field's own parse error already surfaces inline
+    // (calc-preview-error above) rather than only in the validation rail.
+    const whenParse = rule.when && rule.when.trim() ? tryParseExpression(rule.when) : null;
+    const ruleParse = tryParseExpression(rule.rule);
+
     return html`
       <li class="calc-field-row" data-wayfinder-calc-validation=${`${stage.stateKey}-${index}`}>
         <div class="calc-field-row-header">
@@ -878,6 +885,9 @@ export class WayfinderCalculationsEditorElement extends LitElement {
               @expression-input=${(event: CustomEvent<{ value: string }>) =>
                 this._setValidation(stage, index, { when: event.detail.value || undefined })}
             ></wayfinder-calculation-expression-editor>
+            ${whenParse && !whenParse.ok
+              ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-validation-preview>${whenParse.message}</span>`
+              : nothing}
           </div>
 
           <div class="field-block calc-expression-block">
@@ -888,6 +898,9 @@ export class WayfinderCalculationsEditorElement extends LitElement {
               label-text="${rule.code || 'validation'} rule"
               @expression-input=${(event: CustomEvent<{ value: string }>) => this._setValidation(stage, index, { rule: event.detail.value })}
             ></wayfinder-calculation-expression-editor>
+            ${!ruleParse.ok
+              ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-validation-preview>${ruleParse.message}</span>`
+              : nothing}
           </div>
 
           <label class="field-block">

@@ -3,7 +3,7 @@ import { stageActions, stageKind, serviceBlueprintGateways, serviceBlueprintStag
 import { findCatalogEntry, validateAction } from './action-editing.js';
 import { flattenRoutes, outgoingRouteViews, inboundRouteViews } from './route-model.js';
 import { collectStageInputFields } from './component-property-references.js';
-import { inScopeInputFieldKeys } from './calculation-runtime.js';
+import { inScopeInputFieldKeys, tryParseExpression } from './calculation-runtime.js';
 import { computeCalculationDiagnostics, type CalculationDiagnostic } from './calculation-diagnostics.js';
 
 const TERMINAL_STAGE_KINDS = new Set<AuthoredStage['metadata'] extends never ? never : ReturnType<typeof stageKind>>(['Confirmation']);
@@ -40,7 +40,8 @@ export interface ServiceBlueprintValidationIssue {
     | 'calculation-name-collision'
     | 'calculation-cycle'
     | 'calculation-order'
-    | 'calculation-loop-variable-collision';
+    | 'calculation-loop-variable-collision'
+    | 'stage-validation-parse-error';
   severity: ServiceBlueprintValidationSeverity;
   message: string;
   blocking: boolean;
@@ -327,6 +328,45 @@ function calculationDiagnosticToIssue(diagnostic: CalculationDiagnostic, index: 
   }
 }
 
+/**
+ * `when`/`rule` are expressions in the same calculation language as `expr`/`showWhen` (see
+ * AuthoredStageValidation's doc comment in types.ts) and CheckStageValidationExpression
+ * (ServiceBlueprintAuthoringService.cs) rejects a malformed one at Save time exactly like
+ * CalculationEvaluator does for a calculation field — so this mirrors calculationValidationIssues
+ * above rather than leaving these fields checked only by the CodeMirror lint's red squiggle, which
+ * warns but never blocks Save.
+ */
+function stageValidationRuleIssues(serviceBlueprint: AuthoredServiceBlueprint): ServiceBlueprintValidationIssue[] {
+  return serviceBlueprint.stages.flatMap(stage =>
+    (stage.validations ?? []).flatMap((validation, index) => {
+      const fields: Array<{ key: 'when' | 'rule'; expression: string | undefined }> = [
+        { key: 'when', expression: validation.when },
+        { key: 'rule', expression: validation.rule },
+      ];
+
+      return fields.flatMap(({ key, expression }) => {
+        if (!expression) {
+          return [];
+        }
+
+        const result = tryParseExpression(expression);
+        if (result.ok) {
+          return [];
+        }
+
+        return [{
+          id: `stage-validation-parse-error-${stage.stateKey}-${index}-${key}`,
+          code: 'stage-validation-parse-error' as const,
+          severity: 'error' as const,
+          blocking: true,
+          location: { kind: 'stage', stageKey: stage.stateKey } as const,
+          message: `Stage “${stage.displayName}” validation rule “${validation.code}” has an invalid ${key} expression: ${result.message}`,
+        }];
+      });
+    })
+  );
+}
+
 export function validateServiceBlueprint(
   serviceBlueprint: AuthoredServiceBlueprint,
   actionCatalog: ActionCatalogEntry[] = [],
@@ -443,5 +483,6 @@ export function validateServiceBlueprint(
     ...stageActionIssues,
     ...routeActionIssues,
     ...calculationValidationIssues(serviceBlueprint, componentCatalog),
+    ...stageValidationRuleIssues(serviceBlueprint),
   ];
 }
