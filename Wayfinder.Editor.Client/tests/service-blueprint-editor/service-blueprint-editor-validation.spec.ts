@@ -314,4 +314,40 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await expect(saveError).toHaveCount(0);
     await expect(page.locator('[data-wayfinder-save-error-copy-status]')).toHaveCount(0);
   });
+
+  test('flags a malformed stage validation expression inline and blocks save', async ({ page }) => {
+    await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
+
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-wayfinder-save]')).toBeEnabled();
+
+    await page.getByRole('tab', { name: 'Calculations' }).click();
+    await page.locator('summary', { hasText: 'Validations' }).click();
+
+    const declarationValidations = page.locator('.calc-validations-stage', { hasText: 'Declaration' });
+    await declarationValidations.getByRole('button', { name: '+ Add validation rule' }).click();
+
+    const row = page.locator('[data-wayfinder-calc-validation="declaration-0"]');
+    await expect(row).toBeVisible();
+    const editors = row.locator('wayfinder-calculation-expression-editor');
+
+    // A well-formed `rule` first, so only the `when` guard below is under test.
+    await editors.nth(1).locator('.cm-content').click();
+    await page.keyboard.type('true');
+
+    const whenContent = editors.nth(0).locator('.cm-content');
+    await whenContent.click();
+    await page.keyboard.type('hasDangerousProps ko[ko[k[ok');
+    await page.keyboard.press('Escape'); // dismiss the autocomplete tooltip
+
+    // The same parse error the Validation tab reports is shown right under the field it belongs
+    // to, not only in the rail — matching how a calc field's own parse error already surfaces
+    // inline via its live-preview span.
+    const inlineError = row.locator('[data-wayfinder-calc-validation-preview]').first();
+    await expect(inlineError).toContainText("Unexpected character '['");
+
+    await page.getByRole('tab', { name: 'Validation' }).click();
+    await expect(page.locator('[data-wayfinder-validation-rail]')).toContainText('has an invalid when expression');
+    await expect(page.locator('[data-wayfinder-save]')).toBeDisabled();
+  });
 });
