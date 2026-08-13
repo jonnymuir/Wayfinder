@@ -1024,6 +1024,14 @@ public record RouteMetadata
     public IReadOnlyList<ActionDefinition>? Actions { get; init; }
 }
 
+/// <summary>
+/// Something a stage or route does beyond just moving between them. Historically schema-only —
+/// the engine copies an instance through wherever it's attached (<see cref="StageDefinition.Actions"/>,
+/// <see cref="RouteMetadata.Actions"/>) without ever executing it. The first <see cref="Type"/>
+/// convention the engine actually executes is
+/// <see cref="SupportSystems.SupportSystemActionTypes.SupportSystemCall"/> — see
+/// docs/guides/support-systems.md.
+/// </summary>
 public record ActionDefinition
 {
     public string Type { get; init; } = "";

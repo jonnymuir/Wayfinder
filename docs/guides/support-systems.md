@@ -1,0 +1,143 @@
+# Support systems
+
+How Wayfinder models Nielsen Norman Group's third service-blueprint lane — the
+external/downstream systems a backstage actor calls out to — and how a toolkit integrator
+registers one. This is for whoever is *building* a Wayfinder host, not whoever is *authoring* a
+service blueprint against one; if that's you, see
+[Reference Service Blueprint Contract](./reference-service-blueprint-contract.md) instead.
+
+This document is also exposed as an MCP resource (`service-blueprint-docs://support-systems`)
+so an agent can fetch it directly without repo access.
+
+---
+
+## Where this sits in the service-blueprint model
+
+NN/g's article (nngroup.com/articles/service-blueprints-definition) defines **support
+processes** as "internal steps, and interactions that support the employees in delivering the
+service" — credit-card verification, pricing, quality testing are its own examples. Wayfinder's
+reference app already models two of the five NN/g layers as queues: a citizen-facing
+(frontstage) queue and a caseworker-facing (backstage) queue. A **support system** is the third:
+an external, API-driven actor a caseworker's own stage calls out to, and potentially waits on,
+before finishing their own decision.
+
+The worked example in this repo (`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`):
+a caseworker reviewing a juggling-event licence application sends the applicant's uploaded risk
+assessment to **SafetyNet Underwriting**, a fictional insurer, and waits for its approve/reject
+decision before finishing their own review.
+
+## The abstraction: capability-declared completion mode
+
+A support system doesn't get bespoke engine code. It's a **descriptor** — what the system is
+called and what it can do — plus a small client the host registers alongside it. Two things stay
+deliberately generic rather than baked into any one integration:
+
+- **Inputs** a capability needs are declared using `ComponentPropertyDescriptor` — the exact
+  same recursive shape already shared with action parameters and component properties (see
+  [Extending the component catalog](./extending-the-component-catalog.md)). An input tagged
+  `Format: "field-ref"` gets the existing reference-aware field-ref editor machinery for free —
+  no bespoke input-authoring UI. A capability can declare more than one input.
+- **How the outcome comes back** — poll or webhook — is declared per capability, not assumed by
+  the engine. The engine always offers *both* mechanisms as generic, always-on plumbing: a
+  poll-check hook (invoked whenever a client re-polls a waiting stage, reusing the exact
+  defer/poll envelope a join gateway already returns) and a generic webhook receiver (resolving
+  an opaque invocation id back to the pending cursor). A capability's
+  `SupportedCompletionModes` tells the engine which of those two it should actually use for that
+  capability — the engine only calls the client's status-check method if `Poll` is declared, and
+  only hands the client a callback URL if `Webhook` is declared. A capability can declare both,
+  as SafetyNet Underwriting's does, to demonstrate both paths genuinely resolving the same call.
+
+This means adding a new support system with a different completion strategy — synchronous-only,
+webhook-only, poll-only — needs no engine change, only a new descriptor and a new client.
+
+## `SupportSystemDescriptor` reference
+
+| Field | Meaning |
+|---|---|
+| `Key` | Unique across the whole process — a duplicate throws at registration time. |
+| `DisplayName` | Human-readable name, e.g. "SafetyNet Underwriting". |
+| `Description` | Longer help text — editor tooltip / AI-agent-readable prose. |
+| `Capabilities` | `IReadOnlyList<SupportSystemCapabilityDescriptor>` — see below. Must be registered with at least the capabilities a blueprint will reference. |
+
+## `SupportSystemCapabilityDescriptor` reference
+
+| Field | Meaning |
+|---|---|
+| `Key` | Unique within the support system, e.g. `"validate-risk-assessment"`. |
+| `DisplayName` | Human-readable name for editor UI. |
+| `Inputs` | `IReadOnlyList<ComponentPropertyDescriptor>` — what this capability needs, reusing the exact same property-descriptor shape as a component's own properties. |
+| `SupportedCompletionModes` | `Poll` and/or `Webhook` — must declare at least one, or an invocation could never resolve. |
+| `Outcomes` | The closed set of decisions this capability can resolve to, e.g. `approved`/`rejected` — must declare at least one. A blueprint's outgoing routes from the calling stage are validated against this vocabulary. |
+
+## Registering a support system
+
+```csharp
+SupportSystemRegistry.Register(new SupportSystemDescriptor
+{
+    Key = "safetynet-underwriting",
+    DisplayName = "SafetyNet Underwriting",
+    Capabilities =
+    [
+        new SupportSystemCapabilityDescriptor
+        {
+            Key = "validate-risk-assessment",
+            DisplayName = "Validate a risk assessment",
+            Inputs =
+            [
+                new() { Key = "File", Title = "Risk assessment file", ValueKind = ComponentPropertyValueKind.String, Format = "field-ref", Required = true },
+            ],
+            SupportedCompletionModes = [SupportSystemCompletionMode.Poll, SupportSystemCompletionMode.Webhook],
+            Outcomes =
+            [
+                new() { Key = "approved", DisplayName = "Approved" },
+                new() { Key = "rejected", DisplayName = "Rejected" },
+            ],
+        },
+    ],
+});
+```
+
+Call this **once, at host startup, before any blueprint referencing it is read, validated, or
+run** — `SupportSystemRegistry` freezes the first time anything actually reads it (`.All`,
+`.Find`, `.FindCapability`), and `Register` throws after that, loudly, the same registration
+discipline `ComponentTypeRegistry` already enforces (see
+[Extending the component catalog § Registration timing](./extending-the-component-catalog.md#registration-timing-the-registry-freezes)).
+
+Registering the descriptor alone gets you validation and editor authoring support for
+referencing the capability. Actually calling out to the real external system, and resolving the
+outcome back, is a separate `ISupportSystemClient` implementation the host also registers — the
+engine execution side of this (`Wayfinder.Engine`) is a later phase of this same feature; this
+document will grow to cover it once that lands.
+
+## Using it in a blueprint
+
+An action of type `support-system-call` on a stage or route is how a blueprint calls out to a
+registered capability:
+
+```json
+{
+  "type": "support-system-call",
+  "timing": "onEnter",
+  "params": {
+    "supportSystemKey": "safetynet-underwriting",
+    "capabilityKey": "validate-risk-assessment",
+    "inputs": { "File": "riskAssessment" }
+  }
+}
+```
+
+The stage carrying this action then sits waiting — using the same `waitingContent`/
+`waitingPollIntervalMs`/`requiredIncomingQueues` fields a join gateway already uses for the
+citizen's "waiting behind the line of visibility" screen — until the capability resolves to one
+of its declared `Outcomes`, at which point the matching outgoing route (`insurer-approved`/
+`insurer-rejected`, in the worked example) fires.
+
+## Related documentation
+
+- [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md) — the full
+  `ServiceBlueprint` JSON shape.
+- [Extending the component catalog](./extending-the-component-catalog.md) — the same
+  descriptor-driven registration pattern this feature mirrors, including the full
+  `ComponentPropertyDescriptor` reference and reference-aware `Format` tags.
+- [The Wayfinder Reference App](./reference-app.md) — the juggling-licence demo blueprint and
+  SafetyNet Underwriting, the worked example this document refers to throughout.

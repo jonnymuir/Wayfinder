@@ -5,8 +5,9 @@ namespace Wayfinder.Engine.Mcp;
 
 /// <summary>
 /// MCP resources exposing the service blueprint authoring reference docs — the calculation
-/// expression grammar, the full ServiceBlueprint contract, and the general
-/// service design principles a blueprint should be judged against — so an agent
+/// expression grammar, the full ServiceBlueprint contract, the general
+/// service design principles a blueprint should be judged against, and how to extend the
+/// component catalog or register a support system — so an agent
 /// connected only over MCP (no repo checkout) can fetch them directly. Content is
 /// embedded from the canonical, tool-agnostic markdown in docs/guides/ at build
 /// time; there is no separate copy to keep in sync.
@@ -72,6 +73,19 @@ public static class ServiceBlueprintAuthoringResources
         "Wayfinder host, not whoever is authoring a blueprint against one — that agent wants " +
         "authoring-guide instead.")]
     public static string ExtendingTheComponentCatalog() => ReadEmbeddedDoc("extending-the-component-catalog.md");
+
+    [McpServerResource(
+        Name = "support-systems",
+        UriTemplate = "service-blueprint-docs://support-systems",
+        Title = "Support Systems",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "How Wayfinder models the third NN/g service-blueprint lane — external/downstream systems a " +
+        "backstage actor calls out to. SupportSystemDescriptor/SupportSystemCapabilityDescriptor shape, " +
+        "the capability-declared poll/webhook completion-mode abstraction, SupportSystemRegistry.Register " +
+        "timing, and the support-system-call action convention. For whoever is building a Wayfinder host, " +
+        "not whoever is authoring a blueprint against one — that agent wants authoring-guide instead.")]
+    public static string SupportSystems() => ReadEmbeddedDoc("support-systems.md");
 
     private static string ReadEmbeddedDoc(string fileName)
     {
