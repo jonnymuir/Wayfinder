@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { captureDocScreenshot, DEMO_USERS, loginAs, resetApp } from './fixtures';
+import { acceptCompletion, captureDocScreenshot, DEMO_USERS, loginAs, resetApp } from './fixtures';
 
 const DOCS_DIR = 'docs/skills/calculations-editor/screenshots';
 
@@ -329,8 +329,7 @@ test.describe('Calculations tab', () => {
 
     const tooltip = editor.locator('.cm-tooltip-autocomplete');
     await expect(tooltip).toBeVisible();
-    await expect(tooltip).toContainText('averageAudienceSize');
-    await page.keyboard.press('Enter');
+    await acceptCompletion(page, tooltip, /^averageAudienceSize/);
     await page.waitForTimeout(200);
 
     // Exact text, not just toContainText — a double-inserted value would still "contain" the
@@ -374,8 +373,7 @@ test.describe('Calculations tab', () => {
       await cm.click();
       await cm.pressSequentially('cla');
       await expect(tooltip).toBeVisible();
-      await expect(tooltip).toContainText('clamp');
-      await page.keyboard.press('Enter');
+      await acceptCompletion(page, tooltip, /^clamp/);
       await page.waitForTimeout(200);
       await expect(cm).toHaveText('clamp(value, lo, hi)');
 

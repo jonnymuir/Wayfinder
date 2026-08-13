@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { captureDocScreenshot, DEMO_USERS, loginAs, resetApp } from './fixtures';
+import { acceptCompletion, captureDocScreenshot, DEMO_USERS, loginAs, resetApp } from './fixtures';
 
 const DOCS_DIR = 'docs/skills/calculations-editor/screenshots';
 
@@ -77,8 +77,7 @@ test.describe('Validations section (Calculations tab)', () => {
     await whenCm.pressSequentially('hasDangerous');
     const whenTooltip = whenEditor.locator('.cm-tooltip-autocomplete');
     await expect(whenTooltip).toBeVisible();
-    await expect(whenTooltip).toContainText('hasDangerousProps');
-    await page.keyboard.press('Enter');
+    await acceptCompletion(page, whenTooltip, /^hasDangerousProps/);
     await page.waitForTimeout(200);
 
     // Landed in "when" specifically, not "rule" — proves per-editor wiring, not just "inserts
@@ -91,8 +90,7 @@ test.describe('Validations section (Calculations tab)', () => {
     await ruleCm.pressSequentially('jugglerCoun');
     const ruleTooltip = ruleEditor.locator('.cm-tooltip-autocomplete');
     await expect(ruleTooltip).toBeVisible();
-    await expect(ruleTooltip).toContainText('jugglerCount');
-    await page.keyboard.press('Enter');
+    await acceptCompletion(page, ruleTooltip, /^jugglerCount/);
     await page.waitForTimeout(200);
 
     await expect(ruleCm).toHaveText('jugglerCount');

@@ -47,3 +47,29 @@ export async function captureDocScreenshot(target: Page | Locator, relativePathF
   mkdirSync(dirname(absolutePath), { recursive: true });
   await target.screenshot({ path: absolutePath });
 }
+
+/**
+ * Accept a CodeMirror autocomplete option with Enter, without racing CodeMirror's own debounce.
+ *
+ * The obvious sequence — `pressSequentially('cla')`, assert the tooltip is visible and contains
+ * "clamp", press Enter — is genuinely flaky (reproduced at roughly 1 run in 3). Every one of
+ * those assertions is already satisfied part-way through typing: "clamp" matches after just "cl".
+ * So Enter can be delivered while CodeMirror is still recomputing completions for the final
+ * keystroke, at which point there is no *active* completion and `acceptCompletion` quietly does
+ * nothing — Enter falls through, the document still reads "cla", and the next assertion fails on
+ * a state that looks inexplicable. The shorter the discriminating prefix, the wider that window,
+ * which is why the "cla" case flaked and the longer ones (e.g. "averageAud") only latently did.
+ *
+ * Waiting for the intended option to be the *selected* one closes it: selection is the settled
+ * end state of a completion cycle, and it's precisely what a real user sees highlighted before
+ * they press Enter. This is stronger than the assertion it replaces, not weaker — it additionally
+ * pins that our option is the one CodeMirror actually defaults to.
+ *
+ * Use this rather than a bare `keyboard.press('Enter')` after typing into an expression editor.
+ * Where several real options match a prefix and the intended one is *not* the default selection,
+ * click the option directly instead (see calculations-editor.spec.ts's "or tr" step).
+ */
+export async function acceptCompletion(page: Page, tooltip: Locator, optionName: RegExp): Promise<void> {
+  await expect(tooltip.getByRole('option', { name: optionName })).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Enter');
+}
