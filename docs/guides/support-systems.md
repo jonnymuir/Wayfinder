@@ -216,6 +216,37 @@ are required, and which outcome keys the calling stage's outgoing routes must ma
 editor's own stage action editor drives this same lookup live — see
 [docs/skills/canvas-editor/SKILL.md](../skills/canvas-editor/SKILL.md).
 
+## Making a support-system call *mandatory*
+
+A caseworker who can simply choose not to consult the insurer isn't much of a control. The
+juggling-licence blueprint makes it compulsory, and does so declaratively:
+
+- Reviewing and deciding are **separate caseworker stages** (`under-review` → `caseworker-decision`),
+  so there is a point in the journey where "have we consulted the insurer?" is a real question with
+  a real gate, rather than one of three equal buttons.
+- `under-review` carries a stage validation rule scoped to a single action:
+
+```json
+{
+  "code": "insurer-check-required",
+  "rule": "riskAssessment = ''",
+  "message": "This application includes a risk assessment. Send it to SafetyNet Underwriting for validation before continuing to a decision.",
+  "actions": ["continue"]
+}
+```
+
+The `actions` scope is what makes this expressible at all. `StageDefinition.Validations` rules
+otherwise guard *every* way out of a stage — which is right for a data-completeness rule, but
+here would block `send-to-insurer` too, making the very action the rule exists to force
+impossible and the stage a dead end. Naming the guarded action leaves that route open while
+refusing the one that would skip it. See
+`ServiceBlueprintStageValidationRule.Actions`.
+
+Note what is *not* here: no host code, no bespoke C#, and no conditional routing. Wayfinder's
+Split gateways deliberately fan out to every route rather than choosing one, and route-level
+`conditions` are carried in the contract but not evaluated by the engine — so "sometimes required"
+is expressed as a rule about leaving a stage, not as a branch in the graph.
+
 ## The worked example, verified end to end
 
 `Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `under-review` stage gets a

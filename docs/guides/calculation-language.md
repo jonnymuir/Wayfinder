@@ -259,6 +259,16 @@ instead of only existing as compiled code in a host repository.
 - **`field`** (optional) — a fieldKey on this same stage to attach the failure to, GDS
   error-summary style. Omit for a stage-level problem not tied to one field.
 - **`message`** — shown to the user when the rule fails.
+- **`actions`** (optional) — the action keys (route triggers) this rule guards. Omit — the
+  default — and it guards *every* way out of the stage, which is what a data-completeness rule
+  wants ("these answers must be consistent before you leave, however you leave"). Name actions
+  when a stage offers genuinely different exits and only some of them require the rule. The case
+  this exists for: a caseworker review stage where "send to the insurer" stays available but
+  "continue without sending" is refused once the applicant has actually attached something the
+  insurer needs to see — an unscoped rule would block the very action it is trying to force. It
+  lists the actions the rule *guards*, not the ones it exempts, so adding a new exit to a stage
+  later can never silently inherit a rule that was never written for it. See
+  [Support systems § Making a support-system call mandatory](./support-systems.md#making-a-support-system-call-mandatory).
 
 Both `when` and `rule` are ordinary expressions in this same language, evaluated against the
 identical scope `calculations.fields`/`showWhen` already use — which spans every stage the

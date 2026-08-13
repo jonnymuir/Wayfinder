@@ -388,7 +388,7 @@ public class ProcessManagerEngine : IProcessManager
             // field-level validation has already passed. Evaluated on the same merge of
             // persisted + just-submitted values FieldValueValidator above just accepted, never
             // on stale persisted data or on anything the client could claim was pre-checked.
-            var stageValidationProblems = EvaluateStageValidations(instance, definition, currentStage, fieldValues);
+            var stageValidationProblems = EvaluateStageValidations(instance, definition, currentStage, fieldValues, action);
             if (stageValidationProblems.Count > 0)
             {
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
@@ -1303,9 +1303,19 @@ public class ProcessManagerEngine : IProcessManager
         ServiceRequest instance,
         ServiceBlueprint definition,
         StageDefinition stage,
-        Dictionary<string, object?>? fieldValues)
+        Dictionary<string, object?>? fieldValues,
+        string action)
     {
-        if (stage.Validations is not { Count: > 0 } rules)
+        // A rule naming no actions guards every way out of the stage (the default, and what a
+        // data-completeness rule wants). A rule naming actions guards only those — see
+        // ServiceBlueprintStageValidationRule.Actions for why a stage with genuinely different
+        // exits needs this to be expressible at all.
+        var rules = (stage.Validations ?? [])
+            .Where(rule => rule.Actions is not { Count: > 0 } scoped
+                || scoped.Contains(action, StringComparer.Ordinal))
+            .ToArray();
+
+        if (rules.Length == 0)
         {
             return [];
         }

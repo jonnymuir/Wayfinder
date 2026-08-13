@@ -42,9 +42,13 @@ test.describe('Service blueprint editor', () => {
       'event-details',
       'risk-assessment',
       'declaration',
+      // Reviewing and deciding are deliberately separate caseworker stages, so that sending a
+      // risk assessment to the insurer can be *required* between them — see
+      // docs/guides/support-systems.md.
       'under-review',
+      'caseworker-decision',
       // The automation queue's own stage — carries the support-system-call action that sends
-      // the risk assessment to SafetyNet Underwriting (see docs/guides/support-systems.md).
+      // the risk assessment to SafetyNet Underwriting.
       'insurer-validation',
       'approved',
       'rejected'

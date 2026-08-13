@@ -146,7 +146,7 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await beat(page, 'setup', "The caseworker's worklist. One application waiting for a decision.");
 
     await humanClick(page, page.getByRole('link', { name: 'Review' }));
-    await expect(page.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Review application' })).toBeVisible();
 
     // The uploaded file is a real link on its own summary row — not a filename in plain text, and
     // not a stray list of links at the bottom of the page.
@@ -170,9 +170,14 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await beat(page, 'note', 'That link serves the real bytes the applicant uploaded — the engine itself never touches them; the host owns file storage.');
   });
 
-  test('Act 3 — sending it to the insurer, and the wait that used to be invisible', async () => {
-    await beat(page, 'intent', 'The caseworker cannot approve a fire act without the insurer validating the risk assessment. So they send it.');
+  test('Act 3 — the blueprint refuses to skip the insurer, and the wait that used to be invisible', async () => {
+    await beat(page, 'intent', 'Reviewing and deciding are separate steps. The caseworker tries to go straight to a decision.');
 
+    await humanClick(page, page.getByRole('button', { name: 'Continue to decision' }));
+    await expect(page.locator('.govuk-error-summary')).toContainText('SafetyNet Underwriting');
+    await beat(page, 'recap', 'Refused. A risk assessment was attached, so it must go to the insurer first — and that rule lives in the blueprint, not in code.');
+
+    await beat(page, 'intent', 'So the caseworker sends it, which is the only way forward.');
     await humanClick(page, page.getByRole('button', { name: 'Send risk assessment to insurer' }));
 
     await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
@@ -229,7 +234,7 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await beat(page, 'recap', 'The "Waiting" tag is gone. The join released the moment the webhook arrived, and it is actionable again.');
 
     await humanClick(page, row.getByRole('link', { name: 'Review' }));
-    await expect(page.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Record your decision' })).toBeVisible();
 
     const summary = page.locator('.govuk-summary-list');
     await expect(summary.getByText('approved', { exact: true })).toBeVisible();

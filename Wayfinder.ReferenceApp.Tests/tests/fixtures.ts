@@ -69,7 +69,32 @@ export async function captureDocScreenshot(target: Page | Locator, relativePathF
  * Where several real options match a prefix and the intended one is *not* the default selection,
  * click the option directly instead (see calculations-editor.spec.ts's "or tr" step).
  */
-export async function acceptCompletion(page: Page, tooltip: Locator, optionName: RegExp): Promise<void> {
-  await expect(tooltip.getByRole('option', { name: optionName })).toHaveAttribute('aria-selected', 'true');
-  await page.keyboard.press('Enter');
+export async function acceptCompletion(
+  page: Page,
+  tooltip: Locator,
+  editorContent: Locator,
+  optionName: RegExp
+): Promise<void> {
+  const option = tooltip.getByRole('option', { name: optionName });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await expect(option).toHaveAttribute('aria-selected', 'true');
+
+    const before = (await editorContent.textContent()) ?? '';
+    await page.keyboard.press('Enter');
+
+    // Waiting for selection is necessary but not sufficient: a debounce cycle can still land
+    // between the assertion and the keypress, leaving Enter to no-op again. The only signal that
+    // actually means "accepted" is the document changing, so verify that and retry the benign
+    // race rather than failing on a state that reads as inexplicable ("the tooltip was open, the
+    // right option was selected, and Enter did nothing").
+    try {
+      await expect(editorContent).not.toHaveText(before, { timeout: 1_500 });
+      return;
+    } catch {
+      // fall through and try again
+    }
+  }
+
+  throw new Error(`Autocomplete option ${optionName} never applied after three attempts.`);
 }

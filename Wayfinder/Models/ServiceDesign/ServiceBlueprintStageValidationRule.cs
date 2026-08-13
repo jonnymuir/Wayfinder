@@ -35,9 +35,26 @@ namespace Wayfinder.Models.ServiceDesign;
 /// stage-level problem not tied to one field.
 /// </param>
 /// <param name="Message">Human-readable explanation shown to the user when this rule fails.</param>
+/// <param name="Actions">
+/// Optional list of action keys (route triggers) this rule applies to. Omit — the default — and it
+/// guards every way out of the stage, which is what a data-completeness rule wants ("these answers
+/// must be consistent before you leave, however you leave").
+///
+/// Name actions when a stage offers genuinely different exits and only some of them require the
+/// rule. The case this exists for: a caseworker's review stage where "send to the insurer" is
+/// always available, but "continue without sending" must be blocked once the applicant has
+/// actually attached something an insurer needs to see. An unscoped rule cannot express that — it
+/// would block the very action it is trying to force you to take. See
+/// <c>docs/guides/support-systems.md</c> and juggling-licence.json's <c>under-review</c> stage.
+///
+/// Deliberately a list of the actions the rule *guards*, not the actions it exempts: an author
+/// states the narrower, positive thing they mean, and adding a new exit to a stage later can never
+/// silently acquire an existing rule it was never written for.
+/// </param>
 public sealed record ServiceBlueprintStageValidationRule(
     string Code,
     string Rule,
     string Message,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? When = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Field = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Field = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Actions = null);

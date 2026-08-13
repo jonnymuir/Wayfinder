@@ -329,7 +329,7 @@ test.describe('Calculations tab', () => {
 
     const tooltip = editor.locator('.cm-tooltip-autocomplete');
     await expect(tooltip).toBeVisible();
-    await acceptCompletion(page, tooltip, /^averageAudienceSize/);
+    await acceptCompletion(page, tooltip, cm, /^averageAudienceSize/);
     await page.waitForTimeout(200);
 
     // Exact text, not just toContainText — a double-inserted value would still "contain" the
@@ -373,7 +373,7 @@ test.describe('Calculations tab', () => {
       await cm.click();
       await cm.pressSequentially('cla');
       await expect(tooltip).toBeVisible();
-      await acceptCompletion(page, tooltip, /^clamp/);
+      await acceptCompletion(page, tooltip, cm, /^clamp/);
       await page.waitForTimeout(200);
       await expect(cm).toHaveText('clamp(value, lo, hi)');
 

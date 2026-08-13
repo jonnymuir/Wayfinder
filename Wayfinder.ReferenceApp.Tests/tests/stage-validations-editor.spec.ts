@@ -77,7 +77,7 @@ test.describe('Validations section (Calculations tab)', () => {
     await whenCm.pressSequentially('hasDangerous');
     const whenTooltip = whenEditor.locator('.cm-tooltip-autocomplete');
     await expect(whenTooltip).toBeVisible();
-    await acceptCompletion(page, whenTooltip, /^hasDangerousProps/);
+    await acceptCompletion(page, whenTooltip, whenCm, /^hasDangerousProps/);
     await page.waitForTimeout(200);
 
     // Landed in "when" specifically, not "rule" — proves per-editor wiring, not just "inserts
@@ -90,7 +90,7 @@ test.describe('Validations section (Calculations tab)', () => {
     await ruleCm.pressSequentially('jugglerCoun');
     const ruleTooltip = ruleEditor.locator('.cm-tooltip-autocomplete');
     await expect(ruleTooltip).toBeVisible();
-    await acceptCompletion(page, ruleTooltip, /^jugglerCount/);
+    await acceptCompletion(page, ruleTooltip, ruleCm, /^jugglerCount/);
     await page.waitForTimeout(200);
 
     await expect(ruleCm).toHaveText('jugglerCount');

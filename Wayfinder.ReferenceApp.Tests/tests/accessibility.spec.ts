@@ -116,7 +116,7 @@ test.describe('Accessibility: WCAG 2.2 AA', () => {
     await auditPage(page, 'Caseworker queue');
 
     await page.getByRole('link', { name: 'Review' }).click();
-    await expect(page.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Review application' })).toBeVisible();
     await auditPage(page, 'Caseworker review');
 
     // The waiting state introduced by the support-systems work — its own distinct rendering

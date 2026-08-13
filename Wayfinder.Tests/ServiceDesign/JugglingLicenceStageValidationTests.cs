@@ -175,4 +175,97 @@ public class JugglingLicenceStageValidationTests
         Assert.Empty(result.Problems);
         Assert.Equal("Check your answers and declare", result.Render?.StateDisplayName);
     }
+
+    /// <summary>
+    /// The action-scoped half of StageDefinition.Validations
+    /// (<see cref="ServiceBlueprintStageValidationRule.Actions"/>), exercised against the real
+    /// juggling-licence "under-review" stage: once an applicant has attached a risk assessment,
+    /// the caseworker must send it to the insurer — "continue to decision" is blocked — while the
+    /// very action the rule exists to force stays available. An unscoped rule could not express
+    /// this: it would block send-to-insurer too.
+    /// </summary>
+    private static (ProcessManagerEngine Engine, string InstanceId, int StateVersion) ArriveAtCaseworkerReview(bool withFile)
+    {
+        var engine = new ProcessManagerEngine(
+            NullLogger.Instance,
+            new SingleDefinitionServiceBlueprintStore(LoadDefinition()),
+            new PassthroughContentSanitizer());
+
+        var started = engine.GetCurrent("juggling-licence", TenantId, UserId);
+        var atEventDetails = engine.Advance(
+            started.InstanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "continue", started.StateVersion,
+            new Dictionary<string, object?> { ["applicantName"] = "Alice", ["applicantEmail"] = "alice@example.com" });
+
+        var atRiskAssessment = engine.Advance(
+            atEventDetails.InstanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "continue", atEventDetails.StateVersion,
+            new Dictionary<string, object?>
+            {
+                ["eventName"] = "Fire festival",
+                ["eventDate"] = "2027-06-01",
+                ["jugglerCount"] = 5,
+                ["hasDangerousProps"] = withFile,
+            });
+
+        var riskValues = new Dictionary<string, object?>
+        {
+            ["riskMitigationNotes"] = "10 metres safety distance maintained throughout.",
+        };
+        if (withFile)
+        {
+            riskValues["riskAssessment"] = new ServiceRequestFileReference
+            {
+                StorageKey = "memory://demo",
+                OriginalFileName = "risk-assessment.pdf",
+                ContentType = "application/pdf",
+                SizeBytes = 128,
+            };
+        }
+
+        var atDeclaration = engine.Advance(
+            atRiskAssessment.InstanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner,
+            "continue", atRiskAssessment.StateVersion, riskValues);
+
+        var afterSubmit = engine.Advance(
+            atDeclaration.InstanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner,
+            "submit", atDeclaration.StateVersion,
+            new Dictionary<string, object?> { ["declarationConfirmed"] = true });
+
+        return (engine, started.InstanceId, afterSubmit.StateVersion);
+    }
+
+    [Fact]
+    public void Advance_BlocksContinueToDecisionWhenAFileMustGoToTheInsurer()
+    {
+        var (engine, instanceId, stateVersion) = ArriveAtCaseworkerReview(withFile: true);
+
+        var result = engine.Advance(
+            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "continue", stateVersion, null);
+
+        Assert.Contains(result.Problems, p => p.Code == "insurer-check-required");
+    }
+
+    [Fact]
+    public void Advance_StillAllowsSendingToTheInsurer_TheActionTheRuleExistsToForce()
+    {
+        // The whole point of scoping the rule to "continue": an unscoped rule would block this
+        // too, making the required action impossible and the stage a dead end.
+        var (engine, instanceId, stateVersion) = ArriveAtCaseworkerReview(withFile: true);
+
+        var result = engine.Advance(
+            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "send-to-insurer", stateVersion, null);
+
+        Assert.DoesNotContain(result.Problems, p => p.Code == "insurer-check-required");
+    }
+
+    [Fact]
+    public void Advance_AllowsContinueToDecisionWhenThereIsNoFileToSend()
+    {
+        var (engine, instanceId, stateVersion) = ArriveAtCaseworkerReview(withFile: false);
+
+        var result = engine.Advance(
+            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "continue", stateVersion, null);
+
+        Assert.Empty(result.Problems);
+        Assert.Equal("Record your decision", result.Render?.StateDisplayName);
+    }
 }

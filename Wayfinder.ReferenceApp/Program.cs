@@ -481,7 +481,18 @@ caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (str
             PageShell.Render("Review application", RenderJourneyBody(result, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer), ctx.User), "text/html");
     }
 
-    return Results.Redirect("/caseworker/queue");
+    // PRG, but back to whichever place actually has the caseworker's next move. Advancing from
+    // "review" to "record your decision" leaves real work on this same instance, and bouncing to
+    // the worklist so they can immediately click back into the item they never left is pointless
+    // ceremony. Advancing into a wait (sent to the insurer) or a terminal decision genuinely does
+    // hand the instance back to the queue, so that's where those go — and the "Waiting" tag is
+    // what makes the first of those findable again.
+    var next = engine.GetCurrent(blueprintKey, ReferenceActors.TenantId, userId, profile, instanceId);
+    var hasMoreToDoHere = next.Render?.AvailableActions.Count > 0;
+
+    return Results.Redirect(hasMoreToDoHere
+        ? $"/caseworker/queue/{blueprintKey}/{instanceId}"
+        : "/caseworker/queue");
 });
 
 // ── Test isolation ────────────────────────────────────────────────────────────────────────

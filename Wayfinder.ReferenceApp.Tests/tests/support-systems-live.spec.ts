@@ -73,10 +73,17 @@ test.describe('Support systems: real cross-process round trip', () => {
     const queueRow = caseworkerPage.locator('tr', { hasText: 'Apply for a licence to hold a juggling event' });
     await queueRow.getByRole('link', { name: 'Review' }).click();
 
-    await expect(caseworkerPage.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+    await expect(caseworkerPage.getByRole('heading', { name: 'Review application' })).toBeVisible();
     // The uploaded file is a real link on its own summary row (FieldRenderPayload.FileUrl), not
     // a filename in plain text — a caseworker can open exactly what the applicant submitted.
     await expect(caseworkerPage.getByRole('link', { name: 'risk-assessment.pdf' })).toBeVisible();
+
+    // This application carries a risk assessment, so the blueprint's action-scoped validation
+    // rule makes sending it to the insurer mandatory — continuing straight to a decision is
+    // refused, by the blueprint, with no host code involved.
+    await caseworkerPage.getByRole('button', { name: 'Continue to decision' }).click();
+    await expect(caseworkerPage.locator('.govuk-error-summary')).toContainText('SafetyNet Underwriting');
+
     await caseworkerPage.getByRole('button', { name: 'Send risk assessment to insurer' }).click();
 
     // The application must STAY on the caseworker's own worklist while it's out with the insurer,
@@ -118,7 +125,7 @@ test.describe('Support systems: real cross-process round trip', () => {
     await expect(queueRow.getByText('Waiting')).toHaveCount(0);
 
     await queueRow.getByRole('link', { name: 'Review' }).click();
-    await expect(caseworkerPage.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+    await expect(caseworkerPage.getByRole('heading', { name: 'Record your decision' })).toBeVisible();
     const summary = caseworkerPage.locator('.govuk-summary-list');
     await expect(summary.getByText('approved', { exact: true })).toBeVisible();
     await expect(summary.getByText('Adequate mitigation for a live-stack test.')).toBeVisible();

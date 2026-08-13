@@ -48,8 +48,14 @@ test.describe('Caseworker queue: review and decide', () => {
     });
 
     await test.step("Caseworker sees the applicant's submitted details and approves", async () => {
-      await expect(caseworkerPage.getByRole('heading', { name: 'Application under review' })).toBeVisible();
+      // Reviewing and deciding are separate stages: this application carries no risk assessment,
+      // so "Continue to decision" is allowed straight away (with one attached, the blueprint's
+      // action-scoped validation rule forces it to the insurer first).
+      await expect(caseworkerPage.getByRole('heading', { name: 'Review application' })).toBeVisible();
       await expect(caseworkerPage.getByText('Big Top Juggling Gala')).toBeVisible();
+      await caseworkerPage.getByRole('button', { name: 'Continue to decision' }).click();
+
+      await expect(caseworkerPage.getByRole('heading', { name: 'Record your decision' })).toBeVisible();
       await caseworkerPage.getByRole('button', { name: 'Approve' }).click();
       await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
       await expect(caseworkerPage.getByText('No applications waiting for review')).toBeVisible();
@@ -74,6 +80,8 @@ test.describe('Caseworker queue: review and decide', () => {
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
     await caseworkerPage.getByRole('link', { name: 'Review' }).click();
+    await caseworkerPage.getByRole('button', { name: 'Continue to decision' }).click();
+    await expect(caseworkerPage.getByRole('heading', { name: 'Record your decision' })).toBeVisible();
     await caseworkerPage.getByRole('button', { name: 'Reject' }).click();
 
     await applicantPage.reload();

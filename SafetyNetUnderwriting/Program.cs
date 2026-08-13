@@ -198,14 +198,10 @@ static string RenderQueue(IEnumerable<Submission> all)
           <td>{s.Status}</td>
           <td>
             {(showActions ? $"""
-              <form method="post" action="/queue/{s.Id}/decide" style="display:inline">
-                <input type="hidden" name="decision" value="approve" />
+              <form method="post" action="/queue/{s.Id}/decide">
                 <label>Decision notes <input type="text" name="decisionNotes" /></label>
-                <button type="submit">Approve</button>
-              </form>
-              <form method="post" action="/queue/{s.Id}/decide" style="display:inline">
-                <input type="hidden" name="decision" value="reject" />
-                <button type="submit">Reject</button>
+                <button type="submit" name="decision" value="approve">Approve</button>
+                <button type="submit" name="decision" value="reject">Reject</button>
               </form>
               """ : System.Net.WebUtility.HtmlEncode(s.DecisionNotes ?? ""))}
           </td>

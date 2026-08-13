@@ -242,8 +242,10 @@ public class JoinGatewayRoutingTests
 
         var insurerCheckComplete = Assert.Single(joinGateways, g => g.Key == "insurer-check-complete");
         Assert.Equal(["caseworker", "automation"], insurerCheckComplete.RequiredIncomingQueues);
-        Assert.Contains(insurerCheckComplete.Routes!, r => r.Trigger == "approved" && r.Target == "under-review");
-        Assert.Contains(insurerCheckComplete.Routes!, r => r.Trigger == "rejected" && r.Target == "under-review");
+        // Releases into the caseworker's own decision stage — not back to the review stage they
+        // came from — so the insurer's verdict is in front of them when they actually decide.
+        Assert.Contains(insurerCheckComplete.Routes!, r => r.Trigger == "approved" && r.Target == "caseworker-decision");
+        Assert.Contains(insurerCheckComplete.Routes!, r => r.Trigger == "rejected" && r.Target == "caseworker-decision");
     }
 
     [Fact]

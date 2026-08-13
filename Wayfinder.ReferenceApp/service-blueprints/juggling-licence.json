@@ -354,16 +354,16 @@
     },
     {
       "stageKey": "under-review",
-      "displayName": "Application under review",
+      "displayName": "Review application",
       "queueKey": "caseworker",
       "components": [
         {
           "type": "panel",
-          "heading": "Application under review"
+          "heading": "Review application"
         },
         {
           "type": "body",
-          "content": "A caseworker will review this application and record a decision below."
+          "content": "Check the application below. If the applicant attached a risk assessment, it must be sent to SafetyNet Underwriting for validation before a decision can be recorded."
         },
         {
           "type": "summary-list",
@@ -509,25 +509,200 @@
       ],
       "routes": [
         {
-          "id": "under-review--approve--post-review",
+          "id": "under-review--send-to-insurer--to-insurer-check",
+          "target": "to-insurer-check",
+          "trigger": "send-to-insurer",
+          "label": "Send risk assessment to insurer",
+          "style": "primary"
+        },
+        {
+          "id": "under-review--continue--to-caseworker-decision",
+          "target": "to-caseworker-decision",
+          "trigger": "continue",
+          "label": "Continue to decision",
+          "style": "secondary"
+        }
+      ],
+      "validations": [
+        {
+          "code": "insurer-check-required",
+          "rule": "riskAssessment = ''",
+          "message": "This application includes a risk assessment. Send it to SafetyNet Underwriting for validation before continuing to a decision.",
+          "actions": [
+            "continue"
+          ]
+        }
+      ]
+    },
+    {
+      "stageKey": "caseworker-decision",
+      "displayName": "Record your decision",
+      "queueKey": "caseworker",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Record your decision"
+        },
+        {
+          "type": "body",
+          "content": "Record the licensing decision for this application."
+        },
+        {
+          "type": "summary-list",
+          "children": [
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "applicantName",
+              "label": "Full name",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "email",
+              "pattern": null,
+              "fieldKey": "applicantEmail",
+              "label": "Email address",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "eventName",
+              "label": "Name of the event",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "date",
+              "fieldKey": "eventDate",
+              "label": "Date of the event",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "number",
+              "min": null,
+              "max": null,
+              "prefix": null,
+              "fieldKey": "jugglerCount",
+              "label": "Number of jugglers taking part",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "boolean",
+              "fieldKey": "hasDangerousProps",
+              "label": "Fire, knives or other dangerous props",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "file-upload",
+              "acceptedFileTypes": null,
+              "maxSizeBytes": null,
+              "fieldKey": "riskAssessment",
+              "label": "Risk assessment / insurance certificate",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "riskMitigationNotes",
+              "label": "How are you mitigating the risk?",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "insurerDecision",
+              "label": "Insurer decision",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "insurerDecisionNotes",
+              "label": "Insurer notes",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            }
+          ],
+          "changeStateKey": null,
+          "title": "Application details"
+        }
+      ],
+      "routes": [
+        {
+          "id": "caseworker-decision--approve--post-review",
           "target": "post-review",
           "trigger": "approve",
           "label": "Approve",
           "style": "primary"
         },
         {
-          "id": "under-review--reject--post-review",
+          "id": "caseworker-decision--reject--post-review",
           "target": "post-review",
           "trigger": "reject",
           "label": "Reject",
           "style": "destructive"
-        },
-        {
-          "id": "under-review--send-to-insurer--to-insurer-check",
-          "target": "to-insurer-check",
-          "trigger": "send-to-insurer",
-          "label": "Send risk assessment to insurer",
-          "style": "secondary"
         }
       ]
     },
@@ -728,13 +903,13 @@
       "queueKey": "caseworker",
       "routes": [
         {
-          "id": "insurer-check-complete--approved--under-review",
-          "target": "under-review",
+          "id": "insurer-check-complete--approved--caseworker-decision",
+          "target": "caseworker-decision",
           "trigger": "approved"
         },
         {
-          "id": "insurer-check-complete--rejected--under-review",
-          "target": "under-review",
+          "id": "insurer-check-complete--rejected--caseworker-decision",
+          "target": "caseworker-decision",
           "trigger": "rejected"
         }
       ],
@@ -744,6 +919,19 @@
       "requiredIncomingQueues": [
         "caseworker",
         "automation"
+      ]
+    },
+    {
+      "key": "to-caseworker-decision",
+      "displayName": "Continue to decision",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        {
+          "id": "to-caseworker-decision--continue--caseworker-decision",
+          "target": "caseworker-decision",
+          "trigger": "continue"
+        }
       ]
     }
   ]
