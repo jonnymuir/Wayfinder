@@ -9,6 +9,7 @@ import {
   type AuthoredServiceBlueprint,
   type ComponentDescriptor,
   type ServiceBlueprintNodePosition,
+  type SupportSystemDescriptor,
   hydrateServiceBlueprintDefinition,
   serviceBlueprintGateways,
 } from './types.js';
@@ -18,6 +19,8 @@ import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import { BuiltInServiceBlueprintActionCatalog } from './action-catalog.js';
 import type { ServiceBlueprintComponentCatalog } from './component-catalog.js';
 import { HttpServiceBlueprintComponentCatalog } from './component-catalog.js';
+import type { ServiceBlueprintSupportSystemCatalog } from './support-system-catalog.js';
+import { HttpServiceBlueprintSupportSystemCatalog } from './support-system-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
 import { availableContexts, contextForTiming, timingForContext, updateActionSummary } from './action-editing.js';
@@ -167,6 +170,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @property({ attribute: false })
   componentCatalog?: ServiceBlueprintComponentCatalog;
 
+  /**
+   * Host-supplied catalog of registered support systems a support-system-call action's own
+   * editor can offer — see docs/guides/support-systems.md. Same "live fetch, not a hand-mirrored
+   * stub" default as componentCatalog above.
+   */
+  @property({ attribute: false })
+  supportSystemCatalog?: ServiceBlueprintSupportSystemCatalog;
+
   /** Optional UX hint about the current author. Never authoritative. */
   @property({ attribute: false })
   authorContext?: ServiceBlueprintAuthorContext;
@@ -194,6 +205,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @state() private _error: string | null = null;
   @state() private _actionCatalog: ActionCatalogEntry[] = [];
   @state() private _componentCatalog: ComponentDescriptor[] = [];
+  @state() private _supportSystemCatalog: SupportSystemDescriptor[] = [];
   @state() private _undoHistory: ServiceBlueprintHistoryEntry[] = [];
   @state() private _redoHistory: ServiceBlueprintHistoryEntry[] = [];
   @state() private _historyAnnouncement = '';
@@ -262,6 +274,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     void this._loadActionCatalog();
     void this._loadComponentCatalog();
+    void this._loadSupportSystemCatalog();
 
     if (this.initialServiceBlueprint) {
       this._initialiseEditorState(this.initialServiceBlueprint);
@@ -362,6 +375,17 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       // properties panel's add/edit UI simply stays unavailable, same as before this feature
       // existed; never block the rest of the editor on this.
       this._componentCatalog = [];
+    }
+  }
+
+  private async _loadSupportSystemCatalog() {
+    const catalog = this.supportSystemCatalog ?? new HttpServiceBlueprintSupportSystemCatalog();
+    try {
+      this._supportSystemCatalog = await catalog.entries();
+    } catch {
+      // Same reasoning as _loadComponentCatalog above — a support-system-call action's own
+      // editor simply has nothing to offer in its pickers; never block the rest of the editor.
+      this._supportSystemCatalog = [];
     }
   }
 
@@ -619,7 +643,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   private get _validationIssues(): ServiceBlueprintValidationIssue[] {
     return this._serviceBlueprint
-      ? validateServiceBlueprint(this._serviceBlueprint, this._actionCatalog, this._componentCatalog)
+      ? validateServiceBlueprint(this._serviceBlueprint, this._actionCatalog, this._componentCatalog, this._supportSystemCatalog)
       : [];
   }
 
@@ -2217,6 +2241,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     .selectedActionTransitionIndex=${this._selectedTransitionIndex}
                     .actionCatalog=${this._actionCatalog}
                     .componentCatalog=${this._componentCatalog}
+                    .supportSystemCatalog=${this._supportSystemCatalog}
                     @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
                     @action-selected=${this._handleActionSelected}
                   ></wayfinder-step-inspector>

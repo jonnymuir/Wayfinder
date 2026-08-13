@@ -1,5 +1,5 @@
 import { validateServiceBlueprint } from './service-blueprint-validation.js';
-import type { AuthoredServiceBlueprint, AuthoredStage, AuthoredStageValidation } from './types.js';
+import type { AuthoredAction, AuthoredServiceBlueprint, AuthoredStage, AuthoredStageValidation, SupportSystemDescriptor } from './types.js';
 
 let failures = 0;
 
@@ -39,6 +39,54 @@ function validation(overrides: Partial<AuthoredStageValidation> = {}): AuthoredS
     message: 'Fix this before continuing.',
     ...overrides,
   };
+}
+
+const TEXT_COMPONENT_CATALOG = [
+  { discriminator: 'text', displayName: 'Text', category: 'Input' as const, clrType: 'TextInputComponent', isInput: true, properties: [], containment: { kind: 'None' as const } },
+];
+
+const SUPPORT_SYSTEM_KEY = 'safetynet-underwriting';
+const CAPABILITY_KEY = 'validate-risk-assessment';
+
+function supportSystemCatalog(): SupportSystemDescriptor[] {
+  return [
+    {
+      key: SUPPORT_SYSTEM_KEY,
+      displayName: 'SafetyNet Underwriting',
+      capabilities: [
+        {
+          key: CAPABILITY_KEY,
+          displayName: 'Validate a risk assessment',
+          inputs: [
+            { key: 'File', title: 'File', valueKind: 'String', required: true },
+            { key: 'Notes', title: 'Notes', valueKind: 'String', required: false },
+          ],
+          outputs: [],
+          supportedCompletionModes: ['Poll'],
+          outcomes: [
+            { key: 'approved', displayName: 'Approved' },
+            { key: 'rejected', displayName: 'Rejected' },
+          ],
+        },
+      ],
+    },
+  ];
+}
+
+function supportSystemCallAction(overrides: Partial<AuthoredAction> = {}): AuthoredAction {
+  return {
+    type: 'support-system-call',
+    timing: 'OnEntry',
+    params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: { File: 'riskAssessment' } },
+    ...overrides,
+  };
+}
+
+function stageWithCapturedField(fieldKey: string): AuthoredStage {
+  return stage({
+    stateKey: 'upload',
+    components: [{ type: 'text', fieldKey, label: fieldKey, required: false }],
+  });
 }
 
 export function run(): number {
@@ -89,6 +137,131 @@ export function run(): number {
       blueprint([stage({ validations: [validation({ when: undefined })] })])
     );
     check('no `when` at all is not treated as a malformed expression', !issues.some(issue => issue.code === 'stage-validation-parse-error'), JSON.stringify(issues));
+  }
+
+  // ── support-system-call: a well-formed action against a real captured field is not flagged ──
+  {
+    const stages = [
+      stageWithCapturedField('riskAssessment'),
+      stage({
+        stateKey: 'automation',
+        components: [],
+        actions: [supportSystemCallAction()],
+        routes: [{ id: 'r1', target: 'done', trigger: 'approved' }, { id: 'r2', target: 'done', trigger: 'rejected' }],
+      }),
+    ];
+    const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, supportSystemCatalog());
+    check('a valid support-system-call action is not flagged', !issues.some(issue => issue.code === 'action-support-system'), JSON.stringify(issues));
+  }
+
+  // ── support-system-call: missing supportSystemKey/capabilityKey is flagged ──
+  {
+    const stages = [stage({ stateKey: 'automation', actions: [supportSystemCallAction({ params: {} })] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
+    check(
+      'a support-system-call action with no keys set is flagged',
+      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('missing-keys')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── support-system-call: an unregistered support system is flagged ──
+  {
+    const stages = [stage({
+      stateKey: 'automation',
+      actions: [supportSystemCallAction({ params: { supportSystemKey: 'not-registered', capabilityKey: CAPABILITY_KEY, inputs: {} } })],
+    })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
+    check(
+      'an unregistered support system is flagged',
+      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('unknown-support-system')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── support-system-call: an unregistered capability is flagged ──
+  {
+    const stages = [stage({
+      stateKey: 'automation',
+      actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: 'not-a-capability', inputs: {} } })],
+    })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
+    check(
+      'an unregistered capability is flagged',
+      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('unknown-capability')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── support-system-call: a missing required input is flagged ──
+  {
+    const stages = [stage({
+      stateKey: 'automation',
+      actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: {} } })],
+    })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
+    check(
+      'a missing required input ("File") is flagged',
+      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('missing-input-File')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── support-system-call: an input mapping key the capability never declared is flagged ──
+  {
+    const stages = [stageWithCapturedField('riskAssessment'), stage({
+      stateKey: 'automation',
+      actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: { File: 'riskAssessment', NotReal: 'riskAssessment' } } })],
+    })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, supportSystemCatalog());
+    check(
+      'an input key the capability never declared is flagged',
+      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('unknown-input-NotReal')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── support-system-call: an input bound to a field that doesn't exist anywhere is flagged ──
+  {
+    const stages = [stage({
+      stateKey: 'automation',
+      actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: { File: 'notARealField' } } })],
+    })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
+    check(
+      'an input bound to a nonexistent field is flagged',
+      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('input-unknown-field-File')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── support-system-call: an outgoing route trigger that isn't a declared outcome is flagged ──
+  {
+    const stages = [stageWithCapturedField('riskAssessment'), stage({
+      stateKey: 'automation',
+      components: [],
+      actions: [supportSystemCallAction()],
+      routes: [{ id: 'r1', target: 'done', trigger: 'maybe' }],
+    })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, supportSystemCatalog());
+    check(
+      'a route trigger not among the capability’s declared outcomes is flagged',
+      issues.some(issue => issue.code === 'action-support-system' && issue.id.includes('route-trigger-maybe')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── support-system-call: server-side validation is stage-scoped only, so a route-level action isn't checked ──
+  {
+    const stages = [stage({ stateKey: 'a' }), stage({ stateKey: 'b' })];
+    const bp = { ...blueprint(stages) };
+    bp.stages[0].routes = [{ id: 'r1', target: 'b', trigger: 'continue', actions: [supportSystemCallAction({ params: {} })] }];
+    const issues = validateServiceBlueprint(bp, [], [], supportSystemCatalog());
+    check(
+      'a route-level support-system-call action is not checked (mirrors ProcessManagerEngine’s stage-entry-only scope)',
+      !issues.some(issue => issue.code === 'action-support-system'),
+      JSON.stringify(issues)
+    );
   }
 
   return failures;

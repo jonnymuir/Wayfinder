@@ -1,6 +1,13 @@
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { ActionCatalogEntry, ActionFormFieldConfig, AuthoredAction, AuthoredParameterDefinition } from './types.js';
+import type {
+  ActionCatalogEntry,
+  ActionFormFieldConfig,
+  AuthoredAction,
+  AuthoredParameterDefinition,
+  SupportSystemCallActionParams,
+  SupportSystemDescriptor,
+} from './types.js';
 import {
   ACTION_FORM_FIELD_TYPES,
   availableContexts,
@@ -18,7 +25,11 @@ import {
   type ActionEditorContext,
   type ActionEditorTarget,
 } from './action-editing.js';
+import { renderComponentPropertyFields, type ResolvedPropertyReferences } from './component-property-editor.js';
+import type { FieldReference } from './component-property-references.js';
 import './wayfinder-inline-help.js';
+
+const SUPPORT_SYSTEM_CALL_TYPE = 'support-system-call';
 
 type ActionsUpdatedDetail = {
   actions: AuthoredAction[];
@@ -50,6 +61,22 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
 
   @property({ attribute: false })
   actionCatalog: ActionCatalogEntry[] = [];
+
+  /** Live registered support systems — drives the support-system-call action's own dedicated editor. See support-system-catalog.ts. */
+  @property({ attribute: false })
+  supportSystemCatalog: SupportSystemDescriptor[] = [];
+
+  /**
+   * Blueprint-wide captured input fields, for a support-system-call action's own field-ref
+   * inputs. Deliberately blueprint-wide, not stage-scoped: unlike a component's own `field-ref`
+   * property (checked against the *same stage*'s submitted values —
+   * FieldValueValidator.cs), a capability input is typically bound to a field captured on an
+   * *earlier* stage than the one carrying the action — mirrors ServiceBlueprint.ValidateSupportSystemActions'
+   * own blueprint-wide field lookup, not component-property-references.ts's stage-scoped
+   * `siblingFields`.
+   */
+  @property({ attribute: false })
+  supportSystemFieldReferences: FieldReference[] = [];
 
   @property({ type: String })
   target: ActionEditorTarget = 'stage';
@@ -720,10 +747,157 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     `;
   }
 
+  private _supportSystemCallParams(action: AuthoredAction): SupportSystemCallActionParams {
+    const params = (action.params ?? {}) as SupportSystemCallActionParams;
+    return {
+      supportSystemKey: params.supportSystemKey ?? '',
+      capabilityKey: params.capabilityKey ?? '',
+      inputs: params.inputs ?? {},
+    };
+  }
+
+  private _updateSupportSystemCallParams(index: number, patch: Partial<SupportSystemCallActionParams>) {
+    const action = this.actions[index];
+    if (!action) {
+      return;
+    }
+
+    this._updateActionParams(index, { ...this._supportSystemCallParams(action), ...patch } as unknown as Record<string, unknown>);
+  }
+
+  /**
+   * The dedicated editor for a support-system-call action: pick a support system, then a
+   * capability scoped to it (cascading — picking a different support system resets the
+   * capability and any bound inputs), then one field per the chosen capability's own declared
+   * `inputs`. Not driven by the generic `paramsSchema`-based renderer below — that mechanism
+   * assumes one fixed schema per action `type`, which can't express a schema that depends on a
+   * value (`capabilityKey`) chosen while authoring this same action. Reuses
+   * `renderComponentPropertyFields` (component-property-editor.ts) for the inputs themselves
+   * rather than a parallel field-rendering implementation — a capability's `inputs` are
+   * `ComponentPropertyDescriptor[]`, the exact same shape a component's own properties use.
+   */
+  private _renderSupportSystemCallEditor(index: number) {
+    const action = this.actions[index];
+    if (!action) {
+      return nothing;
+    }
+
+    const params = this._supportSystemCallParams(action);
+    const supportSystem = this.supportSystemCatalog.find(candidate => candidate.key === params.supportSystemKey) ?? null;
+    const capability = supportSystem?.capabilities.find(candidate => candidate.key === params.capabilityKey) ?? null;
+
+    const messages: string[] = [];
+    if (this.supportSystemCatalog.length === 0) {
+      messages.push('No support systems are registered on this host — nothing to call yet.');
+    } else if (!params.supportSystemKey) {
+      messages.push('Choose a support system.');
+    } else if (!supportSystem) {
+      messages.push(`“${params.supportSystemKey}” is not a registered support system.`);
+    } else if (!params.capabilityKey) {
+      messages.push('Choose a capability.');
+    } else if (!capability) {
+      messages.push(`“${params.capabilityKey}” is not a capability of “${supportSystem.displayName}”.`);
+    } else {
+      for (const input of capability.inputs) {
+        if (input.required && !params.inputs?.[input.key]) {
+          messages.push(`“${input.title || input.key}” needs a field.`);
+        }
+      }
+    }
+
+    // Reuses component-property-editor.ts's field-ref rendering by populating siblingFields with
+    // the blueprint-wide field list, not the current stage's own fields — see
+    // supportSystemFieldReferences' own doc comment above for why that's the correct scope here.
+    const references: ResolvedPropertyReferences = {
+      siblingFields: this.supportSystemFieldReferences,
+      allFields: this.supportSystemFieldReferences,
+      stageOptions: [],
+      calculationFieldNames: [],
+    };
+
+    return html`
+      <div class="action-parameters support-system-call-editor" data-wayfinder-support-system-call-editor="${index}">
+        <div class="field-grid">
+          <label class="field-block" for="support-system-${index}">
+            <span class="field-label">Support system</span>
+            <select
+              id="support-system-${index}"
+              class="field-control"
+              data-wayfinder-support-system-select="${index}"
+              @change=${(event: Event) => {
+                const key = (event.currentTarget as HTMLSelectElement).value;
+                this._updateSupportSystemCallParams(index, { supportSystemKey: key, capabilityKey: '', inputs: {} });
+              }}
+            >
+              <option value="" ?selected=${!params.supportSystemKey}>-- Choose a support system --</option>
+              ${this.supportSystemCatalog.map(candidate => html`
+                <option value=${candidate.key} ?selected=${params.supportSystemKey === candidate.key}>${candidate.displayName}</option>
+              `)}
+            </select>
+            ${supportSystem?.description ? html`<span class="field-help">${supportSystem.description}</span>` : nothing}
+          </label>
+          <label class="field-block" for="support-system-capability-${index}">
+            <span class="field-label">Capability</span>
+            <select
+              id="support-system-capability-${index}"
+              class="field-control"
+              data-wayfinder-support-system-capability-select="${index}"
+              ?disabled=${!supportSystem}
+              @change=${(event: Event) => {
+                const key = (event.currentTarget as HTMLSelectElement).value;
+                this._updateSupportSystemCallParams(index, { capabilityKey: key, inputs: {} });
+              }}
+            >
+              <option value="" ?selected=${!params.capabilityKey}>-- Choose a capability --</option>
+              ${(supportSystem?.capabilities ?? []).map(candidate => html`
+                <option value=${candidate.key} ?selected=${params.capabilityKey === candidate.key}>${candidate.displayName}</option>
+              `)}
+            </select>
+            ${capability?.description ? html`<span class="field-help">${capability.description}</span>` : nothing}
+          </label>
+        </div>
+        ${capability
+          ? html`
+              <fieldset class="field-block field-block-full property-object">
+                <legend class="field-label">Inputs</legend>
+                ${renderComponentPropertyFields(capability.inputs, {
+                  value: params.inputs ?? {},
+                  onChange: (path, value) => {
+                    const key = String(path[0]);
+                    this._updateSupportSystemCallParams(index, { inputs: { ...(params.inputs ?? {}), [key]: value as string } });
+                  },
+                  idPrefix: `support-system-call-${index}`,
+                  references,
+                })}
+              </fieldset>
+              <p class="field-help">
+                Outgoing routes from this stage should trigger on one of this capability's outcomes:
+                ${capability.outcomes.map(outcome => outcome.key).join(', ') || '(none declared)'}.
+              </p>
+            `
+          : nothing}
+        ${messages.length > 0
+          ? html`
+              <div class="action-validation" data-wayfinder-action-errors="${index}">
+                <p class="action-validation-title">Fix these action details before saving:</p>
+                <ul>
+                  ${messages.map(message => html`<li>${message}</li>`)}
+                </ul>
+              </div>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
   private _renderActionParameters(index: number) {
     const action = this.actions[index];
     if (!action) {
       return nothing;
+    }
+
+    if (action.type === SUPPORT_SYSTEM_CALL_TYPE) {
+      return this._renderSupportSystemCallEditor(index);
     }
 
     const entry = this._actionEntry(action);
