@@ -66,8 +66,32 @@ webhook-only, poll-only — needs no engine change, only a new descriptor and a 
 | `Key` | Unique within the support system, e.g. `"validate-risk-assessment"`. |
 | `DisplayName` | Human-readable name for editor UI. |
 | `Inputs` | `IReadOnlyList<ComponentPropertyDescriptor>` — what this capability needs, reusing the exact same property-descriptor shape as a component's own properties. |
+| `Outputs` | `IReadOnlyList<ComponentPropertyDescriptor>` — blueprint field keys this capability's resolution writes directly into instance state once it resolves (e.g. a decision note). A `summary-list`/`stat-group` elsewhere in the blueprint may legitimately bind to one of these even though no stage ever captures it as an input — see [Validation](#validation) below. Unlike `Inputs`, there's no per-blueprint remapping: the `Key` declared here is exactly the field key a host's `ISupportSystemClient` is expected to write. |
 | `SupportedCompletionModes` | `Poll` and/or `Webhook` — must declare at least one, or an invocation could never resolve. |
 | `Outcomes` | The closed set of decisions this capability can resolve to, e.g. `approved`/`rejected` — must declare at least one. A blueprint's outgoing routes from the calling stage are validated against this vocabulary. |
+
+## Validation
+
+Registering a descriptor gets a blueprint referencing it real, comprehensive validation for
+free — `ServiceBlueprint.ValidateSupportSystemActions()` (surfaced through
+`validate_service_blueprint`/`save_service_blueprint`, the same as
+[component property validation](./extending-the-component-catalog.md#validation-comes-for-free)):
+
+- `supportSystemKey`/`capabilityKey` are present and actually registered
+  (`SUPPORT_SYSTEM_ACTION_MISSING_KEYS`/`_UNKNOWN_SUPPORT_SYSTEM`/`_UNKNOWN_CAPABILITY`).
+- Every input the capability declares `Required` is bound in the action's own `params.inputs`
+  (`SUPPORT_SYSTEM_ACTION_MISSING_REQUIRED_INPUT`), and every key in `params.inputs` actually
+  names a declared input (`SUPPORT_SYSTEM_ACTION_UNKNOWN_INPUT` — catches a typo).
+- Each bound input's blueprint field key actually exists somewhere in the blueprint
+  (`SUPPORT_SYSTEM_ACTION_INPUT_UNKNOWN_FIELD`).
+- The carrying stage's own outgoing route triggers are all outcomes the capability can actually
+  resolve to (`SUPPORT_SYSTEM_ACTION_ROUTE_TRIGGER_UNKNOWN_OUTCOME`) — a route whose trigger isn't
+  a declared outcome can never fire, since `ResolveSupportSystemOutcome` only ever delivers one.
+
+Separately, `ValidateDataDisplayBindings()` treats every field key declared in a referenced
+capability's `Outputs` as a known, legitimate binding for a `summary-list`/`stat-group` anywhere
+in the blueprint — the same as a captured input field or a `calculations.fields` entry — so
+showing a support system's decision on a later stage doesn't trip `DATA_DISPLAY_UNKNOWN_FIELD`.
 
 ## Registering a support system
 
@@ -85,6 +109,10 @@ SupportSystemRegistry.Register(new SupportSystemDescriptor
             Inputs =
             [
                 new() { Key = "File", Title = "Risk assessment file", ValueKind = ComponentPropertyValueKind.String, Format = "field-ref", Required = true },
+            ],
+            Outputs =
+            [
+                new() { Key = "insurerDecisionNotes", Title = "Insurer decision notes", ValueKind = ComponentPropertyValueKind.String },
             ],
             SupportedCompletionModes = [SupportSystemCompletionMode.Poll, SupportSystemCompletionMode.Webhook],
             Outcomes =

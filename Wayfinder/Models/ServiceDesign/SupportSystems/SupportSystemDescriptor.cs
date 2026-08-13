@@ -53,6 +53,19 @@ public sealed record SupportSystemCapabilityDescriptor
 
     public IReadOnlyList<ComponentPropertyDescriptor> Inputs { get; init; } = [];
 
+    /// <summary>
+    /// Blueprint field keys this capability's resolution writes directly into
+    /// <c>ServiceRequest.FieldValues</c> once it resolves (e.g. a decision note an external
+    /// system supplies) — declared so a stage elsewhere in the blueprint can legitimately display
+    /// one (a <c>summary-list</c>/<c>stat-group</c> binding to one of these keys is recognised as
+    /// valid, the same as a captured input field or a <c>calculations.fields</c> entry; see
+    /// <see cref="ServiceBlueprint.ValidateDataDisplayBindings"/>). Unlike <see cref="Inputs"/>,
+    /// there's currently no per-blueprint remapping — the key declared here is exactly the
+    /// blueprint field key a host's <c>ISupportSystemClient</c> (<c>Wayfinder.Engine</c>) is
+    /// expected to write; a client and the blueprint author must agree on the name directly.
+    /// </summary>
+    public IReadOnlyList<ComponentPropertyDescriptor> Outputs { get; init; } = [];
+
     /// <summary>Which completion mode(s) this capability actually uses — see <see cref="SupportSystemCompletionMode"/>. Must declare at least one.</summary>
     public required IReadOnlyList<SupportSystemCompletionMode> SupportedCompletionModes { get; init; }
 

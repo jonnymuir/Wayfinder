@@ -6,6 +6,8 @@ using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Models.ServiceDesign.Components;
+using Wayfinder.Models.ServiceDesign.SupportSystems;
 using Wayfinder.Services.Sanitization;
 
 namespace Wayfinder.Tests.ServiceDesign;
@@ -51,12 +53,52 @@ public class JugglingLicenceStageValidationTests
     [Fact]
     public void RealBlueprint_ValidatesCleanlyIncludingTheStageValidationRule()
     {
-        var service = new ServiceBlueprintAuthoringService(new UnusedStore());
+        // The blueprint's insurer-validation stage references "safetynet-underwriting" — real in
+        // Wayfinder.ReferenceApp (Services/SupportSystems/SafetyNetUnderwritingClient.cs), which
+        // this test project doesn't reference. Mirror its shape here so validation sees the same
+        // registered support system production does; keep in sync if that descriptor changes.
+        SupportSystemRegistry.ResetForTests();
+        try
+        {
+            SupportSystemRegistry.Register(new SupportSystemDescriptor
+            {
+                Key = "safetynet-underwriting",
+                DisplayName = "SafetyNet Underwriting",
+                Capabilities =
+                [
+                    new SupportSystemCapabilityDescriptor
+                    {
+                        Key = "validate-risk-assessment",
+                        DisplayName = "Validate a risk assessment",
+                        Inputs =
+                        [
+                            new() { Key = "File", Title = "File", ValueKind = ComponentPropertyValueKind.String, Required = true },
+                            new() { Key = "ApplicantName", Title = "Applicant name", ValueKind = ComponentPropertyValueKind.String },
+                            new() { Key = "EventName", Title = "Event name", ValueKind = ComponentPropertyValueKind.String },
+                            new() { Key = "Notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String },
+                        ],
+                        Outputs =
+                        [
+                            new() { Key = "insurerDecision", Title = "Insurer decision", ValueKind = ComponentPropertyValueKind.String },
+                            new() { Key = "insurerDecisionNotes", Title = "Insurer decision notes", ValueKind = ComponentPropertyValueKind.String },
+                        ],
+                        SupportedCompletionModes = [SupportSystemCompletionMode.Poll, SupportSystemCompletionMode.Webhook],
+                        Outcomes = [new() { Key = "approved", DisplayName = "Approved" }, new() { Key = "rejected", DisplayName = "Rejected" }],
+                    },
+                ],
+            });
 
-        var outcome = service.Validate(LoadDefinition());
+            var service = new ServiceBlueprintAuthoringService(new UnusedStore());
 
-        outcome.IsValid.Should().BeTrue(because: string.Join("; ", outcome.Diagnostics.Select(d => $"{d.Code} {d.Path}: {d.Message}")));
-        outcome.Diagnostics.Should().NotContain(d => d.Code.StartsWith("STAGE_VALIDATION_"));
+            var outcome = service.Validate(LoadDefinition());
+
+            outcome.IsValid.Should().BeTrue(because: string.Join("; ", outcome.Diagnostics.Select(d => $"{d.Code} {d.Path}: {d.Message}")));
+            outcome.Diagnostics.Should().NotContain(d => d.Code.StartsWith("STAGE_VALIDATION_"));
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
 
         var stage = LoadDefinition().Stages.Single(s => s.StageKey == "risk-assessment");
         stage.Validations.Should().ContainSingle(r => r.Code == "risk-mitigation-evidence-required");

@@ -477,6 +477,30 @@
               "default": null,
               "defaultFrom": null,
               "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "insurerDecision",
+              "label": "Insurer decision",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "insurerDecisionNotes",
+              "label": "Insurer notes",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
             }
           ],
           "changeStateKey": null,

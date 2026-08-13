@@ -63,6 +63,20 @@ public static class SafetyNetUnderwriting
                             ValueKind = ComponentPropertyValueKind.String, Format = "field-ref",
                         },
                     ],
+                    Outputs =
+                    [
+                        new()
+                        {
+                            Key = "insurerDecision", Title = "Insurer decision",
+                            Description = "Mirrors the resolved outcome key (\"approved\"/\"rejected\") as a displayable field.",
+                            ValueKind = ComponentPropertyValueKind.String,
+                        },
+                        new()
+                        {
+                            Key = "insurerDecisionNotes", Title = "Insurer decision notes",
+                            ValueKind = ComponentPropertyValueKind.String,
+                        },
+                    ],
                     SupportedCompletionModes = [SupportSystemCompletionMode.Poll, SupportSystemCompletionMode.Webhook],
                     Outcomes =
                     [
