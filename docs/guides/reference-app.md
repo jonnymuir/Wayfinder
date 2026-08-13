@@ -165,6 +165,12 @@ node would be. `Wayfinder` itself has no opinion about this at all — it's a ca
   `juggling-insurance-modeller.json` for the slider/stat-group/chart-driven premium modeller demo
   at `/premium` — see [Package Architecture](#package-architecture) for what renders that)
 - `Wayfinder.ReferenceApp/Services/` — every custom implementation in the table above
+- `Wayfinder.ReferenceApp/Services/SupportSystems/` — `SafetyNetUnderwritingClient`
+  (`ISupportSystemClient`) and the real `SupportSystemDescriptor` registration for the third,
+  support-processes lane — see [docs/guides/support-systems.md](./support-systems.md)
+- `SafetyNetUnderwriting/` — the fictional insurer itself: a genuinely separate ASP.NET Core app
+  (own `Wayfinder.AppHost` resource, not a library inside `Wayfinder.ReferenceApp`), with its own
+  staff worklist at `/queue`
 - `Wayfinder.ReferenceApp/wwwroot/` — just this app's own favicon/manifest branding now;
   **host-specific** assets only. `govuk-frontend` itself, and everything owned by a shared
   Wayfinder package (slider/stat-group/chart styling, calculation runtimes, the live-form
@@ -173,7 +179,16 @@ node would be. `Wayfinder` itself has no opinion about this at all — it's a ca
 - `Wayfinder.ReferenceApp.Tests/` — the Playwright suite (auth, the full citizen→caseworker→citizen
   handoff, the editor/authoring wiring, file upload, the premium modeller) — run single-worker,
   since the backend is one shared in-memory process with fixed demo identities, not per-test
-  isolated
+  isolated. **Known gap**: this suite boots `Wayfinder.ReferenceApp` directly
+  (`dotnet run --project Wayfinder.ReferenceApp`), not through `Wayfinder.AppHost`, so
+  `SafetyNetUnderwritingClient`'s Aspire service-discovery address
+  (`http://safetynet-underwriting`) never resolves here — the full "send to insurer" round trip
+  is verified manually against the real `dotnet run --project Wayfinder.AppHost` stack (see the
+  worked example in [docs/guides/support-systems.md](./support-systems.md)), not by an automated
+  Playwright spec. `Wayfinder.Editor.Client`'s own suite does cover the *authoring* UX for a
+  `support-system-call` action (`support-system-action-editor.spec.ts`) — see
+  [docs/skills/canvas-editor/SKILL.md](../skills/canvas-editor/SKILL.md) — since that needs no
+  live SafetyNet Underwriting process, only the registered descriptor.
 
 ## Package Architecture
 

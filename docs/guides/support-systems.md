@@ -192,14 +192,35 @@ registered capability:
 The stage carrying this action then sits waiting — using the same `waitingContent`/
 `waitingPollIntervalMs`/`requiredIncomingQueues` fields a join gateway already uses for the
 citizen's "waiting behind the line of visibility" screen — until the capability resolves to one
-of its declared `Outcomes`, at which point the matching outgoing route (`insurer-approved`/
-`insurer-rejected`, in the worked example) fires.
+of its declared `Outcomes`, at which point the matching outgoing route (`approved`/`rejected`, in
+the worked example) fires.
 
 An editor or agent authoring this action should look the capability up first —
 `GET /wayfinder/service-blueprint-authoring/support-systems` (REST) or `list_support_systems`
 (MCP) list every registered support system exactly like `component-types`/`list_component_types`
 do for the component catalog — to get the real `supportSystemKey`/`capabilityKey`, which inputs
-are required, and which outcome keys the calling stage's outgoing routes must match.
+are required, and which outcome keys the calling stage's outgoing routes must match. The visual
+editor's own stage action editor drives this same lookup live — see
+[docs/skills/canvas-editor/SKILL.md](../skills/canvas-editor/SKILL.md).
+
+## The worked example, verified end to end
+
+`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `under-review` stage gets a
+third route, `send-to-insurer`, alongside its existing `approve`/`reject` — additive, not a
+replacement — targeting a `to-insurer-check` Split gateway that forks the caseworker's own cursor
+(straight to `insurer-check-complete`, a Join) from a new `automation`-queue cursor
+(`insurer-validation`, carrying the `support-system-call` action). Once SafetyNet Underwriting
+resolves, `insurer-check-complete` releases back into `under-review` itself, now showing the
+insurer's decision, where the caseworker makes the actual final call — flowing into the
+pre-existing, unmodified `post-review` join every application already went through.
+
+Run `dotnet run --project Wayfinder.AppHost`, sign in as `caseworker@example.test` /
+`applicant@example.test` (password `wayfinder-demo`), and the whole path is real: a citizen's
+uploaded risk-assessment file genuinely travels server-to-server to SafetyNet Underwriting's own
+running app, its staff queue at `/queue` (a separate `Wayfinder.AppHost` resource — a distinct
+"Staff queue" dashboard link) shows the real submission, and approving it there resolves the
+caseworker's own wait screen via a real webhook call back into
+`POST /wayfinder/support-systems/callbacks/{invocationId}`.
 
 ## Related documentation
 
