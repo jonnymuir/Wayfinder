@@ -64,10 +64,30 @@ app.MapGet("/submissions/{id}", (string id) =>
         ? Results.Ok(new { id = submission.Id, status = submission.Status, decisionNotes = submission.DecisionNotes })
         : Results.NotFound());
 
+// An underwriter can't sensibly approve or reject a risk assessment they can't actually open —
+// the file genuinely travelled here over HTTP (see SafetyNetUnderwritingClient), so serving it
+// back is this app's own concern, nothing to do with Wayfinder. Inline rather than an attachment
+// download, so a staff member reviewing a queue can just look at it.
+app.MapGet("/submissions/{id}/file", (string id) =>
+{
+    if (!submissions.TryGetValue(id, out var submission) || submission.FileBytes is null)
+    {
+        return Results.NotFound();
+    }
+
+    return Results.File(
+        submission.FileBytes,
+        submission.ContentType ?? "application/octet-stream",
+        submission.FileName,
+        enableRangeProcessing: false);
+});
+
 app.MapGet("/queue", () => Results.Content(RenderQueue(submissions.Values), "text/html"));
 
-app.MapPost("/queue/{id}/decide", async (string id, HttpRequest request, IHttpClientFactory httpClientFactory) =>
+app.MapPost("/queue/{id}/decide", async (
+    string id, HttpRequest request, IHttpClientFactory httpClientFactory, ILoggerFactory loggerFactory) =>
 {
+    var logger = loggerFactory.CreateLogger("SafetyNetUnderwriting.Callback");
     if (!submissions.TryGetValue(id, out var submission))
     {
         return Results.NotFound();
@@ -100,15 +120,36 @@ app.MapPost("/queue/{id}/decide", async (string id, HttpRequest request, IHttpCl
         };
 
         // Best-effort — a callback failing here doesn't undo the decision this staff member just
-        // made; Wayfinder's own poll-check hook is the fallback path if this never arrives.
+        // made; Wayfinder's own poll-check hook is the fallback path if this never arrives. But
+        // "best-effort" must never mean "silent": an unresolvable callback URL swallowed here once
+        // hid a genuinely broken webhook for as long as the poll fallback kept the journey
+        // completing anyway. Log both a non-success status and a thrown failure, loudly enough to
+        // spot in the Aspire dashboard.
         try
         {
             var client = httpClientFactory.CreateClient();
-            await client.PostAsJsonAsync(decided.CallbackUrl, payload);
+            var response = await client.PostAsJsonAsync(decided.CallbackUrl, payload);
+            if (response.IsSuccessStatusCode)
+            {
+                logger.LogInformation(
+                    "Callback to {CallbackUrl} for submission {SubmissionId} succeeded ({Status}).",
+                    decided.CallbackUrl, id, (int)response.StatusCode);
+            }
+            else
+            {
+                logger.LogError(
+                    "Callback to {CallbackUrl} for submission {SubmissionId} returned {Status}. " +
+                    "Wayfinder's poll fallback will have to cover this.",
+                    decided.CallbackUrl, id, (int)response.StatusCode);
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallowed deliberately — see comment above.
+            logger.LogError(
+                ex,
+                "Callback to {CallbackUrl} for submission {SubmissionId} failed outright. " +
+                "Wayfinder's poll fallback will have to cover this.",
+                decided.CallbackUrl, id);
         }
     }
 
@@ -140,6 +181,7 @@ const string QueueStyle = """
     th { background: #16213e; }
     button { background: #ff9f1c; border: none; padding: 0.3rem 0.6rem; cursor: pointer; }
     input[type=text] { padding: 0.2rem; }
+    a { color: #7dd3fc; }
     """;
 
 static string RenderQueue(IEnumerable<Submission> all)
@@ -152,7 +194,7 @@ static string RenderQueue(IEnumerable<Submission> all)
           <td>{System.Net.WebUtility.HtmlEncode(s.ApplicantName ?? "(unknown)")}</td>
           <td>{System.Net.WebUtility.HtmlEncode(s.EventName ?? "")}</td>
           <td>{System.Net.WebUtility.HtmlEncode(s.Notes ?? "")}</td>
-          <td>{(s.FileName is null ? "&mdash;" : System.Net.WebUtility.HtmlEncode(s.FileName))}</td>
+          <td>{(s.FileName is null ? "&mdash;" : $"""<a href="/submissions/{s.Id}/file" target="_blank" rel="noopener">{System.Net.WebUtility.HtmlEncode(s.FileName)}</a>""")}</td>
           <td>{s.Status}</td>
           <td>
             {(showActions ? $"""

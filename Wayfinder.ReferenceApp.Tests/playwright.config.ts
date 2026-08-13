@@ -10,7 +10,8 @@ export default defineConfig({
   // `dotnet run --project ../Wayfinder.ReferenceApp` webServer. Run these with
   // `npm run test:playwright:live` instead — see playwright.live.config.ts and
   // docs/guides/support-systems.md.
-  testIgnore: ['**/support-systems-live.spec.ts'],
+  // `tests/demo/**` is the narrated recording tool (playwright.demo.config.ts), not a test.
+  testIgnore: ['**/support-systems-live.spec.ts', '**/demo/**'],
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   // The backend under test is one shared in-memory singleton process — a fixed pair of demo

@@ -723,7 +723,7 @@
     },
     {
       "key": "insurer-check-complete",
-      "displayName": "Insurer check complete",
+      "displayName": "Awaiting insurer decision",
       "gatewayType": "Join",
       "queueKey": "caseworker",
       "routes": [

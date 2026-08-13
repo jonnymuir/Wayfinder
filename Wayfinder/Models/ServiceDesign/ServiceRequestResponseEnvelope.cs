@@ -282,6 +282,20 @@ public record FieldRenderPayload
     public string? Prefix { get; init; }
 
     /// <summary>
+    /// A URL at which a <c>file-upload</c> field's already-uploaded file can be opened, making a
+    /// read-only summary row render as a real link rather than a filename in plain text.
+    ///
+    /// Deliberately <em>never</em> set by the engine: the engine only ever holds an opaque
+    /// <see cref="ServiceRequestFileReference"/> and has no idea what URL space its host serves
+    /// files from (see <c>IServiceRequestFileStorage</c> — the host owns storage *and* routing).
+    /// A host that exposes a download route enriches the payload with it before rendering; one
+    /// that doesn't simply leaves this null and gets today's plain-filename display. That split is
+    /// why viewing an uploaded file needs no new component type: it's a host rendering concern
+    /// attached to the existing <c>file-upload</c> field, not a new blueprint-authored concept.
+    /// </summary>
+    public string? FileUrl { get; init; }
+
+    /// <summary>
     /// For radios/checkboxes: sub-fields revealed when the parent option is selected.
     /// Key is the option value; value is the list of fields shown when that option is active.
     /// </summary>

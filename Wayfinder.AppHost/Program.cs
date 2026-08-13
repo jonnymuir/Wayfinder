@@ -29,7 +29,7 @@ var safetyNetUnderwriting = builder.AddProject<Projects.SafetyNetUnderwriting>(
         }
     });
 
-builder.AddProject<Projects.Wayfinder_ReferenceApp>("referenceapp", launchProfileName: "https")
+var referenceApp = builder.AddProject<Projects.Wayfinder_ReferenceApp>("referenceapp", launchProfileName: "https")
     .WithReference(safetyNetUnderwriting)
     .WaitFor(safetyNetUnderwriting)
     .WithUrls(ctx =>
@@ -72,5 +72,18 @@ builder.AddProject<Projects.Wayfinder_ReferenceApp>("referenceapp", launchProfil
             });
         }
     });
+
+// The reverse reference, and it is load-bearing: SafetyNetUnderwriting posts its decision back to
+// the callback URL SafetyNetUnderwritingClient hands it (http://referenceapp/wayfinder/
+// support-systems/callbacks/{invocationId}), so *it* needs service discovery for "referenceapp"
+// too — a one-way reference only taught the reference app how to find the insurer, never the other
+// way round. Without this the webhook POST silently fails to resolve and is swallowed by the
+// client's own best-effort catch, leaving the poll fallback to quietly cover for it: the journey
+// still completes, so nothing looks broken, which is exactly why this survived until a recorded
+// end-to-end take checked the one path (the queue list) that never polls.
+//
+// Circular WithReference is fine — it only injects service-discovery config. The WaitFor above
+// stays one-directional; making that circular really would deadlock startup.
+safetyNetUnderwriting.WithReference(referenceApp);
 
 builder.Build().Run();

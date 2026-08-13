@@ -70,19 +70,21 @@ test.describe('Support systems: real cross-process round trip', () => {
     const caseworkerContext = await browser.newContext({ baseURL: REFERENCE_APP });
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
-    await caseworkerPage.getByRole('link', { name: 'Review' }).click();
-    await caseworkerPage.getByText('Live-Stack Fire Juggling Show').click();
+    const queueRow = caseworkerPage.locator('tr', { hasText: 'Apply for a licence to hold a juggling event' });
+    await queueRow.getByRole('link', { name: 'Review' }).click();
 
     await expect(caseworkerPage.getByRole('heading', { name: 'Application under review' })).toBeVisible();
-    const caseworkerItemUrl = caseworkerPage.url();
+    // The uploaded file is a real link on its own summary row (FieldRenderPayload.FileUrl), not
+    // a filename in plain text — a caseworker can open exactly what the applicant submitted.
+    await expect(caseworkerPage.getByRole('link', { name: 'risk-assessment.pdf' })).toBeVisible();
     await caseworkerPage.getByRole('button', { name: 'Send risk assessment to insurer' }).click();
 
-    // The advance route always redirects to the queue list (Program.cs), and this instance
-    // correctly drops off that list while parked at the join with no caseworker-actionable
-    // routes — go back to its own URL directly, the same way a caseworker would via their
-    // browser history/a bookmark, or this reference app's own "my in-progress items" concept
-    // would (there isn't one yet — see docs/guides/reference-app.md).
-    await caseworkerPage.goto(caseworkerItemUrl);
+    // The application must STAY on the caseworker's own worklist while it's out with the insurer,
+    // flagged "Waiting" (QueueWorkItem.IsWaiting). It previously vanished entirely — reachable
+    // only by a remembered URL — which is the bug a recorded end-to-end take surfaced.
+    await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
+    await expect(queueRow.getByText('Waiting')).toBeVisible();
+    await queueRow.getByRole('link', { name: 'View' }).click();
 
     // The caseworker's own cursor is now parked at the insurer-check-complete Join gateway,
     // waiting exactly like the citizen's post-review join already did — same wait/poll UI.
@@ -103,10 +105,19 @@ test.describe('Support systems: real cross-process round trip', () => {
     await pendingRow.getByLabel('Decision notes').fill('Adequate mitigation for a live-stack test.');
     await pendingRow.getByRole('button', { name: 'Approve' }).click();
 
-    // The webhook SafetyNetUnderwriting just fired (POST /wayfinder/support-systems/callbacks/
-    // {invocationId}) should have already resolved the caseworker's wait — reload rather than
-    // poll, proving this is push-driven, not the poll-check hook papering over a missed webhook.
-    await caseworkerPage.reload();
+    // Check the caseworker's QUEUE LIST first, deliberately — it is the one surface that never
+    // runs the engine's poll-check hook (that only fires from GetCurrent, i.e. opening the item
+    // itself). So a released join here can only have been released by the real inbound webhook.
+    //
+    // An earlier version of this test reloaded the item page instead and claimed in a comment to
+    // be "proving this is push-driven" — it was not: opening the item polls, which silently
+    // covered for a webhook that was in fact completely broken (SafetyNetUnderwriting had no
+    // Aspire service-discovery reference back to referenceapp, so the callback URL never
+    // resolved). Assert against the non-polling surface, or this proves nothing.
+    await caseworkerPage.goto('/caseworker/queue');
+    await expect(queueRow.getByText('Waiting')).toHaveCount(0);
+
+    await queueRow.getByRole('link', { name: 'Review' }).click();
     await expect(caseworkerPage.getByRole('heading', { name: 'Application under review' })).toBeVisible();
     const summary = caseworkerPage.locator('.govuk-summary-list');
     await expect(summary.getByText('approved', { exact: true })).toBeVisible();

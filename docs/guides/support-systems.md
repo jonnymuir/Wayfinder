@@ -247,6 +247,31 @@ in-memory apps, nothing to seed). The spec drives three separate browser context
 caseworker, and SafetyNet Underwriting's own staff — through the real UI on both real apps, not
 an API shortcut standing in for either.
 
+## Two things the first working version got wrong
+
+Both found by recording the journey end to end and watching it, not by any test suite — worth
+naming because they generalise beyond this feature.
+
+**A backstage actor waiting on a support system must stay on their own worklist.** The engine's
+queue worklist originally meant "what can I act on", so it filtered to items with available
+actions. A caseworker's cursor parked at a join gateway has none — so the moment an application
+was sent to the insurer it vanished from the caseworker's queue entirely, reachable only by a
+remembered URL. `QueueWorkItem.IsWaiting` now carries "in your queue, nothing to do yet", the
+worklist includes those items, and the reference app renders them with a "Waiting" tag and a
+"View" link. This was never support-systems-specific: *any* actor parked at *any* join gateway
+was invisible to their own queue. It only surfaced now because before this feature, the only
+actor who ever waited at a join was the citizen — who has always had a dedicated wait screen.
+
+**Viewing an uploaded file is not a new component.** The engine deliberately never sees file
+bytes or URLs — it holds an opaque `ServiceRequestFileReference`, and `IServiceRequestFileStorage`
+leaves both storage *and* routing to the host. So a blueprint-authored "file download" component
+would have to make the engine mint URLs it has no business knowing. Instead the host fills in
+`FieldRenderPayload.FileUrl` on the way to the renderer, and a `file-upload` field's read-only
+summary row renders its filename as a real link (see `WithFileDownloadUrls` in
+`Wayfinder.ReferenceApp/Program.cs`). A host with no download route leaves it null and gets plain
+filename text, exactly as before. The insurer's own file view is not a Wayfinder concern at all —
+SafetyNet Underwriting serves the bytes it received from its own `GET /submissions/{id}/file`.
+
 ## Related documentation
 
 - [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md) — the full

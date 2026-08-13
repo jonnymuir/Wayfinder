@@ -548,8 +548,12 @@ public class ProcessManagerEngine : IProcessManager
                     return Array.Empty<QueueWorkItem>();
                 }
 
+                // A join-gateway item legitimately has no available actions — the actor is waiting
+                // on another queue, not choosing anything. Filtering purely on "has actions" hid
+                // those entirely, so an application sent to a support system vanished from the
+                // caseworker's own queue with no way back to it (see QueueWorkItem.IsWaiting).
                 return FindAccessibleWorkItems(instance, definition, accessProfile)
-                    .Where(item => item.AvailableActions.Count > 0)
+                    .Where(item => item.AvailableActions.Count > 0 || item.IsJoinGateway)
                     .Select(item => item.ToEnvelopeItem(instance, definition))
                     .ToArray();
             })
@@ -1067,7 +1071,8 @@ public class ProcessManagerEngine : IProcessManager
                 TenantId = instance.TenantId,
                 UserId = instance.UserId,
                 StateVersion = instance.StateVersion,
-                AvailableActions = AvailableActions
+                AvailableActions = AvailableActions,
+                IsWaiting = IsJoinGateway
             };
     }
 
