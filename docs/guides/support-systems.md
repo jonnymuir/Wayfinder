@@ -235,6 +235,18 @@ running app, its staff queue at `/queue` (a separate `Wayfinder.AppHost` resourc
 caseworker's own wait screen via a real webhook call back into
 `POST /wayfinder/support-systems/callbacks/{invocationId}`.
 
+This exact path is also a real, automated Playwright spec —
+`Wayfinder.ReferenceApp.Tests/tests/support-systems-live.spec.ts`, run with
+`npm run test:playwright:live` (not the default `npm run test:playwright`, which boots
+`Wayfinder.ReferenceApp` directly and has no Aspire service discovery to resolve
+`http://safetynet-underwriting` with). `tests/support/live-app-host.ts` boots the real
+`Wayfinder.AppHost` stack and polls both resources' own HTTP endpoints until they're genuinely
+answering before any test runs — precedent: Umbraco.Prism's own
+`UmbracoPrism.Client/tests/support/live-app-host.ts`, proportionately leaner here (two plain
+in-memory apps, nothing to seed). The spec drives three separate browser contexts — applicant,
+caseworker, and SafetyNet Underwriting's own staff — through the real UI on both real apps, not
+an API shortcut standing in for either.
+
 ## Related documentation
 
 - [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md) — the full

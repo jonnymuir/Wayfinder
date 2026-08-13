@@ -43,6 +43,9 @@ test.describe('Service blueprint editor', () => {
       'risk-assessment',
       'declaration',
       'under-review',
+      // The automation queue's own stage — carries the support-system-call action that sends
+      // the risk assessment to SafetyNet Underwriting (see docs/guides/support-systems.md).
+      'insurer-validation',
       'approved',
       'rejected'
     ]);

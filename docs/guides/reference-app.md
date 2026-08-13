@@ -179,16 +179,21 @@ node would be. `Wayfinder` itself has no opinion about this at all — it's a ca
 - `Wayfinder.ReferenceApp.Tests/` — the Playwright suite (auth, the full citizen→caseworker→citizen
   handoff, the editor/authoring wiring, file upload, the premium modeller) — run single-worker,
   since the backend is one shared in-memory process with fixed demo identities, not per-test
-  isolated. **Known gap**: this suite boots `Wayfinder.ReferenceApp` directly
-  (`dotnet run --project Wayfinder.ReferenceApp`), not through `Wayfinder.AppHost`, so
-  `SafetyNetUnderwritingClient`'s Aspire service-discovery address
-  (`http://safetynet-underwriting`) never resolves here — the full "send to insurer" round trip
-  is verified manually against the real `dotnet run --project Wayfinder.AppHost` stack (see the
-  worked example in [docs/guides/support-systems.md](./support-systems.md)), not by an automated
-  Playwright spec. `Wayfinder.Editor.Client`'s own suite does cover the *authoring* UX for a
-  `support-system-call` action (`support-system-action-editor.spec.ts`) — see
+  isolated. `Wayfinder.Editor.Client`'s own suite covers the support-system-call action's
+  *authoring* UX (`support-system-action-editor.spec.ts`) — see
   [docs/skills/canvas-editor/SKILL.md](../skills/canvas-editor/SKILL.md) — since that needs no
-  live SafetyNet Underwriting process, only the registered descriptor.
+  live SafetyNet Underwriting process, only the registered descriptor. The default
+  `npm run test:playwright` here boots `Wayfinder.ReferenceApp` directly, without Aspire, so it
+  can't exercise the real cross-process "send to insurer" round trip
+  (`SafetyNetUnderwritingClient`'s `http://safetynet-underwriting` service-discovery address
+  never resolves outside `Wayfinder.AppHost`) — that's what `npm run test:playwright:live` is
+  for: `support-systems-live.spec.ts`, driven by `tests/support/live-app-host.ts`, which boots
+  the real `Wayfinder.AppHost` stack (precedent: Umbraco.Prism's own
+  `UmbracoPrism.Client/tests/support/live-app-host.ts`, proportionately leaner here — two plain
+  in-memory apps, no Docker/Keycloak to wait on) and polls both resources' own HTTP endpoints
+  until they're genuinely answering before any test runs against them. See
+  [docs/guides/support-systems.md](./support-systems.md) for the worked example this spec
+  actually drives, browser-to-browser, across both real apps.
 
 ## Package Architecture
 

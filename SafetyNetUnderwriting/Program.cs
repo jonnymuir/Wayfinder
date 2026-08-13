@@ -116,6 +116,20 @@ app.MapPost("/queue/{id}/decide", async (string id, HttpRequest request, IHttpCl
     return Results.Redirect("/queue");
 });
 
+// Development-only, same guard/reasoning as Wayfinder.ReferenceApp's own /api/test/reset —
+// wipes every in-memory submission so a Playwright spec starts each test from a known-empty
+// state instead of restarting the process.
+app.MapDelete("/api/test/reset", (IHostEnvironment env) =>
+{
+    if (!env.IsDevelopment())
+    {
+        return Results.NotFound();
+    }
+
+    submissions.Clear();
+    return Results.Ok(new { cleared = true });
+});
+
 app.Run();
 
 const string QueueStyle = """
@@ -144,7 +158,7 @@ static string RenderQueue(IEnumerable<Submission> all)
             {(showActions ? $"""
               <form method="post" action="/queue/{s.Id}/decide" style="display:inline">
                 <input type="hidden" name="decision" value="approve" />
-                <input type="text" name="decisionNotes" placeholder="Decision notes" />
+                <label>Decision notes <input type="text" name="decisionNotes" /></label>
                 <button type="submit">Approve</button>
               </form>
               <form method="post" action="/queue/{s.Id}/decide" style="display:inline">

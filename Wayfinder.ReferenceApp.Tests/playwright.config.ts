@@ -5,6 +5,12 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: './tests',
+  // Live-stack tests: need the real Wayfinder.AppHost stack (Aspire service discovery between
+  // Wayfinder.ReferenceApp and SafetyNetUnderwriting), not this config's single-process
+  // `dotnet run --project ../Wayfinder.ReferenceApp` webServer. Run these with
+  // `npm run test:playwright:live` instead — see playwright.live.config.ts and
+  // docs/guides/support-systems.md.
+  testIgnore: ['**/support-systems-live.spec.ts'],
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   // The backend under test is one shared in-memory singleton process — a fixed pair of demo
