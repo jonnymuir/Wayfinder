@@ -11,6 +11,8 @@
     "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test calculations-editor.spec.ts --workers=1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.46.1"
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.46.1",
+    "axe-core": "^4.13.0"
   }
 }

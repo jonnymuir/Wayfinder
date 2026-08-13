@@ -214,7 +214,7 @@ static string RenderQueue(IEnumerable<Submission> all)
 
     return $"""
         <!doctype html>
-        <html>
+        <html lang="en">
         <head>
           <meta charset="utf-8" />
           <title>SafetyNet Underwriting — Staff Queue</title>

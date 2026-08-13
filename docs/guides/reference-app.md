@@ -38,9 +38,11 @@ A third **support-systems** lane (a downstream/API-driven actor — the third le
 now also runs alongside these two: **SafetyNet Underwriting**, a genuinely separate ASP.NET Core
 app (`SafetyNetUnderwriting/`, its own resource in `Wayfinder.AppHost`) standing in for a
 fictional insurer a caseworker sends the applicant's risk assessment to, with its own staff
-worklist at `/queue`. See [docs/guides/support-systems.md](./support-systems.md) for the full
-picture — the engine-level plumbing and this demo app both exist; wiring the juggling-licence
-blueprint itself to actually call out to it is the next step.
+worklist at `/queue`. The juggling-licence blueprint really does call out to it: a caseworker
+reviewing a dangerous-props act sends the uploaded risk assessment across, waits on it (flagged
+"Waiting" in their own worklist), and the insurer's decision comes back by webhook. See
+[docs/guides/support-systems.md](./support-systems.md) for the full picture, and
+[docs/demos/](../demos/) for a recording of the whole journey.
 
 Every stage route targets a real gateway (`ServiceBlueprint.ValidateGatewayRouting()`'s rule) —
 even the trivial single-route handoffs get their own pass-through gateway. See
@@ -320,3 +322,23 @@ expressions as page JSON, visible via view-source, where the AJAX version never 
 formulas client-side at all — but nothing in this repo has ever needed that, so it stayed
 unbuilt-on hypothetical baggage rather than an active alternative. Recoverable from git history
 if a real host ever needs exactly that trade-off.
+
+## Accessibility
+
+Every screen is expected to meet **WCAG 2.2 AA**, and that's enforced, not asserted:
+`Wayfinder.ReferenceApp.Tests/tests/accessibility.spec.ts` runs axe-core across the whole citizen
+journey (including a real server-rendered validation-error page), the caseworker queue, review and
+waiting screens, and checks keyboard operability explicitly — focus order matching visual order,
+`Space` toggling a checkbox, and a visible focus indicator.
+
+**A Safari caveat worth knowing before you report a bug.** On macOS, Safari's *default* is to move
+Tab only between text fields and pop-up menus — it skips links, buttons, checkboxes and radios.
+Verified directly against WebKit on the event-details form: it tabs the five text inputs and
+nothing else, skipping even the skip-link, while the identical markup tabs everything in Chromium
+and Firefox. That's a user-agent preference that applies to every site on the web (GOV.UK
+included) and page markup cannot override it. To test keyboard navigation properly in Safari,
+enable **Safari → Settings → Advanced → "Press Tab to highlight each item on a webpage"**, or
+macOS **System Settings → Keyboard → Keyboard navigation**.
+
+axe catches roughly a third of WCAG issues — it cannot judge whether an error message is *useful*
+or a heading structure *meaningful*, so it supplements manual testing rather than replacing it.
