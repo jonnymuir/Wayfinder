@@ -584,7 +584,7 @@ const SUPPORT_SYSTEM_CALL_SERVICE_BLUEPRINT = {
           params: {
             supportSystemKey: 'safetynet-underwriting',
             capabilityKey: 'validate-risk-assessment',
-            inputs: { File: 'riskAssessment', Notes: 'riskMitigationNotes' },
+            inputs: { file: 'riskAssessment', notes: 'riskMitigationNotes' },
           },
           summary: 'Send the risk assessment to SafetyNet Underwriting.',
         },
@@ -649,9 +649,9 @@ const SUPPORT_SYSTEM_CATALOG_FIXTURE: SupportSystemDescriptor[] = [
         displayName: 'Validate a risk assessment',
         description: "Sends the applicant's risk assessment to SafetyNet Underwriting's own staff queue for a decision.",
         inputs: [
-          { key: 'File', title: 'Risk assessment file', valueKind: 'String', format: 'field-ref', required: true },
-          { key: 'ApplicantName', title: 'Applicant name', valueKind: 'String', format: 'field-ref', required: false },
-          { key: 'Notes', title: 'Risk mitigation notes', valueKind: 'String', format: 'field-ref', required: false },
+          { key: 'file', title: 'Risk assessment file', valueKind: 'String', format: 'field-ref', required: true },
+          { key: 'applicantName', title: 'Applicant name', valueKind: 'String', format: 'field-ref', required: false },
+          { key: 'notes', title: 'Risk mitigation notes', valueKind: 'String', format: 'field-ref', required: false },
         ],
         outputs: [
           { key: 'insurerDecision', title: 'Insurer decision', valueKind: 'String', required: false },

@@ -72,10 +72,10 @@ public class JugglingLicenceStageValidationTests
                         DisplayName = "Validate a risk assessment",
                         Inputs =
                         [
-                            new() { Key = "File", Title = "File", ValueKind = ComponentPropertyValueKind.String, Required = true },
-                            new() { Key = "ApplicantName", Title = "Applicant name", ValueKind = ComponentPropertyValueKind.String },
-                            new() { Key = "EventName", Title = "Event name", ValueKind = ComponentPropertyValueKind.String },
-                            new() { Key = "Notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String },
+                            new() { Key = "file", Title = "File", ValueKind = ComponentPropertyValueKind.String, Required = true },
+                            new() { Key = "applicantName", Title = "Applicant name", ValueKind = ComponentPropertyValueKind.String },
+                            new() { Key = "eventName", Title = "Event name", ValueKind = ComponentPropertyValueKind.String },
+                            new() { Key = "notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String },
                         ],
                         Outputs =
                         [

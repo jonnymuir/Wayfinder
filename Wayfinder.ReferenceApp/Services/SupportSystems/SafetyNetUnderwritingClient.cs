@@ -43,23 +43,23 @@ public static class SafetyNetUnderwriting
                     [
                         new()
                         {
-                            Key = "File", Title = "Risk assessment file",
+                            Key = "file", Title = "Risk assessment file",
                             Description = "The file-upload field carrying the applicant's risk assessment.",
                             ValueKind = ComponentPropertyValueKind.String, Format = "field-ref", Required = true,
                         },
                         new()
                         {
-                            Key = "ApplicantName", Title = "Applicant name",
+                            Key = "applicantName", Title = "Applicant name",
                             ValueKind = ComponentPropertyValueKind.String, Format = "field-ref",
                         },
                         new()
                         {
-                            Key = "EventName", Title = "Event name",
+                            Key = "eventName", Title = "Event name",
                             ValueKind = ComponentPropertyValueKind.String, Format = "field-ref",
                         },
                         new()
                         {
-                            Key = "Notes", Title = "Risk mitigation notes",
+                            Key = "notes", Title = "Risk mitigation notes",
                             ValueKind = ComponentPropertyValueKind.String, Format = "field-ref",
                         },
                     ],
@@ -110,17 +110,17 @@ public sealed class SafetyNetUnderwritingClient(
     {
         using var form = new MultipartFormDataContent();
 
-        if (inputs.GetValueOrDefault("ApplicantName")?.RawValue is string applicantName)
+        if (inputs.GetValueOrDefault("applicantName")?.RawValue is string applicantName)
         {
             form.Add(new StringContent(applicantName), "applicantName");
         }
 
-        if (inputs.GetValueOrDefault("EventName")?.RawValue is string eventName)
+        if (inputs.GetValueOrDefault("eventName")?.RawValue is string eventName)
         {
             form.Add(new StringContent(eventName), "eventName");
         }
 
-        if (inputs.GetValueOrDefault("Notes")?.RawValue is string notes)
+        if (inputs.GetValueOrDefault("notes")?.RawValue is string notes)
         {
             form.Add(new StringContent(notes), "notes");
         }
@@ -130,7 +130,7 @@ public sealed class SafetyNetUnderwritingClient(
             form.Add(new StringContent($"{callbackBaseUrl}/wayfinder/support-systems/callbacks/{context.InvocationId}"), "callbackUrl");
         }
 
-        if (inputs.GetValueOrDefault("File")?.FileReference is { } fileReference)
+        if (inputs.GetValueOrDefault("file")?.FileReference is { } fileReference)
         {
             await using var fileStream = await fileStorage.OpenReadAsync(fileReference.StorageKey, ct);
             if (fileStream is not null)

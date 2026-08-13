@@ -549,10 +549,10 @@
             "supportSystemKey": "safetynet-underwriting",
             "capabilityKey": "validate-risk-assessment",
             "inputs": {
-              "File": "riskAssessment",
-              "ApplicantName": "applicantName",
-              "EventName": "eventName",
-              "Notes": "riskMitigationNotes"
+              "file": "riskAssessment",
+              "applicantName": "applicantName",
+              "eventName": "eventName",
+              "notes": "riskMitigationNotes"
             }
           }
         }

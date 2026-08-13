@@ -108,7 +108,7 @@ SupportSystemRegistry.Register(new SupportSystemDescriptor
             DisplayName = "Validate a risk assessment",
             Inputs =
             [
-                new() { Key = "File", Title = "Risk assessment file", ValueKind = ComponentPropertyValueKind.String, Format = "field-ref", Required = true },
+                new() { Key = "file", Title = "Risk assessment file", ValueKind = ComponentPropertyValueKind.String, Format = "field-ref", Required = true },
             ],
             Outputs =
             [
@@ -137,6 +137,19 @@ referencing the capability. Actually calling out to the real external system is 
 `Wayfinder.Engine/Abstractions/ISupportSystemClient.cs`. `ProcessManagerEngine`'s constructor
 takes an `IEnumerable<ISupportSystemClient>`, keyed internally by
 `ISupportSystemClient.SupportSystemKey`.
+
+**`Inputs`/`Outputs` keys must start lowercase.** Found live, the hard way: unlike a component's
+own `ComponentPropertyDescriptor.Key` values (always a real CLR property name passed via
+`nameof`, so the wire converter lowercasing the first letter is a deliberate, harmless
+PascalCase→camelCase translation), a capability's `Inputs`/`Outputs` keys are arbitrary,
+author-chosen identifiers with no backing CLR property — but they reuse the exact same
+`ComponentPropertyDescriptor` type, so the exact same converter still runs. A PascalCase key here
+(the natural instinct, since `nameof`-style PascalCase is the convention everywhere else in this
+toolkit) silently becomes a different string over the wire: the editor's live-fetched catalog and
+a blueprint's own `params.inputs`/`params.outputs` mapping keys stop agreeing, and every reference
+fails validation with no clue why. `SupportSystemRegistry.Register` now rejects an uppercase-first
+key at registration time with a message explaining this — if you hit it, just lowercase the key's
+first letter; nothing else needs to change.
 
 ## Delivering the outcome
 
@@ -184,7 +197,7 @@ registered capability:
   "params": {
     "supportSystemKey": "safetynet-underwriting",
     "capabilityKey": "validate-risk-assessment",
-    "inputs": { "File": "riskAssessment" }
+    "inputs": { "file": "riskAssessment" }
   }
 }
 ```

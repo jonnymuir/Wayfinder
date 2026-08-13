@@ -31,10 +31,10 @@ test.describe('Support-system-call action editor', () => {
     // "Risk assessment" stage — proving supportSystemFieldReferences is genuinely blueprint-wide,
     // not scoped to "insurer-validation" itself (which captures no fields of its own). IDs follow
     // wayfinder-stage-action-editor.ts's idPrefix convention (`support-system-call-${index}-${inputKey}`).
-    const fileSelect = actionEditor.locator('#support-system-call-0-File');
+    const fileSelect = actionEditor.locator('#support-system-call-0-file');
     await expect(fileSelect).toHaveValue('riskAssessment');
 
-    const notesSelect = actionEditor.locator('#support-system-call-0-Notes');
+    const notesSelect = actionEditor.locator('#support-system-call-0-notes');
     await expect(notesSelect).toHaveValue('riskMitigationNotes');
 
     await expect(actionEditor).toContainText('approved, rejected');

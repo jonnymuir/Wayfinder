@@ -32,8 +32,8 @@ public class SupportSystemActionValidationTests
                 DisplayName = "Validate a risk assessment",
                 Inputs =
                 [
-                    new() { Key = "File", Title = "File", ValueKind = ComponentPropertyValueKind.String, Required = true },
-                    new() { Key = "Notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String },
+                    new() { Key = "file", Title = "File", ValueKind = ComponentPropertyValueKind.String, Required = true },
+                    new() { Key = "notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String },
                 ],
                 Outputs =
                 [
@@ -53,7 +53,7 @@ public class SupportSystemActionValidationTests
         {
             ["supportSystemKey"] = SupportSystemKey,
             ["capabilityKey"] = CapabilityKey,
-            ["inputs"] = new JsonObject { ["File"] = "riskAssessment" },
+            ["inputs"] = new JsonObject { ["file"] = "riskAssessment" },
         },
     };
 
@@ -162,7 +162,7 @@ public class SupportSystemActionValidationTests
             {
                 ["supportSystemKey"] = SupportSystemKey,
                 ["capabilityKey"] = "not-a-real-capability",
-                ["inputs"] = new JsonObject { ["File"] = "riskAssessment" },
+                ["inputs"] = new JsonObject { ["file"] = "riskAssessment" },
             }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_UNKNOWN_CAPABILITY");
@@ -184,7 +184,7 @@ public class SupportSystemActionValidationTests
             {
                 ["supportSystemKey"] = SupportSystemKey,
                 ["capabilityKey"] = CapabilityKey,
-                ["inputs"] = new JsonObject(), // "File" is required but unbound
+                ["inputs"] = new JsonObject(), // "file" is required but unbound
             }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_MISSING_REQUIRED_INPUT");
@@ -206,7 +206,7 @@ public class SupportSystemActionValidationTests
             {
                 ["supportSystemKey"] = SupportSystemKey,
                 ["capabilityKey"] = CapabilityKey,
-                ["inputs"] = new JsonObject { ["File"] = "riskAssessment", ["NotARealInput"] = "riskAssessment" },
+                ["inputs"] = new JsonObject { ["file"] = "riskAssessment", ["notARealInput"] = "riskAssessment" },
             }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_UNKNOWN_INPUT");
@@ -228,7 +228,7 @@ public class SupportSystemActionValidationTests
             {
                 ["supportSystemKey"] = SupportSystemKey,
                 ["capabilityKey"] = CapabilityKey,
-                ["inputs"] = new JsonObject { ["File"] = "notARealField" },
+                ["inputs"] = new JsonObject { ["file"] = "notARealField" },
             }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_INPUT_UNKNOWN_FIELD");

@@ -88,7 +88,7 @@ public class SupportSystemActionExecutionTests
                   "params": {
                     "supportSystemKey": "safetynet-underwriting",
                     "capabilityKey": "validate-risk-assessment",
-                    "inputs": { "Notes": "notes" }
+                    "inputs": { "notes": "notes" }
                   }
                 }
               ],
@@ -180,7 +180,7 @@ public class SupportSystemActionExecutionTests
             {
                 Key = CapabilityKey,
                 DisplayName = "Validate a risk assessment",
-                Inputs = [new() { Key = "Notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String }],
+                Inputs = [new() { Key = "notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String }],
                 SupportedCompletionModes = modes,
                 Outcomes =
                 [
@@ -222,7 +222,7 @@ public class SupportSystemActionExecutionTests
             client.Invocations.Should().ContainSingle();
             var invocation = client.Invocations[0];
             invocation.CapabilityKey.Should().Be(CapabilityKey);
-            invocation.Inputs["Notes"].RawValue.Should().Be("please check this one");
+            invocation.Inputs["notes"].RawValue.Should().Be("please check this one");
             invocation.Context.InstanceId.Should().Be(started.InstanceId);
             invocation.Context.WebhookExpected.Should().BeFalse("this fixture only declares Poll support");
 

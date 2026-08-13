@@ -23,7 +23,7 @@ public class SupportSystemRegistryTests
                     [
                         new ComponentPropertyDescriptor
                         {
-                            Key = "File",
+                            Key = "file",
                             Title = "Risk assessment file",
                             ValueKind = ComponentPropertyValueKind.String,
                             Format = "field-ref",
@@ -188,6 +188,45 @@ public class SupportSystemRegistryTests
             var act = () => SupportSystemRegistry.Register(descriptor);
 
             act.Should().Throw<ArgumentException>().WithMessage("*outcome*");
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)] // Inputs
+    [InlineData(true)] // Outputs
+    public void Register_CapabilityInputOrOutputKeyStartingUppercase_Throws(bool isOutput)
+    {
+        // Found live: a PascalCase key here (the natural instinct — nameof-style PascalCase is
+        // the convention everywhere else in this toolkit) silently becomes a different string
+        // over the wire, since Inputs/Outputs reuse ComponentPropertyDescriptor.Key's
+        // PropertyNameJsonConverter — designed for a real CLR property name, which a capability's
+        // own input/output key never is. The editor's live-fetched catalog and a blueprint's own
+        // params.inputs/params.outputs mapping keys then silently stop agreeing, and every
+        // reference fails validation with no clue why (exactly what happened before this guard
+        // existed). Catch it loudly at registration instead.
+        var badProperty = new ComponentPropertyDescriptor
+        {
+            Key = "File", // deliberately uppercase-first
+            Title = "File",
+            ValueKind = ComponentPropertyValueKind.String,
+        };
+        var capability = MakeFixtureDescriptor().Capabilities[0] with
+        {
+            Inputs = isOutput ? MakeFixtureDescriptor().Capabilities[0].Inputs : [badProperty],
+            Outputs = isOutput ? [badProperty] : [],
+        };
+        var descriptor = MakeFixtureDescriptor() with { Capabilities = [capability] };
+
+        SupportSystemRegistry.ResetForTests();
+        try
+        {
+            var act = () => SupportSystemRegistry.Register(descriptor);
+
+            act.Should().Throw<ArgumentException>().WithMessage("*'File'*uppercase*");
         }
         finally
         {

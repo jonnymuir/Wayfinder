@@ -83,6 +83,16 @@ public static class SupportSystemRegistry
                     nameof(descriptor));
             }
 
+            foreach (var input in capability.Inputs)
+            {
+                ValidateWireSafeKey(input.Key, "input", capability.Key, descriptor.Key);
+            }
+
+            foreach (var output in capability.Outputs)
+            {
+                ValidateWireSafeKey(output.Key, "output", capability.Key, descriptor.Key);
+            }
+
             if (capability.SupportedCompletionModes.Count == 0)
             {
                 throw new ArgumentException(
@@ -110,6 +120,38 @@ public static class SupportSystemRegistry
                         nameof(descriptor));
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Catches a real mistake the hard way (found live, in a genuinely running editor): unlike a
+    /// component's own <c>ComponentPropertyDescriptor.Key</c> values — always a real CLR property
+    /// name passed via <see langword="nameof"/>, so <c>PropertyNameJsonConverter</c> lowercasing
+    /// its first letter for the wire is a deliberate, harmless PascalCase→camelCase translation —
+    /// a support-system capability's <c>Inputs</c>/<c>Outputs</c> keys are arbitrary,
+    /// author-chosen identifiers with no backing CLR property at all. The *exact same* converter
+    /// still runs (both reuse <see cref="Components.ComponentPropertyDescriptor"/>), so a
+    /// PascalCase key here — the natural instinct, since <see langword="nameof"/>-style PascalCase
+    /// is the convention everywhere else in this toolkit — silently becomes a different string
+    /// over the wire than what the engine matches internally: the editor's live-fetched catalog
+    /// and a blueprint's own <c>params.inputs</c>/<c>params.outputs</c> mapping keys stop
+    /// agreeing, and every reference to it fails validation with no clue why. Requiring the key to
+    /// already be wire-safe (first character not uppercase) makes the JSON conversion a no-op,
+    /// closing the gap at registration time instead of leaving it to be found the same painful way
+    /// this one was.
+    /// </summary>
+    private static void ValidateWireSafeKey(string key, string kind, string capabilityKey, string supportSystemKey)
+    {
+        if (!string.IsNullOrEmpty(key) && char.IsUpper(key[0]))
+        {
+            throw new ArgumentException(
+                $"Capability '{capabilityKey}' on support system '{supportSystemKey}' declares {kind} key " +
+                $"'{key}', which starts with an uppercase letter. {kind[0].ToString().ToUpperInvariant()}{kind[1..]} " +
+                $"keys are serialized over the wire through the same converter as a component property's " +
+                $"CLR name (lowercasing the first letter) — a capability's own key has no such CLR property " +
+                $"behind it, so this would silently become '{char.ToLowerInvariant(key[0])}{key[1..]}' wherever " +
+                "a blueprint or the editor reads it back, no longer matching what this descriptor itself uses " +
+                $"internally. Use '{char.ToLowerInvariant(key[0])}{key[1..]}' instead.");
         }
     }
 
