@@ -104,10 +104,45 @@ discipline `ComponentTypeRegistry` already enforces (see
 [Extending the component catalog § Registration timing](./extending-the-component-catalog.md#registration-timing-the-registry-freezes)).
 
 Registering the descriptor alone gets you validation and editor authoring support for
-referencing the capability. Actually calling out to the real external system, and resolving the
-outcome back, is a separate `ISupportSystemClient` implementation the host also registers — the
-engine execution side of this (`Wayfinder.Engine`) is a later phase of this same feature; this
-document will grow to cover it once that lands.
+referencing the capability. Actually calling out to the real external system is a separate
+`ISupportSystemClient` implementation the host also registers alongside it — see
+`Wayfinder.Engine/Abstractions/ISupportSystemClient.cs`. `ProcessManagerEngine`'s constructor
+takes an `IEnumerable<ISupportSystemClient>`, keyed internally by
+`ISupportSystemClient.SupportSystemKey`.
+
+## Delivering the outcome
+
+`ProcessManagerEngine.ResolveSupportSystemOutcome(invocationId, outcomeKey, resultPayload?)` is
+the one method that actually advances a waiting automation-queue cursor once a capability's
+outcome is known — the single code path both delivery mechanisms end up calling:
+
+- **Poll**: entirely automatic. Every time a client re-polls a waiting join gateway (the normal
+  `GetCurrent` a caseworker's own browser already does behind the scenes), the engine checks any
+  still-pending invocation blocking that gateway whose capability declared `Poll` support, calls
+  the client's `CheckStatusAsync`, and calls `ResolveSupportSystemOutcome` itself if it got an
+  answer. Nothing for a host to wire up.
+- **Webhook**: a host's own job, the same way `GetCurrent`/`Advance` themselves are — this
+  toolkit's authoring surface (`Wayfinder.Engine.Api`) is deliberately scoped to blueprint
+  *authoring* only, not runtime request handling, so it doesn't ship a webhook route itself. Add
+  one directly against your `ProcessManagerEngine` instance, e.g.:
+
+  ```csharp
+  // CallbackPayload is a small host-defined DTO { string OutcomeKey, JsonObject? ResultPayload }
+  // matching whatever shape the external system's callback actually posts — Wayfinder doesn't
+  // prescribe one.
+  app.MapPost("/wayfinder/support-systems/callbacks/{invocationId}", (
+      string invocationId, CallbackPayload payload, ProcessManagerEngine engine) =>
+      Results.Ok(engine.ResolveSupportSystemOutcome(invocationId, payload.OutcomeKey, payload.ResultPayload)));
+  ```
+
+  `invocationId` is an unguessable per-invocation token generated when the capability's onEnter
+  action ran (`SupportSystemInvocationContext.InvocationId`, handed to the client's `InvokeAsync`)
+  — treat it as the correlation/auth token an external system's callback proves it, the same
+  reasoning `Wayfinder.ReferenceApp`'s already-minimal auth boundary applies elsewhere.
+
+A capability declaring both modes (SafetyNet Underwriting's does) may have both resolve the same
+invocation — `ResolveSupportSystemOutcome` marks an invocation resolved before advancing anything,
+so a second delivery for an already-resolved invocation is a safe no-op, not a double-advance.
 
 ## Using it in a blueprint
 
@@ -131,6 +166,12 @@ The stage carrying this action then sits waiting — using the same `waitingCont
 citizen's "waiting behind the line of visibility" screen — until the capability resolves to one
 of its declared `Outcomes`, at which point the matching outgoing route (`insurer-approved`/
 `insurer-rejected`, in the worked example) fires.
+
+An editor or agent authoring this action should look the capability up first —
+`GET /wayfinder/service-blueprint-authoring/support-systems` (REST) or `list_support_systems`
+(MCP) list every registered support system exactly like `component-types`/`list_component_types`
+do for the component catalog — to get the real `supportSystemKey`/`capabilityKey`, which inputs
+are required, and which outcome keys the calling stage's outgoing routes must match.
 
 ## Related documentation
 

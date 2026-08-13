@@ -54,6 +54,12 @@ public record ServiceRequest
         = new Dictionary<string, IReadOnlyList<string>>();
 
     /// <summary>
+    /// Support-system calls started for this instance, in-flight or resolved. See
+    /// <see cref="SupportSystemInvocation"/> and docs/guides/support-systems.md.
+    /// </summary>
+    public IReadOnlyList<SupportSystemInvocation> SupportSystemInvocations { get; init; } = [];
+
+    /// <summary>
     /// The most recently computed calculation result for this instance's current stage, if
     /// its definition has a calculations block and it last evaluated cleanly. Not part of the
     /// public runtime contract — internal bookkeeping so a composed caller (e.g. the

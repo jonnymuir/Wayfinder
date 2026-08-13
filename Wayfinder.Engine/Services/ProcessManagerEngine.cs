@@ -11,6 +11,7 @@ using Wayfinder.Services.Validation;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Stores;
+using Wayfinder.Models.ServiceDesign.SupportSystems;
 
 namespace Wayfinder.Engine.Services;
 
@@ -23,18 +24,22 @@ public class ProcessManagerEngine : IProcessManager
     private readonly Dictionary<string, ServiceBlueprint> _definitions = new(StringComparer.OrdinalIgnoreCase);
     private readonly IServiceRequestStore _instanceStore;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
+    private readonly IReadOnlyDictionary<string, ISupportSystemClient> _supportSystemClients;
 
     public ProcessManagerEngine(
         ILogger logger,
         IServiceBlueprintStore definitionStore,
         IServiceContentSanitizer sanitizer,
         Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? serviceInputsResolver = null,
-        IServiceRequestStore? instanceStore = null)
+        IServiceRequestStore? instanceStore = null,
+        IEnumerable<ISupportSystemClient>? supportSystemClients = null)
     {
         Logger = logger;
         _sanitizer = sanitizer;
         _serviceInputsResolver = serviceInputsResolver;
         _instanceStore = instanceStore ?? new InMemoryServiceRequestStore();
+        _supportSystemClients = (supportSystemClients ?? [])
+            .ToDictionary(client => client.SupportSystemKey, StringComparer.Ordinal);
 
         foreach (var (lookupKey, definition) in definitionStore.LoadDefinitions(logger))
         {
@@ -413,13 +418,19 @@ public class ProcessManagerEngine : IProcessManager
                 c.CurrentNodeKey == visibleWorkItem.StageKey && !c.IsAtGateway);
             var updatedCursors = MoveCursor(instance.Cursors, sourceCursor?.CursorId, transition.ToState, isAtGateway: false);
             var primaryStage = FirstActiveStageCursorKey(updatedCursors) ?? transition.ToState;
+            var mergedMultiFieldValues = Merge(instance.FieldValues, fieldValues);
+            var movedCursor = updatedCursors.FirstOrDefault(c => c.CursorId == sourceCursor?.CursorId);
+            var newInvocations = movedCursor is not null
+                ? ExecuteOnEnterSupportSystemActions(instanceId, definition, mergedMultiFieldValues, movedCursor)
+                : [];
             var updatedMulti = instance with
             {
                 CurrentStage = primaryStage,
                 Cursors = updatedCursors,
                 StateVersion = instance.StateVersion + 1,
                 UpdatedAt = DateTimeOffset.UtcNow,
-                FieldValues = Merge(instance.FieldValues, fieldValues)
+                FieldValues = mergedMultiFieldValues,
+                SupportSystemInvocations = instance.SupportSystemInvocations.Concat(newInvocations).ToArray()
             };
             SaveInstance(updatedMulti);
             Logger.LogInformation(
@@ -674,6 +685,22 @@ public class ProcessManagerEngine : IProcessManager
             var joinGateway = FindGateway(definition, visibleItem.StageKey);
             if (joinGateway is not null)
             {
+                // A join gateway is exactly where a caseworker's own cursor sits waiting on an
+                // automation-queue cursor that's itself waiting on a support-system call — the
+                // same "waiting behind the line of visibility" screen citizen/caseworker joins
+                // already use. Before rendering that wait screen again, give any still-pending
+                // support-system invocation blocking THIS gateway a chance to resolve via poll —
+                // the generic, always-on counterpart to the webhook receiver resolving one
+                // asynchronously. If anything resolved, its own Advance() call already saved
+                // fresh state (and possibly released the join outright); re-derive the response
+                // from that fresh state rather than the now-stale `instance` this method started
+                // with.
+                if (TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
+                    && TryGetInstance(instance.InstanceId, out var refreshed))
+                {
+                    return BuildEnvelope(refreshed, definition, accessProfile);
+                }
+
                 return BuildJoinWaitingEnvelope(instance, definition, joinGateway);
             }
         }
@@ -1884,6 +1911,16 @@ public class ProcessManagerEngine : IProcessManager
         var allCursors = remainingCursors.Concat(newCursors).ToArray();
         var primaryStage = FirstActiveStageCursorKey(allCursors) ?? newCursors[0].CurrentNodeKey;
         var joinArrivals = new Dictionary<string, IReadOnlyList<string>>(instance.JoinArrivals);
+        var mergedFieldValues = Merge(instance.FieldValues, fieldValues);
+
+        // A branch that lands straight on a stage (not another gateway) may carry its own
+        // onEnter support-system-call action — the automation-queue branch of a "send to
+        // support system" split, e.g. See ExecuteOnEnterSupportSystemActions's own remarks for
+        // why this only runs for multi-cursor branches, not the single-cursor path.
+        var newInvocations = newCursors
+            .Where(cursor => !cursor.IsAtGateway)
+            .SelectMany(cursor => ExecuteOnEnterSupportSystemActions(instance.InstanceId, definition, mergedFieldValues, cursor))
+            .ToList();
 
         foreach (var joinGroup in newCursors
                      .Where(cursor => cursor.IsAtGateway)
@@ -1913,7 +1950,8 @@ public class ProcessManagerEngine : IProcessManager
             JoinArrivals = joinArrivals,
             StateVersion = instance.StateVersion + 1,
             UpdatedAt = DateTimeOffset.UtcNow,
-            FieldValues = Merge(instance.FieldValues, fieldValues)
+            FieldValues = mergedFieldValues,
+            SupportSystemInvocations = instance.SupportSystemInvocations.Concat(newInvocations).ToArray()
         };
 
         foreach (var joinKey in newCursors
@@ -2087,6 +2125,318 @@ public class ProcessManagerEngine : IProcessManager
             RequestPolicy = definition.RequestPolicy
         };
     }
+
+    // ─── Support system helpers ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs every <c>onEnter</c> <c>support-system-call</c> action declared on the stage a cursor
+    /// just landed on, recording a <see cref="SupportSystemInvocation"/> for each successful
+    /// start. Only wired into the multi-cursor paths (a support-system call only makes sense
+    /// against a genuinely separate automation-queue cursor, per docs/guides/support-systems.md)
+    /// — a single-queue blueprint has no automation actor for such an action to belong to, so
+    /// this deliberately isn't called from the single-cursor "regular stage transition" path.
+    /// </summary>
+    private IReadOnlyList<SupportSystemInvocation> ExecuteOnEnterSupportSystemActions(
+        string instanceId,
+        ServiceBlueprint definition,
+        IReadOnlyDictionary<string, object?> fieldValues,
+        RequestCursor cursor)
+    {
+        var stage = definition.Stages.FirstOrDefault(s => s.StageKey == cursor.CurrentNodeKey);
+        if (stage?.Actions is not { Count: > 0 } actions)
+        {
+            return [];
+        }
+
+        var invocations = new List<SupportSystemInvocation>();
+        foreach (var action in actions)
+        {
+            if (!string.Equals(action.Timing, "onEnter", StringComparison.Ordinal)
+                || !string.Equals(action.Type, SupportSystemActionTypes.SupportSystemCall, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (TryExecuteSupportSystemCall(instanceId, fieldValues, cursor, action) is { } invocation)
+            {
+                invocations.Add(invocation);
+            }
+        }
+
+        return invocations;
+    }
+
+    private SupportSystemInvocation? TryExecuteSupportSystemCall(
+        string instanceId,
+        IReadOnlyDictionary<string, object?> fieldValues,
+        RequestCursor cursor,
+        ActionDefinition action)
+    {
+        var supportSystemKey = action.Parameters["supportSystemKey"]?.GetValue<string>();
+        var capabilityKey = action.Parameters["capabilityKey"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(supportSystemKey) || string.IsNullOrWhiteSpace(capabilityKey))
+        {
+            Logger.LogWarning(
+                "support-system-call action on stage '{Stage}' is missing supportSystemKey/capabilityKey; skipped.",
+                cursor.CurrentNodeKey);
+            return null;
+        }
+
+        var capability = SupportSystemRegistry.FindCapability(supportSystemKey, capabilityKey);
+        if (capability is null)
+        {
+            Logger.LogWarning(
+                "support-system-call action on stage '{Stage}' references unregistered support system " +
+                "'{System}'/capability '{Capability}'; skipped.",
+                cursor.CurrentNodeKey, supportSystemKey, capabilityKey);
+            return null;
+        }
+
+        if (!_supportSystemClients.TryGetValue(supportSystemKey, out var client))
+        {
+            Logger.LogWarning(
+                "No ISupportSystemClient registered for support system '{System}'; skipped.", supportSystemKey);
+            return null;
+        }
+
+        var inputFieldRefs = action.Parameters["inputs"]?.AsObject();
+        var inputs = new Dictionary<string, SupportSystemInputValue>(StringComparer.Ordinal);
+        foreach (var input in capability.Inputs)
+        {
+            var fieldKey = inputFieldRefs?[input.Key]?.GetValue<string>();
+            var raw = fieldKey is not null ? fieldValues.GetValueOrDefault(fieldKey) : null;
+            inputs[input.Key] = SupportSystemInputValue.Resolve(raw);
+        }
+
+        var invocationId = Guid.NewGuid().ToString("N");
+        var context = new SupportSystemInvocationContext
+        {
+            InstanceId = instanceId,
+            InvocationId = invocationId,
+            WebhookExpected = capability.SupportedCompletionModes.Contains(SupportSystemCompletionMode.Webhook)
+        };
+
+        SupportSystemInvocationReceipt receipt;
+        try
+        {
+            receipt = client.InvokeAsync(capabilityKey, inputs, context).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Support system '{System}' capability '{Capability}' invocation failed for cursor '{Cursor}'.",
+                supportSystemKey, capabilityKey, cursor.CursorId);
+            return null;
+        }
+
+        return new SupportSystemInvocation
+        {
+            InvocationId = invocationId,
+            SupportSystemKey = supportSystemKey,
+            CapabilityKey = capabilityKey,
+            CursorId = cursor.CursorId,
+            StageKey = cursor.CurrentNodeKey,
+            Receipt = receipt
+        };
+    }
+
+    /// <summary>
+    /// Gives any support-system invocation still blocking <paramref name="joinGateway"/> a chance
+    /// to resolve via poll, the generic counterpart to the webhook receiver resolving one
+    /// asynchronously — called every time a client re-polls a waiting join gateway (see
+    /// <see cref="BuildEnvelope"/>). Only checks invocations whose capability actually declared
+    /// <see cref="SupportSystemCompletionMode.Poll"/> support; a webhook-only capability is never
+    /// polled, it can only resolve via <see cref="ResolveSupportSystemOutcome"/>. Returns true if
+    /// at least one invocation resolved (and therefore state has already been saved, possibly
+    /// including a full join release) — the caller should re-derive its response from a fresh
+    /// read rather than the <paramref name="instance"/> it started with.
+    /// </summary>
+    private bool TryPollResolveSupportSystemInvocations(
+        ServiceRequest instance,
+        ServiceBlueprint definition,
+        ServiceBlueprintGatewayDefinition joinGateway)
+    {
+        var requiredQueues = joinGateway.RequiredIncomingQueues ?? [];
+        var pendingQueues = requiredQueues
+            .Where(queue => instance.Cursors.All(c =>
+                !(c.IsAtGateway
+                  && string.Equals(c.CurrentNodeKey, joinGateway.Key, StringComparison.Ordinal)
+                  && string.Equals(c.QueueKey, queue, StringComparison.Ordinal))))
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (pendingQueues.Count == 0)
+        {
+            return false;
+        }
+
+        var pendingCursorIds = instance.Cursors
+            .Where(c => !c.IsAtGateway && pendingQueues.Contains(c.QueueKey))
+            .Select(c => c.CursorId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var candidates = instance.SupportSystemInvocations
+            .Where(invocation => !invocation.Resolved && pendingCursorIds.Contains(invocation.CursorId))
+            .ToList();
+
+        var resolvedAny = false;
+        foreach (var invocation in candidates)
+        {
+            var capability = SupportSystemRegistry.FindCapability(invocation.SupportSystemKey, invocation.CapabilityKey);
+            if (capability is null
+                || !capability.SupportedCompletionModes.Contains(SupportSystemCompletionMode.Poll)
+                || invocation.Receipt is null
+                || !_supportSystemClients.TryGetValue(invocation.SupportSystemKey, out var client))
+            {
+                continue;
+            }
+
+            SupportSystemOutcome? outcome;
+            try
+            {
+                outcome = client.CheckStatusAsync(invocation.CapabilityKey, invocation.Receipt).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(
+                    ex,
+                    "Support system '{System}' capability '{Capability}' status check failed for invocation '{Invocation}'.",
+                    invocation.SupportSystemKey, invocation.CapabilityKey, invocation.InvocationId);
+                continue;
+            }
+
+            if (outcome is null)
+            {
+                continue;
+            }
+
+            var resolution = ResolveSupportSystemOutcome(invocation.InvocationId, outcome.OutcomeKey, outcome.ResultPayload);
+            resolvedAny = resolvedAny || resolution.ResponseState != "error";
+        }
+
+        return resolvedAny;
+    }
+
+    /// <summary>
+    /// Delivers a support-system capability's outcome back into the blueprint — the single code
+    /// path both the poll-check hook (<see cref="TryPollResolveSupportSystemInvocations"/>) and
+    /// the generic webhook receiver (<c>Wayfinder.Engine.Api</c>) call, so "what did the external
+    /// system decide" is resolved identically regardless of which mechanism delivered it. Looks
+    /// the owning instance up by <paramref name="invocationId"/> alone — a webhook callback only
+    /// ever carries that one opaque token, never the instance id — then advances the waiting
+    /// automation cursor exactly as if that cursor's own actor had called
+    /// <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>
+    /// with <paramref name="outcomeKey"/> as the action, retrying under this engine's normal
+    /// optimistic concurrency if something else updated the instance in between.
+    /// </summary>
+    public ServiceRequestResponseEnvelope ResolveSupportSystemOutcome(
+        string invocationId,
+        string outcomeKey,
+        JsonObject? resultPayload = null)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            var owner = _instanceStore.GetAll().FirstOrDefault(
+                i => i.SupportSystemInvocations.Any(inv => inv.InvocationId == invocationId && !inv.Resolved));
+
+            if (owner is null)
+            {
+                return ErrorEnvelope(
+                    $"No pending support-system invocation '{invocationId}' found.",
+                    "SUPPORT_SYSTEM_INVOCATION_NOT_FOUND");
+            }
+
+            var invocation = owner.SupportSystemInvocations.First(inv => inv.InvocationId == invocationId);
+            var capability = SupportSystemRegistry.FindCapability(invocation.SupportSystemKey, invocation.CapabilityKey);
+            if (capability is null || capability.Outcomes.All(o => o.Key != outcomeKey))
+            {
+                return ErrorEnvelope(
+                    $"'{outcomeKey}' is not a declared outcome of capability '{invocation.CapabilityKey}' on " +
+                    $"support system '{invocation.SupportSystemKey}'.",
+                    "SUPPORT_SYSTEM_INVALID_OUTCOME");
+            }
+
+            // Mark resolved and save before advancing — Advance() always re-reads the instance
+            // fresh from the store by id, so this is the only way this mutation actually reaches
+            // it. Marking it here, ahead of the Advance() call below, also makes a second
+            // concurrent delivery for the same invocation (poll racing a webhook for a
+            // Both-completion-mode capability) a safe no-op instead of a double-advance: it will
+            // no longer find an unresolved invocation on its own retry.
+            //
+            // resultPayload is merged into FieldValues directly here, NOT passed as Advance()'s
+            // own fieldValues argument — that argument is validated against the CURRENT stage's
+            // (the support-system-call stage's own) declared fields, a whitelist a result payload
+            // key has no reason to appear in, so it would always be rejected as "unknown field".
+            // Merging it into already-persisted instance state first sidesteps that check exactly
+            // the way any other previously-saved field value does.
+            var withResolvedInvocation = owner with
+            {
+                SupportSystemInvocations = owner.SupportSystemInvocations
+                    .Select(inv => inv.InvocationId == invocationId
+                        ? inv with { Resolved = true, OutcomeKey = outcomeKey }
+                        : inv)
+                    .ToArray(),
+                FieldValues = resultPayload is null ? owner.FieldValues : Merge(owner.FieldValues, ToFieldValues(resultPayload)),
+                StateVersion = owner.StateVersion + 1,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+
+            SaveInstance(withResolvedInvocation);
+
+            var advanced = Advance(
+                withResolvedInvocation.InstanceId,
+                withResolvedInvocation.TenantId,
+                withResolvedInvocation.UserId,
+                ActorProfile.UnrestrictedOwner,
+                outcomeKey,
+                withResolvedInvocation.StateVersion,
+                null);
+
+            var isConflict = advanced.ResponseState == "error"
+                && advanced.Problems.Any(p => p.Code == "VERSION_MISMATCH");
+            if (!isConflict)
+            {
+                return advanced;
+            }
+        }
+
+        return ErrorEnvelope(
+            $"Could not resolve support-system invocation '{invocationId}' after {maxAttempts} attempts due to concurrent updates.",
+            "SUPPORT_SYSTEM_RESOLUTION_CONFLICT");
+    }
+
+    private static Dictionary<string, object?> ToFieldValues(JsonObject payload)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var (key, value) in payload)
+        {
+            if (value is null)
+            {
+                result[key] = null;
+            }
+            else if (value is JsonValue stringValue && stringValue.TryGetValue<string>(out var s))
+            {
+                result[key] = s;
+            }
+            else if (value is JsonValue boolValue && boolValue.TryGetValue<bool>(out var b))
+            {
+                result[key] = b;
+            }
+            else if (value is JsonValue decimalValue && decimalValue.TryGetValue<decimal>(out var d))
+            {
+                result[key] = d;
+            }
+            else
+            {
+                result[key] = value.DeepClone();
+            }
+        }
+
+        return result;
+    }
+
+    // ─── end Support system helpers ──────────────────────────────────────────
 
     private ServiceRequestResponseEnvelope? TryReleaseJoinIfReady(
         ServiceRequest instance,

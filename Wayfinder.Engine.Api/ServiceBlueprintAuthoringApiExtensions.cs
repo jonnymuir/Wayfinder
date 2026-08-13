@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.Components;
+using Wayfinder.Models.ServiceDesign.SupportSystems;
 using Wayfinder.Services.Calculations;
 using Wayfinder.Engine.Services;
 
@@ -61,6 +62,11 @@ public static class ServiceBlueprintAuthoringApiExtensions
         // component type (built-in and any host-registered custom one — see
         // docs/guides/extending-the-component-catalog.md), driving the schema-based add/edit UI.
         group.MapGet("/component-types", () => Results.Ok(ComponentTypeRegistry.All));
+
+        // Same reasoning as /component-types above — the REST twin of the MCP
+        // list_support_systems tool, driving the stage-action editor's support-system/capability
+        // pickers. See docs/guides/support-systems.md.
+        group.MapGet("/support-systems", () => Results.Ok(SupportSystemRegistry.All));
 
         group.MapGet("/blueprints/{definitionKey}", async (
             string definitionKey,

@@ -3,6 +3,7 @@ using System.Text.Json;
 using ModelContextProtocol.Server;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.Components;
+using Wayfinder.Models.ServiceDesign.SupportSystems;
 using Wayfinder.Services.Calculations;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Services;
@@ -92,6 +93,23 @@ public static class ServiceBlueprintAuthoringTools
         "otherwise only catch indirectly. See also service-blueprint-docs://extending-the-component-catalog " +
         "for how to register a genuinely new component type.")]
     public static IReadOnlyList<ComponentDescriptor> ListComponentTypes() => ComponentTypeRegistry.All;
+
+    [McpServerTool(Name = "list_support_systems")]
+    [Description(
+        "List every support system this host has registered — the external/downstream systems a " +
+        "blueprint's stages/routes can call out to via a support-system-call action (Nielsen Norman " +
+        "Group's \"support processes\" layer, the third lane alongside a citizen- and a caseworker-" +
+        "facing queue). Each entry has key, displayName, and capabilities: [{ key, displayName, " +
+        "inputs (same ComponentPropertyDescriptor shape as list_component_types' own properties — " +
+        "an input tagged format \"field-ref\" must be bound to a blueprint field's fieldKey), " +
+        "supportedCompletionModes (Poll and/or Webhook — which mechanism(s) the engine will use to " +
+        "learn this capability's outcome), and outcomes: [{ key, displayName }], the closed " +
+        "vocabulary a stage's outgoing route triggers must be drawn from after this capability " +
+        "resolves }. Call this before authoring a support-system-call action to avoid a typo'd " +
+        "supportSystemKey/capabilityKey, an input that isn't bound to a real field, or an outgoing " +
+        "route trigger that doesn't match a declared outcome. See also " +
+        "service-blueprint-docs://support-systems for the full picture.")]
+    public static IReadOnlyList<SupportSystemDescriptor> ListSupportSystems() => SupportSystemRegistry.All;
 
     [McpServerTool(Name = "validate_service_blueprint")]
     [Description(
