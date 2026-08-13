@@ -94,6 +94,7 @@ app.MapPost("/queue/{id}/decide", async (string id, HttpRequest request, IHttpCl
             ["outcomeKey"] = decided.Status,
             ["resultPayload"] = new JsonObject
             {
+                ["insurerDecision"] = decided.Status,
                 ["insurerDecisionNotes"] = decided.DecisionNotes ?? ""
             }
         };

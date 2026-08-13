@@ -168,7 +168,11 @@ public sealed class SafetyNetUnderwritingClient(
         return new SupportSystemOutcome
         {
             OutcomeKey = status,
-            ResultPayload = decisionNotes is null ? null : new JsonObject { ["insurerDecisionNotes"] = decisionNotes }
+            ResultPayload = new JsonObject
+            {
+                ["insurerDecision"] = status,
+                ["insurerDecisionNotes"] = decisionNotes ?? ""
+            }
         };
     }
 }

@@ -159,7 +159,11 @@
         },
         {
           "type": "file-upload",
-          "acceptedFileTypes": [".pdf", ".jpg", ".png"],
+          "acceptedFileTypes": [
+            ".pdf",
+            ".jpg",
+            ".png"
+          ],
           "maxSizeBytes": 5242880,
           "fieldKey": "riskAssessment",
           "label": "Risk assessment or public liability insurance certificate",
@@ -493,6 +497,52 @@
           "trigger": "reject",
           "label": "Reject",
           "style": "destructive"
+        },
+        {
+          "id": "under-review--send-to-insurer--to-insurer-check",
+          "target": "to-insurer-check",
+          "trigger": "send-to-insurer",
+          "label": "Send risk assessment to insurer",
+          "style": "secondary"
+        }
+      ]
+    },
+    {
+      "stageKey": "insurer-validation",
+      "displayName": "Insurer validation",
+      "queueKey": "automation",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Awaiting SafetyNet Underwriting's decision"
+        }
+      ],
+      "actions": [
+        {
+          "type": "support-system-call",
+          "timing": "onEnter",
+          "params": {
+            "supportSystemKey": "safetynet-underwriting",
+            "capabilityKey": "validate-risk-assessment",
+            "inputs": {
+              "File": "riskAssessment",
+              "ApplicantName": "applicantName",
+              "EventName": "eventName",
+              "Notes": "riskMitigationNotes"
+            }
+          }
+        }
+      ],
+      "routes": [
+        {
+          "id": "insurer-validation--approved--insurer-check-complete",
+          "target": "insurer-check-complete",
+          "trigger": "approved"
+        },
+        {
+          "id": "insurer-validation--rejected--insurer-check-complete",
+          "target": "insurer-check-complete",
+          "trigger": "rejected"
         }
       ]
     },
@@ -539,6 +589,11 @@
       "key": "caseworker",
       "displayName": "Caseworker",
       "actor": "caseworker"
+    },
+    {
+      "key": "automation",
+      "displayName": "SafetyNet Underwriting",
+      "actor": "system"
     }
   ],
   "gateways": [
@@ -619,7 +674,53 @@
       "waitingContent": "A caseworker is reviewing your application. We'll update this page once a decision is made.",
       "waitingExpectedSeconds": 120,
       "waitingPollIntervalMs": 5000,
-      "requiredIncomingQueues": ["citizen", "caseworker"]
+      "requiredIncomingQueues": [
+        "citizen",
+        "caseworker"
+      ]
+    },
+    {
+      "key": "to-insurer-check",
+      "displayName": "Send to insurer",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        {
+          "id": "to-insurer-check--send-to-insurer--insurer-check-complete",
+          "target": "insurer-check-complete",
+          "trigger": "send-to-insurer"
+        },
+        {
+          "id": "to-insurer-check--send-to-insurer--insurer-validation",
+          "target": "insurer-validation",
+          "trigger": "send-to-insurer"
+        }
+      ]
+    },
+    {
+      "key": "insurer-check-complete",
+      "displayName": "Insurer check complete",
+      "gatewayType": "Join",
+      "queueKey": "caseworker",
+      "routes": [
+        {
+          "id": "insurer-check-complete--approved--under-review",
+          "target": "under-review",
+          "trigger": "approved"
+        },
+        {
+          "id": "insurer-check-complete--rejected--under-review",
+          "target": "under-review",
+          "trigger": "rejected"
+        }
+      ],
+      "waitingContent": "SafetyNet Underwriting is reviewing the risk assessment. We'll update this page once a decision is made.",
+      "waitingExpectedSeconds": 120,
+      "waitingPollIntervalMs": 5000,
+      "requiredIncomingQueues": [
+        "caseworker",
+        "automation"
+      ]
     }
   ]
 }
