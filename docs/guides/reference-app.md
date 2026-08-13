@@ -35,7 +35,12 @@ scratch. It models NN/g's frontstage/backstage split
   waiting, approve or reject.
 
 A third **support-systems** lane (a downstream/API-driven actor — the third leg of NN/g's model)
-is a deliberate, explicitly-noted gap, not built yet.
+now also runs alongside these two: **SafetyNet Underwriting**, a genuinely separate ASP.NET Core
+app (`SafetyNetUnderwriting/`, its own resource in `Wayfinder.AppHost`) standing in for a
+fictional insurer a caseworker sends the applicant's risk assessment to, with its own staff
+worklist at `/queue`. See [docs/guides/support-systems.md](./support-systems.md) for the full
+picture — the engine-level plumbing and this demo app both exist; wiring the juggling-licence
+blueprint itself to actually call out to it is the next step.
 
 Every stage route targets a real gateway (`ServiceBlueprint.ValidateGatewayRouting()`'s rule) —
 even the trivial single-route handoffs get their own pass-through gateway. See

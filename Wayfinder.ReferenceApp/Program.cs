@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.FileProviders;
@@ -11,6 +12,7 @@ using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.ReferenceApp.Services;
+using Wayfinder.ReferenceApp.Services.SupportSystems;
 using Wayfinder.Rendering.GovUk;
 using Wayfinder.Services.Sanitization;
 
@@ -24,6 +26,11 @@ const string InsuranceModellerDefinitionKey = "juggling-insurance-modeller";
 // proving a genuinely new, host-defined component type registered from outside Wayfinder's own
 // assembly. See Services/CustomComponents.cs and docs/guides/extending-the-component-catalog.md.
 CustomComponents.Register();
+
+// Same "freezes on first read" reasoning as ComponentTypeRegistry above, for
+// SupportSystemRegistry — see Services/SupportSystems/SafetyNetUnderwritingClient.cs and
+// docs/guides/support-systems.md.
+SafetyNetUnderwriting.Register();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -57,6 +64,16 @@ builder.Services.AddSingleton<IServiceBlueprintStore>(
 builder.Services.AddSingleton<IQueueCapabilitiesProvider>(ReferenceActors.CapabilitiesProvider());
 builder.Services.AddSingleton<IServiceRequestFileStorage, InMemoryServiceRequestFileStorage>();
 
+// SafetyNet Underwriting is a genuinely separate ASP.NET Core project (see
+// SafetyNetUnderwriting/Program.cs), orchestrated alongside this one by Wayfinder.AppHost — the
+// base address here is its Aspire resource name, resolved by the AddServiceDiscovery() handler
+// AddServiceDefaults() already wired above. "http://referenceapp" (this app's own resource name)
+// is what SafetyNetUnderwritingClient tells SafetyNet Underwriting to call back on.
+builder.Services.AddHttpClient(SafetyNetUnderwriting.HttpClientName, client =>
+{
+    client.BaseAddress = new Uri("http://safetynet-underwriting");
+});
+
 // Wayfinder.Rendering.GovUk's built-in catalog covers every built-in component/field type out
 // of the box. This reference app registers exactly one override — CustomComponents.RegisterRendering
 // pairs the "rating" type registered above with real govuk-frontend-styled HTML, its own
@@ -71,7 +88,14 @@ builder.Services.AddSingleton(_ =>
 builder.Services.AddSingleton(sp => new ProcessManagerEngine(
     sp.GetRequiredService<ILogger<ProcessManagerEngine>>(),
     sp.GetRequiredService<IServiceBlueprintStore>(),
-    sp.GetRequiredService<IServiceContentSanitizer>()));
+    sp.GetRequiredService<IServiceContentSanitizer>(),
+    supportSystemClients:
+    [
+        new SafetyNetUnderwritingClient(
+            sp.GetRequiredService<IHttpClientFactory>(),
+            sp.GetRequiredService<IServiceRequestFileStorage>(),
+            callbackBaseUrl: "http://referenceapp")
+    ]));
 builder.Services.AddSingleton<IProcessManager>(sp => sp.GetRequiredService<ProcessManagerEngine>());
 
 // The editor / REST / MCP authoring surface and the `/apply` + `/caseworker` request-processing
@@ -138,6 +162,27 @@ app.MapGet("/service-blueprint-editor", (HttpRequest request) =>
 // where it actually matters for a real deployment.
 app.MapServiceBlueprintAuthoringApi();
 app.MapServiceBlueprintAuthoringMcp();
+
+// The webhook half of support-system outcome delivery — a host's own job, not something
+// Wayfinder.Engine.Api ships (that surface is scoped to blueprint authoring only, not runtime
+// request handling — see docs/guides/support-systems.md § Delivering the outcome). invocationId
+// is itself the unguessable correlation/auth token; ResolveSupportSystemOutcome is the same
+// method the engine's own poll-check path calls, so "what did the external system decide" is
+// resolved identically regardless of which mechanism delivered it.
+app.MapPost("/wayfinder/support-systems/callbacks/{invocationId}", async (
+    string invocationId, HttpContext ctx, ProcessManagerEngine engine, CancellationToken ct) =>
+{
+    var payload = await ctx.Request.ReadFromJsonAsync<JsonObject>(ct);
+    var outcomeKey = payload?["outcomeKey"]?.GetValue<string>();
+    if (string.IsNullOrWhiteSpace(outcomeKey))
+    {
+        return Results.BadRequest("outcomeKey is required.");
+    }
+
+    var resultPayload = payload?["resultPayload"] as JsonObject;
+    var result = engine.ResolveSupportSystemOutcome(invocationId, outcomeKey, resultPayload);
+    return result.ResponseState == "error" ? Results.BadRequest(result) : Results.Ok(result);
+});
 
 // Wayfinder.Editor's packaged demo page (service-blueprint-editor.html, compiled from
 // Wayfinder.Editor.Client) talks to a `/mockapp/service-blueprints/*` contract — the shape
