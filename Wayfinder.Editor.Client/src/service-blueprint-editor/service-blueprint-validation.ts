@@ -1,4 +1,13 @@
-import type { ActionCatalogEntry, AuthoredAction, AuthoredStage, AuthoredServiceBlueprint, ComponentDescriptor, RouteView } from './types.js';
+import type {
+  ActionCatalogEntry,
+  AuthoredAction,
+  AuthoredStage,
+  AuthoredServiceBlueprint,
+  ComponentDescriptor,
+  RouteView,
+  SupportSystemCallActionParams,
+  SupportSystemDescriptor,
+} from './types.js';
 import { stageActions, stageKind, serviceBlueprintGateways, serviceBlueprintStages } from './types.js';
 import { findCatalogEntry, validateAction } from './action-editing.js';
 import { flattenRoutes, outgoingRouteViews, inboundRouteViews } from './route-model.js';
@@ -34,6 +43,7 @@ export interface ServiceBlueprintValidationIssue {
     | 'route-missing-stage'
     | 'route-duplicate'
     | 'action-configuration'
+    | 'action-support-system'
     | 'calculation-parse-error'
     | 'calculation-unknown-reference'
     | 'calculation-unknown-table'
@@ -210,6 +220,82 @@ function actionValidationIssues(
 }
 
 /**
+ * Mirrors ServiceBlueprint.ValidateSupportSystemActions (Wayfinder/Models/ServiceDesign/
+ * ServiceBlueprint.cs) client-side — same checks, same diagnostic codes, using the live catalog
+ * fetched from GET .../support-systems instead of the process-wide SupportSystemRegistry.
+ * Server-side only ever walks a *stage's own* `actions` (ProcessManagerEngine's onEnter-action
+ * execution is stage-entry scoped, not route-level), so this is only ever called for
+ * `location.target === 'stage'` — see the one call site below.
+ */
+function supportSystemActionValidationIssues(
+  supportSystemCatalog: SupportSystemDescriptor[],
+  blueprintFieldKeys: Set<string>,
+  action: AuthoredAction,
+  stage: AuthoredStage,
+  actionIndex: number
+): ServiceBlueprintValidationIssue[] {
+  const params = (action.params ?? {}) as SupportSystemCallActionParams;
+  const idPrefix = `stage-${stage.stateKey}-action-${actionIndex}`;
+  const stageLabelText = stage.displayName || stage.stateKey;
+
+  const issue = (suffix: string, message: string): ServiceBlueprintValidationIssue => ({
+    id: `${idPrefix}-${suffix}`,
+    code: 'action-support-system' as const,
+    severity: 'error' as const,
+    blocking: true,
+    location: { kind: 'action', target: 'stage', stageKey: stage.stateKey, actionIndex } as const,
+    message: `Stage “${stageLabelText}”: ${message}`,
+  });
+
+  if (!params.supportSystemKey || !params.capabilityKey) {
+    return [issue('missing-keys', 'a support-system-call action must set both a support system and a capability.')];
+  }
+
+  const supportSystem = supportSystemCatalog.find(candidate => candidate.key === params.supportSystemKey);
+  if (!supportSystem) {
+    return [issue('unknown-support-system', `“${params.supportSystemKey}” is not a registered support system.`)];
+  }
+
+  const capability = supportSystem.capabilities.find(candidate => candidate.key === params.capabilityKey);
+  if (!capability) {
+    return [issue('unknown-capability', `“${params.capabilityKey}” is not a capability of “${supportSystem.displayName}”.`)];
+  }
+
+  const issues: ServiceBlueprintValidationIssue[] = [];
+  const mappedInputKeys = new Set(Object.keys(params.inputs ?? {}));
+  const declaredInputKeys = new Set(capability.inputs.map(input => input.key));
+
+  for (const input of capability.inputs) {
+    if (input.required && !mappedInputKeys.has(input.key)) {
+      issues.push(issue(`missing-input-${input.key}`, `capability “${capability.displayName}” requires “${input.title || input.key}”, which this action doesn't bind to a field.`));
+    }
+  }
+
+  for (const [mappedKey, fieldKey] of Object.entries(params.inputs ?? {})) {
+    if (!declaredInputKeys.has(mappedKey)) {
+      issues.push(issue(`unknown-input-${mappedKey}`, `“${mappedKey}” is not a declared input of capability “${capability.displayName}”.`));
+      continue;
+    }
+
+    if (!fieldKey || !blueprintFieldKeys.has(fieldKey)) {
+      issues.push(issue(`input-unknown-field-${mappedKey}`, `input “${mappedKey}” is bound to field “${fieldKey || ''}”, which is not a captured input field anywhere in this blueprint.`));
+    }
+  }
+
+  const declaredOutcomeKeys = new Set(capability.outcomes.map(outcome => outcome.key));
+  for (const route of stage.routes ?? []) {
+    if (route.trigger && !declaredOutcomeKeys.has(route.trigger)) {
+      issues.push(issue(
+        `route-trigger-${route.trigger}`,
+        `route trigger “${route.trigger}” is not one of capability “${capability.displayName}”'s declared outcomes (${[...declaredOutcomeKeys].join(', ') || 'none'}) — it can never fire.`
+      ));
+    }
+  }
+
+  return issues;
+}
+
+/**
  * Every diagnostic computeCalculationDiagnostics produces corresponds to something
  * CalculationEvaluator.cs/CalculationScopeBuilder.cs genuinely rejects at Save time (see
  * calculation-diagnostics.ts's own doc comment), so every one is reported here as a blocking
@@ -370,7 +456,8 @@ function stageValidationRuleIssues(serviceBlueprint: AuthoredServiceBlueprint): 
 export function validateServiceBlueprint(
   serviceBlueprint: AuthoredServiceBlueprint,
   actionCatalog: ActionCatalogEntry[] = [],
-  componentCatalog: ComponentDescriptor[] = []
+  componentCatalog: ComponentDescriptor[] = [],
+  supportSystemCatalog: SupportSystemDescriptor[] = []
 ): ServiceBlueprintValidationIssue[] {
   const initialStageExists = serviceBlueprint.stages.some(stage => stage.stateKey === serviceBlueprint.initialStage);
   const initialStageIssues = initialStageExists || serviceBlueprint.stages.length === 0
@@ -473,6 +560,22 @@ export function validateServiceBlueprint(
     )
   );
 
+  // Blueprint-wide, matching ServiceBlueprint.ValidateSupportSystemActions' own field-existence
+  // scope (not stage-scoped — a capability input is typically bound to a field captured on an
+  // earlier stage than the one carrying the action).
+  const blueprintFieldKeys = new Set(
+    collectStageInputFields(serviceBlueprint.stages.flatMap(stage => stage.components ?? []), componentCatalog)
+      .map(field => field.fieldKey)
+  );
+
+  const supportSystemActionIssues = serviceBlueprint.stages.flatMap(stage =>
+    stageActions(stage).flatMap((action, actionIndex) =>
+      action.type === 'support-system-call'
+        ? supportSystemActionValidationIssues(supportSystemCatalog, blueprintFieldKeys, action, stage, actionIndex)
+        : []
+    )
+  );
+
   return [
     ...initialStageIssues,
     ...orphanedIssues,
@@ -482,6 +585,7 @@ export function validateServiceBlueprint(
     ...missingStageRouteIssues,
     ...stageActionIssues,
     ...routeActionIssues,
+    ...supportSystemActionIssues,
     ...calculationValidationIssues(serviceBlueprint, componentCatalog),
     ...stageValidationRuleIssues(serviceBlueprint),
   ];

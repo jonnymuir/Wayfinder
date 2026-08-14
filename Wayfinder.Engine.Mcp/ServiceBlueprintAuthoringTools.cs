@@ -3,6 +3,7 @@ using System.Text.Json;
 using ModelContextProtocol.Server;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.Components;
+using Wayfinder.Models.ServiceDesign.SupportSystems;
 using Wayfinder.Services.Calculations;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Services;
@@ -93,6 +94,26 @@ public static class ServiceBlueprintAuthoringTools
         "for how to register a genuinely new component type.")]
     public static IReadOnlyList<ComponentDescriptor> ListComponentTypes() => ComponentTypeRegistry.All;
 
+    [McpServerTool(Name = "list_support_systems")]
+    [Description(
+        "List every support system this host has registered — the external/downstream systems a " +
+        "blueprint's stages/routes can call out to via a support-system-call action (Nielsen Norman " +
+        "Group's \"support processes\" layer, the third lane alongside a citizen- and a caseworker-" +
+        "facing queue). Each entry has key, displayName, and capabilities: [{ key, displayName, " +
+        "inputs (same ComponentPropertyDescriptor shape as list_component_types' own properties — " +
+        "an input tagged format \"field-ref\" must be bound to a blueprint field's fieldKey), " +
+        "outputs (field keys this capability's resolution writes directly into instance state once " +
+        "it resolves — a summary-list/stat-group elsewhere in the blueprint may legitimately bind to " +
+        "one of these even though no stage ever captures it as an input), supportedCompletionModes " +
+        "(Poll and/or Webhook — which mechanism(s) the engine will use to learn this capability's " +
+        "outcome), and outcomes: [{ key, displayName }], the closed vocabulary a stage's outgoing " +
+        "route triggers must be drawn from after this capability resolves }. Call this before " +
+        "authoring a support-system-call action to avoid a typo'd supportSystemKey/capabilityKey, " +
+        "an input that isn't bound to a real field, or an outgoing route trigger that doesn't match " +
+        "a declared outcome. See also " +
+        "service-blueprint-docs://support-systems for the full picture.")]
+    public static IReadOnlyList<SupportSystemDescriptor> ListSupportSystems() => SupportSystemRegistry.All;
+
     [McpServerTool(Name = "validate_service_blueprint")]
     [Description(
         "Validate a service blueprint JSON — checks that every stage route targets a gateway " +
@@ -110,7 +131,15 @@ public static class ServiceBlueprintAuthoringTools
         "— severity \"Warning\" (e.g. an unverifiable service-sourced field) does not block isValid. " +
         "When the host declares queue render capabilities, also checks that every component in a " +
         "stage is actually supported by that stage's queue (QUEUE_CAPABILITY_UNSUPPORTED_COMPONENT " +
-        "— call list_queue_capabilities first to check what a queue supports). " +
+        "— call list_queue_capabilities first to check what a queue supports). Also checks every " +
+        "support-system-call action's params against the registered support system/capability " +
+        "(SUPPORT_SYSTEM_ACTION_MISSING_KEYS/_UNKNOWN_SUPPORT_SYSTEM/_UNKNOWN_CAPABILITY/" +
+        "_MISSING_REQUIRED_INPUT/_UNKNOWN_INPUT/_INPUT_UNKNOWN_FIELD, and " +
+        "_ROUTE_TRIGGER_UNKNOWN_OUTCOME when the carrying stage's own route triggers aren't among " +
+        "the capability's declared outcomes — call list_support_systems first); a summary-list/" +
+        "stat-group bound to a field only a support-system-call action's capability declares as an " +
+        "output (not a captured input or calculations.fields entry) is recognised as valid, not " +
+        "flagged DATA_DISPLAY_UNKNOWN_FIELD. " +
         CalculationsShapeReminder + " " +
         "See also service-blueprint-docs://authoring-guide for the full contract shape.")]
     public static ServiceBlueprintValidationOutcome ValidateServiceBlueprint(

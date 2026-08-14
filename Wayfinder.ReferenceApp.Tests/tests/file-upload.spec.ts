@@ -126,10 +126,13 @@ test.describe('File upload: risk assessment', () => {
 
     // The summary row proves IServiceRequestFileStorage's persisted reference round-trips back
     // to a display value (see ProcessManagerEngine.GetDisplayValue's file-upload branch), not
-    // just the storage key/bytes underneath it.
-    await expect(caseworkerPage.getByText('risk-assessment.pdf').first()).toBeVisible();
-
-    const downloadLink = caseworkerPage.getByRole('link', { name: /Risk assessment.*risk-assessment\.pdf/ });
+    // just the storage key/bytes underneath it — and that row's value *is* the download link
+    // itself (FieldRenderPayload.FileUrl), rather than a filename in plain text with a separate
+    // list of links elsewhere on the page.
+    const fileRow = caseworkerPage.locator('.govuk-summary-list__row', {
+      hasText: 'Risk assessment / insurance certificate',
+    });
+    const downloadLink = fileRow.getByRole('link', { name: 'risk-assessment.pdf' });
     await expect(downloadLink).toBeVisible();
 
     // The download itself exercises OpenReadAsync — the read half of IServiceRequestFileStorage

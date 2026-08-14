@@ -71,10 +71,19 @@ public static class GovUkFields
                   <button type="submit" formnovalidate name="action" value="{GovUk.Esc($"change:{changeTarget}")}" class="govuk-link" style="background:none;border:0;padding:0;font:inherit;cursor:pointer;">Change<span class="govuk-visually-hidden"> {GovUk.Esc(field.Label.ToLowerInvariant())}</span></button>
                 </dd>
                 """;
+        // A file-upload row whose host supplied a FileUrl renders the filename as a real link, so
+        // a reviewer can open what was actually uploaded from the row describing it — rather than
+        // reading a filename here and hunting for a separate list of links elsewhere on the page.
+        // Still escaped: only the <a> wrapper is markup, the filename itself never is.
+        var displayValue = GovUk.Esc(FormatSummaryValue(field, value));
+        var valueCell = field.FieldType == "file-upload" && !string.IsNullOrWhiteSpace(field.FileUrl) && !string.IsNullOrEmpty(value)
+            ? $"""<a class="govuk-link" href="{GovUk.Esc(field.FileUrl)}" target="_blank" rel="noopener">{displayValue}</a>"""
+            : displayValue;
+
         return $"""
             <div class="govuk-summary-list__row">
               <dt class="govuk-summary-list__key">{GovUk.Esc(field.Label)}</dt>
-              <dd class="govuk-summary-list__value">{GovUk.Esc(FormatSummaryValue(field, value))}</dd>
+              <dd class="govuk-summary-list__value">{valueCell}</dd>
               {actionsCell}
             </div>
             """;

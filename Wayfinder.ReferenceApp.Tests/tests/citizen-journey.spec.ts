@@ -145,6 +145,55 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     await expect(summary.getByText('Alex Applicant', { exact: true })).toBeVisible();
   });
 
+  // Regression: a boolean shown read-only on a *later* stage's summary-list used to be reset to
+  // false when that stage was submitted — CoerceFieldValues treated every rendered field as a form
+  // field, and an unchecked checkbox is indistinguishable from an absent one. Submitting "check
+  // your answers" (whose summary displays hasDangerousProps) therefore wiped the applicant's own
+  // "yes", and the caseworker reviewing a fire act read "No". The applicant's own summary was
+  // right, so this only ever showed up one stage later — see Program.cs's CoerceFieldValues.
+  test('a boolean answered "yes" survives a later stage that only displays it read-only', async ({ browser }) => {
+    const applicantContext = await browser.newContext();
+    const applicantPage = await applicantContext.newPage();
+
+    await loginAs(applicantPage, DEMO_USERS.applicant);
+    await applicantPage.getByLabel('Full name').fill('Bool Survivor');
+    await applicantPage.getByLabel('Email address').fill('bool@example.test');
+    await applicantPage.getByRole('button', { name: 'Continue' }).click();
+
+    await applicantPage.getByLabel('Name of the event').fill('Boolean Survival Gala');
+    await applicantPage.getByLabel('Day').fill('1');
+    await applicantPage.getByLabel('Month').fill('9');
+    await applicantPage.getByLabel('Year').fill('2026');
+    await applicantPage.getByLabel('Number of jugglers taking part').fill('2');
+    await applicantPage.getByLabel('This act involves fire, knives, or other dangerous props').check();
+    await applicantPage.getByRole('button', { name: 'Continue' }).click();
+
+    await applicantPage.getByLabel('How are you mitigating the risk?').fill('12 metre exclusion zone, HSE-aligned.');
+    await applicantPage.getByRole('button', { name: 'Continue' }).click();
+
+    // Correct here even before the fix — the damage happened on *submitting* this stage.
+    await expect(applicantPage.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    await expect(
+      applicantPage.locator('.govuk-summary-list__row', { hasText: 'Fire, knives or other dangerous props' })
+    ).toContainText('Yes');
+
+    await applicantPage.getByLabel('I confirm the details above are correct').check();
+    await applicantPage.getByRole('button', { name: 'Submit application' }).click();
+    await expect(applicantPage.getByText('A caseworker is reviewing your application.')).toBeVisible();
+
+    const caseworkerContext = await browser.newContext();
+    const caseworkerPage = await caseworkerContext.newPage();
+    await loginAs(caseworkerPage, DEMO_USERS.caseworker);
+    await caseworkerPage.getByRole('link', { name: 'Review' }).click();
+
+    await expect(
+      caseworkerPage.locator('.govuk-summary-list__row', { hasText: 'Fire, knives or other dangerous props' })
+    ).toContainText('Yes');
+
+    await applicantContext.close();
+    await caseworkerContext.close();
+  });
+
   test('required fields block progress before a value is entered', async ({ page }) => {
     await loginAs(page, DEMO_USERS.applicant);
     await expect(page.getByRole('heading', { name: 'Your details' })).toBeVisible();

@@ -35,7 +35,14 @@ scratch. It models NN/g's frontstage/backstage split
   waiting, approve or reject.
 
 A third **support-systems** lane (a downstream/API-driven actor — the third leg of NN/g's model)
-is a deliberate, explicitly-noted gap, not built yet.
+now also runs alongside these two: **SafetyNet Underwriting**, a genuinely separate ASP.NET Core
+app (`SafetyNetUnderwriting/`, its own resource in `Wayfinder.AppHost`) standing in for a
+fictional insurer a caseworker sends the applicant's risk assessment to, with its own staff
+worklist at `/queue`. The juggling-licence blueprint really does call out to it: a caseworker
+reviewing a dangerous-props act sends the uploaded risk assessment across, waits on it (flagged
+"Waiting" in their own worklist), and the insurer's decision comes back by webhook. See
+[docs/guides/support-systems.md](./support-systems.md) for the full picture, and
+[docs/demos/](../demos/) for a recording of the whole journey.
 
 Every stage route targets a real gateway (`ServiceBlueprint.ValidateGatewayRouting()`'s rule) —
 even the trivial single-route handoffs get their own pass-through gateway. See
@@ -160,6 +167,12 @@ node would be. `Wayfinder` itself has no opinion about this at all — it's a ca
   `juggling-insurance-modeller.json` for the slider/stat-group/chart-driven premium modeller demo
   at `/premium` — see [Package Architecture](#package-architecture) for what renders that)
 - `Wayfinder.ReferenceApp/Services/` — every custom implementation in the table above
+- `Wayfinder.ReferenceApp/Services/SupportSystems/` — `SafetyNetUnderwritingClient`
+  (`ISupportSystemClient`) and the real `SupportSystemDescriptor` registration for the third,
+  support-processes lane — see [docs/guides/support-systems.md](./support-systems.md)
+- `SafetyNetUnderwriting/` — the fictional insurer itself: a genuinely separate ASP.NET Core app
+  (own `Wayfinder.AppHost` resource, not a library inside `Wayfinder.ReferenceApp`), with its own
+  staff worklist at `/queue`
 - `Wayfinder.ReferenceApp/wwwroot/` — just this app's own favicon/manifest branding now;
   **host-specific** assets only. `govuk-frontend` itself, and everything owned by a shared
   Wayfinder package (slider/stat-group/chart styling, calculation runtimes, the live-form
@@ -168,7 +181,21 @@ node would be. `Wayfinder` itself has no opinion about this at all — it's a ca
 - `Wayfinder.ReferenceApp.Tests/` — the Playwright suite (auth, the full citizen→caseworker→citizen
   handoff, the editor/authoring wiring, file upload, the premium modeller) — run single-worker,
   since the backend is one shared in-memory process with fixed demo identities, not per-test
-  isolated
+  isolated. `Wayfinder.Editor.Client`'s own suite covers the support-system-call action's
+  *authoring* UX (`support-system-action-editor.spec.ts`) — see
+  [docs/skills/canvas-editor/SKILL.md](../skills/canvas-editor/SKILL.md) — since that needs no
+  live SafetyNet Underwriting process, only the registered descriptor. The default
+  `npm run test:playwright` here boots `Wayfinder.ReferenceApp` directly, without Aspire, so it
+  can't exercise the real cross-process "send to insurer" round trip
+  (`SafetyNetUnderwritingClient`'s `http://safetynet-underwriting` service-discovery address
+  never resolves outside `Wayfinder.AppHost`) — that's what `npm run test:playwright:live` is
+  for: `support-systems-live.spec.ts`, driven by `tests/support/live-app-host.ts`, which boots
+  the real `Wayfinder.AppHost` stack (precedent: Umbraco.Prism's own
+  `UmbracoPrism.Client/tests/support/live-app-host.ts`, proportionately leaner here — two plain
+  in-memory apps, no Docker/Keycloak to wait on) and polls both resources' own HTTP endpoints
+  until they're genuinely answering before any test runs against them. See
+  [docs/guides/support-systems.md](./support-systems.md) for the worked example this spec
+  actually drives, browser-to-browser, across both real apps.
 
 ## Package Architecture
 
@@ -295,3 +322,23 @@ expressions as page JSON, visible via view-source, where the AJAX version never 
 formulas client-side at all — but nothing in this repo has ever needed that, so it stayed
 unbuilt-on hypothetical baggage rather than an active alternative. Recoverable from git history
 if a real host ever needs exactly that trade-off.
+
+## Accessibility
+
+Every screen is expected to meet **WCAG 2.2 AA**, and that's enforced, not asserted:
+`Wayfinder.ReferenceApp.Tests/tests/accessibility.spec.ts` runs axe-core across the whole citizen
+journey (including a real server-rendered validation-error page), the caseworker queue, review and
+waiting screens, and checks keyboard operability explicitly — focus order matching visual order,
+`Space` toggling a checkbox, and a visible focus indicator.
+
+**A Safari caveat worth knowing before you report a bug.** On macOS, Safari's *default* is to move
+Tab only between text fields and pop-up menus — it skips links, buttons, checkboxes and radios.
+Verified directly against WebKit on the event-details form: it tabs the five text inputs and
+nothing else, skipping even the skip-link, while the identical markup tabs everything in Chromium
+and Firefox. That's a user-agent preference that applies to every site on the web (GOV.UK
+included) and page markup cannot override it. To test keyboard navigation properly in Safari,
+enable **Safari → Settings → Advanced → "Press Tab to highlight each item on a webpage"**, or
+macOS **System Settings → Keyboard → Keyboard navigation**.
+
+axe catches roughly a third of WCAG issues — it cannot judge whether an error message is *useful*
+or a heading structure *meaningful*, so it supplements manual testing rather than replacing it.

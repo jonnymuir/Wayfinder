@@ -1165,6 +1165,56 @@ export interface ComponentDescriptor {
   containment: ComponentContainment;
 }
 
+// ---------------------------------------------------------------------------
+// Support system catalog (SupportSystemRegistry, over the wire)
+// ---------------------------------------------------------------------------
+//
+// Mirrors Wayfinder/Models/ServiceDesign/SupportSystems/SupportSystemDescriptor.cs field-for-
+// field — the wire shape returned by GET /wayfinder/service-blueprint-authoring/support-systems
+// (see support-system-catalog.ts). Same "fetched live, not a hand-mirrored stub" reasoning as
+// ComponentDescriptor above: a host-registered support system (see
+// docs/guides/support-systems.md) shows up automatically in a support-system-call action's
+// support-system/capability pickers with no editor code change. `inputs`/`outputs` reuse
+// ComponentPropertyDescriptor directly — deliberately the same shape a component's own
+// properties use, per the C# type's own doc comment.
+
+export type SupportSystemCompletionMode = 'Poll' | 'Webhook';
+
+export interface SupportSystemOutcomeDescriptor {
+  key: string;
+  displayName: string;
+}
+
+export interface SupportSystemCapabilityDescriptor {
+  key: string;
+  displayName: string;
+  description?: string | null;
+  inputs: ComponentPropertyDescriptor[];
+  outputs: ComponentPropertyDescriptor[];
+  supportedCompletionModes: SupportSystemCompletionMode[];
+  outcomes: SupportSystemOutcomeDescriptor[];
+}
+
+export interface SupportSystemDescriptor {
+  key: string;
+  displayName: string;
+  description?: string | null;
+  capabilities: SupportSystemCapabilityDescriptor[];
+}
+
+/**
+ * The well-known `params` shape of a `support-system-call` action (see
+ * Wayfinder/Models/ServiceDesign/SupportSystems/SupportSystemDescriptor.cs's
+ * `SupportSystemActionTypes`) — `inputs` maps a capability's declared input `key` to the
+ * blueprint field key it's sourced from. This is a shape convention read/written through
+ * `AuthoredAction.params`, not a distinct wire type of its own.
+ */
+export interface SupportSystemCallActionParams {
+  supportSystemKey?: string;
+  capabilityKey?: string;
+  inputs?: Record<string, string>;
+}
+
 export type ActionFormFieldType = 'text' | 'number' | 'textarea' | 'select' | 'radio' | 'date';
 
 export interface ActionFormFieldConfig {
@@ -1184,6 +1234,29 @@ export interface ActionFormFieldConfig {
 // ---------------------------------------------------------------------------
 
 export const STUB_ACTION_CATALOG: ActionCatalogEntry[] = [
+  // Unlike every other entry below (fictional, host-defined mockups — see this section's own
+  // header comment), this one is real: ProcessManagerEngine.cs actually executes a
+  // support-system-call action found on a stage's onEnter timing (see
+  // docs/guides/support-systems.md). Its params shape is genuinely dynamic — which fields it
+  // needs depends on which support system + capability the author picks — so paramsSchema stays
+  // empty here and wayfinder-stage-action-editor.ts renders a dedicated editor for this one
+  // action type instead of the generic paramsSchema-driven form, driven by the live support
+  // system catalog (support-system-catalog.ts) rather than this static entry.
+  {
+    type: 'support-system-call',
+    label: 'Call a support system',
+    summary: 'Call a registered support system capability when this stage opens, and wait for its outcome.',
+    appliesTo: ['stage.onEntry'],
+    paramsSchema: {
+      key: 'support-system-call.params',
+      title: 'Support system call',
+      valueKind: 'Object',
+      properties: [],
+    },
+    defaultParams: { supportSystemKey: '', capabilityKey: '', inputs: {} },
+    status: 'available',
+    runtimeImplementation: 'wayfinder-engine',
+  },
   {
     type: 'forms.load',
     label: 'Load form',

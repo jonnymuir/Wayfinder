@@ -5,11 +5,14 @@ using Wayfinder.Models.ServiceDesign.Components;
 namespace Wayfinder.ReferenceApp.Services;
 
 /// <summary>
-/// The two actor lanes this reference host demonstrates, in NN/g's service-blueprint
-/// vocabulary (https://www.nngroup.com/articles/service-blueprints-definition/): "citizen" is
-/// frontstage (the applicant's own journey), "caseworker" is backstage (the review queue
-/// behind the line of visibility). A third "support-systems" lane — a downstream/API-driven
-/// queue — is a deliberate future addition, not built here.
+/// The two <em>human-facing</em> actor lanes this reference host demonstrates, in NN/g's
+/// service-blueprint vocabulary (https://www.nngroup.com/articles/service-blueprints-definition/):
+/// "citizen" is frontstage (the applicant's own journey), "caseworker" is backstage (the review
+/// queue behind the line of visibility). The third lane — "support processes", a downstream/
+/// API-driven actor — is built too (see docs/guides/support-systems.md, the juggling-licence
+/// blueprint's "automation" queue, and Services/SupportSystems/SafetyNetUnderwritingClient.cs)
+/// but has no entry here: nobody ever renders it to a person, so it needs no
+/// <see cref="ActorProfile"/>/capability declaration the way these two do.
 /// </summary>
 public static class ReferenceActors
 {

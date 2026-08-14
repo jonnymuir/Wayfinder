@@ -26,7 +26,7 @@
     "test:calculation-diagnostics": "node scripts/run-calculation-diagnostics-tests.mjs",
     "test:service-blueprint-validation": "node scripts/run-service-blueprint-validation-tests.mjs",
     "test:canonical-json": "node scripts/run-canonical-json-tests.mjs",
-    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts service-blueprint-editor-validation.spec.ts service-blueprint-editor-definition-tab.spec.ts service-blueprint-editor-help.spec.ts"
+    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts support-system-action-editor.spec.ts service-blueprint-editor-validation.spec.ts service-blueprint-editor-definition-tab.spec.ts service-blueprint-editor-help.spec.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

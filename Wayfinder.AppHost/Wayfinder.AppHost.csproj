@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Wayfinder.ReferenceApp/Wayfinder.ReferenceApp.csproj" />
+    <ProjectReference Include="../SafetyNetUnderwriting/SafetyNetUnderwriting.csproj" />
   </ItemGroup>
 
 </Project>

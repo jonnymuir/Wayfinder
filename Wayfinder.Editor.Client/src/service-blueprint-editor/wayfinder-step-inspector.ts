@@ -10,6 +10,7 @@ import type {
   RouteView,
   AuthoredServiceBlueprint,
   EditorStageType,
+  SupportSystemDescriptor,
 } from './types.js';
 import { serviceBlueprintGateways, serviceBlueprintStages } from './types.js';
 import { NODE_ICONS, defaultIconForGateway, defaultIconForStage, type NodeIconDef, type NodeIconName } from './graph/node-icons.js';
@@ -147,6 +148,10 @@ export class WayfinderStepInspectorElement extends LitElement {
   @property({ attribute: false })
   componentCatalog: ComponentDescriptor[] = [];
 
+  /** Registered support systems a support-system-call action's own editor can offer — see support-system-catalog.ts. */
+  @property({ attribute: false })
+  supportSystemCatalog: SupportSystemDescriptor[] = [];
+
   @property({ attribute: false })
   availableQueues: QueueDefinition[] = [];
 
@@ -180,6 +185,11 @@ export class WayfinderStepInspectorElement extends LitElement {
     }
 
     return serviceBlueprintGateways(this.serviceBlueprint).find(gateway => gateway.key === this.selectedGatewayKey) ?? null;
+  }
+
+  /** Blueprint-wide captured input fields, for a support-system-call action's own inputs — see wayfinder-stage-action-editor.ts's supportSystemFieldReferences doc comment for why this is blueprint-wide, not stage-scoped. */
+  private get _supportSystemFieldReferences() {
+    return buildPropertyReferenceContext(this.serviceBlueprint, undefined, this.componentCatalog).allFields;
   }
 
   protected updated(changed: Map<string, unknown>) {
@@ -989,6 +999,8 @@ export class WayfinderStepInspectorElement extends LitElement {
             data-wayfinder-route-index="${idx}"
             .actions=${transition.actions ?? []}
             .actionCatalog=${this.actionCatalog}
+            .supportSystemCatalog=${this.supportSystemCatalog}
+            .supportSystemFieldReferences=${this._supportSystemFieldReferences}
             .selectedActionIndex=${this.selectedActionTransitionIndex === transitionIndex ? this.selectedActionIndex : null}
             target="transition"
             subject-label="transition"
@@ -1539,6 +1551,8 @@ export class WayfinderStepInspectorElement extends LitElement {
           <wayfinder-stage-action-editor
             .actions=${actions}
             .actionCatalog=${this.actionCatalog}
+            .supportSystemCatalog=${this.supportSystemCatalog}
+            .supportSystemFieldReferences=${this._supportSystemFieldReferences}
             .selectedActionIndex=${this.selectedActionIndex}
             target="stage"
             subject-label="stage"

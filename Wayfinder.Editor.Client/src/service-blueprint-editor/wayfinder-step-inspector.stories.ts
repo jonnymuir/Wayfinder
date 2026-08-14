@@ -3,7 +3,7 @@ import { expect } from '@storybook/test';
 import './wayfinder-step-inspector.js';
 import type { WayfinderStepInspectorElement } from './wayfinder-step-inspector.js';
 import { STUB_ACTION_CATALOG, STUB_SERVICE_BLUEPRINT } from './types.js';
-import type { ActionCatalogEntry, AuthoredServiceBlueprint, ComponentDescriptor } from './types.js';
+import type { ActionCatalogEntry, AuthoredServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
 
 type StoryArgs = {
   serviceBlueprint: AuthoredServiceBlueprint | null;
@@ -11,6 +11,7 @@ type StoryArgs = {
   selectedGatewayKey?: string | null;
   actionCatalog: ActionCatalogEntry[];
   componentCatalog: ComponentDescriptor[];
+  supportSystemCatalog?: SupportSystemDescriptor[];
 };
 
 function makeElement(args: StoryArgs): WayfinderStepInspectorElement {
@@ -20,6 +21,7 @@ function makeElement(args: StoryArgs): WayfinderStepInspectorElement {
   el.selectedGatewayKey = args.selectedGatewayKey ?? null;
   el.actionCatalog = args.actionCatalog;
   el.componentCatalog = args.componentCatalog ?? [];
+  el.supportSystemCatalog = args.supportSystemCatalog ?? [];
   el.addEventListener('service-blueprint-updated', event => {
     const detail = (event as CustomEvent<{
       serviceBlueprint: AuthoredServiceBlueprint;
@@ -61,6 +63,7 @@ const meta: Meta<StoryArgs> = {
     selectedGatewayKey: null,
     actionCatalog: STUB_ACTION_CATALOG,
     componentCatalog: [],
+    supportSystemCatalog: [],
   },
   render: args => makeElement(args),
 };
@@ -526,5 +529,171 @@ export const ComponentRecursiveChildEditing: Story = {
     fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
     await expect(fieldset.children?.length).toBe(0);
     await expect(root.activeElement?.closest('.component-add-row')).not.toBeNull();
+  },
+};
+
+// A small fixture proving a support-system-call action's own dedicated editor — see
+// docs/guides/support-systems.md and Wayfinder.ReferenceApp/service-blueprints/
+// juggling-licence.json's real "insurer-validation" stage, which this mirrors in shape (fictional
+// "SafetyNet Underwriting" support system, "validate-risk-assessment" capability). Two stages: one
+// with real captured input fields a capability input can bind to (a support-system-call action's
+// inputs are typically bound to a field captured earlier, not on the action's own stage — see
+// supportSystemFieldReferences' own doc comment in wayfinder-step-inspector.ts), and the
+// automation-queue stage carrying the action itself.
+const SUPPORT_SYSTEM_CALL_SERVICE_BLUEPRINT = {
+  definitionKey: 'support-system-call-fixture',
+  displayName: 'Support system call fixture',
+  version: 1,
+  requestPolicy: 'single',
+  initialStage: 'risk-assessment',
+  stages: [
+    {
+      stateKey: 'risk-assessment',
+      displayName: 'Risk assessment',
+      kind: 'Question',
+      actor: 'citizen',
+      actions: [],
+      roleGates: [],
+      components: [
+        {
+          type: 'file-upload',
+          fieldKey: 'riskAssessment',
+          label: 'Risk assessment file',
+          required: false,
+        },
+        {
+          type: 'text',
+          fieldKey: 'riskMitigationNotes',
+          label: 'How are you mitigating the risk?',
+          required: false,
+        },
+      ],
+      routes: [{ id: 'risk-assessment--continue--insurer-validation', target: 'insurer-validation', trigger: 'continue' }],
+    },
+    {
+      stateKey: 'insurer-validation',
+      displayName: 'Insurer validation',
+      kind: 'Question',
+      actor: 'automation',
+      roleGates: [],
+      components: [],
+      actions: [
+        {
+          type: 'support-system-call',
+          timing: 'OnEntry',
+          params: {
+            supportSystemKey: 'safetynet-underwriting',
+            capabilityKey: 'validate-risk-assessment',
+            inputs: { file: 'riskAssessment', notes: 'riskMitigationNotes' },
+          },
+          summary: 'Send the risk assessment to SafetyNet Underwriting.',
+        },
+      ],
+      routes: [
+        { id: 'insurer-validation--approved--done', target: 'done', trigger: 'approved' },
+        { id: 'insurer-validation--rejected--done', target: 'done', trigger: 'rejected' },
+      ],
+    },
+    {
+      stateKey: 'done',
+      displayName: 'Done',
+      kind: 'Confirmation',
+      actor: 'citizen',
+      actions: [],
+      components: [],
+      roleGates: [],
+    },
+  ],
+} as unknown as AuthoredServiceBlueprint;
+
+// A minimal, story-local catalog (not COMPONENT_CATALOG_FIXTURE above — that one's shared by
+// three other stories with their own assertions about its exact contents) — just enough for
+// collectStageInputFields (component-property-references.ts) to recognise
+// SUPPORT_SYSTEM_CALL_SERVICE_BLUEPRINT's two captured fields as real inputs, so the
+// support-system-call action's own field-ref dropdowns have something to bind to.
+const SUPPORT_SYSTEM_CALL_COMPONENT_CATALOG_FIXTURE: ComponentDescriptor[] = [
+  {
+    discriminator: 'file-upload',
+    displayName: 'File upload',
+    category: 'Input',
+    clrType: 'FileUploadComponent',
+    isInput: true,
+    properties: [
+      { key: 'fieldKey', title: 'Field key', valueKind: 'String', required: true },
+      { key: 'label', title: 'Label', valueKind: 'String', required: true },
+    ],
+    containment: { kind: 'None' },
+  },
+  {
+    discriminator: 'text',
+    displayName: 'Text input',
+    category: 'Input',
+    clrType: 'TextInputComponent',
+    isInput: true,
+    properties: [
+      { key: 'fieldKey', title: 'Field key', valueKind: 'String', required: true },
+      { key: 'label', title: 'Label', valueKind: 'String', required: true },
+    ],
+    containment: { kind: 'None' },
+  },
+];
+
+const SUPPORT_SYSTEM_CATALOG_FIXTURE: SupportSystemDescriptor[] = [
+  {
+    key: 'safetynet-underwriting',
+    displayName: 'SafetyNet Underwriting',
+    description: "A fictional insurer that validates a juggling licence applicant's risk assessment.",
+    capabilities: [
+      {
+        key: 'validate-risk-assessment',
+        displayName: 'Validate a risk assessment',
+        description: "Sends the applicant's risk assessment to SafetyNet Underwriting's own staff queue for a decision.",
+        inputs: [
+          { key: 'file', title: 'Risk assessment file', valueKind: 'String', format: 'field-ref', required: true },
+          { key: 'applicantName', title: 'Applicant name', valueKind: 'String', format: 'field-ref', required: false },
+          { key: 'notes', title: 'Risk mitigation notes', valueKind: 'String', format: 'field-ref', required: false },
+        ],
+        outputs: [
+          { key: 'insurerDecision', title: 'Insurer decision', valueKind: 'String', required: false },
+          { key: 'insurerDecisionNotes', title: 'Insurer decision notes', valueKind: 'String', required: false },
+        ],
+        supportedCompletionModes: ['Poll', 'Webhook'],
+        outcomes: [
+          { key: 'approved', displayName: 'Approved' },
+          { key: 'rejected', displayName: 'Rejected' },
+        ],
+      },
+    ],
+  },
+];
+
+export const SupportSystemCallActionConfiguration: Story = {
+  args: {
+    serviceBlueprint: SUPPORT_SYSTEM_CALL_SERVICE_BLUEPRINT,
+    selectedStageKey: 'insurer-validation',
+    componentCatalog: SUPPORT_SYSTEM_CALL_COMPONENT_CATALOG_FIXTURE,
+    supportSystemCatalog: SUPPORT_SYSTEM_CATALOG_FIXTURE,
+  },
+  play: async ({ canvasElement }) => {
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
+    await el.updateComplete;
+    const root = el.shadowRoot!;
+
+    const actionEditor = root.querySelector('wayfinder-stage-action-editor')!;
+    const actionRoot = actionEditor.shadowRoot!;
+
+    const supportSystemSelect = actionRoot.querySelector<HTMLSelectElement>('[data-wayfinder-support-system-select="0"]')!;
+    await expect(supportSystemSelect.value).toBe('safetynet-underwriting');
+
+    const capabilitySelect = actionRoot.querySelector<HTMLSelectElement>('[data-wayfinder-support-system-capability-select="0"]')!;
+    await expect(capabilitySelect.value).toBe('validate-risk-assessment');
+
+    // Both required and optional inputs render, already bound to the fixture's real field keys.
+    await expect(actionRoot.querySelectorAll('.support-system-call-editor .property-object .field-block').length).toBeGreaterThanOrEqual(2);
+    // .textContent, not actionEditor.textContent: this component (like the rest of the editor)
+    // renders entirely into its shadow root with no createRenderRoot override, so the host
+    // element's own light-DOM textContent is always empty regardless of what rendered inside it.
+    await expect(actionRoot.textContent).toContain('approved, rejected');
   },
 };

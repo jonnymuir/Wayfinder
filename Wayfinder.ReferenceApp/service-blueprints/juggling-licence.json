@@ -159,7 +159,11 @@
         },
         {
           "type": "file-upload",
-          "acceptedFileTypes": [".pdf", ".jpg", ".png"],
+          "acceptedFileTypes": [
+            ".pdf",
+            ".jpg",
+            ".png"
+          ],
           "maxSizeBytes": 5242880,
           "fieldKey": "riskAssessment",
           "label": "Risk assessment or public liability insurance certificate",
@@ -350,16 +354,16 @@
     },
     {
       "stageKey": "under-review",
-      "displayName": "Application under review",
+      "displayName": "Review application",
       "queueKey": "caseworker",
       "components": [
         {
           "type": "panel",
-          "heading": "Application under review"
+          "heading": "Review application"
         },
         {
           "type": "body",
-          "content": "A caseworker will review this application and record a decision below."
+          "content": "Check the application below. If the applicant attached a risk assessment, it must be sent to SafetyNet Underwriting for validation before a decision can be recorded."
         },
         {
           "type": "summary-list",
@@ -473,6 +477,30 @@
               "default": null,
               "defaultFrom": null,
               "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "insurerDecision",
+              "label": "Insurer decision",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "insurerDecisionNotes",
+              "label": "Insurer notes",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
             }
           ],
           "changeStateKey": null,
@@ -481,18 +509,239 @@
       ],
       "routes": [
         {
-          "id": "under-review--approve--post-review",
+          "id": "under-review--send-to-insurer--to-insurer-check",
+          "target": "to-insurer-check",
+          "trigger": "send-to-insurer",
+          "label": "Send risk assessment to insurer",
+          "style": "primary"
+        },
+        {
+          "id": "under-review--continue--to-caseworker-decision",
+          "target": "to-caseworker-decision",
+          "trigger": "continue",
+          "label": "Continue to decision",
+          "style": "secondary"
+        }
+      ],
+      "validations": [
+        {
+          "code": "insurer-check-required",
+          "rule": "riskAssessment = ''",
+          "message": "This application includes a risk assessment. Send it to SafetyNet Underwriting for validation before continuing to a decision.",
+          "actions": [
+            "continue"
+          ]
+        }
+      ]
+    },
+    {
+      "stageKey": "caseworker-decision",
+      "displayName": "Record your decision",
+      "queueKey": "caseworker",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Record your decision"
+        },
+        {
+          "type": "body",
+          "content": "Record the licensing decision for this application."
+        },
+        {
+          "type": "summary-list",
+          "children": [
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "applicantName",
+              "label": "Full name",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "email",
+              "pattern": null,
+              "fieldKey": "applicantEmail",
+              "label": "Email address",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "minLength": null,
+              "maxLength": null,
+              "pattern": null,
+              "prefix": null,
+              "fieldKey": "eventName",
+              "label": "Name of the event",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "date",
+              "fieldKey": "eventDate",
+              "label": "Date of the event",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "number",
+              "min": null,
+              "max": null,
+              "prefix": null,
+              "fieldKey": "jugglerCount",
+              "label": "Number of jugglers taking part",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "boolean",
+              "fieldKey": "hasDangerousProps",
+              "label": "Fire, knives or other dangerous props",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "file-upload",
+              "acceptedFileTypes": null,
+              "maxSizeBytes": null,
+              "fieldKey": "riskAssessment",
+              "label": "Risk assessment / insurance certificate",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "riskMitigationNotes",
+              "label": "How are you mitigating the risk?",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "insurerDecision",
+              "label": "Insurer decision",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            },
+            {
+              "type": "text",
+              "fieldKey": "insurerDecisionNotes",
+              "label": "Insurer notes",
+              "hint": null,
+              "required": false,
+              "conditionalOn": null,
+              "visibleWhen": null,
+              "default": null,
+              "defaultFrom": null,
+              "changeStateKey": null
+            }
+          ],
+          "changeStateKey": null,
+          "title": "Application details"
+        }
+      ],
+      "routes": [
+        {
+          "id": "caseworker-decision--approve--post-review",
           "target": "post-review",
           "trigger": "approve",
           "label": "Approve",
           "style": "primary"
         },
         {
-          "id": "under-review--reject--post-review",
+          "id": "caseworker-decision--reject--post-review",
           "target": "post-review",
           "trigger": "reject",
           "label": "Reject",
           "style": "destructive"
+        }
+      ]
+    },
+    {
+      "stageKey": "insurer-validation",
+      "displayName": "Insurer validation",
+      "queueKey": "automation",
+      "components": [
+        {
+          "type": "panel",
+          "heading": "Awaiting SafetyNet Underwriting's decision"
+        }
+      ],
+      "actions": [
+        {
+          "type": "support-system-call",
+          "timing": "onEnter",
+          "params": {
+            "supportSystemKey": "safetynet-underwriting",
+            "capabilityKey": "validate-risk-assessment",
+            "inputs": {
+              "file": "riskAssessment",
+              "applicantName": "applicantName",
+              "eventName": "eventName",
+              "notes": "riskMitigationNotes"
+            }
+          }
+        }
+      ],
+      "routes": [
+        {
+          "id": "insurer-validation--approved--insurer-check-complete",
+          "target": "insurer-check-complete",
+          "trigger": "approved"
+        },
+        {
+          "id": "insurer-validation--rejected--insurer-check-complete",
+          "target": "insurer-check-complete",
+          "trigger": "rejected"
         }
       ]
     },
@@ -539,6 +788,11 @@
       "key": "caseworker",
       "displayName": "Caseworker",
       "actor": "caseworker"
+    },
+    {
+      "key": "automation",
+      "displayName": "SafetyNet Underwriting",
+      "actor": "system"
     }
   ],
   "gateways": [
@@ -619,7 +873,66 @@
       "waitingContent": "A caseworker is reviewing your application. We'll update this page once a decision is made.",
       "waitingExpectedSeconds": 120,
       "waitingPollIntervalMs": 5000,
-      "requiredIncomingQueues": ["citizen", "caseworker"]
+      "requiredIncomingQueues": [
+        "citizen",
+        "caseworker"
+      ]
+    },
+    {
+      "key": "to-insurer-check",
+      "displayName": "Send to insurer",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        {
+          "id": "to-insurer-check--send-to-insurer--insurer-check-complete",
+          "target": "insurer-check-complete",
+          "trigger": "send-to-insurer"
+        },
+        {
+          "id": "to-insurer-check--send-to-insurer--insurer-validation",
+          "target": "insurer-validation",
+          "trigger": "send-to-insurer"
+        }
+      ]
+    },
+    {
+      "key": "insurer-check-complete",
+      "displayName": "Awaiting insurer decision",
+      "gatewayType": "Join",
+      "queueKey": "caseworker",
+      "routes": [
+        {
+          "id": "insurer-check-complete--approved--caseworker-decision",
+          "target": "caseworker-decision",
+          "trigger": "approved"
+        },
+        {
+          "id": "insurer-check-complete--rejected--caseworker-decision",
+          "target": "caseworker-decision",
+          "trigger": "rejected"
+        }
+      ],
+      "waitingContent": "SafetyNet Underwriting is reviewing the risk assessment. We'll update this page once a decision is made.",
+      "waitingExpectedSeconds": 120,
+      "waitingPollIntervalMs": 5000,
+      "requiredIncomingQueues": [
+        "caseworker",
+        "automation"
+      ]
+    },
+    {
+      "key": "to-caseworker-decision",
+      "displayName": "Continue to decision",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        {
+          "id": "to-caseworker-decision--continue--caseworker-decision",
+          "target": "caseworker-decision",
+          "trigger": "continue"
+        }
+      ]
     }
   ]
 }

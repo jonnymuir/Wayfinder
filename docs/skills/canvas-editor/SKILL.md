@@ -48,6 +48,16 @@ parameters (forms-backed fields validate as you go), reorder or remove:
 
 ![Properties panel showing a configured stage action](screenshots/stage-action-editor.png)
 
+A `support-system-call` action — calling out to a registered support system (NN/g's third
+service-blueprint lane; see [`docs/guides/support-systems.md`](../../guides/support-systems.md))
+— gets its own dedicated editor instead of the generic parameter form above: cascading
+support-system → capability pickers, then one field per the chosen capability's own declared
+inputs (reusing the same reference-aware field-ref dropdowns the properties panel's own component
+editing uses), plus a hint naming the outcomes the carrying stage's own outgoing routes should
+trigger on:
+
+![Properties panel showing a support-system-call action bound to a real capability](screenshots/support-system-call-action-editor.png)
+
 Some property fields are **reference-aware** rather than free text — `conditionalOn`
 offers a dropdown of the current stage's own sibling field keys, `defaultFrom` offers the
 blueprint's declared calculation field names, `changeStateKey` offers real stage keys —
@@ -79,19 +89,26 @@ authors.)
   actions specifically: `[data-wayfinder-open-action-picker]` +
   `[data-wayfinder-action-picker-option="<action-type>"]` +
   `[data-wayfinder-action-picker-add]` to add one, `[data-wayfinder-action-param="<index>-<paramName>"]`
-  for each parameter, `[data-wayfinder-stage-action="<index>"]` per configured action.
+  for each parameter, `[data-wayfinder-stage-action="<index>"]` per configured action. A
+  `support-system-call` action's own dedicated editor instead:
+  `[data-wayfinder-support-system-select="<index>"]` /
+  `[data-wayfinder-support-system-capability-select="<index>"]` for the cascading pickers, each
+  input rendered at id `support-system-call-<index>-<inputKey>` (e.g.
+  `#support-system-call-0-File`), `[data-wayfinder-action-errors="<index>"]` for its own
+  validation messages.
 - The toolbar (Save/Undo/Redo) lives inside this tab's own slotted content — hidden while
   any other tab is active. Every other tab's own doc in this series notes this same thing;
   it's this tab you have to be on to actually click Save.
 
 ## Keeping this current
 
-Every screenshot above is written by one of three existing Storybook-driven specs in
+Every screenshot above is written by one of four existing Storybook-driven specs in
 `Wayfinder.Editor.Client/tests/service-blueprint-editor/`:
 `service-blueprint-graph-visual.spec.ts` (graph overview, gateway shape),
-`service-blueprint-editor-gateways.spec.ts` (gateway inspector), and
-`stage-action-editor.spec.ts` (stage action editor). Regenerate with:
+`service-blueprint-editor-gateways.spec.ts` (gateway inspector),
+`stage-action-editor.spec.ts` (stage action editor), and
+`support-system-action-editor.spec.ts` (support-system-call action editor). Regenerate with:
 
 ```
-cd Wayfinder.Editor.Client && CAPTURE_DOC_SCREENSHOTS=1 npx playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts
+cd Wayfinder.Editor.Client && CAPTURE_DOC_SCREENSHOTS=1 npx playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts support-system-action-editor.spec.ts
 ```

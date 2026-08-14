@@ -225,15 +225,27 @@ public class JoinGatewayRoutingTests
         Assert.DoesNotContain(routingDiagnostics, d => d.Severity == ServiceBlueprintDiagnosticSeverity.Error);
         Assert.DoesNotContain(reachabilityDiagnostics, d => d.Severity == ServiceBlueprintDiagnosticSeverity.Error);
 
-        // The two former "Application under review" joins are now one gateway with both outcomes.
+        // The two former "Application under review" joins are one gateway with both outcomes —
+        // plus, since the support-systems feature landed, a second, genuinely different join
+        // ("insurer-check-complete") merging the caseworker back with the automation queue's own
+        // SafetyNet Underwriting call. Two Join gateways for two distinct reasons, not a
+        // regression of the original merge this test guards.
         var joinGateways = definition.Gateways!
             .Where(g => string.Equals(g.GatewayType, "Join", StringComparison.Ordinal))
             .ToList();
-        var postReview = Assert.Single(joinGateways);
-        Assert.Equal("post-review", postReview.Key);
+        Assert.Equal(2, joinGateways.Count);
+
+        var postReview = Assert.Single(joinGateways, g => g.Key == "post-review");
         Assert.Equal(2, postReview.Routes?.Count);
         Assert.Contains(postReview.Routes!, r => r.Trigger == "approve" && r.Target == "approved");
         Assert.Contains(postReview.Routes!, r => r.Trigger == "reject" && r.Target == "rejected");
+
+        var insurerCheckComplete = Assert.Single(joinGateways, g => g.Key == "insurer-check-complete");
+        Assert.Equal(["caseworker", "automation"], insurerCheckComplete.RequiredIncomingQueues);
+        // Releases into the caseworker's own decision stage — not back to the review stage they
+        // came from — so the insurer's verdict is in front of them when they actually decide.
+        Assert.Contains(insurerCheckComplete.Routes!, r => r.Trigger == "approved" && r.Target == "caseworker-decision");
+        Assert.Contains(insurerCheckComplete.Routes!, r => r.Trigger == "rejected" && r.Target == "caseworker-decision");
     }
 
     [Fact]

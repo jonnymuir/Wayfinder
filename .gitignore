@@ -533,3 +533,8 @@ src/UmbracoPrism.MockBusinessApp/appsettings.Local.json
 
 # uSync export files — environment-specific, not source artefacts.
 uSync/
+
+# Demo recording footage (regenerate with Wayfinder.ReferenceApp.Tests' `npm run demo:record`).
+# Committed docs reference these by name; the binaries themselves stay out of git, matching
+# Umbraco.Prism's own convention for its demo captures — see docs/demos/README.md.
+docs/demos/*.webm

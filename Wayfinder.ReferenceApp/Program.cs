@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.FileProviders;
@@ -11,6 +12,7 @@ using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.ReferenceApp.Services;
+using Wayfinder.ReferenceApp.Services.SupportSystems;
 using Wayfinder.Rendering.GovUk;
 using Wayfinder.Services.Sanitization;
 
@@ -24,6 +26,11 @@ const string InsuranceModellerDefinitionKey = "juggling-insurance-modeller";
 // proving a genuinely new, host-defined component type registered from outside Wayfinder's own
 // assembly. See Services/CustomComponents.cs and docs/guides/extending-the-component-catalog.md.
 CustomComponents.Register();
+
+// Same "freezes on first read" reasoning as ComponentTypeRegistry above, for
+// SupportSystemRegistry — see Services/SupportSystems/SafetyNetUnderwritingClient.cs and
+// docs/guides/support-systems.md.
+SafetyNetUnderwriting.Register();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -57,6 +64,16 @@ builder.Services.AddSingleton<IServiceBlueprintStore>(
 builder.Services.AddSingleton<IQueueCapabilitiesProvider>(ReferenceActors.CapabilitiesProvider());
 builder.Services.AddSingleton<IServiceRequestFileStorage, InMemoryServiceRequestFileStorage>();
 
+// SafetyNet Underwriting is a genuinely separate ASP.NET Core project (see
+// SafetyNetUnderwriting/Program.cs), orchestrated alongside this one by Wayfinder.AppHost — the
+// base address here is its Aspire resource name, resolved by the AddServiceDiscovery() handler
+// AddServiceDefaults() already wired above. "http://referenceapp" (this app's own resource name)
+// is what SafetyNetUnderwritingClient tells SafetyNet Underwriting to call back on.
+builder.Services.AddHttpClient(SafetyNetUnderwriting.HttpClientName, client =>
+{
+    client.BaseAddress = new Uri("http://safetynet-underwriting");
+});
+
 // Wayfinder.Rendering.GovUk's built-in catalog covers every built-in component/field type out
 // of the box. This reference app registers exactly one override — CustomComponents.RegisterRendering
 // pairs the "rating" type registered above with real govuk-frontend-styled HTML, its own
@@ -71,7 +88,14 @@ builder.Services.AddSingleton(_ =>
 builder.Services.AddSingleton(sp => new ProcessManagerEngine(
     sp.GetRequiredService<ILogger<ProcessManagerEngine>>(),
     sp.GetRequiredService<IServiceBlueprintStore>(),
-    sp.GetRequiredService<IServiceContentSanitizer>()));
+    sp.GetRequiredService<IServiceContentSanitizer>(),
+    supportSystemClients:
+    [
+        new SafetyNetUnderwritingClient(
+            sp.GetRequiredService<IHttpClientFactory>(),
+            sp.GetRequiredService<IServiceRequestFileStorage>(),
+            callbackBaseUrl: "http://referenceapp")
+    ]));
 builder.Services.AddSingleton<IProcessManager>(sp => sp.GetRequiredService<ProcessManagerEngine>());
 
 // The editor / REST / MCP authoring surface and the `/apply` + `/caseworker` request-processing
@@ -138,6 +162,27 @@ app.MapGet("/service-blueprint-editor", (HttpRequest request) =>
 // where it actually matters for a real deployment.
 app.MapServiceBlueprintAuthoringApi();
 app.MapServiceBlueprintAuthoringMcp();
+
+// The webhook half of support-system outcome delivery — a host's own job, not something
+// Wayfinder.Engine.Api ships (that surface is scoped to blueprint authoring only, not runtime
+// request handling — see docs/guides/support-systems.md § Delivering the outcome). invocationId
+// is itself the unguessable correlation/auth token; ResolveSupportSystemOutcome is the same
+// method the engine's own poll-check path calls, so "what did the external system decide" is
+// resolved identically regardless of which mechanism delivered it.
+app.MapPost("/wayfinder/support-systems/callbacks/{invocationId}", async (
+    string invocationId, HttpContext ctx, ProcessManagerEngine engine, CancellationToken ct) =>
+{
+    var payload = await ctx.Request.ReadFromJsonAsync<JsonObject>(ct);
+    var outcomeKey = payload?["outcomeKey"]?.GetValue<string>();
+    if (string.IsNullOrWhiteSpace(outcomeKey))
+    {
+        return Results.BadRequest("outcomeKey is required.");
+    }
+
+    var resultPayload = payload?["resultPayload"] as JsonObject;
+    var result = engine.ResolveSupportSystemOutcome(invocationId, outcomeKey, resultPayload);
+    return result.ResponseState == "error" ? Results.BadRequest(result) : Results.Ok(result);
+});
 
 // Wayfinder.Editor's packaged demo page (service-blueprint-editor.html, compiled from
 // Wayfinder.Editor.Client) talks to a `/mockapp/service-blueprints/*` contract — the shape
@@ -342,12 +387,21 @@ caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
     var esc = GovUk.Esc;
     var rows = items.Count == 0
         ? """<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="4">No applications waiting for review</td></tr>"""
+        // A waiting item (QueueWorkItem.IsWaiting — this caseworker's own cursor parked at a join
+        // gateway, waiting on another queue) has nothing to act on yet, but must stay visible and
+        // reachable: before it did, an application sent to SafetyNet Underwriting disappeared from
+        // this queue entirely. Tagged with a real GOV.UK "Waiting" status tag and a "View" link
+        // rather than "Review", so the difference between "you can decide this now" and "something
+        // else is happening to this" is obvious at a glance.
         : string.Join("\n", items.Select(item => $"""
             <tr class="govuk-table__row">
               <td class="govuk-table__cell">{esc(item.BlueprintDisplayName)}</td>
-              <td class="govuk-table__cell">{esc(item.StateDisplayName)}</td>
+              <td class="govuk-table__cell">
+                {esc(item.StateDisplayName)}
+                {(item.IsWaiting ? """<strong class="govuk-tag govuk-tag--yellow">Waiting</strong>""" : "")}
+              </td>
               <td class="govuk-table__cell">{esc(item.InstanceId[..Math.Min(8, item.InstanceId.Length)])}…</td>
-              <td class="govuk-table__cell"><a class="govuk-link" href="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">Review</a></td>
+              <td class="govuk-table__cell"><a class="govuk-link" href="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">{(item.IsWaiting ? "View" : "Review")}</a></td>
             </tr>
             """));
 
@@ -372,12 +426,11 @@ caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}", (string blueprintKe
 {
     var envelope = engine.GetCurrent(
         blueprintKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
-    var downloadLinks = BuildFileDownloadLinks(
-        engine, instanceId, envelope.Render, $"/caseworker/queue/{blueprintKey}/{instanceId}/files");
+    envelope = WithFileDownloadUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/files");
     return Results.Content(
         PageShell.Render(
             "Review application",
-            RenderJourneyBody(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer) + downloadLinks,
+            RenderJourneyBody(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer),
             ctx.User),
         "text/html");
 });
@@ -428,7 +481,18 @@ caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (str
             PageShell.Render("Review application", RenderJourneyBody(result, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer), ctx.User), "text/html");
     }
 
-    return Results.Redirect("/caseworker/queue");
+    // PRG, but back to whichever place actually has the caseworker's next move. Advancing from
+    // "review" to "record your decision" leaves real work on this same instance, and bouncing to
+    // the worklist so they can immediately click back into the item they never left is pointless
+    // ceremony. Advancing into a wait (sent to the insurer) or a terminal decision genuinely does
+    // hand the instance back to the queue, so that's where those go — and the "Waiting" tag is
+    // what makes the first of those findable again.
+    var next = engine.GetCurrent(blueprintKey, ReferenceActors.TenantId, userId, profile, instanceId);
+    var hasMoreToDoHere = next.Render?.AvailableActions.Count > 0;
+
+    return Results.Redirect(hasMoreToDoHere
+        ? $"/caseworker/queue/{blueprintKey}/{instanceId}"
+        : "/caseworker/queue");
 });
 
 // ── Test isolation ────────────────────────────────────────────────────────────────────────
@@ -472,52 +536,41 @@ static string RenderJourneyBody(ServiceRequestResponseEnvelope envelope, string 
 }
 
 /// <summary>
-/// A caseworker reviewing an application needs to actually open what was uploaded, not just see
-/// its filename — this is the demo's one exercise of IServiceRequestFileStorage.OpenReadAsync,
-/// the read half of the interface the rest of the app only ever writes to. Generic over every
-/// file-upload field the current stage renders, so it needs no per-blueprint wiring: any new
-/// file-upload field anywhere just starts working here too. Reads the *raw* persisted
-/// FieldValues (not the rendered display value, which is deliberately just a filename — see
-/// ProcessManagerEngine.GetDisplayValue) because only the raw ServiceRequestFileReference still
-/// carries the storage key OpenReadAsync needs.
+/// A caseworker reviewing an application needs to actually open what was uploaded, not just read
+/// its filename. The engine deliberately can't do this itself — it only ever holds an opaque
+/// <see cref="ServiceRequestFileReference"/> and knows nothing about this host's URL space (see
+/// <c>IServiceRequestFileStorage</c>: the host owns storage *and* routing) — so the host fills in
+/// <see cref="FieldRenderPayload.FileUrl"/> on the way to the renderer, which turns the summary
+/// row's filename into a real link. That's why viewing an uploaded file needs no new component
+/// type: it's a host rendering concern hung off the existing <c>file-upload</c> field.
+///
+/// Generic over every file-upload field on the stage, so it needs no per-blueprint wiring — any
+/// new file-upload field anywhere starts working here too. Only a field with a real value gets a
+/// URL; an empty one keeps rendering "Not provided" rather than linking to a 404.
 /// </summary>
-static string BuildFileDownloadLinks(IProcessManager engine, string instanceId, StepContent? render, string downloadUrlPrefix)
+static ServiceRequestResponseEnvelope WithFileDownloadUrls(
+    ServiceRequestResponseEnvelope envelope,
+    string downloadUrlPrefix)
 {
-    if (render is null)
+    if (envelope.Render is null)
     {
-        return "";
+        return envelope;
     }
 
-    var fileFields = render.Components
-        .SelectMany(component => component.Fields)
-        .Where(field => field.FieldType == "file-upload")
-        .ToList();
-    if (fileFields.Count == 0)
-    {
-        return "";
-    }
+    var components = envelope.Render.Components
+        .Select(component => component.Fields.Any(field => field.FieldType == "file-upload")
+            ? component with
+            {
+                Fields = component.Fields
+                    .Select(field => field.FieldType == "file-upload" && !string.IsNullOrEmpty(field.Value?.ToString())
+                        ? field with { FileUrl = $"{downloadUrlPrefix}/{Uri.EscapeDataString(field.FieldKey)}" }
+                        : field)
+                    .ToArray()
+            }
+            : component)
+        .ToArray();
 
-    var rawValues = engine.GetAllInstances().FirstOrDefault(request => request.InstanceId == instanceId)?.FieldValues;
-    if (rawValues is null)
-    {
-        return "";
-    }
-
-    var esc = GovUk.Esc;
-    var links = fileFields
-        .Select(field => (Field: field, Reference: ServiceRequestFileReference.FromFieldValue(rawValues.GetValueOrDefault(field.FieldKey))))
-        .Where(entry => entry.Reference is not null)
-        .Select(entry => $"""
-            <li><a class="govuk-link" href="{downloadUrlPrefix}/{Uri.EscapeDataString(entry.Field.FieldKey)}">{esc(entry.Field.Label)} ({esc(entry.Reference!.OriginalFileName)})</a></li>
-            """)
-        .ToList();
-
-    return links.Count == 0
-        ? ""
-        : $"""
-            <h2 class="govuk-heading-m">Uploaded files</h2>
-            <ul class="govuk-list">{string.Join("\n", links)}</ul>
-            """;
+    return envelope with { Render = envelope.Render with { Components = components } };
 }
 
 static string RenderLoginBody(string? returnUrl, string? error)
@@ -583,7 +636,21 @@ static Dictionary<string, object?> CoerceFieldValues(IFormCollection form, StepC
         return fieldValues;
     }
 
+    // Only components that actually render editable controls. A summary-list is always a
+    // read-only display of values captured earlier (GovUkComponents.RenderSummaryList is
+    // deliberately not routed through the overridable field renderer for exactly this reason), so
+    // its rows are never posted back — and must never be *coerced* as though they had been.
+    //
+    // This mattered, silently and destructively: the boolean branch below writes
+    // `form.ContainsKey(...)` unconditionally, because an unchecked checkbox genuinely posts
+    // nothing and "absent" is the only way to detect false. Applied to a read-only summary row
+    // that was never on the form, that turns every displayed-but-not-editable boolean into false
+    // the moment the stage is submitted. On juggling-licence, submitting "check your answers"
+    // (whose summary shows hasDangerousProps) wiped the applicant's own "yes" — so the caseworker
+    // reviewing a fire act read "Fire, knives or other dangerous props: No". Found by watching a
+    // recorded end-to-end take contradict its own narration.
     var fieldsByKey = render.Components
+        .Where(component => component.Type != "summary-list")
         .SelectMany(component => component.Fields)
         .ToDictionary(field => field.FieldKey, field => field.FieldType, StringComparer.Ordinal);
 
