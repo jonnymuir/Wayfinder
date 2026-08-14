@@ -691,6 +691,9 @@ export const SupportSystemCallActionConfiguration: Story = {
 
     // Both required and optional inputs render, already bound to the fixture's real field keys.
     await expect(actionRoot.querySelectorAll('.support-system-call-editor .property-object .field-block').length).toBeGreaterThanOrEqual(2);
-    await expect(actionEditor.textContent).toContain('approved, rejected');
+    // .textContent, not actionEditor.textContent: this component (like the rest of the editor)
+    // renders entirely into its shadow root with no createRenderRoot override, so the host
+    // element's own light-DOM textContent is always empty regardless of what rendered inside it.
+    await expect(actionRoot.textContent).toContain('approved, rejected');
   },
 };
