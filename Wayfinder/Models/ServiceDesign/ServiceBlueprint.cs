@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using SupportSystems = Wayfinder.Models.ServiceDesign.SupportSystems;
+using BulkData = Wayfinder.Models.ServiceDesign.BulkData;
 
 namespace Wayfinder.Models.ServiceDesign;
 
@@ -378,6 +379,7 @@ public record ServiceBlueprint
             .Where(key => !string.IsNullOrWhiteSpace(key))
             .ToHashSet(StringComparer.Ordinal);
         inputFieldKeys.UnionWith(GetSupportSystemOutputFieldKeys());
+        inputFieldKeys.UnionWith(GetBulkDatasetIngestOutputFieldKeys());
         var stageKeys = Stages.Select(s => s.StageKey).ToHashSet(StringComparer.Ordinal);
 
         var diagnostics = new List<ServiceBlueprintDiagnostic>();
@@ -704,6 +706,231 @@ public record ServiceBlueprint
                             $"'{capabilityKey}''s declared outcomes ({string.Join(", ", declaredOutcomeKeys)}) — it " +
                             "can never fire, since resolving this action only ever delivers a declared outcome key."));
                     }
+                }
+            }
+        }
+
+        return diagnostics;
+    }
+
+    /// <summary>
+    /// Every field key a <c>bulk-dataset-ingest</c> action anywhere in this blueprint declares
+    /// via its <c>errorCountField</c>/<c>warningCountField</c>/<c>acceptedCountField</c> params —
+    /// <see cref="ValidateDataDisplayBindings"/>'s "known field" set for stat-group/summary-list
+    /// bindings, the same role <see cref="GetSupportSystemOutputFieldKeys"/> plays for a support
+    /// system's own declared <c>Outputs</c>.
+    /// </summary>
+    private HashSet<string> GetBulkDatasetIngestOutputFieldKeys()
+    {
+        var outputFieldKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var stage in Stages)
+        {
+            foreach (var action in stage.Actions ?? [])
+            {
+                if (!string.Equals(action.Type, BulkData.BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                foreach (var countFieldParam in new[] { "errorCountField", "warningCountField", "acceptedCountField" })
+                {
+                    var fieldKey = action.Parameters[countFieldParam]?.GetValue<string>();
+                    if (!string.IsNullOrWhiteSpace(fieldKey))
+                    {
+                        outputFieldKeys.Add(fieldKey);
+                    }
+                }
+            }
+        }
+
+        return outputFieldKeys;
+    }
+
+    /// <summary>
+    /// Validates every <c>bulk-dataset-ingest</c>/<c>bulk-dataset-materialize</c> action: that
+    /// <c>sourceFileField</c> is set and actually resolves to a known field (a captured input, or
+    /// a support-system capability's own declared output — the response file from an external
+    /// system's <c>support-system-call</c> is the expected common case); that a
+    /// <c>bulk-dataset-ingest</c> action declares at least one column, exactly one of which is
+    /// <see cref="BulkData.BulkDatasetColumnRole.RowKey"/> (never zero, never more than one — the
+    /// external system can only be expected to echo back a single correlation column); that no
+    /// two columns share a <c>key</c>; and that every column's <c>role</c>/<c>valueKind</c> is one
+    /// of the closed, known vocabularies. A <c>bulk-dataset-materialize</c> action's own
+    /// <c>sourceFileField</c> must match some <c>bulk-dataset-ingest</c> action's — it materializes
+    /// a dataset that ingest produced, it doesn't declare a new one. See
+    /// docs/guides/bulk-data-review.md.
+    /// </summary>
+    public IReadOnlyList<ServiceBlueprintDiagnostic> ValidateBulkDatasetActions()
+    {
+        var diagnostics = new List<ServiceBlueprintDiagnostic>();
+        var knownFieldKeys = Stages
+            .SelectMany(s => s.Components.GetSubmittableInputs())
+            .Select(c => c.FieldKey)
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .ToHashSet(StringComparer.Ordinal);
+        knownFieldKeys.UnionWith(GetSupportSystemOutputFieldKeys());
+
+        var ingestSourceFileFields = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var stage in Stages)
+        {
+            var actionIndex = 0;
+            foreach (var action in stage.Actions ?? [])
+            {
+                var path = $"stages.{stage.StageKey}.actions[{actionIndex}]";
+                actionIndex++;
+
+                var isIngest = string.Equals(action.Type, BulkData.BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal);
+                var isMaterialize = string.Equals(action.Type, BulkData.BulkDataActionTypes.BulkDatasetMaterialize, StringComparison.Ordinal);
+                if (!isIngest && !isMaterialize)
+                {
+                    continue;
+                }
+
+                var sourceFileField = action.Parameters["sourceFileField"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(sourceFileField))
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_MISSING_SOURCE_FIELD",
+                        $"{path}.params.sourceFileField",
+                        $"A {action.Type} action must set params.sourceFileField."));
+                    continue;
+                }
+
+                if (!knownFieldKeys.Contains(sourceFileField))
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_INVALID_SOURCE_FIELD",
+                        $"{path}.params.sourceFileField",
+                        $"sourceFileField '{sourceFileField}' is neither a captured input field nor a " +
+                        "support system capability's declared output anywhere in this blueprint."));
+                }
+
+                if (isMaterialize)
+                {
+                    var targetFileField = action.Parameters["targetFileField"]?.GetValue<string>();
+                    if (string.IsNullOrWhiteSpace(targetFileField))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "BULK_DATASET_ACTION_MISSING_TARGET_FIELD",
+                            $"{path}.params.targetFileField",
+                            "A bulk-dataset-materialize action must set params.targetFileField."));
+                    }
+
+                    continue;
+                }
+
+                ingestSourceFileFields.Add(sourceFileField);
+
+                var columns = action.Parameters["columns"]?.AsArray();
+                if (columns is null || columns.Count == 0)
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_MISSING_COLUMNS",
+                        $"{path}.params.columns",
+                        "A bulk-dataset-ingest action must declare at least one column."));
+                    continue;
+                }
+
+                var seenColumnKeys = new HashSet<string>(StringComparer.Ordinal);
+                var rowKeyColumnCount = 0;
+                var columnIndex = 0;
+                foreach (var columnNode in columns)
+                {
+                    var columnPath = $"{path}.params.columns[{columnIndex}]";
+                    columnIndex++;
+
+                    var column = columnNode?.AsObject();
+                    var columnKey = column?["key"]?.GetValue<string>();
+                    var columnTitle = column?["title"]?.GetValue<string>();
+                    if (string.IsNullOrWhiteSpace(columnKey) || string.IsNullOrWhiteSpace(columnTitle))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "BULK_DATASET_ACTION_INVALID_COLUMN",
+                            columnPath,
+                            "Every column must set both key and title."));
+                        continue;
+                    }
+
+                    if (!seenColumnKeys.Add(columnKey))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "BULK_DATASET_ACTION_DUPLICATE_COLUMN_KEY",
+                            $"{columnPath}.key",
+                            $"Column key '{columnKey}' is declared more than once."));
+                    }
+
+                    var roleValue = column?["role"]?.GetValue<string>();
+                    if (string.IsNullOrWhiteSpace(roleValue) ||
+                        !Enum.TryParse<BulkData.BulkDatasetColumnRole>(roleValue, out var role))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "BULK_DATASET_ACTION_UNKNOWN_ROLE",
+                            $"{columnPath}.role",
+                            $"Column '{columnKey}' has role '{roleValue}', which is not a recognised " +
+                            $"BulkDatasetColumnRole ({string.Join(", ", Enum.GetNames<BulkData.BulkDatasetColumnRole>())})."));
+                        continue;
+                    }
+
+                    if (role == BulkData.BulkDatasetColumnRole.RowKey)
+                    {
+                        rowKeyColumnCount++;
+                    }
+
+                    var valueKindValue = column?["valueKind"]?.GetValue<string>();
+                    if (string.IsNullOrWhiteSpace(valueKindValue) ||
+                        !Enum.TryParse<ComponentPropertyValueKind>(valueKindValue, out _))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "BULK_DATASET_ACTION_UNKNOWN_VALUE_KIND",
+                            $"{columnPath}.valueKind",
+                            $"Column '{columnKey}' has valueKind '{valueKindValue}', which is not a recognised " +
+                            "ComponentPropertyValueKind."));
+                    }
+                }
+
+                if (rowKeyColumnCount == 0)
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_MISSING_ROW_KEY",
+                        $"{path}.params.columns",
+                        "Exactly one column must declare role RowKey — the column the external system is " +
+                        "expected to echo back unchanged, used to correlate a row across resubmission rounds. " +
+                        "None of this action's columns declare it."));
+                }
+                else if (rowKeyColumnCount > 1)
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_DUPLICATE_ROW_KEY_ROLE",
+                        $"{path}.params.columns",
+                        $"{rowKeyColumnCount} columns declare role RowKey — exactly one column must, since " +
+                        "it's the single correlation key used to match a row across resubmission rounds."));
+                }
+            }
+        }
+
+        foreach (var stage in Stages)
+        {
+            var actionIndex = 0;
+            foreach (var action in stage.Actions ?? [])
+            {
+                var path = $"stages.{stage.StageKey}.actions[{actionIndex}]";
+                actionIndex++;
+
+                if (!string.Equals(action.Type, BulkData.BulkDataActionTypes.BulkDatasetMaterialize, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var sourceFileField = action.Parameters["sourceFileField"]?.GetValue<string>();
+                if (!string.IsNullOrWhiteSpace(sourceFileField) && !ingestSourceFileFields.Contains(sourceFileField))
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_UNKNOWN_DATASET",
+                        $"{path}.params.sourceFileField",
+                        $"sourceFileField '{sourceFileField}' doesn't match any bulk-dataset-ingest action's own " +
+                        "sourceFileField in this blueprint — there's no dataset for this action to materialize."));
                 }
             }
         }

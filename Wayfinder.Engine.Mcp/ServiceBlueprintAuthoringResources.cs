@@ -87,6 +87,20 @@ public static class ServiceBlueprintAuthoringResources
         "not whoever is authoring a blueprint against one — that agent wants authoring-guide instead.")]
     public static string SupportSystems() => ReadEmbeddedDoc("support-systems.md");
 
+    [McpServerResource(
+        Name = "bulk-data-review",
+        UriTemplate = "service-blueprint-docs://bulk-data-review",
+        Title = "Bulk Data Review",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "How Wayfinder handles bulk, row-level data — a paginated 'only show me what needs attention' " +
+        "review experience layered on top of Support Systems, for an external system that only ever " +
+        "speaks whole-file-in/whole-file-out. The bulk-dataset-ingest/bulk-dataset-materialize action " +
+        "convention, column role vocabulary (RowKey/Data/ResponseMatchedId/ResponseError/ResponseWarning), " +
+        "and how a BulkDataReviewComponent binds to the resulting dataset. For whoever is authoring a " +
+        "blueprint against a host with IBulkDatasetStore registered.")]
+    public static string BulkDataReview() => ReadEmbeddedDoc("bulk-data-review.md");
+
     private static string ReadEmbeddedDoc(string fileName)
     {
         var assembly = Assembly.GetExecutingAssembly();
