@@ -222,13 +222,20 @@ export async function clearBeat(page: Page): Promise<void> {
  */
 export async function showSlate(
   page: Page,
-  opts: { eyebrow?: string; title: string; body: string; holdMs?: number }
+  opts: {
+    eyebrow?: string;
+    title: string;
+    body: string;
+    holdMs?: number;
+    /** Optional source-attribution link, rendered as a scannable QR code plus the plain URL underneath — for a viewer on a phone, or anyone who'd rather read the original source than take the film's word for it. */
+    link?: { url: string; qrDataUri: string };
+  }
 ): Promise<void> {
-  const slateHold = opts.holdMs ?? computeHoldMs(`${opts.title} ${opts.body}`) + 1500;
-  recordTimelineEntry('slate', `${opts.title}. ${opts.body}`, slateHold);
+  const slateHold = opts.holdMs ?? computeHoldMs(`${opts.title} ${opts.body}`) + (opts.link ? 2500 : 1500);
+  recordTimelineEntry('slate', `${opts.title}. ${opts.body}${opts.link ? ` Source: ${opts.link.url}` : ''}`, slateHold);
   await evaluateResilient(
     page,
-    ({ eyebrow, title, body }) => {
+    ({ eyebrow, title, body, link }) => {
       const id = 'demo-slate';
       document.getElementById(id)?.remove();
       const slate = document.createElement('div');
@@ -282,12 +289,49 @@ export async function showSlate(
       } satisfies Partial<CSSStyleDeclaration>);
       slate.appendChild(bodyEl);
 
+      if (link) {
+        const linkRow = document.createElement('div');
+        Object.assign(linkRow.style, {
+          marginTop: '28px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '10px'
+        } satisfies Partial<CSSStyleDeclaration>);
+
+        // White card behind the QR image — a QR code needs real light/dark contrast to scan;
+        // dropping it straight onto the slate's own dark gradient would make it unreadable.
+        const qrCard = document.createElement('div');
+        Object.assign(qrCard.style, {
+          background: '#ffffff',
+          padding: '10px',
+          borderRadius: '8px',
+          lineHeight: '0'
+        } satisfies Partial<CSSStyleDeclaration>);
+        const qrImg = document.createElement('img');
+        qrImg.src = link.qrDataUri;
+        qrImg.alt = `QR code linking to ${link.url}`;
+        Object.assign(qrImg.style, { width: '132px', height: '132px', display: 'block' } satisfies Partial<CSSStyleDeclaration>);
+        qrCard.appendChild(qrImg);
+        linkRow.appendChild(qrCard);
+
+        const urlEl = document.createElement('div');
+        urlEl.textContent = link.url;
+        Object.assign(urlEl.style, {
+          font: '500 16px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+          color: '#7dd3fc'
+        } satisfies Partial<CSSStyleDeclaration>);
+        linkRow.appendChild(urlEl);
+
+        slate.appendChild(linkRow);
+      }
+
       document.body.appendChild(slate);
       requestAnimationFrame(() => {
         slate.style.opacity = '1';
       });
     },
-    { eyebrow: opts.eyebrow, title: opts.title, body: opts.body }
+    { eyebrow: opts.eyebrow, title: opts.title, body: opts.body, link: opts.link ?? null }
   );
   await page.waitForTimeout(slateHold);
 }

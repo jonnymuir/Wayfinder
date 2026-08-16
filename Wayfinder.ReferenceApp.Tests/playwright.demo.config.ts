@@ -2,10 +2,10 @@ import { defineConfig } from '@playwright/test';
 
 // Not a test config — a recording tool. Deliberately excluded from CI: no CI script references
 // this file, and the demo spec's own path is excluded from both playwright.config.ts (testIgnore)
-// and playwright.live.config.ts (testMatch). Produces docs/demos/support-systems-end-to-end.webm.
+// and playwright.live.config.ts (testMatch). Produces docs/demos/wayfinder-overview.webm.
 export default defineConfig({
   testDir: './tests/demo',
-  testMatch: /support-systems-demo\.spec\.ts/,
+  testMatch: /wayfinder-overview-demo\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   timeout: 12 * 60_000,

@@ -4,13 +4,18 @@ import path from 'node:path';
 import { LiveAppHost } from '../support/live-app-host';
 import { beat, clearBeat, showSlate, clearSlate, moveNarrationTo, startNarrationTimeline, getNarrationTimeline } from './support/narration';
 import { humanClick, humanCheck, humanType, humanMoveTo } from './support/human-interactions';
+import { qrCodeDataUri } from './support/qr';
 
 /**
- * A narrated, single-take recording of the Support Systems feature — NN/g's third
- * service-blueprint lane — working end to end across three real actors and two genuinely separate
- * running apps. Not a CI test: this is a recording tool (see playwright.demo.config.ts, which no
- * CI script references). The assertions it does make are load-bearing — a beat that narrates
- * something the app didn't actually do would be a lie on camera, so every claim is checked.
+ * A narrated, single-take walkthrough of Wayfinder itself, for a viewer who has never seen it
+ * before: what a service blueprint is (grounded in Nielsen Norman Group's own definition), and
+ * then every major thing declaring one buys you — real GOV.UK screens, cross-field validation
+ * enforced from a declarative rule, the GDS "Change" pattern, conditional routing, and a genuinely
+ * separate third-party system (NN/g's "support processes" lane) all wired from the same blueprint
+ * — followed by the authoring side, showing the same rules being written in the visual editor.
+ * Not a CI test: this is a recording tool (see playwright.demo.config.ts, which no CI script
+ * references). The assertions it does make are load-bearing — a beat that narrates something the
+ * app didn't actually do would be a lie on camera, so every claim is checked.
  *
  * One continuous video: Playwright records one video per *Page*, so every act navigates the same
  * page rather than opening new ones, and afterAll saves it explicitly (a page shared across tests
@@ -22,7 +27,7 @@ import { humanClick, humanCheck, humanType, humanMoveTo } from './support/human-
 const REFERENCE_APP = 'https://localhost:7286';
 const SAFETYNET = 'https://localhost:7301';
 const OUTPUT_DIR = path.resolve(process.cwd(), '../docs/demos');
-const OUTPUT_FILE = path.join(OUTPUT_DIR, 'support-systems-end-to-end.webm');
+const OUTPUT_FILE = path.join(OUTPUT_DIR, 'wayfinder-overview.webm');
 
 const appHost = new LiveAppHost();
 let browserRef: Browser;
@@ -32,7 +37,15 @@ const RISK_ASSESSMENT_PDF = Buffer.from(
   '%PDF-1.4\n% Juggling risk assessment — 10 metre exclusion zone, HSE-aligned, 3 performers.\n'
 );
 
-test.describe('Support systems — narrated end-to-end demo', () => {
+// The same URL already cited (and independently verified) throughout this repo's own docs —
+// see e.g. docs/guides/support-systems.md and Services/ReferenceActors.cs's own doc comment.
+const NNGROUP_URL = 'https://www.nngroup.com/articles/service-blueprints-definition/';
+const NNGROUP_QR_DATA_URI = qrCodeDataUri(NNGROUP_URL);
+
+const ORIGINAL_EVENT_NAME = 'Riverside Fire Juggling Gala';
+const RENAMED_EVENT_NAME = 'Riverside Community Fire Show';
+
+test.describe('Wayfinder overview — narrated end-to-end demo', () => {
   test.describe.configure({ mode: 'serial' });
   test.setTimeout(12 * 60_000);
 
@@ -81,14 +94,17 @@ test.describe('Support systems — narrated end-to-end demo', () => {
 
     await showSlate(page, {
       eyebrow: 'WAYFINDER — SERVICE BLUEPRINTS',
-      title: 'Support systems: the third lane',
+      title: 'What is a service blueprint?',
       body:
-        "Nielsen Norman Group's service blueprint has three actor layers. Wayfinder already modelled two — " +
-        'the citizen out front, the caseworker behind the line of visibility. This is the third: a real ' +
-        'external system, doing real work, that the service has to wait on.'
+        'A design tool from Nielsen Norman Group that maps a service across everyone touching it: the ' +
+        'customer out front, the staff working behind the scenes, and the external systems neither of them ' +
+        'ever sees. Wayfinder is an engine for building real, working services directly from one — declared ' +
+        'once, not hand-coded three separate times.',
+      link: { url: NNGROUP_URL, qrDataUri: NNGROUP_QR_DATA_URI }
     });
     await clearSlate(page);
 
+    await beat(page, 'setup', 'This film follows one blueprint, start to finish — a licence application — to show what each part of that model looks like as real, working software.');
     await beat(page, 'setup', 'Three actors, two separately running apps: an applicant, a caseworker, and SafetyNet Underwriting — a fictional insurer with its own system.');
 
     await beat(page, 'intent', 'First, the applicant applies for a licence to hold a juggling event — and attaches the risk assessment the whole story turns on.');
@@ -98,12 +114,13 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await humanClick(page, page.getByRole('button', { name: 'Sign in' }));
 
     await expect(page.getByLabel('Full name')).toBeVisible();
+    await beat(page, 'note', 'Every screen from here on is the real, official GOV.UK Design System — not a lookalike, the actual govuk-frontend package.');
     await humanType(page, page.getByLabel('Full name'), 'Robin Marsh');
     await humanType(page, page.getByLabel('Email address'), 'robin.marsh@example.test');
     await humanClick(page, page.getByRole('button', { name: 'Continue' }));
 
     await expect(page.getByRole('heading', { name: 'About the event' })).toBeVisible();
-    await humanType(page, page.getByLabel('Name of the event'), 'Riverside Fire Juggling Gala');
+    await humanType(page, page.getByLabel('Name of the event'), ORIGINAL_EVENT_NAME);
     await humanType(page, page.getByLabel('Day'), '15');
     await humanType(page, page.getByLabel('Month'), '9');
     await humanType(page, page.getByLabel('Year'), '2026');
@@ -114,16 +131,52 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await humanClick(page, page.getByRole('button', { name: 'Continue' }));
 
     await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
-    await beat(page, 'intent', 'The applicant attaches their risk assessment. This is a real file — it is about to travel between two separate apps.');
+
+    // A declarative, cross-stage business rule — genuinely enforced, not a UI hint — demonstrated
+    // by actually tripping it first. hasDangerousProps was captured two stages earlier; this rule
+    // reads it from there with no extra wiring, and only applies because of what was ticked then.
+    // Neither a document nor a measurable note has been given yet, so the rule catches it.
+    await beat(page, 'intent', 'Because dangerous props were ticked, this blueprint requires real mitigation evidence here — not just a promise. A vague answer first, to see the rule actually catch it.');
+    await humanType(page, page.getByLabel('How are you mitigating the risk?'), 'We will be careful.');
+    await humanClick(page, page.getByRole('button', { name: 'Continue' }));
+
+    await expect(page.getByText('There is a problem')).toBeVisible();
+    await beat(page, 'recap', 'Rejected — a real GOV.UK error summary, driven by one declarative rule in the blueprint, not bespoke validation code.', { holdMs: 5_000 });
+
+    await humanType(page, page.getByLabel('How are you mitigating the risk?'), '10 metre exclusion zone, HSE-aligned.');
+
+    // The rule accepts either a measurable note or an actual document — the applicant gives both.
+    // This is the real file the whole rest of the story turns on: it's about to travel between
+    // two separate apps.
+    await beat(page, 'intent', 'The applicant also attaches the risk assessment document itself.');
     await page.getByLabel('Risk assessment or public liability insurance certificate').setInputFiles({
       name: 'riverside-risk-assessment.pdf',
       mimeType: 'application/pdf',
       buffer: RISK_ASSESSMENT_PDF
     });
-    await humanType(page, page.getByLabel('How are you mitigating the risk?'), '10 metre exclusion zone, HSE-aligned.');
     await humanClick(page, page.getByRole('button', { name: 'Continue' }));
 
     await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    await beat(page, 'setup', 'Every answer is shown back before anything is submitted — and any of them can still be changed.');
+
+    await humanClick(page, page.getByRole('button', { name: /Change name of the event/i }));
+    await expect(page.getByRole('heading', { name: 'About the event' })).toBeVisible();
+    await expect(page.getByLabel('Name of the event')).toHaveValue(ORIGINAL_EVENT_NAME);
+    await beat(page, 'note', 'Back on the exact stage that captured it, pre-filled with what was already given — not a blank form to start over on.');
+    await humanType(page, page.getByLabel('Name of the event'), RENAMED_EVENT_NAME);
+    await humanClick(page, page.getByRole('button', { name: 'Continue' }));
+
+    // Already valid from the first pass — the file and the fixed-up notes both survive untouched,
+    // so re-visiting this stage on the way back needs no re-entry at all.
+    await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
+    await humanClick(page, page.getByRole('button', { name: 'Continue' }));
+
+    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    const checkAnswersSummary = page.locator('.govuk-summary-list');
+    await expect(checkAnswersSummary.getByText(RENAMED_EVENT_NAME, { exact: true })).toBeVisible();
+    await expect(checkAnswersSummary.getByText('riverside-risk-assessment.pdf')).toBeVisible();
+    await beat(page, 'recap', 'The change stuck, and nothing else was lost — the file and the mitigation notes are both still exactly as they were.');
+
     await humanCheck(page, page.getByLabel('I confirm the details above are correct'));
     await humanClick(page, page.getByRole('button', { name: 'Submit application' }));
 
@@ -262,6 +315,29 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await page.waitForTimeout(300);
     await expect(showWhenContent).toHaveText("riskAssessment <> ''");
     await beat(page, 'recap', "That's the whole rule: send to insurer when a risk assessment exists. One line, written by the person who designed the service.");
+
+    // The Calculations tab is where the OTHER declarative rule from earlier in the film lives —
+    // the one that rejected a vague mitigation answer. Same author, same editor, same language.
+    await beat(page, 'intent', 'And the rule that rejected a vague answer earlier — the same tab, the same kind of rule.');
+    await humanClick(page, page.getByRole('tab', { name: 'Calculations' }));
+    const calcTab = page.locator('wayfinder-calculations-editor');
+    await expect(calcTab).toBeVisible({ timeout: 10_000 });
+
+    const validationsSection = calcTab.locator('.calc-section', { hasText: 'Validations' });
+    await humanClick(page, validationsSection.locator('summary'));
+    const evidenceRule = calcTab.locator('[data-wayfinder-calc-validation="risk-assessment-0"]');
+    await evidenceRule.scrollIntoViewIfNeeded();
+    await expect(evidenceRule).toBeVisible();
+    await page.waitForTimeout(400);
+
+    const whenEditor = evidenceRule.locator('wayfinder-calculation-expression-editor').first();
+    const ruleEditor = evidenceRule.locator('wayfinder-calculation-expression-editor').nth(1);
+    await expect(whenEditor.locator('.cm-content')).toContainText('hasDangerousProps');
+    await expect(ruleEditor.locator('.cm-content')).toBeVisible();
+    await beat(page, 'recap',
+      'Two fields: "when" — only checked if dangerous props were ticked, two stages earlier — and "rule", which must hold for the stage to continue. Everything this film has shown is this same shape.',
+      { holdMs: 5_500 }
+    );
   });
 
   test('Act 5 — a genuinely separate insurer system does the work', async () => {
@@ -273,7 +349,7 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await beat(page, 'setup', "The insurer's own staff queue. Deliberately not GOV.UK styled — this is somebody else's system, and it should look like it.");
 
     await expect(page.getByText('Robin Marsh')).toBeVisible();
-    await expect(page.getByText('Riverside Fire Juggling Gala')).toBeVisible();
+    await expect(page.getByText(RENAMED_EVENT_NAME)).toBeVisible();
 
     // The file genuinely arrived here over HTTP — the insurer can open it, not just see its name.
     const insurerFileLink = page.getByRole('link', { name: 'riverside-risk-assessment.pdf' });
@@ -338,11 +414,16 @@ test.describe('Support systems — narrated end-to-end demo', () => {
 
     await showSlate(page, {
       eyebrow: 'WHAT YOU JUST WATCHED',
-      title: 'One blueprint, three lanes, two real systems',
+      title: 'One blueprint, every lane of the same model',
       body:
-        'The insurer call is declared in the blueprint as an action, not written as bespoke code. The engine ' +
-        'offers both polling and webhooks; each capability declares which it uses. And the caseworker waits ' +
-        'on a support system using the very same gateway Wayfinder already used to make a citizen wait.'
+        "Frontstage: real GOV.UK screens, cross-field validation, an answer changed after the fact with " +
+        'nothing else lost. Backstage: a route offered only when the data calls for it, declared as one ' +
+        'expression with the same intellisense throughout. Support process: a genuinely separate app, a real ' +
+        'file transfer, and a decision carried back by webhook or poll — whichever the capability declares. ' +
+        "None of it is bespoke code. It's one blueprint, describing a service the way Nielsen Norman Group " +
+        'already teaches services should be understood.',
+      link: { url: NNGROUP_URL, qrDataUri: NNGROUP_QR_DATA_URI },
+      holdMs: 9_000
     });
     await clearSlate(page);
   });

@@ -92,8 +92,10 @@ public static class GovUkFields
     private static string FormatSummaryValue(FieldRenderPayload field, string value) => field.FieldType switch
     {
         // A same-request value is still a boxed CLR bool (.ToString() => "True"/"False"); a
-        // reloaded one comes back as a JsonElement whose .ToString() is the lowercase JSON
-        // literal ("true"/"false") — case-insensitive to cover both without caring which.
+        // reloaded one comes back as a JsonElement, whose .ToString() for a JSON true/false
+        // literal is also "True"/"False" (verified: JsonDocument.Parse("true").RootElement
+        // .ToString() is "True", not the lowercase JSON spelling) — case-insensitive anyway,
+        // since nothing here depends on that particular capitalisation staying fixed.
         "boolean" => string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ? "Yes" : "No",
         "date" => DateOnly.TryParse(value, out var date) ? date.ToString("d MMMM yyyy") : value,
         "file-upload" => string.IsNullOrEmpty(value) ? "Not provided" : value,
@@ -258,13 +260,21 @@ public static class GovUkFields
     {
         var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
+        // Same "True"/"true" ambiguity FormatSummaryValue's comment explains: a same-request
+        // value is still a boxed CLR bool (.ToString() => "True"), a reloaded one comes back as a
+        // JsonElement (.ToString() => "True" too, for JsonValueKind.True) — case-insensitive to
+        // not care which. A case-sensitive check here previously rendered a stored `true` as
+        // unchecked on every GET re-render (revisiting via a summary-list "Change" link, or a
+        // plain reload), silently discarding the applicant's own answer the moment they came back
+        // to fix something else on the same stage.
+        var isChecked = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
               {hint}
               {ErrorMessage($"{id}-error", error)}
               <div class="govuk-checkboxes" data-module="govuk-checkboxes">
                 <div class="govuk-checkboxes__item">
-                  <input class="govuk-checkboxes__input" id="{id}" name="{name}" type="checkbox" value="true" {(value == "true" ? "checked" : "")}{describedBy} {required}>
+                  <input class="govuk-checkboxes__input" id="{id}" name="{name}" type="checkbox" value="true" {(isChecked ? "checked" : "")}{describedBy} {required}>
                   <label class="govuk-label govuk-checkboxes__label" for="{id}">{GovUk.Esc(field.Label)}</label>
                 </div>
               </div>

@@ -360,4 +360,36 @@ public class GovUkComponentRendererTests
         Assert.Contains("name=\"field:age-confirmation\"", html);
         Assert.DoesNotContain("id=\"field:age-confirmation\"", html);
     }
+
+    // Regression: a stored `true` reloads as the CLR/JsonElement spelling "True", not the
+    // lowercase JSON literal — see FormatSummaryValue's own comment on this same ambiguity. A
+    // previous case-sensitive `value == "true"` check here rendered the checkbox unchecked on
+    // every GET re-render (revisiting a stage via a summary-list "Change" link, or a plain
+    // reload), silently discarding the applicant's own answer.
+    [Theory]
+    [InlineData("True", true)]
+    [InlineData("true", true)]
+    [InlineData("False", false)]
+    [InlineData("false", false)]
+    [InlineData("", false)]
+    public void RenderField_Boolean_PreFillIsCaseInsensitive(string storedValue, bool expectChecked)
+    {
+        var html = GovUkFields.Render(new FieldRenderPayload
+        {
+            FieldKey = "has-dangerous-props",
+            Label = "This act involves fire, knives, or other dangerous props",
+            FieldType = "boolean",
+            Required = false,
+            Value = storedValue,
+        }, NoErrors);
+
+        if (expectChecked)
+        {
+            Assert.Contains("type=\"checkbox\" value=\"true\" checked", html);
+        }
+        else
+        {
+            Assert.DoesNotContain("checked", html);
+        }
+    }
 }
