@@ -664,6 +664,22 @@ static Dictionary<string, object?> CoerceFieldValues(IFormCollection form, StepC
             continue;
         }
 
+        // file-upload is exclusively ApplyFileUploadsAsync's concern (below), never this
+        // generic text branch's. An <input type="file"> with nothing newly selected still posts
+        // a real multipart section for its field name — empty filename, zero bytes — and that
+        // section's own Content-Disposition also satisfies form.TryGetValue, so without this
+        // guard the generic branch below would set fieldValues[fieldKey] = "" explicitly.
+        // ApplyFileUploadsAsync correctly leaves an unchanged file field's key absent when
+        // nothing new was posted (letting Merge preserve whatever's already stored) — but that
+        // protection is worthless if this loop already stamped an explicit "" over the same key
+        // first. Reproduced live: revisiting an earlier stage via a "Change" link and continuing
+        // back through a file-upload stage without reselecting a file silently wiped the
+        // already-uploaded file's reference the moment the stage was resubmitted.
+        if (fieldType == "file-upload")
+        {
+            continue;
+        }
+
         // The real GOV.UK date-input component posts three separate day/month/year fields
         // rather than one native date value — see Wayfinder.Rendering.GovUk.GovUkFields' date field.
         if (fieldType == "date")

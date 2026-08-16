@@ -145,6 +145,56 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     await expect(summary.getByText('Alex Applicant', { exact: true })).toBeVisible();
   });
 
+  // Regression: an uploaded file's reference used to be silently wiped by revisiting an EARLIER
+  // stage via a "Change" link and continuing back through the file-upload stage without
+  // reselecting anything (browsers can never pre-fill a file input, so there's nothing to
+  // reselect). CoerceFieldValues didn't skip "file-upload" fields, and a browser's empty
+  // <input type="file"> still posts a real (zero-byte, empty-filename) multipart section for its
+  // field name — enough to satisfy form.TryGetValue — so the generic text-field branch stamped an
+  // explicit "" over the field before ApplyFileUploadsAsync ever got a chance to leave it alone.
+  // See Program.cs's CoerceFieldValues.
+  test('an uploaded file survives a "Change" round trip through an earlier, unrelated stage', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.applicant);
+    await page.getByLabel('Full name').fill('Alex Applicant');
+    await page.getByLabel('Email address').fill('alex@example.test');
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await page.getByLabel('Name of the event').fill('Big Top Juggling Gala');
+    await page.getByLabel('Day').fill('1');
+    await page.getByLabel('Month').fill('9');
+    await page.getByLabel('Year').fill('2026');
+    await page.getByLabel('Number of jugglers taking part').fill('12');
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
+    await page.getByLabel('Risk assessment or public liability insurance certificate').setInputFiles({
+      name: 'risk-assessment.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n% test risk assessment\n')
+    });
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    const summary = page.locator('.govuk-summary-list');
+    await expect(summary.getByText('risk-assessment.pdf')).toBeVisible();
+
+    // Change an EARLIER, unrelated stage — never touches the file input at all.
+    await page.getByRole('button', { name: /Change name of the event/i }).click();
+    await expect(page.getByRole('heading', { name: 'About the event' })).toBeVisible();
+    await page.getByLabel('Name of the event').fill('Big Top Juggling Gala 2');
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Back through Risk assessment without reselecting a file — Continue straight through.
+    await expect(page.getByRole('heading', { name: 'Risk assessment' })).toBeVisible();
+    await expect(page.getByText('Currently uploaded: risk-assessment.pdf')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Check your answers and declare' })).toBeVisible();
+    await expect(summary.getByText('Big Top Juggling Gala 2', { exact: true })).toBeVisible();
+    // The file survived a stage resubmission it was never part of.
+    await expect(summary.getByText('risk-assessment.pdf')).toBeVisible();
+  });
+
   // Regression: a boolean shown read-only on a *later* stage's summary-list used to be reset to
   // false when that stage was submitted — CoerceFieldValues treated every rendered field as a form
   // field, and an unchecked checkbox is indistinguishable from an absent one. Submitting "check

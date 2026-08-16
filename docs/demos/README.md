@@ -7,7 +7,7 @@ didn't actually do.
 
 | Recording | What it shows | Produced by |
 |---|---|---|
-| `support-systems-end-to-end.webm` | NN/g's third service-blueprint lane: a citizen applies and uploads a risk assessment, a caseworker sends it to SafetyNet Underwriting, that genuinely separate app approves it, a real webhook resolves the caseworker's wait, and the licence is granted. | `Wayfinder.ReferenceApp.Tests/tests/demo/support-systems-demo.spec.ts` |
+| `wayfinder-overview.webm` | What a service blueprint is (grounded in Nielsen Norman Group's definition, with a QR code to the source article) and every major thing declaring one buys you: real GOV.UK screens, a declarative cross-field validation rule enforced live, the GDS "Change" pattern, conditional routing, and a genuinely separate third-party system — NN/g's "support processes" lane — resolving a caseworker's wait by webhook, plus the visual editor authoring the same rules. | `Wayfinder.ReferenceApp.Tests/tests/demo/wayfinder-overview-demo.spec.ts` |
 
 ## Regenerating
 
@@ -17,8 +17,10 @@ cd Wayfinder.ReferenceApp.Tests && npm run demo:record
 
 The spec owns the whole `Wayfinder.AppHost` lifecycle (see `tests/support/live-app-host.ts`), so
 nothing may already be listening on the reference app's or SafetyNet Underwriting's ports when it
-starts. It runs headed on purpose — headless Chromium throttles rendering on a backgrounded tab
-and can silently freeze a recording on one frame while the automation underneath keeps working.
+starts. It runs headless, so recording doesn't take over the operator's screen — headless Chromium
+is known to throttle rendering on a backgrounded tab and can silently freeze a recording on one
+frame while the automation underneath keeps working, so every take is verified afterwards
+(extract frames at several timestamps, confirm they're pixel-distinct) rather than assumed safe.
 
 `npm run demo:record` prints a **narration timeline** — every caption with its video-relative
 timestamp — which is the source data for adding a voiced-over track later without re-timing
