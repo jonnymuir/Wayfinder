@@ -63,6 +63,8 @@ builder.Services.AddSingleton<IServiceBlueprintStore>(
     _ => new FilesystemServiceBlueprintStore(Path.Combine(builder.Environment.ContentRootPath, "service-blueprints")));
 builder.Services.AddSingleton<IQueueCapabilitiesProvider>(ReferenceActors.CapabilitiesProvider());
 builder.Services.AddSingleton<IServiceRequestFileStorage, InMemoryServiceRequestFileStorage>();
+builder.Services.AddSingleton<IBulkDatasetStore>(
+    sp => new InMemoryBulkDatasetStore(sp.GetRequiredService<IServiceRequestFileStorage>()));
 
 // SafetyNet Underwriting is a genuinely separate ASP.NET Core project (see
 // SafetyNetUnderwriting/Program.cs), orchestrated alongside this one by Wayfinder.AppHost — the
@@ -95,7 +97,8 @@ builder.Services.AddSingleton(sp => new ProcessManagerEngine(
             sp.GetRequiredService<IHttpClientFactory>(),
             sp.GetRequiredService<IServiceRequestFileStorage>(),
             callbackBaseUrl: "http://referenceapp")
-    ]));
+    ],
+    bulkDatasetStore: sp.GetRequiredService<IBulkDatasetStore>()));
 builder.Services.AddSingleton<IProcessManager>(sp => sp.GetRequiredService<ProcessManagerEngine>());
 
 // The editor / REST / MCP authoring surface and the `/apply` + `/caseworker` request-processing
@@ -453,6 +456,99 @@ caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/files/{fieldKey}", as
 
     var contentType = string.IsNullOrEmpty(reference.ContentType) ? "application/octet-stream" : reference.ContentType;
     return Results.File(stream, contentType, reference.OriginalFileName);
+});
+
+// ── Bulk data review (see docs/guides/bulk-data-review.md) — the review component's own
+// interactivity (paging/filtering, correcting a row, downloading the full file) never goes
+// through GetCurrent/Advance; it talks to IBulkDatasetStore directly, the same way the file
+// download route above talks to IServiceRequestFileStorage directly rather than the engine.
+// Deliberately the SAME trust model as that route: the "Caseworker" role gate on the whole
+// group is the access check, no extra per-instance ownership check here — IBulkDatasetStore
+// itself still independently verifies instanceId owns datasetId regardless (defence in depth),
+// and both a dataset that doesn't exist and one that belongs to a different instance map to a
+// plain 404, deliberately not distinguished, so a client can't use the response to tell which
+// case it hit.
+caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/summary", async (
+    string blueprintKey, string instanceId, string datasetId, IBulkDatasetStore bulkDatasetStore) =>
+{
+    try
+    {
+        var summary = await bulkDatasetStore.GetSummaryAsync(instanceId, datasetId);
+        return summary is null ? Results.NotFound() : Results.Ok(summary);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.NotFound();
+    }
+});
+
+caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/rows", async (
+    string blueprintKey, string instanceId, string datasetId, string? filter, int? page, int? pageSize,
+    IBulkDatasetStore bulkDatasetStore) =>
+{
+    var parsedFilter = Enum.TryParse<BulkDatasetRowFilter>(filter, ignoreCase: true, out var f)
+        ? f
+        : BulkDatasetRowFilter.NeedsAttention;
+    var pageIndex = Math.Max(page ?? 0, 0);
+    var size = Math.Clamp(pageSize ?? 20, 1, 100);
+
+    try
+    {
+        var result = await bulkDatasetStore.GetRowsAsync(instanceId, datasetId, parsedFilter, pageIndex, size);
+        return result is null ? Results.NotFound() : Results.Ok(result);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.NotFound();
+    }
+});
+
+caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/rows/{rowKey}/correct", async (
+    string blueprintKey, string instanceId, string datasetId, string rowKey,
+    Dictionary<string, string?> correctedValues, HttpContext ctx, IBulkDatasetStore bulkDatasetStore) =>
+{
+    try
+    {
+        await bulkDatasetStore.ApplyCorrectionAsync(instanceId, datasetId, rowKey, correctedValues, GetUserId(ctx.User));
+        return Results.NoContent();
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.NotFound();
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/download", async (
+    string blueprintKey, string instanceId, string datasetId, IBulkDatasetStore bulkDatasetStore, IServiceRequestFileStorage fileStorage) =>
+{
+    ServiceRequestFileReference materialized;
+    try
+    {
+        // A pure human-facing export, not tied to any real blueprint field — targetFieldKey here
+        // is just IServiceRequestFileStorage's own partition key, never read back by the engine.
+        materialized = await bulkDatasetStore.MaterializeAsync(
+            instanceId, datasetId, targetFieldKey: "bulkDatasetDownload", fileName: "contributions.csv",
+            sanitizeForHumanExport: true);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.NotFound();
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+
+    var stream = await fileStorage.OpenReadAsync(materialized.StorageKey);
+    return stream is null ? Results.NotFound() : Results.File(stream, "text/csv", materialized.OriginalFileName);
 });
 
 caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
