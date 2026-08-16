@@ -13,39 +13,45 @@ test.describe('ServiceBlueprint action editor', () => {
 
     await expect(page.locator('wayfinder-step-inspector')).toBeVisible({ timeout: 10_000 });
 
-    await page.locator('[data-wayfinder-action-param="0-assigneeValue"]').fill('planning-officers');
-    await page.locator('[data-wayfinder-action-param="0-overwriteExisting"]').check();
+    // Scoped to the stage's OWN action editor (subject-label="stage"), not any of
+    // reviewer-assessment's own outgoing routes — each of those carries its own
+    // wayfinder-stage-action-editor (subject-label="transition") since a stage's routes became
+    // fully editable in place, so an unscoped locator is ambiguous on this fixture.
+    const stage = page.locator('wayfinder-stage-action-editor[subject-label="stage"]');
 
-    await page.locator('[data-wayfinder-action-param="1-title"]').fill('Request missing site evidence');
-    await page.locator('[data-wayfinder-action-param="1-dueDate"]').fill('2026-05-28');
-    await page.locator('[data-wayfinder-add-form-field="1"]').click();
-    await page.locator('[data-wayfinder-form-field-key="1-1"]').fill('supporting-date');
-    await page.locator('[data-wayfinder-form-field-label="1-1"]').fill('Evidence due date');
-    await page.locator('[data-wayfinder-form-field-type="1-1"]').selectOption('date');
+    await stage.locator('[data-wayfinder-action-param="0-assigneeValue"]').fill('planning-officers');
+    await stage.locator('[data-wayfinder-action-param="0-overwriteExisting"]').check();
 
-    await page.locator('[data-wayfinder-open-action-picker]').click();
-    await page.locator('[data-wayfinder-action-picker-option="case.enqueue"]').click();
-    await page.locator('[data-wayfinder-action-picker-add]').click();
-    await page.locator('[data-wayfinder-action-param="2-queue"]').fill('planning-intake');
-    await page.locator('[data-wayfinder-action-param="2-priority"]').selectOption('high');
+    await stage.locator('[data-wayfinder-action-param="1-title"]').fill('Request missing site evidence');
+    await stage.locator('[data-wayfinder-action-param="1-dueDate"]').fill('2026-05-28');
+    await stage.locator('[data-wayfinder-add-form-field="1"]').click();
+    await stage.locator('[data-wayfinder-form-field-key="1-1"]').fill('supporting-date');
+    await stage.locator('[data-wayfinder-form-field-label="1-1"]').fill('Evidence due date');
+    await stage.locator('[data-wayfinder-form-field-type="1-1"]').selectOption('date');
 
-    await page.locator('[data-wayfinder-open-action-picker]').click();
-    await page.locator('[data-wayfinder-action-picker-option="case.set-status"]').click();
-    await page.locator('[data-wayfinder-action-picker-add]').click();
-    await expect(page.locator('[data-wayfinder-action-errors="3"]')).toContainText('Status is required');
-    await page.locator('[data-wayfinder-action-param="3-status"]').fill('Awaiting more evidence');
-    await page.locator('[data-wayfinder-action-param="3-reason"]').fill('The reviewer needs more documents before deciding.');
-    await expect(page.locator('[data-wayfinder-action-errors="3"]')).toBeHidden();
+    await stage.locator('[data-wayfinder-open-action-picker]').click();
+    await stage.locator('[data-wayfinder-action-picker-option="case.enqueue"]').click();
+    await stage.locator('[data-wayfinder-action-picker-add]').click();
+    await stage.locator('[data-wayfinder-action-param="2-queue"]').fill('planning-intake');
+    await stage.locator('[data-wayfinder-action-param="2-priority"]').selectOption('high');
 
-    await page.locator('[data-wayfinder-open-action-picker]').click();
-    await page.locator('[data-wayfinder-action-picker-context]').selectOption('stage.onExit');
-    await page.locator('[data-wayfinder-action-picker-option="case.add-note"]').click();
-    await page.locator('[data-wayfinder-action-picker-add]').click();
-    await page.locator('[data-wayfinder-action-param="4-note"]').fill('Evidence request sent to applicant.');
-    await page.locator('[data-wayfinder-action-param="4-visibility"]').selectOption('public');
+    await stage.locator('[data-wayfinder-open-action-picker]').click();
+    await stage.locator('[data-wayfinder-action-picker-option="case.set-status"]').click();
+    await stage.locator('[data-wayfinder-action-picker-add]').click();
+    await expect(stage.locator('[data-wayfinder-action-errors="3"]')).toContainText('Status is required');
+    await stage.locator('[data-wayfinder-action-param="3-status"]').fill('Awaiting more evidence');
+    await stage.locator('[data-wayfinder-action-param="3-reason"]').fill('The reviewer needs more documents before deciding.');
+    await expect(stage.locator('[data-wayfinder-action-errors="3"]')).toBeHidden();
 
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(5);
-    await expect(page.locator('[data-wayfinder-stage-action="0"] .action-summary')).toContainText('Assign to role planning-officers');
+    await stage.locator('[data-wayfinder-open-action-picker]').click();
+    await stage.locator('[data-wayfinder-action-picker-context]').selectOption('stage.onExit');
+    await stage.locator('[data-wayfinder-action-picker-option="case.add-note"]').click();
+    await stage.locator('[data-wayfinder-action-picker-add]').click();
+    await stage.locator('[data-wayfinder-action-param="4-note"]').fill('Evidence request sent to applicant.');
+    await stage.locator('[data-wayfinder-action-param="4-visibility"]').selectOption('public');
+
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(5);
+    await expect(stage.locator('[data-wayfinder-stage-action="0"] .action-summary')).toContainText('Assign to role planning-officers');
     await captureDocScreenshot(page.locator('wayfinder-step-inspector'), `${DOCS_DIR}/stage-action-editor.png`);
   });
 
@@ -77,82 +83,87 @@ test.describe('ServiceBlueprint action editor', () => {
 
     await expect(page.locator('wayfinder-step-inspector')).toBeVisible({ timeout: 10_000 });
 
-    const addActionButton = page.locator('[data-wayfinder-open-action-picker]');
+    // Scoped to the stage's OWN action editor — see the previous test's comment for why an
+    // unscoped locator is ambiguous on this fixture now that a stage's own routes are fully
+    // editable in place, each carrying its own wayfinder-stage-action-editor too.
+    const stage = page.locator('wayfinder-stage-action-editor[subject-label="stage"]');
+
+    const addActionButton = stage.locator('[data-wayfinder-open-action-picker]');
     await addActionButton.focus();
     await page.keyboard.press('Enter');
 
-    const pickerDialog = page.locator('[data-wayfinder-action-picker-dialog]');
+    const pickerDialog = stage.locator('[data-wayfinder-action-picker-dialog]');
     await expect(pickerDialog).toBeVisible();
     await expect(pickerDialog.locator('[data-wayfinder-action-picker-search]')).toBeFocused();
 
     await page.keyboard.type('SMS');
-    await expect(page.locator('[data-wayfinder-action-picker-option="notifications.send-sms"]')).toBeVisible();
-    await expect(page.locator('[data-wayfinder-action-picker-option="notifications.send-email"]')).toHaveCount(0);
+    await expect(stage.locator('[data-wayfinder-action-picker-option="notifications.send-sms"]')).toBeVisible();
+    await expect(stage.locator('[data-wayfinder-action-picker-option="notifications.send-email"]')).toHaveCount(0);
 
-    await page.locator('[data-wayfinder-action-picker-option="notifications.send-sms"]').click();
-    await expect(page.locator('[data-wayfinder-action-picker-option="notifications.send-sms"]')).toHaveClass(/\bselected\b/);
-    await page.locator('[data-wayfinder-action-picker-add]').click();
+    await stage.locator('[data-wayfinder-action-picker-option="notifications.send-sms"]').click();
+    await expect(stage.locator('[data-wayfinder-action-picker-option="notifications.send-sms"]')).toHaveClass(/\bselected\b/);
+    await stage.locator('[data-wayfinder-action-picker-add]').click();
 
     await expect(pickerDialog).toBeHidden();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(3);
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(3);
 
-    await page.locator('[data-wayfinder-action-param="2-templateId"]').fill('review-routed-sms');
-    await page.locator('[data-wayfinder-action-param="2-recipientNumber"]').fill('+441234567890');
-    await expect(page.locator('[data-wayfinder-action-errors="2"]')).toBeHidden();
-    await expect(page.locator('[data-wayfinder-stage-action="2"] .action-summary')).toContainText('+441234567890');
+    await stage.locator('[data-wayfinder-action-param="2-templateId"]').fill('review-routed-sms');
+    await stage.locator('[data-wayfinder-action-param="2-recipientNumber"]').fill('+441234567890');
+    await expect(stage.locator('[data-wayfinder-action-errors="2"]')).toBeHidden();
+    await expect(stage.locator('[data-wayfinder-stage-action="2"] .action-summary')).toContainText('+441234567890');
 
     // For buttons inside action-list items, use the double-focus pattern: explicit focus()
     // then locator.press(). The action list's @focusin→requestAnimationFrame can move focus
     // between steps, but locator.press() refocuses the target before dispatching the key,
     // so the key always lands on the intended element.
-    const addFieldButton = page.locator('[data-wayfinder-add-form-field="1"]');
+    const addFieldButton = stage.locator('[data-wayfinder-add-form-field="1"]');
     await addFieldButton.focus();
     // Drain the rAF scheduled by _setSelectedAction(1) (focus moved from action 2 to action 1).
     // Without this, the rAF fires between press()'s internal focus and keydown, stealing focus.
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     await addFieldButton.press('Enter');
-    await expect(page.locator('[data-wayfinder-form-field="1-1"]')).toBeVisible({ timeout: 10_000 });
+    await expect(stage.locator('[data-wayfinder-form-field="1-1"]')).toBeVisible({ timeout: 10_000 });
 
-    await page.locator('[data-wayfinder-form-field-key="1-1"]').fill('supporting-date');
-    await page.locator('[data-wayfinder-form-field-label="1-1"]').fill('Evidence due date');
-    await page.locator('[data-wayfinder-form-field-type="1-1"]').selectOption('date');
+    await stage.locator('[data-wayfinder-form-field-key="1-1"]').fill('supporting-date');
+    await stage.locator('[data-wayfinder-form-field-label="1-1"]').fill('Evidence due date');
+    await stage.locator('[data-wayfinder-form-field-type="1-1"]').selectOption('date');
 
-    const moveFieldUpButton = page.locator('[data-wayfinder-form-field="1-1"]').getByRole('button', { name: 'Move up' });
+    const moveFieldUpButton = stage.locator('[data-wayfinder-form-field="1-1"]').getByRole('button', { name: 'Move up' });
     await moveFieldUpButton.focus();
     await moveFieldUpButton.press('Enter');
-    await expect(page.locator('[data-wayfinder-form-field-key="1-0"]')).toHaveValue('supporting-date');
+    await expect(stage.locator('[data-wayfinder-form-field-key="1-0"]')).toHaveValue('supporting-date');
 
-    const actionItem2 = page.locator('[data-wayfinder-stage-action="2"]');
+    const actionItem2 = stage.locator('[data-wayfinder-stage-action="2"]');
     await actionItem2.focus();
     await actionItem2.press('Alt+ArrowUp');
-    await expect(page.locator('[data-wayfinder-stage-action="1"] .action-title')).toContainText('Send SMS');
+    await expect(stage.locator('[data-wayfinder-stage-action="1"] .action-title')).toContainText('Send SMS');
     // _moveAction calls _setSelectedAction(1), triggering a Lit render → updated() → rAF for
     // _focusActionEditor(1). That rAF can fire between press()'s internal focus CDP call and its
     // keydown CDP call, stealing focus from the remove button. Drain it here so state is stable.
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
 
-    const removeButton = page.locator('[data-wayfinder-stage-action-remove="1"]');
+    const removeButton = stage.locator('[data-wayfinder-stage-action-remove="1"]');
     await removeButton.focus();
     await removeButton.press('Enter');
 
-    const deleteDialog = page.locator('[data-wayfinder-delete-action-dialog]');
+    const deleteDialog = stage.locator('[data-wayfinder-delete-action-dialog]');
     await expect(deleteDialog).toBeVisible();
     await expect(deleteDialog).toContainText('Delete Send SMS?');
-    await expect(page.locator('[data-wayfinder-delete-action-cancel]')).toBeFocused();
-    await page.locator('[data-wayfinder-delete-action-cancel]').press('Escape');
+    await expect(stage.locator('[data-wayfinder-delete-action-cancel]')).toBeFocused();
+    await stage.locator('[data-wayfinder-delete-action-cancel]').press('Escape');
 
     await expect(deleteDialog).toBeHidden();
     await expect(removeButton).toBeFocused();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(3);
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(3);
     await deleteDialog.waitFor({ state: 'detached' });
 
     await removeButton.focus();
     await removeButton.press('Enter');
     await expect(deleteDialog).toBeVisible();
-    await page.locator('[data-wayfinder-delete-action-confirm]').press('Enter');
+    await stage.locator('[data-wayfinder-delete-action-confirm]').press('Enter');
 
     await expect(deleteDialog).toBeHidden();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(2);
-    await expect(page.locator('wayfinder-stage-action-editor').getByText('Send SMS removed.')).toBeVisible();
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(2);
+    await expect(stage.getByText('Send SMS removed.')).toBeVisible();
   });
 });

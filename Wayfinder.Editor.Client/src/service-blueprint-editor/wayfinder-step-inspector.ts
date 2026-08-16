@@ -333,11 +333,13 @@ export class WayfinderStepInspectorElement extends LitElement {
       return;
     }
 
-    // Slice C: edits address a gateway-owned route by (gatewayKey, routeId).
-    // Project the mutation onto gateways[].routes so it survives serialisation.
-    const gatewayKey = previous.key || nextTransition.key;
+    // Slice C: edits address a route by (ownerKey, routeId) regardless of whether the owner is a
+    // gateway or a stage — updateRoute itself already handles both (mutateRouteOwners matches
+    // routeId across both stages[].routes and gateways[].routes). Project the mutation through it
+    // so it survives serialisation either way.
+    const ownerKey = previous.key || nextTransition.key;
     const routeId = previous.routeId || nextTransition.routeId;
-    if (!gatewayKey || !routeId) {
+    if (!ownerKey || !routeId) {
       return;
     }
     const nextServiceBlueprint = updateRoute(this.serviceBlueprint, { routeId }, route => ({
@@ -350,10 +352,20 @@ export class WayfinderStepInspectorElement extends LitElement {
       editorComment: nextTransition.editorComment,
     }));
 
+    // Preserve whichever kind of panel this edit actually came from — a gateway's own "Outgoing
+    // routes"/"Incoming routes", or (since a stage's own routes became fully editable in place,
+    // not just gateway-owned ones) a stage's own "Outgoing routes". Dropping this to `null` when
+    // edited from a stage panel used to bounce the properties panel back to its empty state after
+    // every keystroke, discarding the very selection the author was actively editing.
     const selectedGatewayKey = this._selectedGateway?.key;
+    const selectedStageKey = this._selectedStage?.stateKey;
     this._emitServiceBlueprintUpdated(
       nextServiceBlueprint,
-      selectedGatewayKey ? { kind: 'gateway', gatewayKey: selectedGatewayKey } : null
+      selectedGatewayKey
+        ? { kind: 'gateway', gatewayKey: selectedGatewayKey }
+        : selectedStageKey
+          ? { kind: 'stage', stageKey: selectedStageKey }
+          : null
     );
   }
 
@@ -640,14 +652,21 @@ export class WayfinderStepInspectorElement extends LitElement {
     if (!this.serviceBlueprint) return;
     const ctx = this._routeTransitionFromEvent(event);
     if (!ctx) return;
-    const gatewayKey = ctx.transition.key;
+    const ownerKey = ctx.transition.key;
     const routeId = ctx.transition.routeId;
-    if (!gatewayKey || !routeId) return;
-    const nextServiceBlueprint = deleteRoute(this.serviceBlueprint, { gatewayKey, routeId });
+    if (!ownerKey || !routeId) return;
+    const nextServiceBlueprint = deleteRoute(this.serviceBlueprint, { gatewayKey: ownerKey, routeId });
+    // Same fix as _replaceSelectedTransition: stay on whichever panel — gateway or stage — this
+    // delete was actually triggered from, rather than always assuming a gateway.
     const selectedGatewayKey = this._selectedGateway?.key;
+    const selectedStageKey = this._selectedStage?.stateKey;
     this._emitServiceBlueprintUpdated(
       nextServiceBlueprint,
-      selectedGatewayKey ? { kind: 'gateway', gatewayKey: selectedGatewayKey } : null
+      selectedGatewayKey
+        ? { kind: 'gateway', gatewayKey: selectedGatewayKey }
+        : selectedStageKey
+          ? { kind: 'stage', stageKey: selectedStageKey }
+          : null
     );
     this._announce(`Route ${ctx.transition.action} deleted.`);
   }
@@ -840,6 +859,19 @@ export class WayfinderStepInspectorElement extends LitElement {
     const ariaId = `route-${transitionIndex}-title`;
     const targetEmpty = !transition.toStage;
     const targetWarningId = `route-${transitionIndex}-target-warning`;
+    // A route this stage owns can target a gateway directly (the ordinary shape for any route
+    // authored via "+ Add route", which always creates or reuses a Split pass-through) — the
+    // "Target stage" <select> below only ever lists real stages, so a gateway target matches none
+    // of its <option>s. Left alone, an unselected native <select> silently falls back to its
+    // first non-disabled option — which is some unrelated stage, not the gateway this route
+    // actually goes to. That's not just a display glitch: an author who "reselects" what looks
+    // like the current value would genuinely retarget the route to that wrong stage. Detect it
+    // and render an honest, non-editable readout instead — retargeting away from a gateway this
+    // route was wired to (by "+ Add route" or by direct JSON authoring) isn't something this
+    // control is meant to do; that's what deleting and re-adding the route is for.
+    const targetIsGateway = Boolean(transition.toGateway);
+    const targetIsUnresolved = !targetEmpty && !targetIsGateway
+      && !targetOptions.some(stage => stage.stateKey === transition.toStage);
 
     return html`
       <article
@@ -880,23 +912,43 @@ export class WayfinderStepInspectorElement extends LitElement {
             </select>
           </label>
           <label class="field-block">
-            <span class="field-label">Target stage</span>
-            <select
-              class="field-control ${targetEmpty ? 'field-control-error' : ''}"
-              data-wayfinder-route-target-select
-              data-wayfinder-route-index="${idx}"
-              aria-invalid=${String(targetEmpty)}
-              aria-describedby=${targetEmpty ? targetWarningId : ''}
-              @change=${this._updateRouteTarget}
-            >
-              <option value="" ?selected=${targetEmpty} disabled>Choose a destination…</option>
-              ${targetOptions.map(stage => html`
-                <option value=${stage.stateKey} ?selected=${stage.stateKey === transition.toStage}>${stage.displayName}</option>
-              `)}
-            </select>
-            ${targetEmpty
-              ? html`<span id="${targetWarningId}" class="field-error" data-wayfinder-route-target-warning>Choose a destination</span>`
-              : nothing}
+            <span class="field-label-row">
+              <span class="field-label">Target stage</span>
+              ${targetIsGateway || targetIsUnresolved
+                ? html`
+                    <wayfinder-inline-help
+                      label="Target stage help"
+                      message="This route goes to a gateway rather than a stage directly — that's normal for a route created with + Add route. A gateway's own onward routing is edited by selecting it, not from here."
+                    ></wayfinder-inline-help>
+                  `
+                : nothing}
+            </span>
+            ${targetIsGateway || targetIsUnresolved
+              ? html`
+                  <p class="field-control field-static-value" data-wayfinder-route-target-gateway>
+                    ${targetIsGateway
+                      ? html`<strong>${this._gatewayLabel(transition.toGateway!)}</strong> (gateway)`
+                      : html`“${transition.toStage}” — not a stage in this service blueprint`}
+                  </p>
+                `
+              : html`
+                  <select
+                    class="field-control ${targetEmpty ? 'field-control-error' : ''}"
+                    data-wayfinder-route-target-select
+                    data-wayfinder-route-index="${idx}"
+                    aria-invalid=${String(targetEmpty)}
+                    aria-describedby=${targetEmpty ? targetWarningId : ''}
+                    @change=${this._updateRouteTarget}
+                  >
+                    <option value="" ?selected=${targetEmpty} disabled>Choose a destination…</option>
+                    ${targetOptions.map(stage => html`
+                      <option value=${stage.stateKey} ?selected=${stage.stateKey === transition.toStage}>${stage.displayName}</option>
+                    `)}
+                  </select>
+                  ${targetEmpty
+                    ? html`<span id="${targetWarningId}" class="field-error" data-wayfinder-route-target-warning>Choose a destination</span>`
+                    : nothing}
+                `}
           </label>
           <label class="field-block">
             <span class="field-label">Arrive through</span>
@@ -972,7 +1024,7 @@ export class WayfinderStepInspectorElement extends LitElement {
           </button>
         </div>
 
-        <section class="inspector-subsection" aria-labelledby="section-route-actions-${idx}">
+        <section class="inspector-subsection" aria-labelledby="${ariaId} section-route-actions-${idx}">
           <div class="section-header-row">
             <h5 id="section-route-actions-${idx}" class="section-heading">Route actions</h5>
             <span class="section-meta">${transition.actions?.length ?? 0} configured</span>
@@ -1557,11 +1609,14 @@ export class WayfinderStepInspectorElement extends LitElement {
           ${outgoing.length === 0
             ? html`<p class="section-empty">No routes yet. Use <strong>+ Add route</strong> above to send this stage to its next destination.</p>`
             : html`
-                <ul class="transition-list">
+                <ul class="gateway-route-list" role="list">
                   ${outgoing.map(transition => html`
-                    <li class="transition-item">
-                      <span class="transition-action">${transition.action}</span>
-                      <span>${this._routeDescriptor(transition)}</span>
+                    <li
+                      class="gateway-route-item"
+                      data-wayfinder-route-target="${transition.toStage}"
+                      data-wayfinder-route-id="${transition.routeId}"
+                    >
+                      ${this._renderRouteEditor(transition, transition.routeIndex)}
                     </li>
                   `)}
                 </ul>
@@ -1871,6 +1926,16 @@ export class WayfinderStepInspectorElement extends LitElement {
       color: #111827;
       font: inherit;
       box-sizing: border-box;
+    }
+
+    .field-static-value {
+      display: flex;
+      align-items: center;
+      margin: 0;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 0.875rem;
+      line-height: 1.4;
     }
 
     .icon-picker {
