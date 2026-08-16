@@ -5,6 +5,7 @@ import type {
   ActionFormFieldConfig,
   AuthoredAction,
   AuthoredParameterDefinition,
+  ComponentPropertyDescriptor,
   SupportSystemCallActionParams,
   SupportSystemDescriptor,
 } from './types.js';
@@ -25,11 +26,74 @@ import {
   type ActionEditorContext,
   type ActionEditorTarget,
 } from './action-editing.js';
-import { renderComponentPropertyFields, type ResolvedPropertyReferences } from './component-property-editor.js';
+import { renderComponentPropertyFields, setAtPath, type ResolvedPropertyReferences } from './component-property-editor.js';
 import type { FieldReference } from './component-property-references.js';
 import './wayfinder-inline-help.js';
 
 const SUPPORT_SYSTEM_CALL_TYPE = 'support-system-call';
+
+// bulk-dataset-ingest/bulk-dataset-materialize (see docs/guides/bulk-data-review.md) — genuinely
+// real, ProcessManagerEngine-executed action types, the same "not a fictional mockup" status as
+// SUPPORT_SYSTEM_CALL_TYPE above. Unlike that one, their params shape is static (not dependent on
+// a live-fetched catalog), so the whole editor — scalar field-refs and the repeatable `columns`
+// list alike — is just one renderComponentPropertyFields call against a hand-authored schema,
+// reusing its existing Array-of-Object recursion (the same mechanism a stat-group's `items` or a
+// chart's `bands` already gets for free) rather than a bespoke list-editing implementation.
+const BULK_DATASET_INGEST_TYPE = 'bulk-dataset-ingest';
+const BULK_DATASET_MATERIALIZE_TYPE = 'bulk-dataset-materialize';
+
+// Mirrors Wayfinder.Models.ServiceDesign.BulkData.BulkDatasetColumnRole and
+// Wayfinder.Models.ServiceDesign.Components.ComponentPropertyValueKind exactly — keep in sync if
+// either C# enum changes; there's no live fetch for these two closed vocabularies the way a
+// support-system-call action's inputs come from a real catalog fetch, since a column's role/kind
+// is fixed at the language level, not something a host registers more of.
+const BULK_DATASET_COLUMN_ROLES = ['RowKey', 'Data', 'ResponseMatchedId', 'ResponseError', 'ResponseWarning', 'Ignored'];
+const BULK_DATASET_COLUMN_VALUE_KINDS = ['String', 'Number', 'Integer', 'Boolean', 'StringArray', 'Object', 'Array'];
+
+const BULK_DATASET_COLUMN_SCHEMA: ComponentPropertyDescriptor = {
+  key: 'column',
+  title: 'Column',
+  valueKind: 'Object',
+  required: false,
+  properties: [
+    { key: 'key', title: 'Column key', description: 'The literal CSV header this column binds to.', valueKind: 'String', required: true },
+    { key: 'title', title: 'Title', description: 'Label shown in the review UI.', valueKind: 'String', required: true },
+    { key: 'valueKind', title: 'Value kind', valueKind: 'String', required: true, allowedValues: BULK_DATASET_COLUMN_VALUE_KINDS },
+    { key: 'format', title: 'Format', description: 'Optional semantic hint, e.g. "currency", "date".', valueKind: 'String', required: false },
+    { key: 'role', title: 'Role', valueKind: 'String', required: true, allowedValues: BULK_DATASET_COLUMN_ROLES },
+    { key: 'visible', title: 'Visible', valueKind: 'Boolean', required: false, editor: 'toggle', defaultValue: true },
+    { key: 'editable', title: 'Editable (Data role only)', valueKind: 'Boolean', required: false, editor: 'toggle' },
+  ],
+};
+
+const BULK_DATASET_INGEST_SCHEMA: ComponentPropertyDescriptor[] = [
+  {
+    key: 'sourceFileField', title: 'Source file field', valueKind: 'String', format: 'field-ref', required: true,
+    description: 'The file to parse — typically a support-system-call action’s own declared file output.',
+  },
+  {
+    key: 'datasetIdField', title: 'Dataset id field', valueKind: 'String', required: true,
+    description: 'A new field name the minted dataset id is written into — not a field-ref: this name doesn’t exist yet, ingest creates it. A bulk-dataset-materialize action or a bulk-data-review component binds to it.',
+  },
+  { key: 'errorCountField', title: 'Error count field', valueKind: 'String', required: false, description: 'Optional new field name the error row count is written into.' },
+  { key: 'warningCountField', title: 'Warning count field', valueKind: 'String', required: false, description: 'Optional new field name the warning row count is written into.' },
+  { key: 'acceptedCountField', title: 'Accepted count field', valueKind: 'String', required: false, description: 'Optional new field name the accepted row count is written into.' },
+  {
+    key: 'columns', title: 'Columns', valueKind: 'Array', required: true, items: BULK_DATASET_COLUMN_SCHEMA,
+    description: 'One entry per CSV column — the only place this dataset’s shape is authored. Exactly one column must have role RowKey.',
+  },
+];
+
+const BULK_DATASET_MATERIALIZE_SCHEMA: ComponentPropertyDescriptor[] = [
+  {
+    key: 'datasetIdField', title: 'Dataset id field', valueKind: 'String', required: true,
+    description: 'Must match a bulk-dataset-ingest action’s own datasetIdField — not a field-ref picker, since it names a field an ingest action elsewhere declares, not one already captured.',
+  },
+  {
+    key: 'targetFileField', title: 'Target file field', valueKind: 'String', format: 'field-ref', required: true,
+    description: 'The materialized file is written here — typically the same field the original upload went to.',
+  },
+];
 
 type ActionsUpdatedDetail = {
   actions: AuthoredAction[];
@@ -890,6 +954,82 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     `;
   }
 
+  /**
+   * The dedicated editor for bulk-dataset-ingest/bulk-dataset-materialize actions (see
+   * docs/guides/bulk-data-review.md) — unlike support-system-call's own dedicated editor above,
+   * the whole thing (scalar field-refs and the repeatable `columns` list alike) is one
+   * `renderComponentPropertyFields` call against a hand-authored static schema, since neither
+   * action's shape depends on a value chosen while authoring it. Validation messages here are
+   * hand-computed the same way support-system-call's are, not derived from `paramsSchema` (left
+   * empty on both actions' `ActionCatalogEntry` for the same reason — see STUB_ACTION_CATALOG)
+   * — the authoritative structural check is server-side (`ValidateBulkDatasetActions`), surfaced
+   * through the editor's own live-diagnostics panel; these are just an early, inline nudge.
+   */
+  private _renderBulkDatasetActionEditor(index: number, actionType: string, schema: ComponentPropertyDescriptor[]) {
+    const action = this.actions[index];
+    if (!action) {
+      return nothing;
+    }
+
+    const params = (action.params ?? {}) as Record<string, unknown>;
+    const messages: string[] = [];
+
+    if (actionType === BULK_DATASET_INGEST_TYPE) {
+      if (!params.sourceFileField) {
+        messages.push('Set a source file field.');
+      }
+      if (!params.datasetIdField) {
+        messages.push('Set a dataset id field.');
+      }
+      const columns = Array.isArray(params.columns) ? (params.columns as Array<Record<string, unknown>>) : [];
+      if (columns.length === 0) {
+        messages.push('Add at least one column.');
+      } else {
+        const rowKeyCount = columns.filter(column => column.role === 'RowKey').length;
+        if (rowKeyCount === 0) {
+          messages.push('Exactly one column must have role RowKey — none do yet.');
+        } else if (rowKeyCount > 1) {
+          messages.push(`Exactly one column must have role RowKey — ${rowKeyCount} do.`);
+        }
+      }
+    } else {
+      if (!params.datasetIdField) {
+        messages.push('Set a dataset id field, matching a bulk-dataset-ingest action’s own.');
+      }
+      if (!params.targetFileField) {
+        messages.push('Set a target file field.');
+      }
+    }
+
+    const references: ResolvedPropertyReferences = {
+      siblingFields: this.supportSystemFieldReferences,
+      allFields: this.supportSystemFieldReferences,
+      stageOptions: [],
+      calculationFieldNames: [],
+    };
+
+    return html`
+      <div class="action-parameters bulk-dataset-action-editor" data-wayfinder-bulk-dataset-action-editor="${index}">
+        ${renderComponentPropertyFields(schema, {
+          value: params,
+          onChange: (path, value) => this._updateActionParams(index, setAtPath(params, path, value) as Record<string, unknown>),
+          idPrefix: `bulk-dataset-action-${index}`,
+          references,
+        })}
+        ${messages.length > 0
+          ? html`
+              <div class="action-validation" data-wayfinder-action-errors="${index}">
+                <p class="action-validation-title">Fix these action details before saving:</p>
+                <ul>
+                  ${messages.map(message => html`<li>${message}</li>`)}
+                </ul>
+              </div>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
   private _renderActionParameters(index: number) {
     const action = this.actions[index];
     if (!action) {
@@ -898,6 +1038,14 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
 
     if (action.type === SUPPORT_SYSTEM_CALL_TYPE) {
       return this._renderSupportSystemCallEditor(index);
+    }
+
+    if (action.type === BULK_DATASET_INGEST_TYPE) {
+      return this._renderBulkDatasetActionEditor(index, BULK_DATASET_INGEST_TYPE, BULK_DATASET_INGEST_SCHEMA);
+    }
+
+    if (action.type === BULK_DATASET_MATERIALIZE_TYPE) {
+      return this._renderBulkDatasetActionEditor(index, BULK_DATASET_MATERIALIZE_TYPE, BULK_DATASET_MATERIALIZE_SCHEMA);
     }
 
     const entry = this._actionEntry(action);

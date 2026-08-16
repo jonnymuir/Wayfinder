@@ -174,6 +174,26 @@ this follows). Its own "revalidate" route targets the original Split gateway aga
 the automation stage above runs materialize (this time with a real `datasetIdField` value),
 overwriting `contributionsFile` with the corrected data before `support-system-call` resubmits it.
 
+## Authoring in the editor
+
+Both actions get a dedicated editor in `Wayfinder.Editor.Client` (same rationale as
+`support-system-call`'s own dedicated editor — see
+[Extending the component catalog](./extending-the-component-catalog.md)), reachable via the
+"Add action" picker as **Ingest a bulk dataset** / **Materialize a bulk dataset**. Unlike
+`support-system-call`, neither action's shape depends on a value chosen while authoring it, so
+the whole form — scalar field-refs and the repeatable `columns` list alike — is a single
+schema-driven render against a hand-authored, static property schema, reusing the exact
+recursive Array-of-Object rendering a component's own properties (e.g. a stat-group's `items`)
+already get for free: no bespoke list-editing code, just "add a column" / "remove a column"
+buttons and one form field per column property (`key`, `title`, `valueKind`, `format`, `role`,
+`visible`, `editable`), `role` and `valueKind` rendering as closed-vocabulary selects. `columns`
+is the *only* place a bulk dataset's shape is authored — the `BulkDataReviewComponent` on the
+review stage needs none of its own. The editor's own live diagnostics mirror
+`ValidateBulkDatasetActions()`'s checks client-side (missing/invalid `sourceFileField`, missing
+`datasetIdField`, no columns, wrong `RowKey` count, a `bulk-dataset-materialize` action's
+`datasetIdField` not matching any ingest action's) for an immediate nudge before Save; the
+server-side check is still the authoritative one.
+
 ## Performance and security
 
 Both are first-class requirements of the underlying `IBulkDatasetStore`, not afterthoughts —

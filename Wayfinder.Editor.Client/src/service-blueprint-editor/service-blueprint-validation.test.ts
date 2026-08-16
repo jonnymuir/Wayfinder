@@ -264,5 +264,111 @@ export function run(): number {
     );
   }
 
+  // ── bulk-dataset-ingest/materialize (mirrors NjfContributionsBlueprintTests.cs / BulkDatasetActionValidationTests.cs server-side) ──
+  const validColumns = [
+    { key: 'memberRef', title: 'Ref', valueKind: 'String', role: 'RowKey' },
+    { key: 'memberName', title: 'Name', valueKind: 'String', role: 'Data', editable: true },
+    { key: 'errorText', title: 'Errors', valueKind: 'String', role: 'ResponseError' },
+  ];
+
+  function ingestAction(overrides: Partial<AuthoredAction> = {}): AuthoredAction {
+    return {
+      type: 'bulk-dataset-ingest',
+      timing: 'OnEntry',
+      params: { sourceFileField: 'contributionsFile', datasetIdField: 'contributionsDatasetId', columns: validColumns },
+      ...overrides,
+    };
+  }
+
+  function materializeAction(overrides: Partial<AuthoredAction> = {}): AuthoredAction {
+    return {
+      type: 'bulk-dataset-materialize',
+      timing: 'OnEntry',
+      params: { datasetIdField: 'contributionsDatasetId', targetFileField: 'contributionsFile' },
+      ...overrides,
+    };
+  }
+
+  // ── bulk-dataset-ingest: a well-formed action against a real captured field is not flagged ──
+  {
+    const stages = [stageWithCapturedField('contributionsFile'), stage({ stateKey: 'review', actions: [ingestAction()] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, []);
+    check('a valid bulk-dataset-ingest action is not flagged', !issues.some(issue => issue.code === 'action-bulk-dataset'), JSON.stringify(issues));
+  }
+
+  // ── bulk-dataset-ingest: missing datasetIdField is flagged ──
+  {
+    const stages = [stage({ stateKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'contributionsFile', columns: validColumns } })] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], []);
+    check(
+      'a bulk-dataset-ingest action with no datasetIdField is flagged',
+      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-dataset-id-field')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── bulk-dataset-ingest: sourceFileField pointing at a nonexistent field is flagged ──
+  {
+    const stages = [stage({ stateKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'notReal', datasetIdField: 'contributionsDatasetId', columns: validColumns } })] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], []);
+    check(
+      'a bulk-dataset-ingest sourceFileField pointing nowhere is flagged',
+      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('invalid-source-field')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── bulk-dataset-ingest: no columns at all is flagged ──
+  {
+    const stages = [stageWithCapturedField('contributionsFile'), stage({ stateKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'contributionsFile', datasetIdField: 'contributionsDatasetId', columns: [] } })] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, []);
+    check(
+      'a bulk-dataset-ingest action with no columns is flagged',
+      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-columns')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── bulk-dataset-ingest: no RowKey column is flagged ──
+  {
+    const columns = [{ key: 'memberName', title: 'Name', valueKind: 'String', role: 'Data' }];
+    const stages = [stageWithCapturedField('contributionsFile'), stage({ stateKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'contributionsFile', datasetIdField: 'contributionsDatasetId', columns } })] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, []);
+    check(
+      'a bulk-dataset-ingest action with no RowKey column is flagged',
+      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-row-key')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── bulk-dataset-materialize: a well-formed action matching a real ingest action is not flagged ──
+  {
+    const stages = [stageWithCapturedField('contributionsFile'), stage({ stateKey: 'automation', actions: [ingestAction(), materializeAction()] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, []);
+    check('a valid bulk-dataset-materialize action is not flagged', !issues.some(issue => issue.code === 'action-bulk-dataset'), JSON.stringify(issues));
+  }
+
+  // ── bulk-dataset-materialize: datasetIdField not matching any ingest action is flagged ──
+  {
+    const stages = [stage({ stateKey: 'automation', actions: [materializeAction({ params: { datasetIdField: 'someOtherId', targetFileField: 'contributionsFile' } })] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], []);
+    check(
+      'a bulk-dataset-materialize action with an unknown datasetIdField is flagged',
+      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('unknown-dataset')),
+      JSON.stringify(issues)
+    );
+  }
+
+  // ── bulk-dataset-materialize: matches an ingest action even when declared first in the blueprint ──
+  {
+    const stages = [stage({ stateKey: 'automation', actions: [materializeAction(), ingestAction()] })];
+    const issues = validateServiceBlueprint(blueprint(stages), [], [], []);
+    check(
+      'a bulk-dataset-materialize action matches an ingest action’s datasetIdField even when declared first',
+      !issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('unknown-dataset')),
+      JSON.stringify(issues)
+    );
+  }
+
   return failures;
 }
