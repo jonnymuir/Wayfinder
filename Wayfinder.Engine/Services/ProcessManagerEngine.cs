@@ -2535,7 +2535,15 @@ public class ProcessManagerEngine : IProcessManager
         var fieldKey = action.Parameters[paramName]?.GetValue<string>();
         if (!string.IsNullOrWhiteSpace(fieldKey))
         {
-            updates[fieldKey] = value;
+            // decimal, not int: CalculationEvaluator.ValuesEqual only coerces when BOTH sides of
+            // "=" are decimal — a numeric literal in a showWhen/calculation expression parses as
+            // decimal, so a plain boxed int here would silently compare unequal to it even when
+            // numerically equal (found live: njf-contributions.json's "Accept and finish" route,
+            // showWhen: "contributionsErrorCount = 0", never became visible even once the count
+            // genuinely reached zero). Matches ToFieldValues' own JsonValue-decimal handling —
+            // "decimal for numbers in FieldValues" is this engine's established convention, not
+            // something to work around per call site.
+            updates[fieldKey] = (decimal)value;
         }
     }
 

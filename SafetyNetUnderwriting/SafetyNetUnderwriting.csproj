@@ -11,4 +11,11 @@
     <ProjectReference Include="../Wayfinder.ServiceDefaults/Wayfinder.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Own dependency, not shared with Wayfinder.Engine's — this app is deliberately independent
+         of Wayfinder's domain model (see Program.cs's own remarks), it just happens to need the
+         same kind of CSV parsing for its contributions-file validation. -->
+    <PackageReference Include="CsvHelper" Version="33.0.1" />
+  </ItemGroup>
+
 </Project>

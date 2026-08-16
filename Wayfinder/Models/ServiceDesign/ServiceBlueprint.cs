@@ -373,11 +373,21 @@ public record ServiceBlueprint
             ?? new HashSet<string>(StringComparer.Ordinal);
         var calculatedSeriesNames = Calculations?.Series?.Keys.ToHashSet(StringComparer.Ordinal)
             ?? new HashSet<string>(StringComparer.Ordinal);
-        var inputFieldKeys = Stages
+        var capturedInputFieldKeys = Stages
             .SelectMany(s => s.Components.GetSubmittableInputs())
             .Select(c => c.FieldKey)
             .Where(key => !string.IsNullOrWhiteSpace(key))
             .ToHashSet(StringComparer.Ordinal);
+        // inputFieldKeys is the broader "known field" set DataDisplay bindings below are checked
+        // against — genuinely captured inputs, plus a support-system/bulk-dataset-ingest action's
+        // own outputs. The CALC_FIELD_SHADOWS_INPUT check further down deliberately uses the
+        // narrower capturedInputFieldKeys instead: a service-sourced calculations.fields entry
+        // legitimately shares a name with an ingest/support-system output (that's the whole point
+        // of declaring one — see docs/guides/bulk-data-review.md, a showWhen expression can't
+        // otherwise see it), and is never "shadowing" *user input* the way it would be if a real
+        // captured field used that name — conflating the two produced a real false positive here,
+        // caught by njf-contributions.json's own contributionsErrorCount field.
+        var inputFieldKeys = new HashSet<string>(capturedInputFieldKeys, StringComparer.Ordinal);
         inputFieldKeys.UnionWith(GetSupportSystemOutputFieldKeys());
         inputFieldKeys.UnionWith(GetBulkDatasetIngestOutputFieldKeys());
         var stageKeys = Stages.Select(s => s.StageKey).ToHashSet(StringComparer.Ordinal);
@@ -547,7 +557,7 @@ public record ServiceBlueprint
             foreach (var (name, field) in Calculations.Fields)
             {
                 if (string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase) &&
-                    inputFieldKeys.Contains(name))
+                    capturedInputFieldKeys.Contains(name))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
                         "CALC_FIELD_SHADOWS_INPUT",

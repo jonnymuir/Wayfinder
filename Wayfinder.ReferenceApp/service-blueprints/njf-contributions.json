@@ -1,0 +1,166 @@
+{
+  "definitionKey": "njf-contributions",
+  "displayName": "Submit an NJF contributions file",
+  "version": 1,
+  "description": "The National Juggling Federation's own worked example of Wayfinder's bulk data review capability (see docs/guides/bulk-data-review.md): the caseworker queue uploads a monthly contributions CSV, SafetyNet Underwriting validates it row by row, and the caseworker corrects only the rows that need attention before resubmitting.",
+  "initialStage": "upload",
+  "requestPolicy": "single",
+  "calculations": {
+    "fields": {
+      "contributionsErrorCount": { "source": "service" }
+    }
+  },
+  "queues": [
+    { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
+    { "key": "automation", "displayName": "SafetyNet Underwriting", "actor": "system" }
+  ],
+  "stages": [
+    {
+      "stageKey": "upload",
+      "displayName": "Submit contributions file",
+      "queueKey": "caseworker",
+      "components": [
+        { "type": "panel", "heading": "Submit contributions file" },
+        {
+          "type": "body",
+          "content": "Upload the CSV of member contributions for this cycle. SafetyNet Underwriting will validate every row and return the same file with a matched member ID and any errors or warnings attached."
+        },
+        { "type": "file-upload", "fieldKey": "contributionsFile", "label": "Contributions file", "required": true, "acceptedFileTypes": [".csv"] }
+      ],
+      "routes": [
+        { "id": "upload--submit--split", "target": "to-support-system", "trigger": "submit", "label": "Submit" }
+      ]
+    },
+    {
+      "stageKey": "automation",
+      "displayName": "Processing",
+      "queueKey": "automation",
+      "components": [
+        { "type": "panel", "heading": "Processing the contributions file" }
+      ],
+      "actions": [
+        {
+          "type": "bulk-dataset-materialize",
+          "timing": "onEnter",
+          "params": {
+            "datasetIdField": "contributionsDatasetId",
+            "targetFileField": "contributionsFile"
+          }
+        },
+        {
+          "type": "support-system-call",
+          "timing": "onEnter",
+          "params": {
+            "supportSystemKey": "safetynet-underwriting",
+            "capabilityKey": "validate-contributions-file",
+            "inputs": { "file": "contributionsFile" }
+          }
+        }
+      ],
+      "routes": [
+        { "id": "automation--processed--join", "target": "check-complete", "trigger": "processed" }
+      ]
+    },
+    {
+      "stageKey": "review",
+      "displayName": "Review contributions file",
+      "queueKey": "caseworker",
+      "components": [
+        { "type": "panel", "heading": "Review contributions file" },
+        {
+          "type": "body",
+          "content": "SafetyNet Underwriting has validated this file. Only the rows below need attention — correct them and resubmit, or download the full file to fix it another way."
+        },
+        {
+          "type": "stat-group",
+          "title": "Summary",
+          "items": [
+            { "label": "Rows with errors", "fieldKey": "contributionsErrorCount" },
+            { "label": "Rows with warnings", "fieldKey": "contributionsWarningCount" },
+            { "label": "Accepted rows", "fieldKey": "contributionsAcceptedCount" }
+          ]
+        },
+        {
+          "type": "bulk-data-review",
+          "title": "Rows needing attention",
+          "datasetIdField": "contributionsDatasetId",
+          "pageSize": 20
+        }
+      ],
+      "actions": [
+        {
+          "type": "bulk-dataset-ingest",
+          "timing": "onEnter",
+          "params": {
+            "sourceFileField": "contributionsResponseFile",
+            "datasetIdField": "contributionsDatasetId",
+            "errorCountField": "contributionsErrorCount",
+            "warningCountField": "contributionsWarningCount",
+            "acceptedCountField": "contributionsAcceptedCount",
+            "columns": [
+              { "key": "memberRef", "title": "Member reference", "valueKind": "String", "role": "RowKey" },
+              { "key": "memberName", "title": "Name", "valueKind": "String", "role": "Data", "editable": true },
+              { "key": "tier", "title": "Membership tier", "valueKind": "String", "role": "Data", "editable": true },
+              { "key": "fireEndorsement", "title": "Fire endorsement (Y/N)", "valueKind": "String", "role": "Data", "editable": true },
+              { "key": "under18", "title": "Under 18 (Y/N)", "valueKind": "String", "role": "Data", "editable": true },
+              { "key": "dob", "title": "Date of birth", "valueKind": "String", "format": "date", "role": "Data", "editable": true },
+              { "key": "monthlyContribution", "title": "Monthly contribution", "valueKind": "Number", "format": "currency", "role": "Data", "editable": true },
+              { "key": "safetyNetMemberId", "title": "SafetyNet member ID", "valueKind": "String", "role": "ResponseMatchedId" },
+              { "key": "errorText", "title": "Errors", "valueKind": "String", "role": "ResponseError" },
+              { "key": "warningText", "title": "Warnings", "valueKind": "String", "role": "ResponseWarning" }
+            ]
+          }
+        }
+      ],
+      "routes": [
+        { "id": "review--resubmit--split", "target": "to-support-system", "trigger": "resubmit", "label": "Resubmit corrected file" },
+        { "id": "review--accept--split", "target": "to-done", "trigger": "accept", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0" }
+      ]
+    },
+    {
+      "stageKey": "done",
+      "displayName": "Contributions file accepted",
+      "queueKey": "caseworker",
+      "components": [
+        { "type": "panel", "heading": "Contributions file accepted" },
+        { "type": "body", "content": "SafetyNet Underwriting has confirmed cover for every member in this file. No further action is needed for this cycle." }
+      ]
+    }
+  ],
+  "gateways": [
+    {
+      "key": "to-support-system",
+      "displayName": "Send to SafetyNet Underwriting",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        { "id": "to-support-system--submit--join", "target": "check-complete", "trigger": "submit" },
+        { "id": "to-support-system--submit--automation", "target": "automation", "trigger": "submit" },
+        { "id": "to-support-system--resubmit--join", "target": "check-complete", "trigger": "resubmit" },
+        { "id": "to-support-system--resubmit--automation", "target": "automation", "trigger": "resubmit" }
+      ]
+    },
+    {
+      "key": "check-complete",
+      "displayName": "Awaiting SafetyNet Underwriting",
+      "gatewayType": "Join",
+      "queueKey": "caseworker",
+      "waitingContent": "SafetyNet Underwriting is processing the contributions file. We'll update this page once it's done.",
+      "waitingExpectedSeconds": 15,
+      "waitingPollIntervalMs": 3000,
+      "routes": [
+        { "id": "check-complete--processed--review", "target": "review", "trigger": "processed" }
+      ],
+      "requiredIncomingQueues": ["caseworker", "automation"]
+    },
+    {
+      "key": "to-done",
+      "displayName": "Finish",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        { "id": "to-done--accept--done", "target": "done", "trigger": "accept" }
+      ]
+    }
+  ]
+}

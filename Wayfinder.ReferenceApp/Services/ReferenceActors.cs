@@ -51,6 +51,9 @@ public static class ReferenceActors
             ComponentTypeRegistry.DiscriminatorFor<NumberInputComponent>(),
             ComponentTypeRegistry.DiscriminatorFor<BooleanComponent>(),
             ComponentTypeRegistry.DiscriminatorFor<FileUploadComponent>(),
+            // NJF contributions demo (see docs/guides/bulk-data-review.md) — the review stage's
+            // own bulk-data-review component.
+            ComponentTypeRegistry.DiscriminatorFor<BulkDataReviewComponent>(),
         ];
 
     /// <summary>
