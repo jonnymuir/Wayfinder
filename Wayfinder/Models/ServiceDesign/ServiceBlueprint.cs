@@ -517,6 +517,27 @@ public record ServiceBlueprint
                         }
 
                         break;
+
+                    case BulkDataReviewComponent bulkReview:
+                        if (string.IsNullOrWhiteSpace(bulkReview.DatasetIdField))
+                        {
+                            diagnostics.Add(new ServiceBlueprintDiagnostic(
+                                "DATA_DISPLAY_MISSING_FIELD",
+                                $"{path}.datasetIdField",
+                                $"bulk-data-review '{bulkReview.Title}' has no datasetIdField set — it can never " +
+                                "bind to a dataset. Set it to match a bulk-dataset-ingest action's own datasetIdField."));
+                        }
+                        else if (!inputFieldKeys.Contains(bulkReview.DatasetIdField))
+                        {
+                            diagnostics.Add(new ServiceBlueprintDiagnostic(
+                                "DATA_DISPLAY_UNKNOWN_FIELD",
+                                $"{path}.datasetIdField",
+                                $"bulk-data-review '{bulkReview.Title}' binds to datasetIdField " +
+                                $"'{bulkReview.DatasetIdField}', which no bulk-dataset-ingest action in this " +
+                                "blueprint declares as its own datasetIdField."));
+                        }
+
+                        break;
                 }
             }
         }

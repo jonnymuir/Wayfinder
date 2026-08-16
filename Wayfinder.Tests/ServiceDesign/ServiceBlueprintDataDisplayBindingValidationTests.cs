@@ -166,4 +166,64 @@ public class ServiceBlueprintDataDisplayBindingValidationTests
 
         blueprint.ValidateDataDisplayBindings().Should().ContainSingle(d => d.Code == "DATA_DISPLAY_MISSING_FIELD");
     }
+
+    [Fact]
+    public void BulkDataReview_MissingDatasetIdField_ReturnsMissingFieldDiagnostic()
+    {
+        var blueprint = Blueprint(new BulkDataReviewComponent { Title = "Review", DatasetIdField = "" });
+
+        blueprint.ValidateDataDisplayBindings().Should().ContainSingle(d => d.Code == "DATA_DISPLAY_MISSING_FIELD");
+    }
+
+    [Fact]
+    public void BulkDataReview_BoundToUndefinedDatasetIdField_ReturnsError()
+    {
+        var blueprint = Blueprint(new BulkDataReviewComponent { Title = "Review", DatasetIdField = "ghostDatasetId" });
+
+        blueprint.ValidateDataDisplayBindings().Should().ContainSingle(d =>
+            d.Code == "DATA_DISPLAY_UNKNOWN_FIELD" && d.Message.Contains("'ghostDatasetId'"));
+    }
+
+    [Fact]
+    public void BulkDataReview_BoundToAnIngestActionsDatasetIdField_ReturnsNoErrors()
+    {
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "test",
+            DisplayName = "Test",
+            InitialStage = "review",
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "review",
+                    DisplayName = "Review",
+                    Components = [new BulkDataReviewComponent { Title = "Review", DatasetIdField = "contributionsDatasetId" }],
+                    Actions =
+                    [
+                        new ActionDefinition
+                        {
+                            Type = Wayfinder.Models.ServiceDesign.BulkData.BulkDataActionTypes.BulkDatasetIngest,
+                            Timing = "onEnter",
+                            Parameters = new System.Text.Json.Nodes.JsonObject
+                            {
+                                ["sourceFileField"] = "contributionsResponseFile",
+                                ["datasetIdField"] = "contributionsDatasetId",
+                                ["columns"] = new System.Text.Json.Nodes.JsonArray
+                                {
+                                    new System.Text.Json.Nodes.JsonObject
+                                    {
+                                        ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey",
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+
+        blueprint.ValidateDataDisplayBindings().Should().NotContain(d =>
+            d.Code == "DATA_DISPLAY_MISSING_FIELD" || d.Code == "DATA_DISPLAY_UNKNOWN_FIELD");
+    }
 }
