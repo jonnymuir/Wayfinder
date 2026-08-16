@@ -7,7 +7,8 @@
     "test:playwright": "playwright test",
     "test:playwright:ui": "playwright test --ui",
     "test:playwright:live": "playwright test -c playwright.live.config.ts --reporter=line",
-    "demo:record": "playwright test -c playwright.demo.config.ts --reporter=line",
+    "demo:record:overview": "playwright test -c playwright.demo.config.ts tests/demo/wayfinder-overview-demo.spec.ts --reporter=line",
+    "demo:record:bulk-data-review": "playwright test -c playwright.demo.config.ts tests/demo/bulk-data-review-demo.spec.ts --reporter=line",
     "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test calculations-editor.spec.ts --workers=1"
   },
   "devDependencies": {

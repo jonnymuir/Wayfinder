@@ -764,10 +764,11 @@ static string RenderLoginBody(string? returnUrl, string? error)
           </div>
         </form>
         <h2 class="govuk-heading-m">Demo accounts</h2>
-        <p class="govuk-body">Both demo accounts use the password <code class="govuk-!-font-family-sans-serif">{esc(DemoUsers.DemoPassword)}</code>.</p>
+        <p class="govuk-body">All demo accounts use the password <code class="govuk-!-font-family-sans-serif">{esc(DemoUsers.DemoPassword)}</code>.</p>
         <ul class="govuk-list govuk-list--bullet">
           <li><strong>{esc(DemoUsers.Applicant.DisplayName)}</strong> — {esc(DemoUsers.Applicant.Email)} (applicant / frontstage)</li>
-          <li><strong>{esc(DemoUsers.Caseworker.DisplayName)}</strong> — {esc(DemoUsers.Caseworker.Email)} (caseworker / backstage)</li>
+          <li><strong>{esc(DemoUsers.Caseworker.DisplayName)}</strong> — {esc(DemoUsers.Caseworker.Email)} (caseworker / backstage, juggling licences)</li>
+          <li><strong>{esc(DemoUsers.NjfOperations.DisplayName)}</strong> — {esc(DemoUsers.NjfOperations.Email)} (caseworker / backstage, NJF contributions)</li>
         </ul>
         """;
 }

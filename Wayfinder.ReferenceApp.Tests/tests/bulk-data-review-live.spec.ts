@@ -39,12 +39,12 @@ test.describe('Bulk data review: real cross-process round trip', () => {
     await request.delete(`${SAFETYNET}/api/test/reset`);
   });
 
-  test('caseworker uploads a contributions file, corrects the one flagged row via the card UI, resubmits, and accepts', async ({
+  test('NJF operations uploads a contributions file, corrects the one flagged row via the card UI, resubmits, and accepts', async ({
     browser
   }) => {
     const context = await browser.newContext({ baseURL: REFERENCE_APP });
     const page = await context.newPage();
-    await loginAs(page, DEMO_USERS.caseworker);
+    await loginAs(page, DEMO_USERS.njfOperations);
 
     await page.goto('/caseworker/njf-contributions/new');
     await expect(page.getByRole('heading', { name: 'Submit contributions file' })).toBeVisible();
