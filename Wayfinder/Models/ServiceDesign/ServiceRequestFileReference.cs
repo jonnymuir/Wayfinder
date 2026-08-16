@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Wayfinder.Models.ServiceDesign;
 
@@ -23,9 +24,14 @@ public sealed record ServiceRequestFileReference
     public long SizeBytes { get; init; }
 
     /// <summary>
-    /// Parses a <c>file-upload</c> field's raw stored value back into a reference. Handles both
-    /// a same-request value (still its original CLR type) and a reloaded one (a boxed
-    /// <see cref="JsonElement"/>, since <c>FieldValues</c> has no custom converter). Returns
+    /// Parses a <c>file-upload</c> field's raw stored value back into a reference. Handles a
+    /// same-request value (still its original CLR type), a reloaded one (a boxed
+    /// <see cref="JsonElement"/>, since <c>FieldValues</c> has no custom converter), and a
+    /// same-request value that arrived via a support-system capability's own file-typed
+    /// <c>Output</c> — <c>ProcessManagerEngine.ResolveSupportSystemOutcome</c>'s
+    /// <c>ToFieldValues</c> merges an object-shaped result-payload value in as a
+    /// <see cref="JsonObject"/> (a <c>DeepClone()</c> of the payload node), a different CLR type
+    /// than the <see cref="JsonElement"/> a reload produces, so both need their own case. Returns
     /// <see langword="null"/> for anything else, including no value at all.
     /// </summary>
     public static ServiceRequestFileReference? FromFieldValue(object? raw) => raw switch
@@ -33,6 +39,8 @@ public sealed record ServiceRequestFileReference
         ServiceRequestFileReference reference => reference,
         JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Object =>
             jsonElement.Deserialize<ServiceRequestFileReference>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true }),
+        JsonObject jsonObject =>
+            jsonObject.Deserialize<ServiceRequestFileReference>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true }),
         _ => null
     };
 }
