@@ -177,12 +177,14 @@ public class JugglingLicenceStageValidationTests
     }
 
     /// <summary>
-    /// The action-scoped half of StageDefinition.Validations
-    /// (<see cref="ServiceBlueprintStageValidationRule.Actions"/>), exercised against the real
+    /// <see cref="ServiceBlueprintRouteDefinition.ShowWhen"/>, exercised against the real
     /// juggling-licence "under-review" stage: once an applicant has attached a risk assessment,
-    /// the caseworker must send it to the insurer — "continue to decision" is blocked — while the
-    /// very action the rule exists to force stays available. An unscoped rule could not express
-    /// this: it would block send-to-insurer too.
+    /// "continue to decision" isn't merely blocked — it isn't offered at all — while
+    /// "send to insurer" is the one route present instead. An earlier version of this stage
+    /// enforced the same requirement with a <see cref="ServiceBlueprintStageValidationRule"/>
+    /// scoped via <see cref="ServiceBlueprintStageValidationRule.Actions"/> (still a real,
+    /// separately-tested engine capability — see StageValidationActionScopeTests — just no longer
+    /// the right tool for "which of several genuinely different exits should even be offered").
     /// </summary>
     private static (ProcessManagerEngine Engine, string InstanceId, int StateVersion) ArriveAtCaseworkerReview(bool withFile)
     {
@@ -234,33 +236,38 @@ public class JugglingLicenceStageValidationTests
     }
 
     [Fact]
-    public void Advance_BlocksContinueToDecisionWhenAFileMustGoToTheInsurer()
+    public void WithAFileAttached_ContinueIsNotOfferedAndSendToInsurerIs()
     {
         var (engine, instanceId, stateVersion) = ArriveAtCaseworkerReview(withFile: true);
 
-        var result = engine.Advance(
+        var current = engine.GetCurrent("juggling-licence", TenantId, UserId, ActorProfile.UnrestrictedOwner, instanceId);
+
+        var actionKeys = current.Render?.AvailableActions.Select(a => a.ActionKey).ToArray() ?? [];
+        Assert.Contains("send-to-insurer", actionKeys);
+        Assert.DoesNotContain("continue", actionKeys);
+
+        // Not just absent from the rendered list — genuinely unreachable, the same protection
+        // Advance() already gives a hidden component's field: tampering to submit the trigger of
+        // a route that isn't offered is rejected, not silently accepted.
+        var tampered = engine.Advance(
             instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "continue", stateVersion, null);
-
-        Assert.Contains(result.Problems, p => p.Code == "insurer-check-required");
-    }
-
-    [Fact]
-    public void Advance_StillAllowsSendingToTheInsurer_TheActionTheRuleExistsToForce()
-    {
-        // The whole point of scoping the rule to "continue": an unscoped rule would block this
-        // too, making the required action impossible and the stage a dead end.
-        var (engine, instanceId, stateVersion) = ArriveAtCaseworkerReview(withFile: true);
+        Assert.Equal("INVALID_TRANSITION", tampered.Problems.Single().Code);
 
         var result = engine.Advance(
             instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "send-to-insurer", stateVersion, null);
-
-        Assert.DoesNotContain(result.Problems, p => p.Code == "insurer-check-required");
+        Assert.Empty(result.Problems);
     }
 
     [Fact]
-    public void Advance_AllowsContinueToDecisionWhenThereIsNoFileToSend()
+    public void WithNoFileAttached_ContinueIsOfferedAndSendToInsurerIsNot()
     {
         var (engine, instanceId, stateVersion) = ArriveAtCaseworkerReview(withFile: false);
+
+        var current = engine.GetCurrent("juggling-licence", TenantId, UserId, ActorProfile.UnrestrictedOwner, instanceId);
+
+        var actionKeys = current.Render?.AvailableActions.Select(a => a.ActionKey).ToArray() ?? [];
+        Assert.Contains("continue", actionKeys);
+        Assert.DoesNotContain("send-to-insurer", actionKeys);
 
         var result = engine.Advance(
             instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "continue", stateVersion, null);

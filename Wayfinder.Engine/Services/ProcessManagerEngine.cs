@@ -805,7 +805,7 @@ public class ProcessManagerEngine : IProcessManager
                         stage.DisplayName,
                         queueName,
                         IsJoinGateway: false,
-                        BuildAvailableActions(definition, stage.StageKey, queueName, accessProfile)));
+                        BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile)));
                 }
             }
 
@@ -833,7 +833,7 @@ public class ProcessManagerEngine : IProcessManager
                 stage.DisplayName,
                 queueName,
                 IsJoinGateway: false,
-                BuildAvailableActions(definition, stage.StageKey, queueName, accessProfile)));
+                BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile)));
         }
 
         foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
@@ -875,6 +875,7 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     protected IReadOnlyList<ServiceRequestAction> BuildAvailableActions(
+        ServiceRequest instance,
         ServiceBlueprint definition,
         string stageKey,
         string? queueName,
@@ -889,6 +890,25 @@ public class ProcessManagerEngine : IProcessManager
         else if (!accessProfile.CanActInQueue(queueName))
         {
             return [];
+        }
+
+        // ServiceBlueprintRouteDefinition.ShowWhen excludes a route from AvailableActions
+        // entirely (not merely disables it) — the same mechanism a stage's own components use via
+        // Component.ShowWhen. The Any() guard is deliberate: this runs once per stage per queue
+        // render (FindAccessibleWorkItems calls it for every visible cursor across every instance
+        // a queue lists), so a blueprint that never uses ShowWhen on a route — everything shipped
+        // before this — pays nothing extra for it.
+        if (transitions.Any(transition => !string.IsNullOrWhiteSpace(transition.ShowWhen)))
+        {
+            var stage = definition.Stages.FirstOrDefault(candidate =>
+                string.Equals(candidate.StageKey, stageKey, StringComparison.Ordinal));
+            if (stage is not null)
+            {
+                var scope = BuildCalculationScope(instance, definition, stage, pendingFieldValues: null);
+                transitions = transitions
+                    .Where(transition => EvaluateShowWhen(transition.ShowWhen, scope, definition.Calculations))
+                    .ToArray();
+            }
         }
 
         return transitions
@@ -964,7 +984,7 @@ public class ProcessManagerEngine : IProcessManager
                     Label = route.Label,
                     Style = route.Style,
                     RequiresRole = route.RequiresRole,
-                    Conditions = route.Conditions,
+                    ShowWhen = route.ShowWhen,
                     Actions = route.Actions
                 })
                 .OrderBy(transition => transition.ToState, StringComparer.Ordinal)
@@ -984,7 +1004,7 @@ public class ProcessManagerEngine : IProcessManager
                     Label = route.Label,
                     Style = route.Style,
                     RequiresRole = route.RequiresRole,
-                    Conditions = route.Conditions,
+                    ShowWhen = route.ShowWhen,
                     Actions = route.Actions
                 })
                 .OrderBy(transition => transition.ToState, StringComparer.Ordinal)
@@ -1038,7 +1058,7 @@ public class ProcessManagerEngine : IProcessManager
                 Label = route.Label,
                 Style = route.Style,
                 RequiresRole = route.RequiresRole,
-                Conditions = route.Conditions,
+                ShowWhen = route.ShowWhen,
                 Actions = route.Actions
             }));
         }
@@ -1261,22 +1281,72 @@ public class ProcessManagerEngine : IProcessManager
         _ => JsonValue.Create(value.ToString())
     };
 
-    private bool EvaluateShowWhen(string? showWhen, CalculationRenderContext? calc)
+    /// <summary>
+    /// Shared by <see cref="Components.Component.ShowWhen"/> (component visibility) and
+    /// <see cref="ServiceBlueprintRouteDefinition.ShowWhen"/> (route/action availability) — takes
+    /// a raw scope rather than a <see cref="CalculationRenderContext"/> so a caller with no other
+    /// use for the fuller context (route gating doesn't need <c>Result</c>/<c>Display</c>) isn't
+    /// forced to build one just to call this.
+    /// </summary>
+    private bool EvaluateShowWhen(
+        string? showWhen,
+        IReadOnlyDictionary<string, object?>? scope,
+        ServiceBlueprintCalculationSet? calculations)
     {
-        if (string.IsNullOrWhiteSpace(showWhen) || calc is null)
+        if (string.IsNullOrWhiteSpace(showWhen) || scope is null)
         {
             return true;
         }
 
         try
         {
-            return _calculationEvaluator.EvaluateExpression(showWhen, calc.Scope, calc.Set) is not false;
+            return _calculationEvaluator.EvaluateExpression(showWhen, scope, calculations) is not false;
         }
         catch (CalculationException exception)
         {
-            Logger.LogWarning(exception, "showWhen expression '{Expr}' failed; component stays visible.", showWhen);
+            Logger.LogWarning(exception, "showWhen expression '{Expr}' failed; stays visible.", showWhen);
             return true;
         }
+    }
+
+    /// <summary>
+    /// The scope a <c>showWhen</c>/stage-validation expression evaluates against: declared inputs
+    /// plus calculated fields, exactly what <see cref="EvaluateDefinitionCalculations"/> also
+    /// builds — but without that method's side effect of persisting
+    /// <see cref="ServiceRequest.LastCalculationResult"/>, so it's safe to call from a hot,
+    /// no-writes path like <see cref="BuildAvailableActions"/> (once per stage per queue render)
+    /// without multiplying instance-store writes.
+    /// </summary>
+    /// <param name="pendingFieldValues">
+    /// A submission in progress, merged over <paramref name="instance"/>'s already-persisted
+    /// values before evaluating — <see langword="null"/> to evaluate against persisted state
+    /// alone (what a caller deciding what to *render*, rather than validating a submission,
+    /// wants).
+    /// </param>
+    private Dictionary<string, object?> BuildCalculationScope(
+        ServiceRequest instance,
+        ServiceBlueprint definition,
+        StageDefinition stage,
+        Dictionary<string, object?>? pendingFieldValues)
+    {
+        var serviceInputs = ResolveServiceInputs(instance, definition, stage);
+        var mergedFieldValues = pendingFieldValues is null
+            ? instance.FieldValues
+            : Merge(instance.FieldValues, pendingFieldValues);
+        var baseScope = CalculationScopeBuilder.Build(definition, mergedFieldValues, serviceInputs);
+
+        if (definition.Calculations is null)
+        {
+            return baseScope;
+        }
+
+        var evaluation = _calculationEvaluator.EvaluateCollectingErrors(definition.Calculations, baseScope);
+        var fullScope = new Dictionary<string, object?>(baseScope, StringComparer.Ordinal);
+        foreach (var (name, value) in evaluation.Result.Fields)
+        {
+            fullScope[name] = value;
+        }
+        return fullScope;
     }
 
     /// <summary>
@@ -1320,22 +1390,7 @@ public class ProcessManagerEngine : IProcessManager
             return [];
         }
 
-        var serviceInputs = ResolveServiceInputs(instance, definition, stage);
-        var mergedFieldValues = Merge(instance.FieldValues, fieldValues);
-        var baseScope = CalculationScopeBuilder.Build(definition, mergedFieldValues, serviceInputs);
-
-        var scope = baseScope;
-        if (definition.Calculations is not null)
-        {
-            var evaluation = _calculationEvaluator.EvaluateCollectingErrors(definition.Calculations, baseScope);
-            var fullScope = new Dictionary<string, object?>(baseScope, StringComparer.Ordinal);
-            foreach (var (name, value) in evaluation.Result.Fields)
-            {
-                fullScope[name] = value;
-            }
-
-            scope = fullScope;
-        }
+        var scope = BuildCalculationScope(instance, definition, stage, fieldValues);
 
         var problems = new List<ServiceRequestProblem>();
         foreach (var rule in rules)
@@ -1581,7 +1636,7 @@ public class ProcessManagerEngine : IProcessManager
 
             if (component.ShowWhen is { Length: > 0 } showWhen)
             {
-                var visible = EvaluateShowWhen(showWhen, calc);
+                var visible = EvaluateShowWhen(showWhen, calc?.Scope, calc?.Set);
                 for (var i = payloadsBefore; i < result.Count; i++)
                 {
                     result[i] = result[i] with { ShowWhen = showWhen, Hidden = !visible };

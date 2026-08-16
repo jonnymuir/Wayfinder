@@ -170,14 +170,14 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await beat(page, 'note', 'That link serves the real bytes the applicant uploaded — the engine itself never touches them; the host owns file storage.');
   });
 
-  test('Act 3 — the blueprint refuses to skip the insurer, and the wait that used to be invisible', async () => {
-    await beat(page, 'intent', 'Reviewing and deciding are separate steps. The caseworker tries to go straight to a decision.');
+  test('Act 3 — the blueprint offers only one way forward, and a wait the caseworker never loses sight of', async () => {
+    await beat(page, 'intent', 'Reviewing and deciding are separate steps. A risk assessment was attached, so there is only one thing to do here.');
 
-    await humanClick(page, page.getByRole('button', { name: 'Continue to decision' }));
-    await expect(page.locator('.govuk-error-summary')).toContainText('SafetyNet Underwriting');
-    await beat(page, 'recap', 'Refused. A risk assessment was attached, so it must go to the insurer first — and that rule lives in the blueprint, not in code.');
+    // Not blocked-with-an-error — simply never offered. The blueprint's own route visibility
+    // rule decides which action even appears, before the caseworker could click the wrong one.
+    await expect(page.getByRole('button', { name: 'Continue to decision' })).toHaveCount(0);
+    await beat(page, 'recap', 'No "continue straight to a decision" button exists on this screen at all — that rule lives in the blueprint, not in code.');
 
-    await beat(page, 'intent', 'So the caseworker sends it, which is the only way forward.');
     await humanClick(page, page.getByRole('button', { name: 'Send risk assessment to insurer' }));
 
     await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
@@ -186,7 +186,7 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     const waitingRow = page.locator('tr', { hasText: 'Apply for a licence to hold a juggling event' });
     await expect(waitingRow.getByText('Waiting')).toBeVisible();
     await expect(waitingRow.getByRole('link', { name: 'View' })).toBeVisible();
-    await beat(page, 'note', 'This is the fix that made the feature real: before it, an application sent to a support system disappeared from the queue entirely.');
+    await beat(page, 'note', "Every application a caseworker has sent out stays visible and findable here, however long the insurer takes to answer.");
 
     await humanClick(page, waitingRow.getByRole('link', { name: 'View' }));
     await expect(page.getByText('SafetyNet Underwriting is reviewing the risk assessment.')).toBeVisible();

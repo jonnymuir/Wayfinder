@@ -103,7 +103,7 @@ function makeSimulationBranchServiceBlueprint(): AuthoredServiceBlueprint {
           id: 'review-decision--request-more-checks--checks-pending',
           target: 'checks-pending',
           trigger: 'request more checks',
-          condition: 'siteVisitRequired == true',
+          showWhen: 'siteVisitRequired == true',
         },
       ],
     },

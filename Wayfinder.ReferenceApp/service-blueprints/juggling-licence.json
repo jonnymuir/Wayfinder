@@ -363,7 +363,7 @@
         },
         {
           "type": "body",
-          "content": "Check the application below. If the applicant attached a risk assessment, it must be sent to SafetyNet Underwriting for validation before a decision can be recorded."
+          "content": "Check the application below. If a risk assessment was attached, send it to SafetyNet Underwriting for validation; otherwise continue straight to a decision."
         },
         {
           "type": "summary-list",
@@ -513,24 +513,16 @@
           "target": "to-insurer-check",
           "trigger": "send-to-insurer",
           "label": "Send risk assessment to insurer",
-          "style": "primary"
+          "style": "primary",
+          "showWhen": "riskAssessment <> ''"
         },
         {
           "id": "under-review--continue--to-caseworker-decision",
           "target": "to-caseworker-decision",
           "trigger": "continue",
           "label": "Continue to decision",
-          "style": "secondary"
-        }
-      ],
-      "validations": [
-        {
-          "code": "insurer-check-required",
-          "rule": "riskAssessment = ''",
-          "message": "This application includes a risk assessment. Send it to SafetyNet Underwriting for validation before continuing to a decision.",
-          "actions": [
-            "continue"
-          ]
+          "style": "secondary",
+          "showWhen": "riskAssessment = ''"
         }
       ]
     },

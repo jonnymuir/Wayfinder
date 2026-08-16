@@ -27,7 +27,7 @@ function serialisableRoute(route: AuthoredRoute): Record<string, unknown> {
     trigger: route.trigger,
     label: route.label,
     style: route.style,
-    condition: route.condition,
+    showWhen: route.showWhen,
     requiresRole: route.requiresRole,
     actions: route.actions,
     editorComment: route.editorComment,

@@ -41,7 +41,7 @@ function mapRouteView(owner: RouteOwner, serviceBlueprint: Pick<AuthoredServiceB
     action: owner.route.trigger,
     actions: owner.route.actions,
     requiresRole: owner.route.requiresRole,
-    condition: owner.route.condition,
+    showWhen: owner.route.showWhen,
     editorComment: owner.route.editorComment,
     fromGateway,
     toGateway,
@@ -218,7 +218,7 @@ export function buildRoute(options: {
   target: string;
   trigger: string;
   requiresRole?: string;
-  condition?: string;
+  showWhen?: string;
   actions?: AuthoredAction[];
 }): AuthoredRoute {
   return {
@@ -226,7 +226,7 @@ export function buildRoute(options: {
     target: options.target,
     trigger: options.trigger,
     requiresRole: options.requiresRole,
-    condition: options.condition,
+    showWhen: options.showWhen,
     actions: options.actions ?? [],
   };
 }

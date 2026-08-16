@@ -216,6 +216,63 @@ public sealed class ServiceBlueprintAuthoringService(
                     "STAGE_VALIDATION_RULE_EVAL_ERROR", "STAGE_VALIDATION_RULE_UNVERIFIED", $"{path}.rule",
                     numericInputsWithoutDefault, diagnostics);
             }
+
+            // ServiceBlueprintRouteDefinition.ShowWhen is evaluated by ProcessManagerEngine with
+            // exactly the tolerant, fail-open bias component.ShowWhen has above (any non-false
+            // result stays visible) — checked the same way here: a parse/reference error is
+            // flagged, but (unlike a stage validation's when/rule) a clean non-boolean result is
+            // not, since that's the real runtime behaviour a route's ShowWhen is documented to have.
+            var routeIndex = 0;
+            foreach (var route in stage.Routes ?? [])
+            {
+                var routePath = $"stages.{stage.StageKey}.routes[{routeIndex}]";
+                routeIndex++;
+
+                if (string.IsNullOrWhiteSpace(route.ShowWhen))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    evaluator.EvaluateExpression(route.ShowWhen, showWhenScope, blueprint.Calculations);
+                }
+                catch (CalculationException ex)
+                {
+                    diagnostics.Add(ClassifyEvalDiagnostic(
+                        "ROUTE_SHOW_WHEN_EVAL_ERROR", "ROUTE_SHOW_WHEN_UNVERIFIED", $"{routePath}.showWhen",
+                        ex.Message, numericInputsWithoutDefault));
+                }
+            }
+        }
+
+        // A gateway's own routes never go through ProcessManagerEngine.BuildAvailableActions —
+        // a Split gateway fans out to every outgoing route regardless (that's what makes the
+        // multi-cursor Join model work at all), and a Join gateway selects its one outgoing route
+        // by matching the arriving trigger, not by evaluating anything. ShowWhen set there would
+        // silently do nothing rather than the author's intended thing, so it's flagged rather than
+        // left to be found the hard way — the same reasoning that made replacing the old, equally
+        // silent always/event/guard route-condition UI worth doing.
+        foreach (var gateway in blueprint.Gateways ?? [])
+        {
+            var routeIndex = 0;
+            foreach (var route in gateway.Routes ?? [])
+            {
+                var routePath = $"gateways.{gateway.Key}.routes[{routeIndex}]";
+                routeIndex++;
+
+                if (!string.IsNullOrWhiteSpace(route.ShowWhen))
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "ROUTE_SHOW_WHEN_ON_GATEWAY_ROUTE",
+                        $"{routePath}.showWhen",
+                        "showWhen has no effect on a gateway's own routes — a Split gateway always follows " +
+                        "every outgoing route regardless, and a Join gateway selects by matching the arriving " +
+                        "trigger, not by this expression. Move this route's condition onto the stage that " +
+                        "owns it instead.",
+                        ServiceBlueprintDiagnosticSeverity.Warning));
+                }
+            }
         }
 
         return new ServiceBlueprintValidationOutcome(
