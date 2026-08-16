@@ -78,11 +78,10 @@ test.describe('Support systems: real cross-process round trip', () => {
     // a filename in plain text — a caseworker can open exactly what the applicant submitted.
     await expect(caseworkerPage.getByRole('link', { name: 'risk-assessment.pdf' })).toBeVisible();
 
-    // This application carries a risk assessment, so the blueprint's action-scoped validation
-    // rule makes sending it to the insurer mandatory — continuing straight to a decision is
-    // refused, by the blueprint, with no host code involved.
-    await caseworkerPage.getByRole('button', { name: 'Continue to decision' }).click();
-    await expect(caseworkerPage.locator('.govuk-error-summary')).toContainText('SafetyNet Underwriting');
+    // This application carries a risk assessment, so the blueprint's route-level ShowWhen makes
+    // sending it to the insurer mandatory — "Continue to decision" isn't merely blocked, it isn't
+    // offered at all, entirely in the blueprint, with no host code involved.
+    await expect(caseworkerPage.getByRole('button', { name: 'Continue to decision' })).toHaveCount(0);
 
     await caseworkerPage.getByRole('button', { name: 'Send risk assessment to insurer' }).click();
 

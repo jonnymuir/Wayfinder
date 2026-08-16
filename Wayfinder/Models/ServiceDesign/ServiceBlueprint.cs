@@ -964,13 +964,10 @@ public record RouteFile
     public string? RequiresRole { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<ConditionDefinition>? Conditions { get; init; }
+    public string? ShowWhen { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ActionDefinition>? Actions { get; init; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public RouteMetadata? Metadata { get; init; }
 }
 
 public record QueueDefinition
@@ -1103,8 +1100,26 @@ public record ServiceBlueprintRouteDefinition
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? RequiresRole { get; init; }
 
+    /// <summary>
+    /// Optional visibility expression, in the same calculation language and evaluated with the
+    /// same fail-open bias as <see cref="Components.Component.ShowWhen"/> — when it evaluates to
+    /// false this route is excluded from the stage's available actions entirely, not merely
+    /// disabled or blocked-with-an-error. Only evaluated for a stage's own routes; it has no
+    /// effect on a gateway's own routes (a Split gateway always fans out to every route
+    /// regardless, and a Join gateway selects by matching the arriving trigger, not by this) —
+    /// <c>ServiceBlueprintAuthoringService.Validate</c> flags a <c>ShowWhen</c> set there as a
+    /// diagnostic rather than let it silently do nothing.
+    ///
+    /// Use this, not a <see cref="ServiceBlueprintStageValidationRule"/> scoped via
+    /// <see cref="ServiceBlueprintStageValidationRule.Actions"/>, when a stage has genuinely
+    /// different exits and exactly one should be *offered* for a given state of the data — e.g.
+    /// "send to insurer" vs. "continue" depending on whether a file was attached. Reach for a
+    /// scoped validation rule instead when the exit should always stay offered but needs to be
+    /// *blocked with an explanation* until some condition holds — the two are different UX, not
+    /// interchangeable spellings of the same thing.
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<ConditionDefinition>? Conditions { get; init; }
+    public string? ShowWhen { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ActionDefinition>? Actions { get; init; }
@@ -1187,20 +1202,11 @@ public record StageMetadata
     }
 }
 
-public record RouteMetadata
-{
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<ConditionDefinition>? Conditions { get; init; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<ActionDefinition>? Actions { get; init; }
-}
-
 /// <summary>
 /// Something a stage or route does beyond just moving between them. Historically schema-only —
 /// the engine copies an instance through wherever it's attached (<see cref="StageDefinition.Actions"/>,
-/// <see cref="RouteMetadata.Actions"/>) without ever executing it. The first <see cref="Type"/>
-/// convention the engine actually executes is
+/// <see cref="ServiceBlueprintRouteDefinition.Actions"/>) without ever executing it. The first
+/// <see cref="Type"/> convention the engine actually executes is
 /// <see cref="SupportSystems.SupportSystemActionTypes.SupportSystemCall"/> — see
 /// docs/guides/support-systems.md.
 /// </summary>
@@ -1220,16 +1226,6 @@ public record ActionDefinition
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyName("params")]
     public JsonObject Parameters { get; init; } = [];
-}
-
-public record ConditionDefinition
-{
-    public string Kind { get; init; } = "";
-
-    public string Expression { get; init; } = "";
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? Description { get; init; }
 }
 
 /// <summary>

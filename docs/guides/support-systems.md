@@ -219,44 +219,67 @@ editor's own stage action editor drives this same lookup live — see
 ## Making a support-system call *mandatory*
 
 A caseworker who can simply choose not to consult the insurer isn't much of a control. The
-juggling-licence blueprint makes it compulsory, and does so declaratively:
-
-- Reviewing and deciding are **separate caseworker stages** (`under-review` → `caseworker-decision`),
-  so there is a point in the journey where "have we consulted the insurer?" is a real question with
-  a real gate, rather than one of three equal buttons.
-- `under-review` carries a stage validation rule scoped to a single action:
+juggling-licence blueprint makes it compulsory, and does so declaratively — the review stage's own
+routes decide which single action is even *offered*, using
+[route visibility](./calculation-language.md#route-visibility-showwhen-on-a-route)
+(`ServiceBlueprintRouteDefinition.ShowWhen`):
 
 ```json
 {
-  "code": "insurer-check-required",
-  "rule": "riskAssessment = ''",
-  "message": "This application includes a risk assessment. Send it to SafetyNet Underwriting for validation before continuing to a decision.",
-  "actions": ["continue"]
+  "id": "under-review--send-to-insurer--to-insurer-check",
+  "target": "to-insurer-check",
+  "trigger": "send-to-insurer",
+  "label": "Send risk assessment to insurer",
+  "showWhen": "riskAssessment <> ''"
+},
+{
+  "id": "under-review--continue--to-caseworker-decision",
+  "target": "to-caseworker-decision",
+  "trigger": "continue",
+  "label": "Continue to decision",
+  "showWhen": "riskAssessment = ''"
 }
 ```
 
-The `actions` scope is what makes this expressible at all. `StageDefinition.Validations` rules
-otherwise guard *every* way out of a stage — which is right for a data-completeness rule, but
-here would block `send-to-insurer` too, making the very action the rule exists to force
-impossible and the stage a dead end. Naming the guarded action leaves that route open while
-refusing the one that would skip it. See
-`ServiceBlueprintStageValidationRule.Actions`.
+A caseworker reviewing an application with a risk assessment attached sees exactly one button,
+"Send risk assessment to insurer" — "Continue to decision" isn't rendered, isn't in
+`AvailableActions`, and submitting its trigger anyway is rejected the same as any other action
+that was never declared. Reviewing and deciding stay **separate caseworker stages**
+(`under-review` → `caseworker-decision`) so there's a real point in the journey where "have we
+consulted the insurer?" gates what happens next, rather than three equal buttons on one screen.
 
-Note what is *not* here: no host code, no bespoke C#, and no conditional routing. Wayfinder's
-Split gateways deliberately fan out to every route rather than choosing one, and route-level
-`conditions` are carried in the contract but not evaluated by the engine — so "sometimes required"
-is expressed as a rule about leaving a stage, not as a branch in the graph.
+Note what is *not* here: no host code, no bespoke C#. It's worth being precise about what this
+mechanism *isn't*, too — it isn't conditional routing in the graph-theoretic sense. Wayfinder's
+Split gateways still deliberately fan out to every route rather than choosing one; `ShowWhen` only
+ever changes which routes a *human* is offered on a stage, evaluated the same way and with the
+same fail-open bias as a component's own `showWhen`.
+
+**This replaced an earlier, worse version of the same idea.** The first working version of this
+requirement used a `StageDefinition.Validations` rule scoped to a single action
+(`ServiceBlueprintStageValidationRule.Actions`) — both buttons always shown, "Continue to
+decision" blocked with an error message if clicked with a file attached. That's a legitimate
+pattern (see the "Route `showWhen` vs. a scoped stage validation rule" callout in the
+[calculation-language guide](./calculation-language.md#route-visibility-showwhen-on-a-route)) —
+but it was the wrong tool for *this* stage, where the two exits are genuinely different courses of
+action, not one action with an extra data requirement. It also depended on an editor route-condition
+UI (an always/event/guard mode selector) that had existed in the codebase since before this
+feature, looked functional, but was never evaluated by the engine anywhere and — because of a
+client/server wire-key mismatch — didn't even survive a save. `ShowWhen` on the route itself is
+what that UI should have been from the start: authored with the same
+`wayfinder-calculation-expression-editor` intellisense as a stage validation's `when`/`rule`.
 
 ## The worked example, verified end to end
 
-`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `under-review` stage gets a
-third route, `send-to-insurer`, alongside its existing `approve`/`reject` — additive, not a
-replacement — targeting a `to-insurer-check` Split gateway that forks the caseworker's own cursor
-(straight to `insurer-check-complete`, a Join) from a new `automation`-queue cursor
-(`insurer-validation`, carrying the `support-system-call` action). Once SafetyNet Underwriting
-resolves, `insurer-check-complete` releases back into `under-review` itself, now showing the
-insurer's decision, where the caseworker makes the actual final call — flowing into the
-pre-existing, unmodified `post-review` join every application already went through.
+`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `under-review` stage (now
+"Review application") offers exactly one of two routes, gated by `ShowWhen` as shown above:
+`send-to-insurer`, targeting a `to-insurer-check` Split gateway that forks the caseworker's own
+cursor (straight to `insurer-check-complete`, a Join) from a new `automation`-queue cursor
+(`insurer-validation`, carrying the `support-system-call` action); or `continue`, when there's
+nothing to send, straight to `caseworker-decision`. Once SafetyNet Underwriting resolves,
+`insurer-check-complete` releases into `caseworker-decision` — a separate stage from `under-review`,
+so the insurer's decision is already on screen by the time the caseworker makes the actual final
+call — flowing into the pre-existing, unmodified `post-review` join every application already went
+through.
 
 Run `dotnet run --project Wayfinder.AppHost`, sign in as `caseworker@example.test` /
 `applicant@example.test` (password `wayfinder-demo`), and the whole path is real: a citizen's

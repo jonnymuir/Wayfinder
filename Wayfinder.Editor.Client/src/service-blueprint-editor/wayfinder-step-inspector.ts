@@ -77,13 +77,7 @@ import {
   serviceBlueprintQueueOptions,
 } from './stage-assignment.js';
 import { deriveGatewayBindings, gatewayQueueKey, type GatewayBinding } from './gateway-representation.js';
-import {
-  parseTransitionCondition,
-  serialiseTransitionCondition,
-  TRANSITION_ACTION_OPTIONS,
-  transitionQuickAction,
-  type TransitionConditionMode,
-} from './gateway-route-conditions.js';
+import { TRANSITION_ACTION_OPTIONS, transitionQuickAction } from './gateway-route-conditions.js';
 import {
   isTerminalStage,
   serviceBlueprintDeadEndStages,
@@ -94,6 +88,9 @@ import {
 import { addRoute, deleteRoute, findOrCreateSplitGateway, flattenRoutes, newRouteId, updateRoute } from './route-model.js';
 import './wayfinder-stage-action-editor.js';
 import './wayfinder-inline-help.js';
+import './wayfinder-calculation-expression-editor.js';
+import type { ExpressionCompletionItem } from './wayfinder-calculation-expression-editor.js';
+import { tryParseExpression } from './calculation-runtime.js';
 
 const STAGE_TYPE_OPTIONS: Array<{ value: EditorStageType; label: string }> = [
   { value: 'form', label: 'Form' },
@@ -190,6 +187,22 @@ export class WayfinderStepInspectorElement extends LitElement {
   /** Blueprint-wide captured input fields, for a support-system-call action's own inputs — see wayfinder-stage-action-editor.ts's supportSystemFieldReferences doc comment for why this is blueprint-wide, not stage-scoped. */
   private get _supportSystemFieldReferences() {
     return buildPropertyReferenceContext(this.serviceBlueprint, undefined, this.componentCatalog).allFields;
+  }
+
+  /**
+   * Insertable-name completions for a route's showWhen expression editor — every captured input
+   * field blueprint-wide plus every calculated field, the identical two-source construction
+   * wayfinder-calculations-editor.ts uses for a stage validation's when/rule completions. A route
+   * can reference any field captured anywhere earlier in the journey, the same as a stage
+   * validation rule can, so this is deliberately blueprint-wide, not scoped to the route's own
+   * source stage.
+   */
+  private get _routeConditionCompletions(): ExpressionCompletionItem[] {
+    const context = buildPropertyReferenceContext(this.serviceBlueprint, undefined, this.componentCatalog);
+    return [
+      ...context.allFields.map(field => ({ name: field.fieldKey, detail: field.label })),
+      ...context.calculationFieldNames.map(name => ({ name, detail: 'field' })),
+    ];
   }
 
   protected updated(changed: Map<string, unknown>) {
@@ -331,7 +344,7 @@ export class WayfinderStepInspectorElement extends LitElement {
       ...route,
       target: nextTransition.toStage || route.target,
       trigger: nextTransition.action || route.trigger,
-      condition: nextTransition.condition,
+      showWhen: nextTransition.showWhen,
       requiresRole: nextTransition.requiresRole,
       actions: nextTransition.actions ?? route.actions,
       editorComment: nextTransition.editorComment,
@@ -605,30 +618,13 @@ export class WayfinderStepInspectorElement extends LitElement {
     );
   }
 
-  private _updateRouteConditionMode(event: Event) {
+  private _updateRouteShowWhen(event: CustomEvent<{ value: string }>) {
     const ctx = this._routeTransitionFromEvent(event);
     if (!ctx) return;
-    const mode = (event.currentTarget as HTMLSelectElement).value as TransitionConditionMode;
-    const current = parseTransitionCondition(ctx.transition.condition);
-    const condition = serialiseTransitionCondition(mode, mode === current.mode ? current.value : '');
-    this._replaceSelectedTransition({ ...ctx.transition, condition }, ctx.index);
-    this._announce(
-      mode === 'always'
-        ? 'Route condition cleared.'
-        : `${mode === 'event' ? 'Event' : 'Guard'} condition enabled.`
-    );
-  }
-
-  private _updateRouteConditionValue(event: Event) {
-    const ctx = this._routeTransitionFromEvent(event);
-    if (!ctx) return;
-    const parsed = parseTransitionCondition(ctx.transition.condition);
-    const condition = serialiseTransitionCondition(
-      parsed.mode === 'always' ? 'guard' : parsed.mode,
-      (event.currentTarget as HTMLInputElement).value
-    );
-    this._replaceSelectedTransition({ ...ctx.transition, condition }, ctx.index);
-    this._announce('Route condition updated.');
+    const showWhen = event.detail.value.trim() || undefined;
+    if (showWhen === ctx.transition.showWhen) return;
+    this._replaceSelectedTransition({ ...ctx.transition, showWhen }, ctx.index);
+    this._announce(showWhen ? 'Route visibility condition updated.' : 'Route visibility condition cleared — always available.');
   }
 
   private _updateRouteRole(event: Event) {
@@ -838,7 +834,6 @@ export class WayfinderStepInspectorElement extends LitElement {
   }
 
   private _renderRouteEditor(transition: RouteView, transitionIndex: number) {
-    const condition = parseTransitionCondition(transition.condition);
     const targetOptions = (this.serviceBlueprint?.stages ?? []).filter(stage => stage.stateKey !== transition.fromStage);
     const joinGateways = this._availableJoinGatewaysForStage(transition.toStage);
     const idx = String(transitionIndex);
@@ -936,47 +931,34 @@ export class WayfinderStepInspectorElement extends LitElement {
           </label>
         </div>
 
-        <div class="field-grid">
-          <label class="field-block">
-            <span class="field-label-row">
-              <span class="field-label">Condition type</span>
-              <wayfinder-inline-help
-                label="Condition type help"
-                message="Choose Always available for a standard route, Event for named service blueprint triggers, or Guard expression when runtime data decides whether this route can run."
-              ></wayfinder-inline-help>
-            </span>
-            <select
-              class="field-control"
-              data-wayfinder-route-condition-mode
-              data-wayfinder-route-index="${idx}"
-              @change=${this._updateRouteConditionMode}
-            >
-              <option value="always" ?selected=${condition.mode === 'always'}>Always available</option>
-              <option value="event" ?selected=${condition.mode === 'event'}>Event</option>
-              <option value="guard" ?selected=${condition.mode === 'guard'}>Guard expression</option>
-            </select>
-          </label>
-          <label class="field-block ${condition.mode === 'always' ? 'field-block-disabled' : ''}">
-            <span class="field-label-row">
-              <span class="field-label">${condition.mode === 'event' ? 'Event name' : 'Condition value'}</span>
-              <wayfinder-inline-help
-                label="Condition value help"
-                message=${condition.mode === 'event'
-                  ? 'Use the exact event name your runtime emits, for example submit-clicked.'
-                  : 'Use a concise guard expression that explains when this route should unlock, for example application.isComplete == true.'}
-              ></wayfinder-inline-help>
-            </span>
-            <input
-              class="field-control"
-              data-wayfinder-route-condition-value
-              data-wayfinder-route-index="${idx}"
-              .value=${condition.value}
-              ?disabled=${condition.mode === 'always'}
-              placeholder=${condition.mode === 'event' ? 'submit-clicked' : 'application.isComplete == true'}
-              @change=${this._updateRouteConditionValue}
-            />
-          </label>
-        </div>
+        ${transition.fromGateway
+          ? nothing
+          : (() => {
+              const showWhenParse = transition.showWhen?.trim() ? tryParseExpression(transition.showWhen) : null;
+              return html`
+                <div class="field-grid">
+                  <div class="field-block calc-expression-block">
+                    <span class="field-label-row">
+                      <span class="field-label">Available when (optional — leave blank for always available)</span>
+                      <wayfinder-inline-help
+                        label="Route visibility help"
+                        message="A boolean expression in the same calculation language as a stage validation's when/rule. Leave blank for a route that's always offered. Set it so only one of several routes appears depending on the data captured so far — for example riskAssessment <> '' — rather than offering an action that would just get blocked with an error."
+                      ></wayfinder-inline-help>
+                    </span>
+                    <wayfinder-calculation-expression-editor
+                      data-wayfinder-route-index="${idx}"
+                      .value=${transition.showWhen ?? ''}
+                      .completions=${this._routeConditionCompletions}
+                      label-text="${transition.action || 'route'} available when"
+                      @expression-input=${this._updateRouteShowWhen}
+                    ></wayfinder-calculation-expression-editor>
+                    ${showWhenParse && !showWhenParse.ok
+                      ? html`<span class="calc-preview calc-preview-error" data-wayfinder-route-show-when-preview>${showWhenParse.message}</span>`
+                      : nothing}
+                  </div>
+                </div>
+              `;
+            })()}
 
         <div class="action-buttons">
           <button
@@ -1853,8 +1835,17 @@ export class WayfinderStepInspectorElement extends LitElement {
       margin-top: 0.25rem;
     }
 
-    .field-block-disabled {
-      opacity: 0.7;
+    .calc-expression-block {
+      grid-column: 1 / -1;
+    }
+
+    .calc-preview {
+      font-size: 0.8125rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .calc-preview-error {
+      color: #b91c1c;
     }
 
     .field-label {

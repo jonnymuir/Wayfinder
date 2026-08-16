@@ -220,6 +220,53 @@ without a full page round-trip. `showWhen` must evaluate to a boolean — a `sho
 that evaluates to a number or string is a `CalculationException`, same as any other
 type mismatch.
 
+## Route visibility (`showWhen` on a route)
+
+A `StageDefinition`'s own routes (`routes[]`) may carry the identical `showWhen`
+string — same expression language, same scope, same fail-open evaluation as a
+component's `showWhen`. When it evaluates to `false`, that route is excluded from
+the stage's available actions entirely — not rendered as a disabled button, not
+offered at all — and submitting its trigger anyway is rejected exactly like
+submitting an action that was never declared:
+
+```json
+"routes": [
+  { "id": "review--send-to-insurer", "target": "to-insurer-check", "trigger": "send-to-insurer",
+    "label": "Send risk assessment to insurer", "showWhen": "riskAssessment <> ''" },
+  { "id": "review--continue", "target": "to-decision", "trigger": "continue",
+    "label": "Continue to decision", "showWhen": "riskAssessment = ''" }
+]
+```
+
+Only one of these two buttons is ever rendered, depending on whether a risk
+assessment was actually attached — the real shape used by
+`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `under-review`
+stage (see [Support systems](./support-systems.md)).
+
+**Route `showWhen` vs. a scoped stage validation rule** — the two look similar but
+answer different questions, and picking the wrong one produces a worse UX than
+either alone:
+
+- Use route `showWhen` when a stage has genuinely different exits and exactly one
+  should be *offered* for a given state of the data. The example above: an
+  applicant either did or didn't attach a file, so exactly one of "send to
+  insurer" / "continue" makes sense to show at all. Offering both and rejecting
+  the wrong one after the fact just makes the caseworker guess.
+- Use a [stage validation](#stage-validations) rule, scoped via `actions`, when
+  the exit should *always stay visible* but needs to be blocked with an
+  explanation until something holds — e.g. an "Approve" button that's always on
+  screen, but refuses with a message until a checklist is complete. Hiding
+  "Approve" entirely there would be worse: the caseworker wouldn't know the
+  option exists or why it's missing.
+
+**Only meaningful on a stage's own routes.** `showWhen` has no effect on a
+gateway's own routes: a Split gateway always fans out to every outgoing route
+regardless (that's what makes the multi-cursor Join model work), and a Join
+gateway selects its one outgoing route by matching the arriving trigger, not by
+evaluating anything. `save_service_blueprint`/`validate_service_blueprint` flags
+a `showWhen` set on a gateway route with a warning (`ROUTE_SHOW_WHEN_ON_GATEWAY_ROUTE`)
+rather than let it silently do nothing.
+
 ## Stage validations
 
 A `StageDefinition` may carry a `validations` list — declarative, cross-field business rules

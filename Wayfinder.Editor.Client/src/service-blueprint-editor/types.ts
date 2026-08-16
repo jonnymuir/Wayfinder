@@ -386,17 +386,6 @@ export function transitionActions(transition: Pick<AuthoredTransition, 'metadata
   return transition.actions ?? transition.metadata?.actions ?? [];
 }
 
-export function transitionConditions(
-  transition: Pick<AuthoredTransition, 'metadata' | 'condition'>
-): ServiceBlueprintConditionDefinition[] {
-  if (transition.metadata?.conditions?.length) {
-    return transition.metadata.conditions;
-  }
-  return transition.condition
-    ? [{ kind: 'expression', expression: transition.condition }]
-    : [];
-}
-
 function defineCompatGetter(target: object, key: string, getter: () => unknown) {
   if (Object.prototype.hasOwnProperty.call(target, key)) {
     return;
@@ -597,7 +586,9 @@ function normaliseLegacyTransitionRoute(
     id: firstString(transition.id) ?? routeId(sourceKey, trigger, firstString(transition.toState, transition.target) ?? ''),
     target: firstString(transition.toState, transition.target) ?? '',
     trigger,
-    condition: firstString(
+    // Reads the legacy condition/metadata.conditions shape (this function normalises the old
+    // Transitions-array format specifically) into the modern showWhen field.
+    showWhen: firstString(
       transition.condition,
       asRecord(transition.metadata).conditions && Array.isArray(asRecord(transition.metadata).conditions)
         ? (asRecord(asArray(asRecord(transition.metadata).conditions)[0]).expression as string | undefined)
@@ -617,7 +608,7 @@ function normaliseRoute(rawRoute: Record<string, unknown>, sourceKey: string): A
     trigger,
     label: firstString(rawRoute.label),
     style: firstString(rawRoute.style),
-    condition: firstString(rawRoute.condition),
+    showWhen: firstString(rawRoute.showWhen),
     requiresRole: firstString(rawRoute.requiresRole),
     actions: asArray<AuthoredAction>(rawRoute.actions),
     editorComment: firstString(rawRoute.editorComment),
@@ -801,8 +792,8 @@ function buildLegacyTransitions(
   const stageTransitions = serviceBlueprint.stages.flatMap(stage =>
     (stage.routes ?? []).map(route => {
       const metadata: ServiceBlueprintTransitionMetadata = {
-        conditions: route.condition
-          ? [{ kind: 'expression', expression: route.condition }]
+        conditions: route.showWhen
+          ? [{ kind: 'expression', expression: route.showWhen }]
           : undefined,
         actions: route.actions ?? [],
       };
@@ -812,7 +803,7 @@ function buildLegacyTransitions(
         action: route.trigger,
         requiresRole: route.requiresRole,
         metadata,
-        condition: route.condition,
+        condition: route.showWhen,
         actions: route.actions ?? [],
         editorComment: route.editorComment,
       };
@@ -825,8 +816,8 @@ function buildLegacyTransitions(
   const gatewayTransitions = (serviceBlueprint.gateways ?? []).flatMap(gateway =>
     (gateway.routes ?? []).map(route => {
       const metadata: ServiceBlueprintTransitionMetadata = {
-        conditions: route.condition
-          ? [{ kind: 'expression', expression: route.condition }]
+        conditions: route.showWhen
+          ? [{ kind: 'expression', expression: route.showWhen }]
           : undefined,
         actions: route.actions ?? [],
       };
@@ -836,7 +827,7 @@ function buildLegacyTransitions(
         action: route.trigger,
         requiresRole: route.requiresRole,
         metadata,
-        condition: route.condition,
+        condition: route.showWhen,
         actions: route.actions ?? [],
         editorComment: route.editorComment,
       };
@@ -865,7 +856,13 @@ export interface AuthoredRoute {
   trigger: string;
   label?: string;
   style?: string;
-  condition?: string;
+  /**
+   * Optional visibility expression, in the same calculation language and evaluated with the same
+   * fail-open bias as a component's own showWhen — when it evaluates to false this route is
+   * excluded from the stage's available actions entirely. Only has effect on a stage's own
+   * routes, not a gateway's (see ServiceBlueprintRouteDefinition.ShowWhen server-side).
+   */
+  showWhen?: string;
   requiresRole?: string;
   actions?: AuthoredAction[];
   editorComment?: string;
@@ -877,7 +874,7 @@ export interface RouteView {
   action: string;
   actions?: AuthoredAction[];
   requiresRole?: string;
-  condition?: string;
+  showWhen?: string;
   editorComment?: string;
   fromGateway?: string;
   toGateway?: string;

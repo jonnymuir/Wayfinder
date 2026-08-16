@@ -318,7 +318,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
 
     const routes = topologyNode.gateway.routes ?? [];
     const pillRoute = topologyNode.pill ? routes[0] : undefined;
-    const condition = pillRoute?.condition?.trim();
+    const condition = pillRoute?.showWhen?.trim();
     return {
       ...common,
       type: 'gateway',

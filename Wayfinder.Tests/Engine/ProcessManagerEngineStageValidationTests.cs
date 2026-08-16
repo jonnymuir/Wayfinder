@@ -170,3 +170,153 @@ public class ProcessManagerEngineStageValidationTests
         Assert.Equal("Done", result.Render?.StateDisplayName);
     }
 }
+
+/// <summary>
+/// <see cref="ServiceBlueprintStageValidationRule.Actions"/> — scoping a stage validation rule
+/// to specific route triggers, distinct from and complementary to
+/// <see cref="ServiceBlueprintRouteDefinition.ShowWhen"/> (see
+/// JugglingLicenceStageValidationTests' own "under-review" coverage for that). The two answer
+/// different questions about the same kind of stage: ShowWhen decides which routes are even
+/// *offered* (an approve/reject stage doesn't need this — both should always be visible); an
+/// Actions-scoped rule decides which of the *always-offered* routes should be blocked with an
+/// explanation until something holds — here, approving requires a completed checklist, but
+/// rejecting never does, and both stay in AvailableActions throughout.
+/// </summary>
+public class ProcessManagerEngineStageValidationActionScopeTests
+{
+    private const string DefinitionKey = "stage-validation-action-scope-test";
+    private const string TenantId = "tenant";
+    private const string UserId = "user";
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+
+    private const string BlueprintJson = """
+        {
+          "definitionKey": "stage-validation-action-scope-test",
+          "displayName": "Stage Validation Action Scope Test",
+          "version": 1,
+          "initialStage": "review",
+          "requestPolicy": "single",
+          "queues": [
+            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" }
+          ],
+          "stages": [
+            {
+              "stageKey": "review",
+              "displayName": "Review",
+              "queueKey": "caseworker",
+              "components": [
+                { "type": "boolean", "fieldKey": "checklistComplete", "label": "Checklist complete", "default": "false" }
+              ],
+              "validations": [
+                {
+                  "code": "checklist-required-to-approve",
+                  "rule": "checklistComplete",
+                  "actions": ["approve"],
+                  "message": "Complete the checklist before approving."
+                }
+              ],
+              "routes": [
+                { "id": "review--approve", "target": "to-approved", "trigger": "approve", "label": "Approve" },
+                { "id": "review--reject", "target": "to-rejected", "trigger": "reject", "label": "Reject" }
+              ]
+            },
+            {
+              "stageKey": "approved",
+              "displayName": "Approved",
+              "queueKey": "caseworker",
+              "components": [ { "type": "panel", "heading": "Approved" } ]
+            },
+            {
+              "stageKey": "rejected",
+              "displayName": "Rejected",
+              "queueKey": "caseworker",
+              "components": [ { "type": "panel", "heading": "Rejected" } ]
+            }
+          ],
+          "gateways": [
+            {
+              "key": "to-approved",
+              "displayName": "Continue to approved",
+              "gatewayType": "Split",
+              "queueKey": "caseworker",
+              "routes": [ { "id": "to-approved--approve", "target": "approved", "trigger": "approve" } ]
+            },
+            {
+              "key": "to-rejected",
+              "displayName": "Continue to rejected",
+              "gatewayType": "Split",
+              "queueKey": "caseworker",
+              "routes": [ { "id": "to-rejected--reject", "target": "rejected", "trigger": "reject" } ]
+            }
+          ]
+        }
+        """;
+
+    private static (ProcessManagerEngine Engine, string InstanceId, int StateVersion) BuildEngine()
+    {
+        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var engine = new ProcessManagerEngine(
+            NullLogger.Instance,
+            new SingleDefinitionServiceBlueprintStore(definition),
+            new PassthroughContentSanitizer());
+        var started = engine.GetCurrent(DefinitionKey, TenantId, UserId);
+        return (engine, started.InstanceId, started.StateVersion);
+    }
+
+    [Fact]
+    public void BothRoutesAreAlwaysOffered_RegardlessOfChecklistState()
+    {
+        // The contrast with ShowWhen: an Actions-scoped rule never removes a route from
+        // AvailableActions, only blocks-with-a-message when it's actually used.
+        var (engine, instanceId, _) = BuildEngine();
+
+        var current = engine.GetCurrent(DefinitionKey, TenantId, UserId, ActorProfile.UnrestrictedOwner, instanceId);
+
+        var actionKeys = current.Render?.AvailableActions.Select(a => a.ActionKey).ToArray() ?? [];
+        Assert.Contains("approve", actionKeys);
+        Assert.Contains("reject", actionKeys);
+    }
+
+    [Fact]
+    public void Advance_BlocksApproveWhenChecklistIncomplete()
+    {
+        var (engine, instanceId, stateVersion) = BuildEngine();
+
+        var result = engine.Advance(
+            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "approve", stateVersion, null);
+
+        Assert.Contains(result.Problems, p => p.Code == "checklist-required-to-approve");
+    }
+
+    [Fact]
+    public void Advance_StillAllowsRejectWhenChecklistIncomplete()
+    {
+        // The whole point of scoping the rule to "approve": an unscoped rule would block this
+        // too, even though nothing about rejecting depends on the checklist at all.
+        var (engine, instanceId, stateVersion) = BuildEngine();
+
+        var result = engine.Advance(
+            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "reject", stateVersion, null);
+
+        Assert.Empty(result.Problems);
+        Assert.Equal("Rejected", result.Render?.StateDisplayName);
+    }
+
+    [Fact]
+    public void Advance_AllowsApproveWhenChecklistComplete()
+    {
+        var (engine, instanceId, stateVersion) = BuildEngine();
+
+        var result = engine.Advance(
+            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner,
+            "approve", stateVersion, new Dictionary<string, object?> { ["checklistComplete"] = true });
+
+        Assert.Empty(result.Problems);
+        Assert.Equal("Approved", result.Render?.StateDisplayName);
+    }
+}
