@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { LiveAppHost } from '../support/live-app-host';
 import { beat, clearBeat, showSlate, clearSlate, moveNarrationTo, startNarrationTimeline, getNarrationTimeline } from './support/narration';
-import { humanClick, humanCheck, humanType } from './support/human-interactions';
+import { humanClick, humanCheck, humanType, humanMoveTo } from './support/human-interactions';
 
 /**
  * A narrated, single-take recording of the Support Systems feature — NN/g's third
@@ -135,8 +135,12 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await beat(page, 'intent', 'Now we become the caseworker: backstage, reviewing what just arrived.');
     await clearBeat(page);
 
+    // Sign-out's own POST already redirects to /account/login server-side (see
+    // Program.cs's "/account/logout" handler) — an explicit goto() here raced that in-flight
+    // navigation and intermittently aborted it (net::ERR_ABORTED). Wait for the page sign-out
+    // already sends us to, rather than issuing a second, competing navigation.
     await humanClick(page, page.getByRole('button', { name: 'Sign out' }));
-    await page.goto('/account/login');
+    await page.waitForURL('**/account/login');
     await humanType(page, page.getByLabel('Email address'), 'caseworker@example.test');
     await humanType(page, page.locator('#password'), 'wayfinder-demo');
     await humanClick(page, page.getByRole('button', { name: 'Sign in' }));
@@ -176,9 +180,19 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     // Not blocked-with-an-error — simply never offered. The blueprint's own route visibility
     // rule decides which action even appears, before the caseworker could click the wrong one.
     await expect(page.getByRole('button', { name: 'Continue to decision' })).toHaveCount(0);
-    await beat(page, 'recap', 'No "continue straight to a decision" button exists on this screen at all — that rule lives in the blueprint, not in code.');
+    const sendToInsurerButton = page.getByRole('button', { name: 'Send risk assessment to insurer' });
+    await expect(sendToInsurerButton).toBeVisible();
+    // Scroll the one real button into view and lift the narration bar off the bottom of the
+    // page — a bottom-anchored bar sits exactly where this button renders, so proving "this is
+    // the only option" requires the button to actually be on screen, not just named in the copy.
+    await sendToInsurerButton.scrollIntoViewIfNeeded();
+    await moveNarrationTo(page, 'top');
+    await beat(page, 'recap',
+      'No "continue straight to a decision" button exists on this screen at all — that rule lives in the blueprint, not in code. Sending it to the insurer is the only option.',
+      { holdMs: 5_500, position: 'top' }
+    );
 
-    await humanClick(page, page.getByRole('button', { name: 'Send risk assessment to insurer' }));
+    await humanClick(page, sendToInsurerButton);
 
     await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
     await beat(page, 'recap', 'Back on the worklist — and crucially the application is still here, tagged "Waiting". It is out with the insurer, but it has not vanished.');
@@ -193,7 +207,64 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await beat(page, 'recap', "The caseworker's own wait screen — the same mechanism the applicant gets, now serving a backstage actor waiting on a support system.");
   });
 
-  test('Act 4 — a genuinely separate insurer system does the work', async () => {
+  test('Act 4 — how easy it is to describe: the same rule, seen in the blueprint', async () => {
+    await beat(page, 'intent', "Nothing conjured that button rule out of thin air. It's declared in the blueprint — let's look.");
+
+    await humanClick(page, page.getByRole('link', { name: 'Editor' }));
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+    await expect(shell).toHaveAttribute('data-wayfinder-active-service-blueprint', 'juggling-licence', { timeout: 15_000 });
+    await page.waitForTimeout(400);
+
+    // Wide establishing shot first: the whole applicant → caseworker → insurer flow, in one
+    // frame, before drilling into the one stage this story is actually about.
+    await humanClick(page, page.getByRole('button', { name: 'Fit to screen' }));
+    await page.waitForTimeout(500);
+    await beat(page, 'setup', 'The whole service, laid out end to end — every stage, every gateway, on one canvas.');
+
+    // Zoom in on "Review application" — genuine wheel-zoom, centred on the node, not a jump-cut,
+    // so what's on screen stays legible throughout rather than arriving already cropped.
+    const reviewNode = page.getByRole('button', { name: /Review application/ }).first();
+    const reviewBox = await reviewNode.boundingBox();
+    if (reviewBox) {
+      await humanMoveTo(page, reviewBox.x + reviewBox.width / 2, reviewBox.y + reviewBox.height / 2);
+    }
+    for (let i = 0; i < 8; i++) {
+      await page.mouse.wheel(0, -120);
+      await page.waitForTimeout(90);
+    }
+    await page.waitForTimeout(400);
+    await beat(page, 'setup', 'Here it is — the review stage, with its two exits: send to insurer, or continue.');
+
+    await humanClick(page, reviewNode);
+    const inspector = page.locator('wayfinder-step-inspector');
+    await expect(inspector.locator('[data-wayfinder-stage-detail="under-review"]')).toBeVisible();
+    await inspector.locator('#stage-transitions-heading').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(400);
+
+    const sendRoute = inspector.locator('[data-wayfinder-route-target="to-insurer-check"]');
+    await expect(sendRoute).toBeVisible();
+    const showWhenEditor = sendRoute.locator('wayfinder-calculation-expression-editor');
+    await expect(showWhenEditor).toBeVisible();
+    await beat(page, 'setup', 'Each route has an "Available when" field — the same expression language, the same editor, as everywhere else in the blueprint.');
+
+    // A genuine, live intellisense demonstration — clear the field, type a recognisable prefix,
+    // let the real autocomplete dropdown appear, accept it, then finish the expression back to
+    // its actual value. Ends exactly where it started: this is the real rule, not a stand-in.
+    const showWhenContent = showWhenEditor.locator('.cm-content');
+    await humanClick(page, showWhenContent);
+    await showWhenContent.press('ControlOrMeta+A');
+    await showWhenContent.press('Backspace');
+    await showWhenContent.pressSequentially('riskAss', { delay: 70 });
+    await expect(showWhenEditor.locator('.cm-tooltip-autocomplete')).toBeVisible();
+    await beat(page, 'note', 'Real autocomplete — every field captured anywhere in the journey, offered as you type.');
+    await page.keyboard.press('Enter');
+    await showWhenContent.pressSequentially(" <> ''", { delay: 55 });
+    await page.waitForTimeout(300);
+    await expect(showWhenContent).toHaveText("riskAssessment <> ''");
+    await beat(page, 'recap', "That's the whole rule: send to insurer when a risk assessment exists. One line, written by the person who designed the service.");
+  });
+
+  test('Act 5 — a genuinely separate insurer system does the work', async () => {
     await beat(page, 'intent', 'Now the third lane. SafetyNet Underwriting is a different app, on a different port, that knows nothing about Wayfinder.');
     await clearBeat(page);
 
@@ -222,7 +293,7 @@ test.describe('Support systems — narrated end-to-end demo', () => {
     await beat(page, 'recap', 'Approved — and that click fired a real webhook back into Wayfinder.');
   });
 
-  test('Act 5 — the webhook resolves the wait, and the licence is granted', async () => {
+  test('Act 6 — the webhook resolves the wait, and the licence is granted', async () => {
     await beat(page, 'intent', "Back to the caseworker. Nothing was polled or refreshed by hand — the insurer's decision was pushed to Wayfinder.");
     await clearBeat(page);
 
@@ -252,8 +323,12 @@ test.describe('Support systems — narrated end-to-end demo', () => {
 
     await beat(page, 'intent', 'And back to the applicant, who has been waiting this whole time.');
     await clearBeat(page);
+    // Sign-out's own POST already redirects to /account/login server-side (see
+    // Program.cs's "/account/logout" handler) — an explicit goto() here raced that in-flight
+    // navigation and intermittently aborted it (net::ERR_ABORTED). Wait for the page sign-out
+    // already sends us to, rather than issuing a second, competing navigation.
     await humanClick(page, page.getByRole('button', { name: 'Sign out' }));
-    await page.goto('/account/login');
+    await page.waitForURL('**/account/login');
     await humanType(page, page.getByLabel('Email address'), 'applicant@example.test');
     await humanType(page, page.locator('#password'), 'wayfinder-demo');
     await humanClick(page, page.getByRole('button', { name: 'Sign in' }));
