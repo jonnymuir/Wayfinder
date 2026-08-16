@@ -161,6 +161,23 @@ public record ComponentRenderPayload
     /// <summary>Message to show if the user defers the wait (for "waiting" components).</summary>
     public string? DeferMessage { get; init; }
 
+    // Bulk data review
+    /// <summary>
+    /// Resolved value of the "bulk-data-review" component's own DatasetIdField — null/empty
+    /// before anything's been ingested yet (see docs/guides/bulk-data-review.md). The renderer
+    /// treats an empty value as "nothing to review yet" rather than an error.
+    /// </summary>
+    public string? DatasetId { get; init; }
+    /// <summary>How many attention-rows to show per page for "bulk-data-review" components.</summary>
+    public int? PageSize { get; init; }
+    /// <summary>
+    /// Host-supplied base URL for this dataset's REST endpoints (summary/rows/correct/download) —
+    /// a host routing concern the engine itself has no opinion on, the same reasoning
+    /// <c>WithFileDownloadUrls</c> already applies to file-upload fields. Null until a host's own
+    /// post-processing step fills it in.
+    /// </summary>
+    public string? BulkDatasetApiUrl { get; init; }
+
     /// <summary>
     /// Computed display name for this component — returns the most semantically appropriate heading property
     /// based on component type. Used by views that iterate over components and render section headings.

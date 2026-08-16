@@ -349,6 +349,7 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
             ErrorRowCount = errorCount,
             WarningRowCount = warningCount,
             AcceptedRowCount = acceptedCount,
+            Columns = dataset.Columns,
         };
     }
 

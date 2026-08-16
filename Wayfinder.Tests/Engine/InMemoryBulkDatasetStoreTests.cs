@@ -71,6 +71,7 @@ public class InMemoryBulkDatasetStoreTests
         result.Summary.ErrorRowCount.Should().Be(1);
         result.Summary.WarningRowCount.Should().Be(1);
         result.Summary.AcceptedRowCount.Should().Be(1);
+        result.Summary.Columns.Should().BeEquivalentTo(Columns, "a client rendering rows has no other way to learn each column's title/role/editability");
     }
 
     [Fact]

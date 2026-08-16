@@ -75,6 +75,7 @@ public static class PageShell
               <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-poll.js"></script>
               <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-slider.js"></script>
               <script type="module" src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-live-form.js"></script>
+              <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-bulk-data-review.js"></script>
             </body>
             </html>
             """;

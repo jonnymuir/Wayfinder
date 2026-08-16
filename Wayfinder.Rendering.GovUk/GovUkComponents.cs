@@ -40,6 +40,7 @@ public static class GovUkComponents
         "task-list" => RenderTaskList(component),
         "stat-group" => RenderStatGroup(component),
         "chart" => RenderChart(component),
+        "bulk-data-review" => RenderBulkDataReview(component),
         _ => "",
     };
 
@@ -308,6 +309,58 @@ public static class GovUkComponents
                 <tbody>{string.Join("\n", tableRows)}</tbody>
               </table>
             </figure>
+            """;
+    }
+
+    /// <summary>
+    /// Server-rendered skeleton for the bulk-data review UI (see docs/guides/bulk-data-review.md)
+    /// — a summary/controls/rows/pagination shell plus a <c>&lt;noscript&gt;</c> fallback (the
+    /// download link always works without JavaScript), progressively enhanced by
+    /// wayfinder-bulk-data-review.js via the <c>data-wayfinder-bulk-review-*</c> attributes below.
+    /// No row data is rendered server-side: the dataset's own REST endpoints (host-routed — see
+    /// <see cref="ComponentRenderPayload.BulkDatasetApiUrl"/>) are what supply it, the same "host
+    /// fills in a URL, this package's JS/CSS do the rest" shape <c>wayfinder-chart</c>/
+    /// <c>wayfinder-stat-group</c> already use. This is the gold-standard rendering — hosts don't
+    /// need their own override for this type.
+    /// </summary>
+    private static string RenderBulkDataReview(ComponentRenderPayload component)
+    {
+        var heading = string.IsNullOrEmpty(component.Title) ? "" : $"""<h2 class="govuk-heading-m">{GovUk.Esc(component.Title)}</h2>""";
+
+        if (string.IsNullOrEmpty(component.DatasetId) || string.IsNullOrEmpty(component.BulkDatasetApiUrl))
+        {
+            return $"""
+                {heading}
+                <p class="govuk-body">Nothing to review yet.</p>
+                """;
+        }
+
+        var apiUrl = GovUk.Esc(component.BulkDatasetApiUrl);
+        var pageSize = component.PageSize ?? 20;
+
+        return $"""
+            {heading}
+            <div class="wayfinder-bulk-review" data-wayfinder-bulk-review data-wayfinder-bulk-review-api="{apiUrl}" data-wayfinder-bulk-review-page-size="{pageSize}">
+              <noscript>
+                <p class="govuk-body">Turn on JavaScript to review rows individually, or <a class="govuk-link" href="{apiUrl}/download">download the full file</a> to review it another way.</p>
+              </noscript>
+              <div class="wayfinder-bulk-review__summary" data-wayfinder-bulk-review-summary aria-live="polite">
+                <p class="govuk-body">Loading…</p>
+              </div>
+              <div class="wayfinder-bulk-review__controls" data-wayfinder-bulk-review-controls hidden>
+                <div class="govuk-button-group">
+                  <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-filter="NeedsAttention" aria-pressed="true">Needs attention</button>
+                  <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-filter="All" aria-pressed="false">All rows</button>
+                </div>
+                <a class="govuk-link" href="{apiUrl}/download">Download full file</a>
+              </div>
+              <div class="wayfinder-bulk-review__rows" data-wayfinder-bulk-review-rows></div>
+              <nav class="wayfinder-bulk-review__pagination" data-wayfinder-bulk-review-pagination hidden aria-label="Row pages">
+                <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-prev>Previous</button>
+                <span data-wayfinder-bulk-review-page-status class="wayfinder-bulk-review__page-status"></span>
+                <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-next>Next</button>
+              </nav>
+            </div>
             """;
     }
 

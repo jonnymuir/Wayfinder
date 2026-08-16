@@ -430,6 +430,7 @@ caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}", (string blueprintKe
     var envelope = engine.GetCurrent(
         blueprintKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
     envelope = WithFileDownloadUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/files");
+    envelope = WithBulkDatasetApiUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/bulk-datasets");
     return Results.Content(
         PageShell.Render(
             "Review application",
@@ -663,6 +664,33 @@ static ServiceRequestResponseEnvelope WithFileDownloadUrls(
                         : field)
                     .ToArray()
             }
+            : component)
+        .ToArray();
+
+    return envelope with { Render = envelope.Render with { Components = components } };
+}
+
+/// <summary>
+/// Same reasoning as <see cref="WithFileDownloadUrls"/>, for the bulk-data-review component's own
+/// REST endpoints (see docs/guides/bulk-data-review.md and the caseworkerGroup routes above):
+/// the engine resolves a "bulk-data-review" component's <c>DatasetId</c> from field values, but
+/// has no opinion on this host's own URL scheme, so it's this host's job to fill in
+/// <see cref="ComponentRenderPayload.BulkDatasetApiUrl"/> before rendering. Only a component with
+/// a real dataset id gets a URL — one with none yet (nothing ingested) keeps rendering its own
+/// "Nothing to review yet" placeholder rather than linking to a 404.
+/// </summary>
+static ServiceRequestResponseEnvelope WithBulkDatasetApiUrls(
+    ServiceRequestResponseEnvelope envelope,
+    string apiUrlPrefix)
+{
+    if (envelope.Render is null)
+    {
+        return envelope;
+    }
+
+    var components = envelope.Render.Components
+        .Select(component => component.Type == "bulk-data-review" && !string.IsNullOrEmpty(component.DatasetId)
+            ? component with { BulkDatasetApiUrl = $"{apiUrlPrefix}/{Uri.EscapeDataString(component.DatasetId)}" }
             : component)
         .ToArray();
 

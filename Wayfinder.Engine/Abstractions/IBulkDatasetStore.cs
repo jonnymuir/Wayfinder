@@ -82,6 +82,14 @@ public sealed record BulkDatasetSummary
 
     /// <summary>Rows with neither an error nor a warning — <see cref="TotalRowCount"/> minus every row counted in <see cref="ErrorRowCount"/> or <see cref="WarningRowCount"/> (a row with both counts once, in each).</summary>
     public required int AcceptedRowCount { get; init; }
+
+    /// <summary>
+    /// The column schema this dataset was ingested against — a row's own <c>OriginalValues</c>/
+    /// <c>CurrentValues</c> are just key→value dictionaries, with no per-column title/role/
+    /// editability of their own, so a client rendering rows (see <c>wayfinder-bulk-data-review.js</c>)
+    /// needs this to know what to label, show, or let a user correct.
+    /// </summary>
+    public required IReadOnlyList<BulkDatasetColumnDescriptor> Columns { get; init; }
 }
 
 /// <summary>

@@ -1626,6 +1626,18 @@ public class ProcessManagerEngine : IProcessManager
                     });
                     break;
 
+                case BulkDataReviewComponent bulkReview:
+                    result.Add(new ComponentRenderPayload
+                    {
+                        Type = "bulk-data-review",
+                        Title = bulkReview.Title,
+                        DatasetId = displayValues.TryGetValue(bulkReview.DatasetIdField, out var datasetIdValue)
+                            ? datasetIdValue?.ToString()
+                            : null,
+                        PageSize = bulkReview.PageSize,
+                    });
+                    break;
+
                 case InputComponent input:
                 {
                     var fields = BuildFields(new[] { (Component)input }, displayValues, calc);
