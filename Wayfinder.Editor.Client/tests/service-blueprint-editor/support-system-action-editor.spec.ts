@@ -18,7 +18,10 @@ test.describe('Support-system-call action editor', () => {
   }) => {
     await page.goto(storyUrl('service-blueprint-editor-step-inspector--support-system-call-action-configuration'));
 
-    const actionEditor = page.locator('wayfinder-step-inspector wayfinder-stage-action-editor');
+    // subject-label="stage" — insurer-validation now also has two of its own outgoing routes
+    // (approved/rejected), each carrying its own wayfinder-stage-action-editor since a stage's
+    // routes became fully editable in place; an unscoped locator would be ambiguous.
+    const actionEditor = page.locator('wayfinder-step-inspector wayfinder-stage-action-editor[subject-label="stage"]');
     await expect(actionEditor).toBeVisible({ timeout: 10_000 });
 
     const supportSystemSelect = actionEditor.locator('[data-wayfinder-support-system-select="0"]');
@@ -46,7 +49,10 @@ test.describe('Support-system-call action editor', () => {
   test('changing the support system resets the capability and any bound inputs', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-step-inspector--support-system-call-action-configuration'));
 
-    const actionEditor = page.locator('wayfinder-step-inspector wayfinder-stage-action-editor');
+    // subject-label="stage" — insurer-validation now also has two of its own outgoing routes
+    // (approved/rejected), each carrying its own wayfinder-stage-action-editor since a stage's
+    // routes became fully editable in place; an unscoped locator would be ambiguous.
+    const actionEditor = page.locator('wayfinder-step-inspector wayfinder-stage-action-editor[subject-label="stage"]');
     await expect(actionEditor).toBeVisible({ timeout: 10_000 });
 
     const capabilitySelect = actionEditor.locator('[data-wayfinder-support-system-capability-select="0"]');

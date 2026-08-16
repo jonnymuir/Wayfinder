@@ -133,35 +133,39 @@ test.describe('ServiceBlueprint editor undo and redo', () => {
     await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
 
     await page.locator('[data-wayfinder-stage="declaration"]').dblclick();
-    const formDefinitionInput = page.locator('[data-wayfinder-action-param="0-formDefinitionId"]');
+    // Scoped to the stage's OWN action editor — "declaration" now also has its own outgoing
+    // route(s), each carrying a wayfinder-stage-action-editor of its own since a stage's routes
+    // became fully editable in place, so an unscoped locator is ambiguous on this fixture.
+    const stage = page.locator('wayfinder-stage-action-editor[subject-label="stage"]');
+    const formDefinitionInput = stage.locator('[data-wayfinder-action-param="0-formDefinitionId"]');
     await expect(formDefinitionInput).toHaveValue('planning-declaration');
     await formDefinitionInput.fill('planning-declaration-v2');
     await expect(formDefinitionInput).toHaveValue('planning-declaration-v2');
 
-    await page.locator('[data-wayfinder-open-action-picker]').click();
-    await page.locator('[data-wayfinder-action-picker-option="notifications.send-sms"]').click();
-    await page.locator('[data-wayfinder-action-picker-add]').click();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(2);
+    await stage.locator('[data-wayfinder-open-action-picker]').click();
+    await stage.locator('[data-wayfinder-action-picker-option="notifications.send-sms"]').click();
+    await stage.locator('[data-wayfinder-action-picker-add]').click();
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(2);
 
-    await page.locator('[data-wayfinder-stage-action="1"]').focus();
+    await stage.locator('[data-wayfinder-stage-action="1"]').focus();
     await page.keyboard.press('Alt+ArrowUp');
-    await expect(page.locator('[data-wayfinder-stage-action="0"] .action-title')).toContainText('Send SMS');
+    await expect(stage.locator('[data-wayfinder-stage-action="0"] .action-title')).toContainText('Send SMS');
 
-    await page.locator('[data-wayfinder-stage-action-remove="0"]').click();
-    const deleteDialog = page.locator('[data-wayfinder-delete-action-dialog]');
+    await stage.locator('[data-wayfinder-stage-action-remove="0"]').click();
+    const deleteDialog = stage.locator('[data-wayfinder-delete-action-dialog]');
     await expect(deleteDialog).toBeVisible();
-    await page.locator('[data-wayfinder-delete-action-confirm]').click();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(1);
+    await stage.locator('[data-wayfinder-delete-action-confirm]').click();
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(1);
 
     await page.locator('[data-wayfinder-undo]').click();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(2);
-    await expect(page.locator('[data-wayfinder-stage-action="0"] .action-title')).toContainText('Send SMS');
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(2);
+    await expect(stage.locator('[data-wayfinder-stage-action="0"] .action-title')).toContainText('Send SMS');
 
     await page.locator('[data-wayfinder-undo]').click();
-    await expect(page.locator('[data-wayfinder-stage-action="1"] .action-title')).toContainText('Send SMS');
+    await expect(stage.locator('[data-wayfinder-stage-action="1"] .action-title')).toContainText('Send SMS');
 
     await page.locator('[data-wayfinder-undo]').click();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(1);
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(1);
 
     await page.locator('[data-wayfinder-undo]').click();
     await expect(formDefinitionInput).toHaveValue('planning-declaration');
@@ -169,10 +173,10 @@ test.describe('ServiceBlueprint editor undo and redo', () => {
     await page.locator('[data-wayfinder-redo]').click();
     await expect(formDefinitionInput).toHaveValue('planning-declaration-v2');
     await page.locator('[data-wayfinder-redo]').click();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(2);
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(2);
     await page.locator('[data-wayfinder-redo]').click();
-    await expect(page.locator('[data-wayfinder-stage-action="0"] .action-title')).toContainText('Send SMS');
+    await expect(stage.locator('[data-wayfinder-stage-action="0"] .action-title')).toContainText('Send SMS');
     await page.locator('[data-wayfinder-redo]').click();
-    await expect(page.locator('[data-wayfinder-stage-action]')).toHaveCount(1);
+    await expect(stage.locator('[data-wayfinder-stage-action]')).toHaveCount(1);
   });
 });

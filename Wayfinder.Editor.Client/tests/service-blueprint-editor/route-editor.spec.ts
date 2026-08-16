@@ -89,3 +89,61 @@ test.describe('Route visibility (showWhen)', () => {
     await expect(routeBlock.locator('wayfinder-calculation-expression-editor')).toHaveCount(0);
   });
 });
+
+// Regression: a stage's own "Outgoing routes" panel used to render a read-only summary line for
+// every route it owns — no way back into a route's full editor (target/role/showWhen/actions)
+// once it existed, unless it happened to also be reachable as a Join gateway's own "Incoming
+// routes". Most routes never are: start-request -> review-split targets an ordinary Split
+// pass-through, the shape almost every "Continue" button in a real service blueprint uses, and a
+// Split's own "Outgoing routes" panel only ever shows its OWN downstream routes, never routes
+// INTO it. So this specific, extremely common route shape had no editable surface anywhere.
+test.describe("A stage's own routes are fully editable from the stage's own panel", () => {
+  test('selecting the stage shows the full route editor for each of its own routes, not a read-only summary', async ({ page }) => {
+    await page.goto(storyUrl('service-blueprint-editor-editor-host--gateway-representation'));
+
+    const editor = page.locator('wayfinder-service-blueprint-editor');
+    await expect(editor).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Expand outline panel' }).click();
+
+    const outline = editor.locator('wayfinder-service-blueprint-outline');
+    await outline.locator('[data-wayfinder-outline-stage="start-request"]').click();
+
+    const inspector = editor.locator('wayfinder-step-inspector');
+    await expect(inspector.locator('[data-wayfinder-stage-detail="start-request"]')).toBeVisible();
+
+    const routeBlock = inspector.locator('[data-wayfinder-route-target="review-split"]');
+    await expect(routeBlock).toBeVisible();
+    // The full editor, not the old breadcrumb-only summary — a real, editable field.
+    await expect(routeBlock.locator('[data-wayfinder-route-label]')).toBeVisible();
+
+    const label = routeBlock.locator('[data-wayfinder-route-label]');
+    await label.fill('begin request');
+    await label.dispatchEvent('change');
+    await expect(inspector.locator('[data-wayfinder-route-target="review-split"] .gateway-route-title')).toHaveText('begin request');
+  });
+
+  test("a route targeting a gateway shows an honest read-only readout, not a native select silently defaulted to the wrong stage", async ({ page }) => {
+    // Before this fix: the "Target stage" <select> only ever lists real stages, so a route whose
+    // target is a gateway (review-split) matched none of its <option>s, and — since nothing was
+    // marked selected — the browser's own native fallback silently highlighted the FIRST stage in
+    // the list instead. That's not just a cosmetic glitch: an author who "reselected" what looked
+    // like the current value would genuinely retarget the route to that wrong stage.
+    await page.goto(storyUrl('service-blueprint-editor-editor-host--gateway-representation'));
+
+    const editor = page.locator('wayfinder-service-blueprint-editor');
+    await expect(editor).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Expand outline panel' }).click();
+
+    const outline = editor.locator('wayfinder-service-blueprint-outline');
+    await outline.locator('[data-wayfinder-outline-stage="start-request"]').click();
+
+    const inspector = editor.locator('wayfinder-step-inspector');
+    const routeBlock = inspector.locator('[data-wayfinder-route-target="review-split"]');
+    await expect(routeBlock).toBeVisible();
+
+    await expect(routeBlock.locator('[data-wayfinder-route-target-select]')).toHaveCount(0);
+    const readout = routeBlock.locator('[data-wayfinder-route-target-gateway]');
+    await expect(readout).toBeVisible();
+    await expect(readout).toContainText('Review split');
+  });
+});
