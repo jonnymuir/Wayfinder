@@ -33,19 +33,25 @@ needing its own configuration. Two action types, both reusing `ActionDefinition.
 same way `support-system-call` already does:
 
 - **`bulk-dataset-ingest`** (an `onEnter` action) parses a file field's content into an indexed,
-  pageable dataset. Its `columns` parameter — one entry per CSV column, each declaring a `role`
-  (see below) — is the *only* place a bulk dataset's shape is authored.
-- **`bulk-dataset-materialize`** (a route action) reconstructs the full CSV (original rows with
-  any corrections overlaid) and writes it back into a file field, ready to resubmit through the
-  same `support-system-call` action that produced the file in the first place — a genuine loop,
-  which Wayfinder's routing already supports natively (a route may target any previously-visited
-  stage; see `ProcessManagerEngine.MoveCursor`).
+  pageable dataset, minting a fresh dataset id and writing it into `datasetIdField`. Its `columns`
+  parameter — one entry per CSV column, each declaring a `role` (see below) — is the *only* place
+  a bulk dataset's shape is authored.
+- **`bulk-dataset-materialize`** (an `onEnter` action, typically on the same stage a loop's
+  `support-system-call` re-runs on, ordered before it) reconstructs the full CSV (original rows
+  with any corrections overlaid) for the dataset named by `datasetIdField`, and writes it back
+  into a file field — ready for that stage's own `support-system-call` action to resubmit through
+  the same call that produced the file in the first place. A genuine loop: a route may target any
+  previously-visited stage/gateway, which Wayfinder's routing already supports natively (see
+  `ProcessManagerEngine.MoveCursor`). Materialize is a safe no-op the first time round — before
+  anything's been ingested, `datasetIdField` has no value yet, so it leaves `targetFileField`
+  untouched and the original upload goes through as-is.
 
 ## `bulk-dataset-ingest` reference
 
 | Param | Meaning |
 |---|---|
 | `sourceFileField` | Field-ref to the file to ingest — typically a `support-system-call` action's own declared file output (the external system's response), sometimes a directly-captured `file-upload` field (a wholesale replacement upload). |
+| `datasetIdField` | Field-ref the freshly-minted dataset id is written into — the single identifier a later `bulk-dataset-materialize` action or a `BulkDataReviewComponent` binds to. Deliberately not `sourceFileField` itself: materialize runs on a different stage than ingest, sometimes several loop rounds later, and only ever has `ServiceRequest.FieldValues` to read from. |
 | `columns` | Array of column descriptors — see below. Must declare at least one, and exactly one with `role: "RowKey"`. |
 | `errorCountField` / `warningCountField` / `acceptedCountField` | Optional field-refs the ingest result's summary counts are written into, so ordinary calculation rules and route triggers can react to them without touching the dataset store directly — e.g. a route trigger `contributionsErrorCount = 0` to gate moving past the review stage. |
 
@@ -77,7 +83,7 @@ Each entry in `columns`:
 
 | Param | Meaning |
 |---|---|
-| `sourceFileField` | Must match some `bulk-dataset-ingest` action's own `sourceFileField` in this blueprint — it materializes a dataset ingest produced, it doesn't declare a new one. |
+| `datasetIdField` | Must match some `bulk-dataset-ingest` action's own `datasetIdField` in this blueprint — it materializes a dataset ingest produced, it doesn't declare a new one. |
 | `targetFileField` | Field-ref the materialized file is written into — typically the same field the original upload went to, so a route back to the automation queue resubmits it. |
 
 ## Validation
@@ -86,25 +92,56 @@ Registering these actions correctly gets a blueprint real, comprehensive validat
 `ServiceBlueprint.ValidateBulkDatasetActions()` (wired into the same `validate_service_blueprint`/
 `save_service_blueprint` pipeline as every other structural check):
 
-- `sourceFileField` is set and resolves to a known field — a captured input, or a support-system
-  capability's own declared output (`BULK_DATASET_ACTION_MISSING_SOURCE_FIELD`/
-  `_INVALID_SOURCE_FIELD`).
-- A `bulk-dataset-ingest` action declares at least one column (`_MISSING_COLUMNS`), every column
-  has both a `key` and `title` (`_INVALID_COLUMN`), no two columns share a `key`
-  (`_DUPLICATE_COLUMN_KEY`), and every `role`/`valueKind` is one of the closed, known vocabularies
-  (`_UNKNOWN_ROLE`/`_UNKNOWN_VALUE_KIND`).
+- Both action types must set `datasetIdField` (`BULK_DATASET_ACTION_MISSING_DATASET_ID_FIELD`).
+- A `bulk-dataset-ingest` action's `sourceFileField` is set and resolves to a known field — a
+  captured input, or a support-system capability's own declared output
+  (`_MISSING_SOURCE_FIELD`/`_INVALID_SOURCE_FIELD`).
+- It declares at least one column (`_MISSING_COLUMNS`), every column has both a `key` and `title`
+  (`_INVALID_COLUMN`), no two columns share a `key` (`_DUPLICATE_COLUMN_KEY`), and every
+  `role`/`valueKind` is one of the closed, known vocabularies (`_UNKNOWN_ROLE`/`_UNKNOWN_VALUE_KIND`).
 - Exactly one column declares `role: "RowKey"` — never zero, never more than one
   (`_MISSING_ROW_KEY`/`_DUPLICATE_ROW_KEY_ROLE`).
-- A `bulk-dataset-materialize` action's `sourceFileField` matches some `bulk-dataset-ingest`
-  action's own `sourceFileField` elsewhere in the blueprint (`_UNKNOWN_DATASET`), and it declares
-  a `targetFileField` (`_MISSING_TARGET_FIELD`).
+- A `bulk-dataset-materialize` action's `datasetIdField` matches some `bulk-dataset-ingest`
+  action's own `datasetIdField` elsewhere in the blueprint (`_UNKNOWN_DATASET`), and it declares a
+  `targetFileField` (`_MISSING_TARGET_FIELD`).
 
 Separately, `ValidateDataDisplayBindings()` treats any field key declared in an ingest action's
-`errorCountField`/`warningCountField`/`acceptedCountField` as a known, legitimate binding for a
-`summary-list`/`stat-group` anywhere in the blueprint — the same as a captured input field, a
-`calculations.fields` entry, or a support system's own declared `Outputs`.
+`datasetIdField`/`errorCountField`/`warningCountField`/`acceptedCountField` as a known, legitimate
+binding for a `summary-list`/`stat-group` anywhere in the blueprint — the same as a captured input
+field, a `calculations.fields` entry, or a support system's own declared `Outputs`.
 
 ## Using it in a blueprint
+
+The automation stage — entered on the initial upload's Split branch, and re-entered every time a
+"revalidate" route loops back to it — carries both actions, materialize ordered before the call
+that reads its output:
+
+```json
+{
+  "actions": [
+    {
+      "type": "bulk-dataset-materialize",
+      "timing": "onEnter",
+      "params": {
+        "datasetIdField": "contributionsDatasetId",
+        "targetFileField": "contributionsFile"
+      }
+    },
+    {
+      "type": "support-system-call",
+      "timing": "onEnter",
+      "params": {
+        "supportSystemKey": "safetynet-underwriting",
+        "capabilityKey": "validate-contributions-file",
+        "inputs": { "file": "contributionsFile" }
+      }
+    }
+  ]
+}
+```
+
+The review stage — reached once the join gateway releases, after SafetyNet's response resolves —
+carries the ingest action:
 
 ```json
 {
@@ -112,6 +149,7 @@ Separately, `ValidateDataDisplayBindings()` treats any field key declared in an 
   "timing": "onEnter",
   "params": {
     "sourceFileField": "contributionsResponseFile",
+    "datasetIdField": "contributionsDatasetId",
     "errorCountField": "contributionsErrorCount",
     "warningCountField": "contributionsWarningCount",
     "acceptedCountField": "contributionsAcceptedCount",
@@ -128,11 +166,13 @@ Separately, `ValidateDataDisplayBindings()` treats any field key declared in an 
 }
 ```
 
-Placing a `BulkDataReviewComponent` on the same stage, bound to the same `sourceFileField`,
-renders the review UI against whatever the ingest action's `columns` already declared — the
-component itself needs no column configuration of its own (see
+Placing a `BulkDataReviewComponent` on that same stage, bound to `contributionsDatasetId`, renders
+the review UI against whatever the ingest action's `columns` already declared — the component
+itself needs no column configuration of its own (see
 [Extending the component catalog](./extending-the-component-catalog.md) for the general pattern
-this follows).
+this follows). Its own "revalidate" route targets the original Split gateway again — re-entering
+the automation stage above runs materialize (this time with a real `datasetIdField` value),
+overwriting `contributionsFile` with the corrected data before `support-system-call` resubmits it.
 
 ## Performance and security
 

@@ -715,7 +715,8 @@ public record ServiceBlueprint
 
     /// <summary>
     /// Every field key a <c>bulk-dataset-ingest</c> action anywhere in this blueprint declares
-    /// via its <c>errorCountField</c>/<c>warningCountField</c>/<c>acceptedCountField</c> params —
+    /// via its <c>datasetIdField</c>/<c>errorCountField</c>/<c>warningCountField</c>/
+    /// <c>acceptedCountField</c> params —
     /// <see cref="ValidateDataDisplayBindings"/>'s "known field" set for stat-group/summary-list
     /// bindings, the same role <see cref="GetSupportSystemOutputFieldKeys"/> plays for a support
     /// system's own declared <c>Outputs</c>.
@@ -733,7 +734,7 @@ public record ServiceBlueprint
                     continue;
                 }
 
-                foreach (var countFieldParam in new[] { "errorCountField", "warningCountField", "acceptedCountField" })
+                foreach (var countFieldParam in new[] { "datasetIdField", "errorCountField", "warningCountField", "acceptedCountField" })
                 {
                     var fieldKey = action.Parameters[countFieldParam]?.GetValue<string>();
                     if (!string.IsNullOrWhiteSpace(fieldKey))
@@ -748,17 +749,22 @@ public record ServiceBlueprint
     }
 
     /// <summary>
-    /// Validates every <c>bulk-dataset-ingest</c>/<c>bulk-dataset-materialize</c> action: that
-    /// <c>sourceFileField</c> is set and actually resolves to a known field (a captured input, or
-    /// a support-system capability's own declared output — the response file from an external
-    /// system's <c>support-system-call</c> is the expected common case); that a
-    /// <c>bulk-dataset-ingest</c> action declares at least one column, exactly one of which is
+    /// Validates every <c>bulk-dataset-ingest</c>/<c>bulk-dataset-materialize</c> action. An
+    /// ingest action must set <c>sourceFileField</c>, resolving to a known field (a captured
+    /// input, or a support-system capability's own declared output — the response file from an
+    /// external system's <c>support-system-call</c> is the expected common case), and
+    /// <c>datasetIdField</c> — the field the minted dataset id is written into, the single
+    /// identifier a later <c>bulk-dataset-materialize</c> action or a <c>BulkDataReviewComponent</c>
+    /// binds to (deliberately not <c>sourceFileField</c> itself: a materialize action runs on a
+    /// different stage than ingest, sometimes several loop rounds later, and only ever has
+    /// <c>ServiceRequest.FieldValues</c> to read from — <c>datasetIdField</c> is how it finds
+    /// "the dataset ingest already produced" without the engine needing any dataset registry of
+    /// its own). It must also declare at least one column, exactly one of which is
     /// <see cref="BulkData.BulkDatasetColumnRole.RowKey"/> (never zero, never more than one — the
-    /// external system can only be expected to echo back a single correlation column); that no
-    /// two columns share a <c>key</c>; and that every column's <c>role</c>/<c>valueKind</c> is one
-    /// of the closed, known vocabularies. A <c>bulk-dataset-materialize</c> action's own
-    /// <c>sourceFileField</c> must match some <c>bulk-dataset-ingest</c> action's — it materializes
-    /// a dataset that ingest produced, it doesn't declare a new one. See
+    /// external system can only be expected to echo back a single correlation column); no two
+    /// columns may share a <c>key</c>; and every column's <c>role</c>/<c>valueKind</c> must be one
+    /// of the closed, known vocabularies. A <c>bulk-dataset-materialize</c> action must set
+    /// <c>datasetIdField</c> (matching some ingest action's own) and <c>targetFileField</c>. See
     /// docs/guides/bulk-data-review.md.
     /// </summary>
     public IReadOnlyList<ServiceBlueprintDiagnostic> ValidateBulkDatasetActions()
@@ -771,8 +777,11 @@ public record ServiceBlueprint
             .ToHashSet(StringComparer.Ordinal);
         knownFieldKeys.UnionWith(GetSupportSystemOutputFieldKeys());
 
-        var ingestSourceFileFields = new HashSet<string>(StringComparer.Ordinal);
+        var ingestDatasetIdFields = new HashSet<string>(StringComparer.Ordinal);
 
+        // Pass 1: bulk-dataset-ingest actions only — collects every declared datasetIdField
+        // first, so pass 2 (below) can validate a materialize action against the *complete* set
+        // regardless of which stage/action ends up earlier in iteration order.
         foreach (var stage in Stages)
         {
             var actionIndex = 0;
@@ -781,12 +790,22 @@ public record ServiceBlueprint
                 var path = $"stages.{stage.StageKey}.actions[{actionIndex}]";
                 actionIndex++;
 
-                var isIngest = string.Equals(action.Type, BulkData.BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal);
-                var isMaterialize = string.Equals(action.Type, BulkData.BulkDataActionTypes.BulkDatasetMaterialize, StringComparison.Ordinal);
-                if (!isIngest && !isMaterialize)
+                if (!string.Equals(action.Type, BulkData.BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal))
                 {
                     continue;
                 }
+
+                var datasetIdField = action.Parameters["datasetIdField"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(datasetIdField))
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_MISSING_DATASET_ID_FIELD",
+                        $"{path}.params.datasetIdField",
+                        "A bulk-dataset-ingest action must set params.datasetIdField."));
+                    continue;
+                }
+
+                ingestDatasetIdFields.Add(datasetIdField);
 
                 var sourceFileField = action.Parameters["sourceFileField"]?.GetValue<string>();
                 if (string.IsNullOrWhiteSpace(sourceFileField))
@@ -794,11 +813,9 @@ public record ServiceBlueprint
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
                         "BULK_DATASET_ACTION_MISSING_SOURCE_FIELD",
                         $"{path}.params.sourceFileField",
-                        $"A {action.Type} action must set params.sourceFileField."));
-                    continue;
+                        "A bulk-dataset-ingest action must set params.sourceFileField."));
                 }
-
-                if (!knownFieldKeys.Contains(sourceFileField))
+                else if (!knownFieldKeys.Contains(sourceFileField))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
                         "BULK_DATASET_ACTION_INVALID_SOURCE_FIELD",
@@ -806,22 +823,6 @@ public record ServiceBlueprint
                         $"sourceFileField '{sourceFileField}' is neither a captured input field nor a " +
                         "support system capability's declared output anywhere in this blueprint."));
                 }
-
-                if (isMaterialize)
-                {
-                    var targetFileField = action.Parameters["targetFileField"]?.GetValue<string>();
-                    if (string.IsNullOrWhiteSpace(targetFileField))
-                    {
-                        diagnostics.Add(new ServiceBlueprintDiagnostic(
-                            "BULK_DATASET_ACTION_MISSING_TARGET_FIELD",
-                            $"{path}.params.targetFileField",
-                            "A bulk-dataset-materialize action must set params.targetFileField."));
-                    }
-
-                    continue;
-                }
-
-                ingestSourceFileFields.Add(sourceFileField);
 
                 var columns = action.Parameters["columns"]?.AsArray();
                 if (columns is null || columns.Count == 0)
@@ -910,6 +911,7 @@ public record ServiceBlueprint
             }
         }
 
+        // Pass 2: bulk-dataset-materialize actions, validated against the complete set pass 1 collected.
         foreach (var stage in Stages)
         {
             var actionIndex = 0;
@@ -923,14 +925,30 @@ public record ServiceBlueprint
                     continue;
                 }
 
-                var sourceFileField = action.Parameters["sourceFileField"]?.GetValue<string>();
-                if (!string.IsNullOrWhiteSpace(sourceFileField) && !ingestSourceFileFields.Contains(sourceFileField))
+                var datasetIdField = action.Parameters["datasetIdField"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(datasetIdField))
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_MISSING_DATASET_ID_FIELD",
+                        $"{path}.params.datasetIdField",
+                        "A bulk-dataset-materialize action must set params.datasetIdField."));
+                }
+                else if (!ingestDatasetIdFields.Contains(datasetIdField))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
                         "BULK_DATASET_ACTION_UNKNOWN_DATASET",
-                        $"{path}.params.sourceFileField",
-                        $"sourceFileField '{sourceFileField}' doesn't match any bulk-dataset-ingest action's own " +
-                        "sourceFileField in this blueprint — there's no dataset for this action to materialize."));
+                        $"{path}.params.datasetIdField",
+                        $"datasetIdField '{datasetIdField}' doesn't match any bulk-dataset-ingest action's own " +
+                        "datasetIdField in this blueprint — there's no dataset for this action to materialize."));
+                }
+
+                var targetFileField = action.Parameters["targetFileField"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(targetFileField))
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "BULK_DATASET_ACTION_MISSING_TARGET_FIELD",
+                        $"{path}.params.targetFileField",
+                        "A bulk-dataset-materialize action must set params.targetFileField."));
                 }
             }
         }

@@ -31,6 +31,7 @@ public class BulkDatasetActionValidationTests
         Parameters = parameters ?? new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["errorCountField"] = "contributionsErrorCount",
             ["columns"] = ValidColumns(),
         },
@@ -42,7 +43,7 @@ public class BulkDatasetActionValidationTests
         Timing = "onEnter",
         Parameters = parameters ?? new JsonObject
         {
-            ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["targetFileField"] = "contributionsFile",
         },
     };
@@ -89,19 +90,36 @@ public class BulkDatasetActionValidationTests
     }
 
     [Fact]
-    public void MissingSourceField_Flagged()
+    public void Ingest_MissingDatasetIdField_Flagged()
     {
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject { ["columns"] = ValidColumns() }));
+        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        {
+            ["sourceFileField"] = "contributionsFile",
+            ["columns"] = ValidColumns(),
+        }));
+
+        blueprint.ValidateBulkDatasetActions().Should().ContainSingle(d => d.Code == "BULK_DATASET_ACTION_MISSING_DATASET_ID_FIELD");
+    }
+
+    [Fact]
+    public void Ingest_MissingSourceField_Flagged()
+    {
+        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        {
+            ["datasetIdField"] = "contributionsDatasetId",
+            ["columns"] = ValidColumns(),
+        }));
 
         blueprint.ValidateBulkDatasetActions().Should().ContainSingle(d => d.Code == "BULK_DATASET_ACTION_MISSING_SOURCE_FIELD");
     }
 
     [Fact]
-    public void SourceFieldNotAKnownField_Flagged()
+    public void Ingest_SourceFieldNotAKnownField_Flagged()
     {
         var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
         {
             ["sourceFileField"] = "notARealField",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["columns"] = ValidColumns(),
         }));
 
@@ -109,18 +127,19 @@ public class BulkDatasetActionValidationTests
     }
 
     [Fact]
-    public void MissingColumns_Flagged()
+    public void Ingest_MissingColumns_Flagged()
     {
         var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
         }));
 
         blueprint.ValidateBulkDatasetActions().Should().ContainSingle(d => d.Code == "BULK_DATASET_ACTION_MISSING_COLUMNS");
     }
 
     [Fact]
-    public void NoRowKeyColumn_Flagged()
+    public void Ingest_NoRowKeyColumn_Flagged()
     {
         var columns = new JsonArray
         {
@@ -129,6 +148,7 @@ public class BulkDatasetActionValidationTests
         var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["columns"] = columns,
         }));
 
@@ -136,7 +156,7 @@ public class BulkDatasetActionValidationTests
     }
 
     [Fact]
-    public void MoreThanOneRowKeyColumn_Flagged()
+    public void Ingest_MoreThanOneRowKeyColumn_Flagged()
     {
         var columns = new JsonArray
         {
@@ -146,6 +166,7 @@ public class BulkDatasetActionValidationTests
         var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["columns"] = columns,
         }));
 
@@ -153,7 +174,7 @@ public class BulkDatasetActionValidationTests
     }
 
     [Fact]
-    public void DuplicateColumnKey_Flagged()
+    public void Ingest_DuplicateColumnKey_Flagged()
     {
         var columns = new JsonArray
         {
@@ -163,6 +184,7 @@ public class BulkDatasetActionValidationTests
         var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["columns"] = columns,
         }));
 
@@ -170,7 +192,7 @@ public class BulkDatasetActionValidationTests
     }
 
     [Fact]
-    public void UnrecognisedRole_Flagged()
+    public void Ingest_UnrecognisedRole_Flagged()
     {
         var columns = new JsonArray
         {
@@ -180,6 +202,7 @@ public class BulkDatasetActionValidationTests
         var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["columns"] = columns,
         }));
 
@@ -187,7 +210,7 @@ public class BulkDatasetActionValidationTests
     }
 
     [Fact]
-    public void UnrecognisedValueKind_Flagged()
+    public void Ingest_UnrecognisedValueKind_Flagged()
     {
         var columns = new JsonArray
         {
@@ -197,6 +220,7 @@ public class BulkDatasetActionValidationTests
         var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["columns"] = columns,
         }));
 
@@ -204,7 +228,7 @@ public class BulkDatasetActionValidationTests
     }
 
     [Fact]
-    public void ColumnMissingKeyOrTitle_Flagged()
+    public void Ingest_ColumnMissingKeyOrTitle_Flagged()
     {
         var columns = new JsonArray
         {
@@ -214,6 +238,7 @@ public class BulkDatasetActionValidationTests
         var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
             ["columns"] = columns,
         }));
 
@@ -221,26 +246,64 @@ public class BulkDatasetActionValidationTests
     }
 
     [Fact]
+    public void Materialize_MissingDatasetIdField_Flagged()
+    {
+        var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new JsonObject
+        {
+            ["targetFileField"] = "contributionsFile",
+        }));
+
+        blueprint.ValidateBulkDatasetActions().Should().ContainSingle(d => d.Code == "BULK_DATASET_ACTION_MISSING_DATASET_ID_FIELD");
+    }
+
+    [Fact]
     public void Materialize_MissingTargetField_Flagged()
     {
         var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new JsonObject
         {
-            ["sourceFileField"] = "contributionsFile",
+            ["datasetIdField"] = "contributionsDatasetId",
         }));
 
         blueprint.ValidateBulkDatasetActions().Should().ContainSingle(d => d.Code == "BULK_DATASET_ACTION_MISSING_TARGET_FIELD");
     }
 
     [Fact]
-    public void Materialize_SourceFieldNotAnyIngestActions_Flagged()
+    public void Materialize_DatasetIdFieldNotAnyIngestActions_Flagged()
     {
         var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new JsonObject
         {
-            ["sourceFileField"] = "someOtherFile",
+            ["datasetIdField"] = "someOtherDatasetId",
             ["targetFileField"] = "contributionsFile",
         }));
 
         blueprint.ValidateBulkDatasetActions().Should().ContainSingle(d => d.Code == "BULK_DATASET_ACTION_UNKNOWN_DATASET");
+    }
+
+    [Fact]
+    public void Materialize_DatasetIdFieldMatchesAnIngestAction_EvenWhenDeclaredFirstInJson()
+    {
+        // The materialize action appears before its ingest counterpart in stage.Actions — proves
+        // the two-pass design (collect every ingest datasetIdField, then validate materialize)
+        // doesn't depend on declaration order.
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "fixture",
+            DisplayName = "Fixture",
+            InitialStage = "automation",
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "automation",
+                    DisplayName = "Automation",
+                    QueueKey = "automation",
+                    Components = [],
+                    Actions = [MakeMaterializeAction(), MakeIngestAction()],
+                },
+            ],
+        };
+
+        blueprint.ValidateBulkDatasetActions().Should().NotContain(d => d.Code == "BULK_DATASET_ACTION_UNKNOWN_DATASET");
     }
 
     [Fact]
