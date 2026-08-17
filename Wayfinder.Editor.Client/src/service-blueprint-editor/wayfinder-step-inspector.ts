@@ -2012,6 +2012,12 @@ export class WayfinderStepInspectorElement extends LitElement {
       font-weight: 600;
     }
 
+    .field-toggle input[type='checkbox'] {
+      width: 1rem;
+      height: 1rem;
+      accent-color: #1d4ed8;
+    }
+
     .pattern-field {
       gap: 0.875rem;
       padding: 0.75rem;

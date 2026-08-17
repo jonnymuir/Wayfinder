@@ -1545,6 +1545,60 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
       font-weight: 600;
     }
 
+    .field-toggle input[type='checkbox'] {
+      width: 1rem;
+      height: 1rem;
+      accent-color: #1d4ed8;
+    }
+
+    /* Array-of-objects property fields (e.g. bulk-dataset-ingest's own columns param) render via
+       component-property-editor.ts's shared renderPropertyField, but Lit's shadow DOM means these
+       class names carry no styling unless each host component defines its own copy — verbatim
+       from wayfinder-step-inspector.ts, which renders the identical markup for a chart's bands or
+       a stat-group's items and already has it. */
+    .property-array,
+    .property-object {
+      display: grid;
+      gap: 0.5rem;
+      border: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .property-array-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .property-array-item {
+      display: grid;
+      gap: 0.5rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #d8dde3;
+    }
+
+    .property-array-item-fields {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .property-array-remove,
+    .text-button {
+      justify-self: start;
+      background: none;
+      border: none;
+      color: #b91c1c;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+      font-size: 0.8125rem;
+    }
+
     .field-control-error {
       border-color: #dc2626;
     }
