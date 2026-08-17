@@ -102,6 +102,7 @@ public sealed class ServiceBlueprintAuthoringService(
         diagnostics.AddRange(blueprint.ValidateFieldReferences());
         diagnostics.AddRange(blueprint.ValidateReachability());
         diagnostics.AddRange(blueprint.ValidateStageVocabulary());
+        diagnostics.AddRange(blueprint.ValidateRequestPolicy());
         diagnostics.AddRange(blueprint.ValidateSupportSystemActions());
         diagnostics.AddRange(blueprint.ValidateBulkDatasetActions());
         diagnostics.AddRange(ValidateComponentProperties(blueprint));

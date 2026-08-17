@@ -20,6 +20,17 @@ public interface IProcessManager
         string? instanceId = null,
         string? action = null);
 
+    /// <summary>
+    /// A distinct "start a new one" affordance, as opposed to <c>GetCurrent</c>'s "continue where
+    /// I left off" — reinstates a non-terminal existing instance exactly as ambient
+    /// <c>GetCurrent</c> already does, but genuinely starts fresh once the existing one has
+    /// reached a terminal stage, rather than returning that stale confirmation forever. See
+    /// <c>ProcessManagerEngine.GetCurrentOrStartFresh</c>'s own remarks for why this needed to be
+    /// a new method rather than a change to the existing explicit <c>action: "start-new"</c>.
+    /// </summary>
+    ServiceRequestResponseEnvelope GetCurrentOrStartFresh(
+        string blueprintKey, string tenantId, string userId, ActorProfile accessProfile);
+
     ServiceRequestResponseEnvelope Advance(
         string instanceId,
         string tenantId,
@@ -50,7 +61,20 @@ public interface IProcessManager
     /// </summary>
     IReadOnlyList<string> ClaimInstances(string tenantId, string fromUserId, string toUserId);
 
-    QueueWorkListEnvelope GetQueueWorkItems(ActorProfile accessProfile);
+    /// <summary>
+    /// The caseworker worklist. <paramref name="statuses"/> defaults (when <see langword="null"/>)
+    /// to <c>{Actionable, Waiting}</c> — today's exact view; pass an explicit, possibly-empty
+    /// collection to override it (see docs/guides/queue-worklist-filtering.md for the
+    /// null-vs-empty distinction). <paramref name="searchText"/> matches case-insensitively across
+    /// instance id, blueprint/stage display name, and every raw field value.
+    /// </summary>
+    QueueWorkListEnvelope GetQueueWorkItems(
+        ActorProfile accessProfile,
+        IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
+        QueueWorkListSort sort = QueueWorkListSort.Default,
+        string? searchText = null,
+        int pageIndex = 0,
+        int pageSize = 20);
 
     IEnumerable<ServiceRequest> GetAllInstances();
 

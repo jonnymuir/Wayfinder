@@ -16,6 +16,18 @@ public record ServiceRequest
     public string UserId { get; init; } = "";
 
     /// <summary>
+    /// What <c>ProcessManagerEngine.FindLatestInstance</c> actually groups "is there already one?"
+    /// by, for the "single"/"prompt" request policies — set once at creation time from
+    /// <c>ActorProfile.ConcurrencyScopeKey ?? userId</c> (see that property's own remarks), never
+    /// changed afterwards. Always equals <see cref="UserId"/> unless the request that created this
+    /// instance supplied an explicit <c>ConcurrencyScopeKey</c> — kept as its own field, distinct
+    /// from <see cref="UserId"/>, so who actually submitted something stays attributable even when
+    /// several people share one concurrency scope (e.g. one organisation's several users all
+    /// sharing one in-flight bulk submission).
+    /// </summary>
+    public string ConcurrencyScopeKey { get; init; } = "";
+
+    /// <summary>
     /// True when <see cref="UserId"/> identifies a signed-in user rather than an anonymous
     /// visitor's correlation cookie. A store may use this to apply a longer-lived (or
     /// unbounded) retention policy than it would for an anonymous session — see
