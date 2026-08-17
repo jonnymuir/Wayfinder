@@ -149,6 +149,54 @@ public class NjfContributionsBlueprintTests
 
     private const string Header = "memberRef,memberName,tier,fireEndorsement,under18,dob,monthlyContribution,safetyNetMemberId,errorText,warningText";
 
+    private sealed record Session(ProcessManagerEngine Engine, ScriptedClient Client, string InstanceId);
+
+    /// <summary>
+    /// Shared setup both tests below need: a fresh engine wired exactly like
+    /// Wayfinder.ReferenceApp/Program.cs's own registration, with an instance already through
+    /// "submit" and its round-1 response scripted. Callers still own their own
+    /// <c>SupportSystemRegistry.Register</c>/<c>ResetForTests</c> pairing, since xUnit runs
+    /// [Fact]s in the same process and this registry is static.
+    /// </summary>
+    private static async Task<Session> StartAndSubmitAsync(string round1ResponseCsv)
+    {
+        var fileStorage = new InMemoryServiceRequestFileStorage();
+        var bulkDatasetStore = new InMemoryBulkDatasetStore(fileStorage);
+        var client = new ScriptedClient(fileStorage) { NextResponseCsv = round1ResponseCsv };
+
+        var engine = new ProcessManagerEngine(
+            NullLogger.Instance,
+            new SingleDefinitionServiceBlueprintStore(LoadDefinition()),
+            new PassthroughContentSanitizer(),
+            // Mirrors Wayfinder.ReferenceApp/Program.cs's own ProcessManagerEngine
+            // registration — contributionsErrorCount is "source: service" precisely so the
+            // review stage's "accept"/"accept-with-warnings" routes' showWhen can see it;
+            // without a resolver wired up, that's a CalculationException, not a
+            // silently-missing value.
+            serviceInputsResolver: (instance, definition, _) =>
+                (definition.Calculations?.Fields ?? new Dictionary<string, Wayfinder.Models.ServiceDesign.Calculations.ServiceBlueprintCalculationField>())
+                    .Where(field => string.Equals(field.Value.Source, "service", StringComparison.OrdinalIgnoreCase))
+                    .ToDictionary(field => field.Key, field => instance.FieldValues.GetValueOrDefault(field.Key)),
+            supportSystemClients: [client],
+            bulkDatasetStore: bulkDatasetStore);
+
+        var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+        var originalCsv = string.Join('\n', "memberRef,memberName,tier,fireEndorsement,under18,dob,monthlyContribution", "NJF-001,Alice,Recreational,N,N,,15.00");
+        await using var originalStream = new MemoryStream(Encoding.UTF8.GetBytes(originalCsv));
+        var originalStorageKey = await fileStorage.SaveAsync(started.InstanceId, "contributionsFile", originalStream, "contributions.csv");
+        var originalFileReference = new ServiceRequestFileReference
+        {
+            StorageKey = originalStorageKey, OriginalFileName = "contributions.csv", ContentType = "text/csv", SizeBytes = originalCsv.Length,
+        };
+
+        var afterSubmit = engine.Advance(
+            started.InstanceId, TenantId, UserId, CaseworkerProfile, "submit", started.StateVersion,
+            new Dictionary<string, object?> { ["contributionsFile"] = originalFileReference });
+        afterSubmit.ResponseState.Should().Be("defer");
+
+        return new Session(engine, client, afterSubmit.InstanceId);
+    }
+
     [Fact]
     public async Task FullLoop_AcceptNotOfferedUntilZeroErrors_ThenOfferedOnceRoundTwoIsClean()
     {
@@ -157,47 +205,14 @@ public class NjfContributionsBlueprintTests
         {
             SupportSystemRegistry.Register(SafetyNetDescriptor());
 
-            var fileStorage = new InMemoryServiceRequestFileStorage();
-            var bulkDatasetStore = new InMemoryBulkDatasetStore(fileStorage);
-            var client = new ScriptedClient(fileStorage)
-            {
-                NextResponseCsv = string.Join('\n',
-                    Header,
-                    "NJF-001,Alice,Recreational,N,N,,15.00,,,",
-                    "NJF-002,Bob,Recreational,N,N,,15.00,,Unrecognised tier,"),
-            };
-
-            var engine = new ProcessManagerEngine(
-                NullLogger.Instance,
-                new SingleDefinitionServiceBlueprintStore(LoadDefinition()),
-                new PassthroughContentSanitizer(),
-                // Mirrors Wayfinder.ReferenceApp/Program.cs's own ProcessManagerEngine
-                // registration — contributionsErrorCount is "source: service" precisely so the
-                // review stage's "accept" route's showWhen can see it; without a resolver
-                // wired up, that's a CalculationException, not a silently-missing value.
-                serviceInputsResolver: (instance, definition, _) =>
-                    (definition.Calculations?.Fields ?? new Dictionary<string, Wayfinder.Models.ServiceDesign.Calculations.ServiceBlueprintCalculationField>())
-                        .Where(field => string.Equals(field.Value.Source, "service", StringComparison.OrdinalIgnoreCase))
-                        .ToDictionary(field => field.Key, field => instance.FieldValues.GetValueOrDefault(field.Key)),
-                supportSystemClients: [client],
-                bulkDatasetStore: bulkDatasetStore);
-
-            var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
-            var originalCsv = string.Join('\n', "memberRef,memberName,tier,fireEndorsement,under18,dob,monthlyContribution", "NJF-001,Alice,Recreational,N,N,,15.00");
-            await using var originalStream = new MemoryStream(Encoding.UTF8.GetBytes(originalCsv));
-            var originalStorageKey = await fileStorage.SaveAsync(started.InstanceId, "contributionsFile", originalStream, "contributions.csv");
-            var originalFileReference = new ServiceRequestFileReference
-            {
-                StorageKey = originalStorageKey, OriginalFileName = "contributions.csv", ContentType = "text/csv", SizeBytes = originalCsv.Length,
-            };
-
-            var afterSubmit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "submit", started.StateVersion,
-                new Dictionary<string, object?> { ["contributionsFile"] = originalFileReference });
-            afterSubmit.ResponseState.Should().Be("defer");
+            var session = await StartAndSubmitAsync(string.Join('\n',
+                Header,
+                "NJF-001,Alice,Recreational,N,N,,15.00,,,",
+                "NJF-002,Bob,Recreational,N,N,,15.00,,Unrecognised tier,"));
+            var (engine, client, instanceId) = session;
 
             client.ReadyToResolve = true;
-            var atReview = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile, afterSubmit.InstanceId);
+            var atReview = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile, instanceId);
             atReview.Render!.StateDisplayName.Should().Be("Review contributions file");
 
             var actionKeysRound1 = atReview.Render.AvailableActions.Select(a => a.ActionKey).ToArray();
@@ -210,7 +225,7 @@ public class NjfContributionsBlueprintTests
             tampered.Problems.Should().ContainSingle(p => p.Code == "INVALID_TRANSITION");
 
             // Resubmit — bulk-dataset-materialize should feed SafetyNet round 1's ingested
-            // response, and this round's response has no errors.
+            // response, and this round's response has no errors or warnings.
             client.ReadyToResolve = false;
             client.NextResponseCsv = string.Join('\n',
                 Header,
@@ -222,9 +237,62 @@ public class NjfContributionsBlueprintTests
             client.ReadyToResolve = true;
             var atReviewRound2 = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile, afterResubmit.InstanceId);
             var actionKeysRound2 = atReviewRound2.Render!.AvailableActions.Select(a => a.ActionKey).ToArray();
-            actionKeysRound2.Should().Contain("accept", "round 2's response has zero errors — Accept and finish must now be offered");
+            actionKeysRound2.Should().Contain("accept", "round 2's response has zero errors and zero warnings — Accept and finish must now be offered directly");
+            actionKeysRound2.Should().NotContain("accept-with-warnings");
 
             var finished = engine.Advance(atReviewRound2.InstanceId, TenantId, UserId, CaseworkerProfile, "accept", atReviewRound2.StateVersion, null);
+            finished.Problems.Should().BeEmpty();
+            finished.Render!.StateDisplayName.Should().Be("Contributions file accepted");
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public async Task ZeroErrorsWithAWarning_RequiresExplicitConfirmation_BeforeReachingDone()
+    {
+        SupportSystemRegistry.ResetForTests();
+        try
+        {
+            SupportSystemRegistry.Register(SafetyNetDescriptor());
+
+            // Zero errors, one warning — the case the plain "accept" route deliberately excludes
+            // (showWhen: "contributionsErrorCount = 0 and contributionsWarningCount = 0").
+            var session = await StartAndSubmitAsync(string.Join('\n',
+                Header,
+                "NJF-001,Alice,Recreational,N,N,,15.00,,,",
+                "NJF-002,Bob,Performer,N,N,,55.00,,,Contribution outside expected band"));
+            var (engine, client, instanceId) = session;
+
+            client.ReadyToResolve = true;
+            var atReview = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile, instanceId);
+            var actionKeys = atReview.Render!.AvailableActions.Select(a => a.ActionKey).ToArray();
+            actionKeys.Should().NotContain("accept", "a warning is present — the direct-finish route must not be offered");
+            actionKeys.Should().Contain("accept-with-warnings", "zero errors with a warning present must offer the confirm-first route instead");
+
+            // Tampering straight to "accept" (bypassing the confirmation stage entirely) must
+            // still be rejected — the same protection as the zero-errors-with-errors case.
+            var tampered = engine.Advance(atReview.InstanceId, TenantId, UserId, CaseworkerProfile, "accept", atReview.StateVersion, null);
+            tampered.Problems.Should().ContainSingle(p => p.Code == "INVALID_TRANSITION");
+
+            var atConfirm = engine.Advance(atReview.InstanceId, TenantId, UserId, CaseworkerProfile, "accept-with-warnings", atReview.StateVersion, null);
+            atConfirm.Problems.Should().BeEmpty();
+            atConfirm.Render!.StateDisplayName.Should().Be("Confirm before finishing");
+            var confirmActionKeys = atConfirm.Render.AvailableActions.Select(a => a.ActionKey).ToArray();
+            confirmActionKeys.Should().Contain("back-to-review");
+            confirmActionKeys.Should().Contain("accept");
+
+            // Changing your mind goes back to the same review stage — the already-ingested
+            // dataset (idempotency-cached by stage/source file, per bulk-dataset-ingest's own
+            // doc comment) must still be there, not re-parsed or lost.
+            var backAtReview = engine.Advance(atConfirm.InstanceId, TenantId, UserId, CaseworkerProfile, "back-to-review", atConfirm.StateVersion, null);
+            backAtReview.Render!.StateDisplayName.Should().Be("Review contributions file");
+            backAtReview.Render.AvailableActions.Select(a => a.ActionKey).Should().Contain("accept-with-warnings");
+
+            var backAtConfirm = engine.Advance(backAtReview.InstanceId, TenantId, UserId, CaseworkerProfile, "accept-with-warnings", backAtReview.StateVersion, null);
+            var finished = engine.Advance(backAtConfirm.InstanceId, TenantId, UserId, CaseworkerProfile, "accept", backAtConfirm.StateVersion, null);
             finished.Problems.Should().BeEmpty();
             finished.Render!.StateDisplayName.Should().Be("Contributions file accepted");
         }

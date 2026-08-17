@@ -7,7 +7,8 @@
   "requestPolicy": "single",
   "calculations": {
     "fields": {
-      "contributionsErrorCount": { "source": "service" }
+      "contributionsErrorCount": { "source": "service" },
+      "contributionsWarningCount": { "source": "service" }
     }
   },
   "queues": [
@@ -114,13 +115,39 @@
       ],
       "routes": [
         { "id": "review--resubmit--split", "target": "to-support-system", "trigger": "resubmit", "label": "Resubmit corrected file" },
-        { "id": "review--accept--split", "target": "to-done", "trigger": "accept", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0" }
+        { "id": "review--accept--split", "target": "to-done", "trigger": "accept", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0" },
+        { "id": "review--accept-with-warnings--split", "target": "to-confirm-warnings", "trigger": "accept-with-warnings", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount > 0" }
+      ]
+    },
+    {
+      "stageKey": "confirm-warnings",
+      "displayName": "Confirm before finishing",
+      "queueKey": "caseworker",
+      "components": [
+        { "type": "panel", "heading": "Confirm before finishing" },
+        {
+          "type": "body",
+          "content": "This file has no errors, but SafetyNet Underwriting has flagged one or more rows with a warning. Warnings don't block finishing, but check the flagged rows are genuinely correct before you continue."
+        },
+        {
+          "type": "stat-group",
+          "title": "Summary",
+          "items": [
+            { "label": "Rows with warnings", "fieldKey": "contributionsWarningCount" },
+            { "label": "Accepted rows", "fieldKey": "contributionsAcceptedCount" }
+          ]
+        }
+      ],
+      "routes": [
+        { "id": "confirm-warnings--back--split", "target": "to-review-from-warnings", "trigger": "back-to-review", "label": "Back to review", "style": "secondary" },
+        { "id": "confirm-warnings--confirm--split", "target": "to-done", "trigger": "accept", "label": "Yes, accept with warnings" }
       ]
     },
     {
       "stageKey": "done",
       "displayName": "Contributions file accepted",
       "queueKey": "caseworker",
+      "stageType": "Confirmation",
       "components": [
         { "type": "panel", "heading": "Contributions file accepted" },
         { "type": "body", "content": "SafetyNet Underwriting has confirmed cover for every member in this file. No further action is needed for this cycle." }
@@ -160,6 +187,24 @@
       "queueKey": "caseworker",
       "routes": [
         { "id": "to-done--accept--done", "target": "done", "trigger": "accept" }
+      ]
+    },
+    {
+      "key": "to-confirm-warnings",
+      "displayName": "Continue to confirm before finishing",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        { "id": "to-confirm-warnings--accept-with-warnings--confirm-warnings", "target": "confirm-warnings", "trigger": "accept-with-warnings" }
+      ]
+    },
+    {
+      "key": "to-review-from-warnings",
+      "displayName": "Back to review",
+      "gatewayType": "Split",
+      "queueKey": "caseworker",
+      "routes": [
+        { "id": "to-review-from-warnings--back-to-review--review", "target": "review", "trigger": "back-to-review" }
       ]
     }
   ]
