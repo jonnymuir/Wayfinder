@@ -12,11 +12,12 @@ import { humanClick, humanType, humanMoveTo } from './support/human-interactions
  * Wayfinder's first bulk/row-level data capability, told through the National Juggling
  * Federation submitting a monthly contributions file to SafetyNet Underwriting — the same
  * fictional insurer from the overview demo, now doing automatic row-by-row validation instead of
- * a human decision. Shows the whole loop: upload, a genuinely separate app validating for real,
- * a client-fetched card UI surfacing only the rows that need attention, an inline correction,
- * a resubmission that materializes the corrected dataset (not the original upload), and a route
- * that only becomes reachable once the data is genuinely clean — plus a warning that does NOT
- * block finishing, to show that distinction is real, not just a label.
+ * a human decision. Shows the whole loop: upload, landing directly on a genuinely separate app's
+ * wait screen, a client-fetched card UI surfacing only the rows that need attention, an
+ * autosaved correction, a resubmission that materializes the corrected dataset (not the original
+ * upload), an explicit confirmation before finishing with a warning still on record, and — the
+ * closing act — the actual blueprint that declares all of it, on the canvas and in the
+ * properties panel, not hidden in host code.
  *
  * Not a CI test: this is a recording tool (see playwright.demo.config.ts, which no CI script
  * references). Every beat narrates something a real assertion just checked.
@@ -116,24 +117,25 @@ test.describe('Bulk data review — narrated end-to-end demo', () => {
     });
     await humanClick(page, page.getByRole('button', { name: 'Submit' }));
 
-    await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
-    const queueRow = page.locator('tr', { hasText: 'Submit an NJF contributions file' });
-    await expect(queueRow.getByText('Waiting')).toBeVisible();
-    await beat(page, 'recap', 'Straight back to the worklist, tagged “Waiting” — the same pattern the licensing demo uses: sent off to another system, but never lost from view.');
-
-    await humanClick(page, queueRow.getByRole('link', { name: 'View' }));
-    // SafetyNet Underwriting's own artificial processing delay is only ~3 seconds — by the time
-    // the narration beats above have played, it may have already resolved. Either outcome is a
-    // true statement about the app; narrate whichever one actually happened rather than assuming
-    // a fixed timing. Act 2's own wait for the review heading handles both cases either way (the
-    // wait screen's poll script reloads on its own if it's still showing).
+    // Lands directly on this instance's own wait screen — the same position the citizen flow has
+    // always put people on straight away, no detour through the queue list first required.
+    const instanceUrl = page.url();
     const stillProcessing = await page.getByText('SafetyNet Underwriting is processing the contributions file.')
       .waitFor({ state: 'visible', timeout: 3_000 })
       .then(() => true)
       .catch(() => false);
+    await beat(page, 'recap', 'Straight to the wait screen — not a detour through the worklist first. SafetyNet Underwriting is a genuinely separate app, on its own port, applying its own underwriting rules.');
+
+    // The submission still stays visible on Priya's own worklist while it's out with SafetyNet —
+    // navigate away and back to prove it, the same "Waiting" tag the licensing demo uses.
+    await humanClick(page, page.getByRole('link', { name: 'Caseworker queue' }));
+    const queueRow = page.locator('tr', { hasText: 'Submit an NJF contributions file' });
     await beat(page, 'note', stillProcessing
-      ? 'SafetyNet Underwriting is a genuinely separate app, on its own port, applying its own underwriting rules — not a stub.'
-      : 'SafetyNet Underwriting — a genuinely separate app, on its own port — has already answered.');
+      ? 'And if she navigates away — here it still is, tagged “Waiting”, never lost from view.'
+      : 'And if she navigates away — here it still is, findable on her own worklist even after the fact.');
+    await expect(queueRow).toBeVisible();
+    await humanClick(page, page.getByRole('link', { name: 'Wayfinder Reference App' }).or(page.locator('a[href="/"]')).first());
+    await page.goto(instanceUrl);
   });
 
   test('Act 2 — only the rows that need attention, fetched, not the whole file', async () => {
@@ -159,26 +161,20 @@ test.describe('Bulk data review — narrated end-to-end demo', () => {
     await beat(page, 'recap', 'No “Accept and finish” button anywhere on this page. One row still has a genuine error — that route simply isn’t offered yet, the same declarative shape as every other rule in Wayfinder.');
   });
 
-  test('Act 3 — correcting a row is a small request, not a page reload', async () => {
+  test('Act 3 — correcting a row autosaves, and can never be silently lost', async () => {
     const errorCard = page.locator('.wayfinder-bulk-review__card', { hasText: 'NJF-003' });
     await errorCard.scrollIntoViewIfNeeded();
     await expect(errorCard.getByText(/Unrecognised tier/)).toBeVisible();
     await beat(page, 'intent', '“Bogus” isn’t a real membership tier — a genuine data problem in Cara Delgado’s row. Priya fixes it in place.');
 
     await humanType(page, errorCard.getByLabel('Membership tier'), 'Recreational');
-    await humanClick(page, errorCard.getByRole('button', { name: 'Save correction' }));
-    await expect(errorCard.getByText('Saved')).toBeVisible();
-    await beat(page, 'recap', 'Saved — a small POST to this row alone. The other four rows, and the file itself, were never touched.');
+    await expect(errorCard.getByText('Saved')).toBeVisible({ timeout: 5_000 });
+    await beat(page, 'recap', 'No “Save” button — it autosaves shortly after she stops typing. Resubmitting always flushes any change still pending first, so a correction can never be silently left behind.');
 
     await beat(page, 'intent', 'Resubmitting sends the whole file back — SafetyNet Underwriting’s contract never changes — but built from the corrected data, not Priya’s original upload.');
     await humanClick(page, page.getByRole('button', { name: 'Resubmit corrected file' }));
 
-    await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
-    const queueRow = page.locator('tr', { hasText: 'Submit an NJF contributions file' });
-    await expect(queueRow.getByText('Waiting')).toBeVisible();
-    await humanClick(page, queueRow.getByRole('link', { name: 'View' }));
-    // Same race as Act 1 — narrate whichever is genuinely true; Act 4's own wait for the review
-    // heading covers both outcomes.
+    // Same direct-to-wait-screen landing as Act 1.
     const stillProcessingAgain = await page.getByText('SafetyNet Underwriting is processing the contributions file.')
       .waitFor({ state: 'visible', timeout: 3_000 })
       .then(() => true)
@@ -188,7 +184,7 @@ test.describe('Bulk data review — narrated end-to-end demo', () => {
       : 'Already answered again — the same real loop through both systems, just faster this time.');
   });
 
-  test('Act 4 — clean enough to finish, even with a warning still open', async () => {
+  test('Act 4 — a warning still needs an explicit yes, even though it never blocked', async () => {
     await beat(page, 'intent', 'SafetyNet Underwriting genuinely re-checks the corrected file this time — nothing here is cached from the first pass.');
     await expect(page.getByRole('heading', { name: 'Review contributions file' })).toBeVisible({ timeout: 20_000 });
 
@@ -203,18 +199,74 @@ test.describe('Bulk data review — narrated end-to-end demo', () => {
     const acceptButton = page.getByRole('button', { name: 'Accept and finish' });
     await expect(acceptButton).toBeVisible({ timeout: 10_000 });
     await moveNarrationTo(page, 'top');
-    await beat(page, 'recap', '“Accept and finish” is offered the moment the error count reaches zero — one declarative rule, checked against real data from a real second system, not a hand-written condition buried in a controller.', { position: 'top', holdMs: 5_500 });
+    await beat(page, 'recap', '“Accept and finish” is offered the moment the error count reaches zero — one declarative rule, checked against real data from a real second system.', { position: 'top' });
+
+    await humanClick(page, acceptButton);
+    await expect(page.getByRole('heading', { name: 'Confirm before finishing' })).toBeVisible();
+    await beat(page, 'intent', 'With a warning still on record, that same button leads here first, not straight through — an explicit yes, not a silent nod.');
+
+    const confirmButton = page.getByRole('button', { name: 'Yes, accept with warnings' });
+    await expect(confirmButton).toBeVisible();
+    await beat(page, 'note', 'A file with zero warnings skips this stage entirely — it only exists when there’s genuinely something to confirm.');
 
     // PRG, same as every other advance — and "done" is a terminal confirmation stage, so the
     // instance drops off the queue list entirely rather than showing "Waiting" (see
     // bulk-data-review-live.spec.ts's own remarks on the identical case). Capture the direct URL
     // before clicking so there's somewhere to go back to.
     const instanceUrl = page.url();
-    await humanClick(page, acceptButton);
+    await humanClick(page, confirmButton);
     await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
     await page.goto(instanceUrl);
     await expect(page.getByRole('heading', { name: 'Contributions file accepted' })).toBeVisible();
     await beat(page, 'recap', 'Done — with an outstanding warning still on record, exactly as it should be: a nudge, not a blocker.');
+  });
+
+  test('Act 5 — none of this is hidden in host code', async () => {
+    await beat(page, 'intent', 'Everything so far — the review stage, the two-route “Accept and finish”, the confirmation stage — is declared, not hand-coded. Here it is.');
+
+    await humanClick(page, page.getByRole('link', { name: 'Editor' }));
+    const shell = page.locator('[data-wayfinder-component="service-blueprint-editor-shell"]');
+    await expect(shell).toBeVisible({ timeout: 15_000 });
+
+    const blueprintSelector = page.locator('select.service-blueprint-selector');
+    await blueprintSelector.selectOption({ label: 'Submit an NJF contributions file (njf-contributions)' });
+    await expect(shell).toHaveAttribute('data-wayfinder-active-service-blueprint', 'njf-contributions', { timeout: 15_000 });
+    await page.waitForTimeout(400);
+
+    await humanClick(page, page.getByRole('button', { name: 'Fit to screen' }));
+    await page.waitForTimeout(500);
+    await beat(page, 'setup', 'The whole thing on one canvas — upload, the loop out to SafetyNet Underwriting, review, and the confirm-before-finishing stage this film just walked through.');
+
+    const reviewNode = page.getByRole('button', { name: /Review contributions file/ }).first();
+    const reviewBox = await reviewNode.boundingBox();
+    if (reviewBox) {
+      await humanMoveTo(page, reviewBox.x + reviewBox.width / 2, reviewBox.y + reviewBox.height / 2);
+    }
+    for (let i = 0; i < 8; i++) {
+      await page.mouse.wheel(0, -120);
+      await page.waitForTimeout(90);
+    }
+    await page.waitForTimeout(400);
+    await beat(page, 'setup', 'The review stage itself — this is where the bulk-data-review card UI and the two “Accept and finish” routes both live.');
+
+    await humanClick(page, reviewNode);
+    const inspector = page.locator('wayfinder-step-inspector');
+    await expect(inspector.locator('#stage-actions-heading')).toBeVisible();
+    await inspector.locator('#stage-actions-heading').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(400);
+    await beat(page, 'recap', 'One action on this stage — “Ingest a bulk dataset” — and its properties panel is exactly where a column schema gets authored.');
+
+    // Scroll further into the action editor's own columns list — the same generic
+    // array-of-typed-objects rendering a stat-group's items already get, now correctly styled.
+    await page.mouse.move(1050, 500);
+    for (let i = 0; i < 5; i++) {
+      await page.mouse.wheel(0, 260);
+      await page.waitForTimeout(140);
+    }
+    const columnKeyField = inspector.getByLabel('Column key');
+    await expect(columnKeyField.first()).toBeVisible({ timeout: 5_000 });
+    await beat(page, 'setup', 'One entry per CSV column — key, title, value kind, and a role: RowKey, Data, or one of SafetyNet’s own response columns.');
+    await beat(page, 'recap', 'This is the only place a bulk dataset’s shape gets authored. The review card UI on the other end needs none of its own configuration — it just renders whatever this declares.');
 
     await showSlate(page, {
       eyebrow: 'WHAT YOU JUST WATCHED',
@@ -222,9 +274,9 @@ test.describe('Bulk data review — narrated end-to-end demo', () => {
       body:
         'A file exchange with a system that only ever speaks whole-file-in, whole-file-out — hidden behind a ' +
         'modern review experience that only shows what needs attention, corrects it in place, and resubmits ' +
-        'the corrected dataset, not the original upload. Errors block; warnings inform. Every rule declared, ' +
-        'not hand-coded — the same model as the rest of Wayfinder, now handling rows by the thousand instead ' +
-        'of one case at a time.',
+        'the corrected dataset, not the original upload. Errors block; warnings need an explicit yes, not a ' +
+        'silent nod. Every rule declared, not hand-coded — the same model as the rest of Wayfinder, now ' +
+        'handling rows by the thousand instead of one case at a time.',
       holdMs: 8_000
     });
     await clearSlate(page);

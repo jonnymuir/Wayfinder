@@ -194,6 +194,57 @@ review stage needs none of its own. The editor's own live diagnostics mirror
 `datasetIdField` not matching any ingest action's) for an immediate nudge before Save; the
 server-side check is still the authoritative one.
 
+## Requiring explicit confirmation for a non-blocking condition
+
+Errors and warnings mean different things: an error blocks (the route simply isn't offered until
+`errorCountField` reaches zero — see [Validation](#validation) above), but a warning shouldn't
+stop someone finishing who's already checked it's fine. The worked example still wants an explicit
+"yes, I've seen this" moment before finishing with a warning on record, without touching the
+engine at all — two routes sharing one trigger and label, gated by mutually exclusive `showWhen`
+conditions, one of them routing through a small interstitial stage instead of straight to done:
+
+```json
+{
+  "routes": [
+    { "target": "to-done", "trigger": "accept", "label": "Accept and finish",
+      "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0" },
+    { "target": "to-confirm-warnings", "trigger": "accept-with-warnings", "label": "Accept and finish",
+      "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount > 0" }
+  ]
+}
+```
+
+The caseworker only ever sees one "Accept and finish" button — never both — since the two
+`showWhen` conditions can't both be true. The interstitial stage itself just needs a route back
+into the same `to-done` gateway the direct path already uses, and (optionally) a "Back to review"
+escape hatch: re-entering the review stage is safe, `bulk-dataset-ingest`'s own idempotency cache
+(keyed on `instanceId`/stageKey/source file) means it reuses the already-ingested dataset rather
+than re-parsing. Both `to-confirm-warnings` and the "back" route need their own single-route Split
+gateway each — a stage's routes must always target a gateway, never another stage directly (see
+`ServiceBlueprint.ValidateGatewayRouting()`).
+
+**A footgun worth knowing before writing a condition like the one above**: `showWhen` fails
+**open** — a `CalculationException` while evaluating it leaves the route visible, not hidden
+(logged as a warning, not surfaced as an error). A field populated by `errorCountField`/
+`warningCountField`/`acceptedCountField` lives in `ServiceRequest.FieldValues`, but referencing it
+in a `showWhen` expression still requires declaring it under the blueprint's own
+`calculations.fields` block with `source: "service"` (the same "service"-sourced pattern
+`errorCountField` needs, backed by a host resolver that reads the value straight back off
+`FieldValues` — see `Wayfinder.ReferenceApp/Program.cs`'s own `serviceInputsResolver`). Skip that
+declaration and every route conditioned on the field **stays visible regardless of its actual
+value** — silently, since the failure is swallowed. `njf-contributions.json` declares both
+`contributionsErrorCount` and `contributionsWarningCount` for exactly this reason.
+
+## Corrections autosave
+
+`BulkDataReviewComponent`'s row cards save a correction automatically (debounced, shortly after
+you stop typing) rather than needing an explicit button — a manual save button meant a second edit
+made after saving once could be silently left out of a later `bulk-dataset-materialize`, since
+materialize always reads whatever the store last had, not whatever's currently on screen. Every
+navigation away from the current page of rows (paging, filtering, or submitting any route on the
+stage) flushes any still-pending save first and waits for it, so a change can't be silently
+dropped by clicking away before the debounce fires.
+
 ## Performance and security
 
 Both are first-class requirements of the underlying `IBulkDatasetStore`, not afterthoughts —
