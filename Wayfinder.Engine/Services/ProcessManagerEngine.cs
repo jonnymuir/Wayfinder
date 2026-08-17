@@ -552,6 +552,14 @@ public class ProcessManagerEngine : IProcessManager
                     return Array.Empty<QueueWorkItem>();
                 }
 
+                // A deliberate refresh of the list should show reality, not what was true the
+                // last time anyone happened to open this specific item — give a waiting item the
+                // same poll-resolve chance BuildEnvelope already gives it on a single-instance
+                // read, just applied per row here instead of per page. No background timer: this
+                // only ever runs inside a caller's own GET, same as everywhere else this hook is
+                // used.
+                instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
+
                 // A join-gateway item legitimately has no available actions — the actor is waiting
                 // on another queue, not choosing anything. Filtering purely on "has actions" hid
                 // those entirely, so an application sent to a support system vanished from the
@@ -570,6 +578,36 @@ public class ProcessManagerEngine : IProcessManager
         {
             Items = items
         };
+    }
+
+    /// <summary>
+    /// The <see cref="GetQueueWorkItems"/> counterpart to <see cref="BuildEnvelope"/>'s own
+    /// poll-resolve step (see its remarks) — same check, same
+    /// <see cref="TryPollResolveSupportSystemInvocations"/> call, just reachable from the list
+    /// view instead of only a single instance's own page. Only fires for an instance whose
+    /// visible item is actually a join gateway the accessing actor is waiting behind; every
+    /// other row is returned untouched.
+    /// </summary>
+    private ServiceRequest RefreshIfWaitingAtJoin(
+        ServiceRequest instance,
+        ServiceBlueprint definition,
+        ActorProfile accessProfile)
+    {
+        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile).FirstOrDefault();
+        if (visibleItem is not { IsJoinGateway: true })
+        {
+            return instance;
+        }
+
+        var joinGateway = FindGateway(definition, visibleItem.StageKey);
+        if (joinGateway is null
+            || !TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
+            || !TryGetInstance(instance.InstanceId, out var refreshed))
+        {
+            return instance;
+        }
+
+        return refreshed;
     }
 
     public IEnumerable<ServiceBlueprint> GetAllDefinitions() => _definitions.Values;

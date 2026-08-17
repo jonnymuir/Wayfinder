@@ -607,11 +607,18 @@ caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (str
     // PRG, but back to whichever place actually has the caseworker's next move. Advancing from
     // "review" to "record your decision" leaves real work on this same instance, and bouncing to
     // the worklist so they can immediately click back into the item they never left is pointless
-    // ceremony. Advancing into a wait (sent to the insurer) or a terminal decision genuinely does
-    // hand the instance back to the queue, so that's where those go — and the "Waiting" tag is
-    // what makes the first of those findable again.
+    // ceremony. Advancing into a terminal decision genuinely does hand the instance back to the
+    // queue, so that's where that goes — and the "Waiting" tag is what makes a since-completed
+    // item findable again if someone navigates away and back.
+    //
+    // Advancing into a wait (sent to the insurer) is different: ResponseState "defer" means the
+    // caseworker's own cursor just parked at a join, the same position the citizen flow's
+    // pre-existing wait screen already lands people on directly. There's no reason to make a
+    // caseworker take an extra click through the queue list to reach the exact page they were
+    // just on — the item's own page already renders that wait/poll screen, and the persistent
+    // "Caseworker queue" link in the header is always there for anyone who'd rather step away.
     var next = engine.GetCurrent(blueprintKey, ReferenceActors.TenantId, userId, profile, instanceId);
-    var hasMoreToDoHere = next.Render?.AvailableActions.Count > 0;
+    var hasMoreToDoHere = next.Render?.AvailableActions.Count > 0 || next.ResponseState == "defer";
 
     return Results.Redirect(hasMoreToDoHere
         ? $"/caseworker/queue/{blueprintKey}/{instanceId}"

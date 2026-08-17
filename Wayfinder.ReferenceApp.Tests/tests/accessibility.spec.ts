@@ -120,14 +120,16 @@ test.describe('Accessibility: WCAG 2.2 AA', () => {
     await auditPage(page, 'Caseworker review');
 
     // The waiting state introduced by the support-systems work — its own distinct rendering
-    // (status tag in the worklist, status-timeline on the item), so its own audit.
+    // (status-timeline on the item, status tag in the worklist), so its own audit of each. The
+    // caseworker lands on the item's own wait screen directly (ResponseState "defer" — see
+    // Program.cs's post-advance redirect), the same way the citizen's own post-review join
+    // always has; the queue list's "Waiting" tag is audited separately by navigating there.
     await page.getByRole('button', { name: 'Send risk assessment to insurer' }).click();
-    await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
-    await auditPage(page, 'Caseworker queue (waiting on a support system)');
-
-    await page.getByRole('link', { name: 'View' }).click();
     await expect(page.getByText('SafetyNet Underwriting is reviewing the risk assessment.')).toBeVisible();
     await auditPage(page, 'Caseworker waiting screen');
+
+    await page.goto('/caseworker/queue');
+    await auditPage(page, 'Caseworker queue (waiting on a support system)');
   });
 
   test('every control on the event-details form is keyboard reachable, in visual order, and operable', async ({
