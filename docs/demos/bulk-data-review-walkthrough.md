@@ -100,11 +100,14 @@ dotnet run --project Wayfinder.AppHost
 
 Sign in as `njf-operations@example.test` / `wayfinder-demo`, and look for **Submit an NJF
 contributions file** on the home page (not the caseworker queue — that's where you land straight
-after signing in). Any CSV with the header
-`memberRef,memberName,tier,fireEndorsement,under18,dob,monthlyContribution` will do; see
-`SafetyNetUnderwriting/ContributionsValidation.cs` for the actual rules being applied (duplicate/
-missing member references, unrecognised tiers, a fire-endorsement surcharge floor, under-18/date-
-of-birth consistency, and the contribution-band warning shown above).
+after signing in). Upload
+[`samples/njf-contributions-sample.csv`](./samples/njf-contributions-sample.csv) — the exact file
+the recording uses, five rows, with Cara Delgado's bad tier and Dev Patel's out-of-band
+contribution already in it, ready to walk through Acts 2–4 above. Any CSV with the header
+`memberRef,memberName,tier,fireEndorsement,under18,dob,monthlyContribution` will do more broadly;
+see `SafetyNetUnderwriting/ContributionsValidation.cs` for the actual rules being applied
+(duplicate/missing member references, unrecognised tiers, a fire-endorsement surcharge floor,
+under-18/date-of-birth consistency, and the contribution-band warning shown above).
 
 ## Regenerating the recording
 

@@ -1,5 +1,6 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { LiveAppHost } from '../support/live-app-host';
 import { beat, clearBeat, showSlate, clearSlate, moveNarrationTo, startNarrationTimeline, getNarrationTimeline } from './support/narration';
@@ -29,20 +30,16 @@ const appHost = new LiveAppHost();
 let browserRef: Browser;
 let page: Page;
 
-const CSV_HEADER = 'memberRef,memberName,tier,fireEndorsement,under18,dob,monthlyContribution';
-
+// Same file a human following docs/demos/bulk-data-review-walkthrough.md would download and
+// upload by hand — one source of truth, so the recording can never drift from the sample.
 // Five members: three clean, one with a real tier error, one with a contribution genuinely
 // outside SafetyNet Underwriting's expected band for its tier (a warning, not an error — see
 // ContributionsValidation.cs). Small enough to narrate every row; large enough that "only two
 // rows need attention" is a real, visible saving, not a triviality.
-const ORIGINAL_CSV = [
-  CSV_HEADER,
-  'NJF-001,Alice Ferreira,Recreational,N,N,,15.00',
-  'NJF-002,Bilal Hussain,Recreational,N,N,,15.00',
-  'NJF-003,Cara Delgado,Bogus,N,N,,15.00',
-  'NJF-004,Dev Patel,Performer,N,N,,55.00',
-  'NJF-005,Priya Osei,Recreational,N,N,,15.00'
-].join('\n');
+const ORIGINAL_CSV = readFileSync(
+  path.resolve(process.cwd(), '../docs/demos/samples/njf-contributions-sample.csv'),
+  'utf-8'
+).trimEnd();
 
 test.describe('Bulk data review — narrated end-to-end demo', () => {
   test.describe.configure({ mode: 'serial' });
