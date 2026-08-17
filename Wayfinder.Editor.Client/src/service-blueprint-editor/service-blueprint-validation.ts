@@ -44,6 +44,7 @@ export interface ServiceBlueprintValidationIssue {
     | 'route-duplicate'
     | 'action-configuration'
     | 'action-support-system'
+    | 'action-bulk-dataset'
     | 'calculation-parse-error'
     | 'calculation-unknown-reference'
     | 'calculation-unknown-table'
@@ -290,6 +291,112 @@ function supportSystemActionValidationIssues(
         `route trigger “${route.trigger}” is not one of capability “${capability.displayName}”'s declared outcomes (${[...declaredOutcomeKeys].join(', ') || 'none'}) — it can never fire.`
       ));
     }
+  }
+
+  return issues;
+}
+
+const BULK_DATASET_COLUMN_ROLE_ROW_KEY = 'RowKey';
+
+/**
+ * Mirrors ServiceBlueprint.ValidateBulkDatasetActions (Wayfinder/Models/ServiceDesign/
+ * ServiceBlueprint.cs) client-side — same two-pass shape for the same reason (a
+ * bulk-dataset-materialize action's datasetIdField is validated against the *complete* set of
+ * ingest-declared ones, regardless of which stage/action happens to iterate first), same
+ * diagnostic intent. Whole-blueprint, not per-action like supportSystemActionValidationIssues
+ * above, since the materialize cross-check genuinely needs every stage's actions up front.
+ */
+function bulkDatasetActionValidationIssues(
+  serviceBlueprint: AuthoredServiceBlueprint,
+  supportSystemCatalog: SupportSystemDescriptor[],
+  blueprintFieldKeys: Set<string>
+): ServiceBlueprintValidationIssue[] {
+  const knownFieldKeys = new Set(blueprintFieldKeys);
+  for (const stage of serviceBlueprintStages(serviceBlueprint)) {
+    for (const action of stageActions(stage)) {
+      if (action.type !== 'support-system-call') {
+        continue;
+      }
+      const params = (action.params ?? {}) as SupportSystemCallActionParams;
+      const supportSystem = supportSystemCatalog.find(candidate => candidate.key === params.supportSystemKey);
+      const capability = supportSystem?.capabilities.find(candidate => candidate.key === params.capabilityKey);
+      for (const output of capability?.outputs ?? []) {
+        knownFieldKeys.add(output.key);
+      }
+    }
+  }
+
+  const issue = (
+    stage: AuthoredStage,
+    actionIndex: number,
+    suffix: string,
+    message: string
+  ): ServiceBlueprintValidationIssue => ({
+    id: `stage-${stage.stateKey}-action-${actionIndex}-${suffix}`,
+    code: 'action-bulk-dataset' as const,
+    severity: 'error' as const,
+    blocking: true,
+    location: { kind: 'action', target: 'stage', stageKey: stage.stateKey, actionIndex } as const,
+    message: `Stage “${stage.displayName || stage.stateKey}”: ${message}`,
+  });
+
+  const issues: ServiceBlueprintValidationIssue[] = [];
+  const ingestDatasetIdFields = new Set<string>();
+
+  // Pass 1: bulk-dataset-ingest actions — collect every declared datasetIdField first, so pass 2
+  // validates a materialize action against the complete set regardless of iteration order.
+  for (const stage of serviceBlueprintStages(serviceBlueprint)) {
+    stageActions(stage).forEach((action, actionIndex) => {
+      if (action.type !== 'bulk-dataset-ingest') {
+        return;
+      }
+
+      const params = action.params as { sourceFileField?: string; datasetIdField?: string; columns?: Array<Record<string, unknown>> } | undefined;
+      if (!params?.datasetIdField) {
+        issues.push(issue(stage, actionIndex, 'missing-dataset-id-field', 'a bulk-dataset-ingest action must set datasetIdField.'));
+        return;
+      }
+
+      ingestDatasetIdFields.add(params.datasetIdField);
+
+      if (!params.sourceFileField) {
+        issues.push(issue(stage, actionIndex, 'missing-source-field', 'a bulk-dataset-ingest action must set sourceFileField.'));
+      } else if (!knownFieldKeys.has(params.sourceFileField)) {
+        issues.push(issue(stage, actionIndex, 'invalid-source-field', `sourceFileField “${params.sourceFileField}” is neither a captured input field nor a support system capability's declared output anywhere in this blueprint.`));
+      }
+
+      const columns = Array.isArray(params.columns) ? params.columns : [];
+      if (columns.length === 0) {
+        issues.push(issue(stage, actionIndex, 'missing-columns', 'a bulk-dataset-ingest action must declare at least one column.'));
+      } else {
+        const rowKeyCount = columns.filter(column => column.role === BULK_DATASET_COLUMN_ROLE_ROW_KEY).length;
+        if (rowKeyCount === 0) {
+          issues.push(issue(stage, actionIndex, 'missing-row-key', 'exactly one column must declare role RowKey — none of this action’s columns do.'));
+        } else if (rowKeyCount > 1) {
+          issues.push(issue(stage, actionIndex, 'duplicate-row-key', `${rowKeyCount} columns declare role RowKey — exactly one must.`));
+        }
+      }
+    });
+  }
+
+  // Pass 2: bulk-dataset-materialize actions, validated against the complete set pass 1 collected.
+  for (const stage of serviceBlueprintStages(serviceBlueprint)) {
+    stageActions(stage).forEach((action, actionIndex) => {
+      if (action.type !== 'bulk-dataset-materialize') {
+        return;
+      }
+
+      const params = action.params as { datasetIdField?: string; targetFileField?: string } | undefined;
+      if (!params?.datasetIdField) {
+        issues.push(issue(stage, actionIndex, 'missing-dataset-id-field', 'a bulk-dataset-materialize action must set datasetIdField.'));
+      } else if (!ingestDatasetIdFields.has(params.datasetIdField)) {
+        issues.push(issue(stage, actionIndex, 'unknown-dataset', `datasetIdField “${params.datasetIdField}” doesn't match any bulk-dataset-ingest action's own datasetIdField in this blueprint — there's no dataset for this action to materialize.`));
+      }
+
+      if (!params?.targetFileField) {
+        issues.push(issue(stage, actionIndex, 'missing-target-field', 'a bulk-dataset-materialize action must set targetFileField.'));
+      }
+    });
   }
 
   return issues;
@@ -576,6 +683,8 @@ export function validateServiceBlueprint(
     )
   );
 
+  const bulkDatasetActionIssues = bulkDatasetActionValidationIssues(serviceBlueprint, supportSystemCatalog, blueprintFieldKeys);
+
   return [
     ...initialStageIssues,
     ...orphanedIssues,
@@ -586,6 +695,7 @@ export function validateServiceBlueprint(
     ...stageActionIssues,
     ...routeActionIssues,
     ...supportSystemActionIssues,
+    ...bulkDatasetActionIssues,
     ...calculationValidationIssues(serviceBlueprint, componentCatalog),
     ...stageValidationRuleIssues(serviceBlueprint),
   ];

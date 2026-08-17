@@ -34,6 +34,7 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 [JsonDerivedType(typeof(SliderComponent), typeDiscriminator: "slider")]
 [JsonDerivedType(typeof(StatGroupComponent), typeDiscriminator: "stat-group")]
 [JsonDerivedType(typeof(ChartComponent), typeDiscriminator: "chart")]
+[JsonDerivedType(typeof(BulkDataReviewComponent), typeDiscriminator: "bulk-data-review")]
 public abstract record Component
 {
     /// <summary>

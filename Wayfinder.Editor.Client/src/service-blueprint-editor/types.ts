@@ -1254,6 +1254,42 @@ export const STUB_ACTION_CATALOG: ActionCatalogEntry[] = [
     status: 'available',
     runtimeImplementation: 'wayfinder-engine',
   },
+  // Also real (see docs/guides/bulk-data-review.md) — ProcessManagerEngine genuinely executes
+  // both onEnter. Unlike support-system-call, their params shape is static, not dependent on a
+  // live-fetched catalog, but wayfinder-stage-action-editor.ts still renders a dedicated editor
+  // for the same reason: paramsSchema stays empty here, and hand-computed validation messages
+  // replace the generic paramsSchema-driven required-field check (see
+  // WayfinderServiceBlueprintActionEditorElement._renderBulkDatasetActionEditor).
+  {
+    type: 'bulk-dataset-ingest',
+    label: 'Ingest a bulk dataset',
+    summary: 'Parse a file field into an indexed, pageable dataset a bulk-data-review component can show.',
+    appliesTo: ['stage.onEntry'],
+    paramsSchema: {
+      key: 'bulk-dataset-ingest.params',
+      title: 'Bulk dataset ingest',
+      valueKind: 'Object',
+      properties: [],
+    },
+    defaultParams: { sourceFileField: '', datasetIdField: '', columns: [] },
+    status: 'available',
+    runtimeImplementation: 'wayfinder-engine',
+  },
+  {
+    type: 'bulk-dataset-materialize',
+    label: 'Materialize a bulk dataset',
+    summary: 'Reconstruct a previously-ingested dataset (with any corrections) back into a file field.',
+    appliesTo: ['stage.onEntry'],
+    paramsSchema: {
+      key: 'bulk-dataset-materialize.params',
+      title: 'Bulk dataset materialize',
+      valueKind: 'Object',
+      properties: [],
+    },
+    defaultParams: { datasetIdField: '', targetFileField: '' },
+    status: 'available',
+    runtimeImplementation: 'wayfinder-engine',
+  },
   {
     type: 'forms.load',
     label: 'Load form',

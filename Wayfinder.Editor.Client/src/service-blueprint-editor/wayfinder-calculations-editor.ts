@@ -1086,6 +1086,12 @@ export class WayfinderCalculationsEditorElement extends LitElement {
       font-weight: 600;
     }
 
+    .field-toggle input[type='checkbox'] {
+      width: 1rem;
+      height: 1rem;
+      accent-color: #1d4ed8;
+    }
+
     .calc-preview {
       font-size: 0.8125rem;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;

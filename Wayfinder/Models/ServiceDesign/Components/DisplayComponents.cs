@@ -73,3 +73,26 @@ public sealed record ChartBand
     /// </summary>
     public string? Color { get; init; }
 }
+
+/// <summary>
+/// The bulk-data review surface (see docs/guides/bulk-data-review.md) — a paginated "only show me
+/// what needs attention" card UI over a dataset a <c>bulk-dataset-ingest</c> action already
+/// produced. Deliberately near-config-free: <see cref="DatasetIdField"/> is the one thing it
+/// needs, the same field-ref a <c>bulk-dataset-materialize</c> action binds to — every column's
+/// role/visibility/editability is already known to the store from ingest time, so this component
+/// never re-declares the dataset's shape itself.
+/// </summary>
+public sealed record BulkDataReviewComponent : Component
+{
+    /// <summary>Optional heading rendered above the review UI.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>
+    /// Field-ref to the field a <c>bulk-dataset-ingest</c> action wrote its minted dataset id
+    /// into — must match that action's own <c>datasetIdField</c> parameter.
+    /// </summary>
+    public string DatasetIdField { get; init; } = "";
+
+    /// <summary>How many attention-rows to show per page. Default 20.</summary>
+    public int PageSize { get; init; } = 20;
+}

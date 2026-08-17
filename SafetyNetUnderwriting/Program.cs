@@ -157,6 +157,70 @@ app.MapPost("/queue/{id}/decide", async (
     return Results.Redirect("/queue");
 });
 
+// ── Contributions file validation (see docs/guides/bulk-data-review.md and
+// Wayfinder.ReferenceApp/service-blueprints/njf-contributions.json) — a genuinely different
+// interaction shape from the risk-assessment queue above: no staff member decides anything here,
+// ContributionsValidation.cs applies deterministic rules automatically. Kept as its own
+// submissions map/endpoints rather than reusing the one above — the two capabilities' request/
+// response shapes (JSON status body vs a whole annotated file; human decision vs automatic rules)
+// don't share enough to be worth forcing into one model.
+var contributionsSubmissions = new ConcurrentDictionary<string, ContributionsSubmission>();
+
+app.MapPost("/contributions/submissions", async (HttpRequest request) =>
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest("Expected multipart/form-data.");
+    }
+
+    var form = await request.ReadFormAsync();
+    var file = form.Files["file"];
+    if (file is null)
+    {
+        return Results.BadRequest("Expected a 'file' part.");
+    }
+
+    using var stream = new MemoryStream();
+    await file.CopyToAsync(stream);
+    var resultCsv = ContributionsValidation.Validate(stream.ToArray());
+
+    var id = Guid.NewGuid().ToString("N");
+    contributionsSubmissions[id] = new ContributionsSubmission
+    {
+        Id = id,
+        SubmittedAt = DateTimeOffset.UtcNow,
+        // A short artificial delay so the demo genuinely shows a "please wait while we process
+        // your file" screen instead of resolving on the very first poll — real batch processing
+        // isn't instant either. Purely a demo touch, not a queueing mechanism: the actual
+        // validation already ran above, this just holds back when it's revealed as done.
+        ReadyAt = DateTimeOffset.UtcNow.AddSeconds(3),
+        ResultCsvBytes = resultCsv,
+    };
+
+    return Results.Accepted($"/contributions/submissions/{id}", new { submissionId = id, status = "pending" });
+});
+
+app.MapGet("/contributions/submissions/{id}", (string id) =>
+{
+    if (!contributionsSubmissions.TryGetValue(id, out var submission))
+    {
+        return Results.NotFound();
+    }
+
+    var status = DateTimeOffset.UtcNow >= submission.ReadyAt ? "processed" : "pending";
+    return Results.Ok(new { id = submission.Id, status });
+});
+
+app.MapGet("/contributions/submissions/{id}/file", (string id) =>
+{
+    if (!contributionsSubmissions.TryGetValue(id, out var submission) || DateTimeOffset.UtcNow < submission.ReadyAt)
+    {
+        return Results.NotFound();
+    }
+
+    return Results.File(submission.ResultCsvBytes, "text/csv", "contributions-response.csv", enableRangeProcessing: false);
+});
+
 // Development-only, same guard/reasoning as Wayfinder.ReferenceApp's own /api/test/reset —
 // wipes every in-memory submission so a Playwright spec starts each test from a known-empty
 // state instead of restarting the process.
@@ -168,6 +232,7 @@ app.MapDelete("/api/test/reset", (IHostEnvironment env) =>
     }
 
     submissions.Clear();
+    contributionsSubmissions.Clear();
     return Results.Ok(new { cleared = true });
 });
 
@@ -247,4 +312,12 @@ sealed record Submission
     public required string Status { get; init; }
     public string? DecisionNotes { get; init; }
     public DateTimeOffset SubmittedAt { get; init; }
+}
+
+sealed record ContributionsSubmission
+{
+    public required string Id { get; init; }
+    public DateTimeOffset SubmittedAt { get; init; }
+    public DateTimeOffset ReadyAt { get; init; }
+    public required byte[] ResultCsvBytes { get; init; }
 }

@@ -195,6 +195,7 @@ this table is a human-readable snapshot of the same data.
 | `accordion` | Container | Collapsible sections, each with their own child components. |
 | `body` | Content | A paragraph of body text. |
 | `boolean` | Input | A single checkbox (Yes/No-style capture). |
+| `bulk-data-review` | Data display | Paginated, only-what-needs-attention review UI over a bulk-dataset-ingest action's dataset. See docs/guides/bulk-data-review.md. |
 | `chart` | Data display | Declarative chart bound to a calculation series. |
 | `checkboxlist` | Input | Checkbox group with optional conditional child components. |
 | `date` | Input | Day/month/year date capture. |

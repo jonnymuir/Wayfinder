@@ -40,6 +40,7 @@ public static class GovUkComponents
         "task-list" => RenderTaskList(component),
         "stat-group" => RenderStatGroup(component),
         "chart" => RenderChart(component),
+        "bulk-data-review" => RenderBulkDataReview(component),
         _ => "",
     };
 
@@ -308,6 +309,74 @@ public static class GovUkComponents
                 <tbody>{string.Join("\n", tableRows)}</tbody>
               </table>
             </figure>
+            """;
+    }
+
+    /// <summary>
+    /// Server-rendered skeleton for the bulk-data review UI (see docs/guides/bulk-data-review.md)
+    /// — a summary/controls/rows/pagination shell plus a <c>&lt;noscript&gt;</c> fallback (the
+    /// download link always works without JavaScript), progressively enhanced by
+    /// wayfinder-bulk-data-review.js via the <c>data-wayfinder-bulk-review-*</c> attributes below.
+    /// No row data is rendered server-side: the dataset's own REST endpoints (host-routed — see
+    /// <see cref="ComponentRenderPayload.BulkDatasetApiUrl"/>) are what supply it, the same "host
+    /// fills in a URL, this package's JS/CSS do the rest" shape <c>wayfinder-chart</c>/
+    /// <c>wayfinder-stat-group</c> already use. This is the gold-standard rendering — hosts don't
+    /// need their own override for this type.
+    /// </summary>
+    private static string RenderBulkDataReview(ComponentRenderPayload component)
+    {
+        var heading = string.IsNullOrEmpty(component.Title) ? "" : $"""<h2 class="govuk-heading-m">{GovUk.Esc(component.Title)}</h2>""";
+
+        if (string.IsNullOrEmpty(component.DatasetId) || string.IsNullOrEmpty(component.BulkDatasetApiUrl))
+        {
+            return $"""
+                {heading}
+                <p class="govuk-body">Nothing to review yet.</p>
+                """;
+        }
+
+        var apiUrl = GovUk.Esc(component.BulkDatasetApiUrl);
+        var pageSize = component.PageSize ?? 20;
+
+        return $"""
+            {heading}
+            <div class="wayfinder-bulk-review" data-wayfinder-bulk-review data-wayfinder-bulk-review-api="{apiUrl}" data-wayfinder-bulk-review-page-size="{pageSize}">
+              <noscript>
+                <p class="govuk-body">Turn on JavaScript to review rows individually, or <a class="govuk-link" href="{apiUrl}/download">download the full file</a> to review it another way.</p>
+              </noscript>
+              <div class="wayfinder-bulk-review__summary" data-wayfinder-bulk-review-summary aria-live="polite">
+                <p class="govuk-body">Loading…</p>
+              </div>
+              <div class="wayfinder-bulk-review__controls" data-wayfinder-bulk-review-controls hidden>
+                <div class="govuk-button-group">
+                  <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-filter="NeedsAttention" aria-pressed="true">Needs attention</button>
+                  <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-filter="All" aria-pressed="false">All rows</button>
+                </div>
+                <a class="govuk-link" href="{apiUrl}/download">Download full file</a>
+              </div>
+              <div class="wayfinder-bulk-review__rows" data-wayfinder-bulk-review-rows></div>
+              <div data-wayfinder-bulk-review-pagination hidden>
+                <nav class="govuk-pagination govuk-pagination--block" aria-label="Row pages">
+                  <div class="govuk-pagination__prev" data-wayfinder-bulk-review-prev-wrapper>
+                    <a class="govuk-link govuk-pagination__link" href="#" rel="prev" data-wayfinder-bulk-review-prev>
+                      <svg class="govuk-pagination__icon govuk-pagination__icon--prev" xmlns="http://www.w3.org/2000/svg" height="13" width="15" aria-hidden="true" focusable="false" viewBox="0 0 15 13">
+                        <path d="m6.5938-0.0078125-6.7266 6.7266 6.7441 6.4062 1.377-1.449-4.1856-3.9768h12.896v-2h-12.984l4.2931-4.293-1.414-1.414z"></path>
+                      </svg>
+                      <span class="govuk-pagination__link-title govuk-pagination__link-title--decorated">Previous<span class="govuk-visually-hidden"> page</span></span>
+                    </a>
+                  </div>
+                  <div class="govuk-pagination__next" data-wayfinder-bulk-review-next-wrapper>
+                    <a class="govuk-link govuk-pagination__link" href="#" rel="next" data-wayfinder-bulk-review-next>
+                      <span class="govuk-pagination__link-title govuk-pagination__link-title--decorated">Next<span class="govuk-visually-hidden"> page</span></span>
+                      <svg class="govuk-pagination__icon govuk-pagination__icon--next" xmlns="http://www.w3.org/2000/svg" height="13" width="15" aria-hidden="true" focusable="false" viewBox="0 0 15 13">
+                        <path d="m8.107-0.0078125-1.4136 1.414 4.2926 4.293h-12.986v2h12.896l-4.1855 3.9768 1.377 1.449 6.7441-6.4062-6.7246-6.7266z"></path>
+                      </svg>
+                    </a>
+                  </div>
+                </nav>
+                <p class="govuk-body wayfinder-bulk-review__page-status" data-wayfinder-bulk-review-page-status></p>
+              </div>
+            </div>
             """;
     }
 

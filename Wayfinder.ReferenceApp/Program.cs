@@ -20,6 +20,7 @@ using Wayfinder.Services.Sanitization;
 // service-blueprints/juggling-insurance-modeller.json.
 const string JugglingLicenceDefinitionKey = "juggling-licence";
 const string InsuranceModellerDefinitionKey = "juggling-insurance-modeller";
+const string NjfContributionsDefinitionKey = "njf-contributions";
 
 // Must run before anything reads ComponentTypeRegistry (it freezes on first read) — the seed
 // blueprints below declare a "rating" component (juggling-licence.json's "event-details" stage),
@@ -63,6 +64,8 @@ builder.Services.AddSingleton<IServiceBlueprintStore>(
     _ => new FilesystemServiceBlueprintStore(Path.Combine(builder.Environment.ContentRootPath, "service-blueprints")));
 builder.Services.AddSingleton<IQueueCapabilitiesProvider>(ReferenceActors.CapabilitiesProvider());
 builder.Services.AddSingleton<IServiceRequestFileStorage, InMemoryServiceRequestFileStorage>();
+builder.Services.AddSingleton<IBulkDatasetStore>(
+    sp => new InMemoryBulkDatasetStore(sp.GetRequiredService<IServiceRequestFileStorage>()));
 
 // SafetyNet Underwriting is a genuinely separate ASP.NET Core project (see
 // SafetyNetUnderwriting/Program.cs), orchestrated alongside this one by Wayfinder.AppHost — the
@@ -89,13 +92,26 @@ builder.Services.AddSingleton(sp => new ProcessManagerEngine(
     sp.GetRequiredService<ILogger<ProcessManagerEngine>>(),
     sp.GetRequiredService<IServiceBlueprintStore>(),
     sp.GetRequiredService<IServiceContentSanitizer>(),
+    // A "source: service" calculations field (see njf-contributions.json's own contributionsErrorCount
+    // — needed so its review stage's "Accept and finish" route's showWhen can see a value that's
+    // never a captured input, only an onEnter action's own output) is resolved via this callback,
+    // never automatically from FieldValues — CalculationScopeBuilder.Build only pulls genuine
+    // captured-input components in on its own. Generic: reads whatever's declared source:"service"
+    // straight off the instance's own already-populated FieldValues, since the "service" that
+    // supplied it here is Wayfinder's own engine (an action's resolution), not a true external
+    // lookup a host would need to actually go and fetch.
+    serviceInputsResolver: (instance, definition, _) =>
+        (definition.Calculations?.Fields ?? new Dictionary<string, Wayfinder.Models.ServiceDesign.Calculations.ServiceBlueprintCalculationField>())
+            .Where(field => string.Equals(field.Value.Source, "service", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(field => field.Key, field => instance.FieldValues.GetValueOrDefault(field.Key)),
     supportSystemClients:
     [
         new SafetyNetUnderwritingClient(
             sp.GetRequiredService<IHttpClientFactory>(),
             sp.GetRequiredService<IServiceRequestFileStorage>(),
             callbackBaseUrl: "http://referenceapp")
-    ]));
+    ],
+    bulkDatasetStore: sp.GetRequiredService<IBulkDatasetStore>()));
 builder.Services.AddSingleton<IProcessManager>(sp => sp.GetRequiredService<ProcessManagerEngine>());
 
 // The editor / REST / MCP authoring surface and the `/apply` + `/caseworker` request-processing
@@ -228,12 +244,13 @@ app.MapGet("/", (HttpContext ctx) =>
         <h1 class="govuk-heading-xl">Wayfinder reference app</h1>
         <p class="govuk-body">A completely transient, in-memory host demonstrating Wayfinder's engine, authoring
         API/MCP and editor — seeded with GOV.UK Service Manual's own "Apply for a licence to
-        hold a juggling event" exemplar, and a second citizen/caseworker demo showcasing
-        slider/stat-group/chart.</p>
+        hold a juggling event" exemplar, a second citizen/caseworker demo showcasing
+        slider/stat-group/chart, and a caseworker-only demo showcasing bulk data review.</p>
         <ul class="govuk-list">
           {(ctx.User.IsInRole(DemoUsers.ApplicantRole) ? """<li><a class="govuk-link" href="/apply">Apply for a juggling licence</a> — the applicant's frontstage journey.</li>""" : "")}
           {(ctx.User.IsInRole(DemoUsers.ApplicantRole) ? """<li><a class="govuk-link" href="/premium">Model your performance insurance premium</a> — an interactive slider/stat-group/chart-driven modeller.</li>""" : "")}
-          {(ctx.User.IsInRole(DemoUsers.CaseworkerRole) ? """<li><a class="govuk-link" href="/caseworker/queue">Caseworker queue</a> — the backstage review queue, shared across both demos.</li>""" : "")}
+          {(ctx.User.IsInRole(DemoUsers.CaseworkerRole) ? """<li><a class="govuk-link" href="/caseworker/queue">Caseworker queue</a> — the backstage review queue, shared across all three demos.</li>""" : "")}
+          {(ctx.User.IsInRole(DemoUsers.CaseworkerRole) ? """<li><a class="govuk-link" href="/caseworker/njf-contributions/new">Submit an NJF contributions file</a> — bulk data review: only the rows needing attention, corrected and resubmitted without leaving the page.</li>""" : "")}
           <li><a class="govuk-link" href="/service-blueprint-editor">Service blueprint editor</a> — author/edit either seeded blueprint live.</li>
         </ul>
         """;
@@ -422,11 +439,24 @@ caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
     return Results.Content(PageShell.Render("Caseworker queue", body, ctx.User), "text/html");
 });
 
+// njf-contributions has no citizen frontstage to originate an instance from (see
+// docs/guides/bulk-data-review.md — the NJF's own operations staff are the only actor), so it
+// needs its own "start" entry point the way /apply and /premium give the citizen-facing demos —
+// GetCurrent with no instanceId resumes this caseworker's own latest instance if one's already
+// in progress, or starts a fresh one, same as those two.
+caseworkerGroup.MapGet("/njf-contributions/new", (HttpContext ctx, IProcessManager engine) =>
+{
+    var started = engine.GetCurrent(
+        NjfContributionsDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile());
+    return Results.Redirect($"/caseworker/queue/{NjfContributionsDefinitionKey}/{started.InstanceId}");
+});
+
 caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}", (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
 {
     var envelope = engine.GetCurrent(
         blueprintKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
     envelope = WithFileDownloadUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/files");
+    envelope = WithBulkDatasetApiUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/bulk-datasets");
     return Results.Content(
         PageShell.Render(
             "Review application",
@@ -453,6 +483,99 @@ caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/files/{fieldKey}", as
 
     var contentType = string.IsNullOrEmpty(reference.ContentType) ? "application/octet-stream" : reference.ContentType;
     return Results.File(stream, contentType, reference.OriginalFileName);
+});
+
+// ── Bulk data review (see docs/guides/bulk-data-review.md) — the review component's own
+// interactivity (paging/filtering, correcting a row, downloading the full file) never goes
+// through GetCurrent/Advance; it talks to IBulkDatasetStore directly, the same way the file
+// download route above talks to IServiceRequestFileStorage directly rather than the engine.
+// Deliberately the SAME trust model as that route: the "Caseworker" role gate on the whole
+// group is the access check, no extra per-instance ownership check here — IBulkDatasetStore
+// itself still independently verifies instanceId owns datasetId regardless (defence in depth),
+// and both a dataset that doesn't exist and one that belongs to a different instance map to a
+// plain 404, deliberately not distinguished, so a client can't use the response to tell which
+// case it hit.
+caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/summary", async (
+    string blueprintKey, string instanceId, string datasetId, IBulkDatasetStore bulkDatasetStore) =>
+{
+    try
+    {
+        var summary = await bulkDatasetStore.GetSummaryAsync(instanceId, datasetId);
+        return summary is null ? Results.NotFound() : Results.Ok(summary);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.NotFound();
+    }
+});
+
+caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/rows", async (
+    string blueprintKey, string instanceId, string datasetId, string? filter, int? page, int? pageSize,
+    IBulkDatasetStore bulkDatasetStore) =>
+{
+    var parsedFilter = Enum.TryParse<BulkDatasetRowFilter>(filter, ignoreCase: true, out var f)
+        ? f
+        : BulkDatasetRowFilter.NeedsAttention;
+    var pageIndex = Math.Max(page ?? 0, 0);
+    var size = Math.Clamp(pageSize ?? 20, 1, 100);
+
+    try
+    {
+        var result = await bulkDatasetStore.GetRowsAsync(instanceId, datasetId, parsedFilter, pageIndex, size);
+        return result is null ? Results.NotFound() : Results.Ok(result);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.NotFound();
+    }
+});
+
+caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/rows/{rowKey}/correct", async (
+    string blueprintKey, string instanceId, string datasetId, string rowKey,
+    Dictionary<string, string?> correctedValues, HttpContext ctx, IBulkDatasetStore bulkDatasetStore) =>
+{
+    try
+    {
+        await bulkDatasetStore.ApplyCorrectionAsync(instanceId, datasetId, rowKey, correctedValues, GetUserId(ctx.User));
+        return Results.NoContent();
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.NotFound();
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/download", async (
+    string blueprintKey, string instanceId, string datasetId, IBulkDatasetStore bulkDatasetStore, IServiceRequestFileStorage fileStorage) =>
+{
+    ServiceRequestFileReference materialized;
+    try
+    {
+        // A pure human-facing export, not tied to any real blueprint field — targetFieldKey here
+        // is just IServiceRequestFileStorage's own partition key, never read back by the engine.
+        materialized = await bulkDatasetStore.MaterializeAsync(
+            instanceId, datasetId, targetFieldKey: "bulkDatasetDownload", fileName: "contributions.csv",
+            sanitizeForHumanExport: true);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.NotFound();
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+
+    var stream = await fileStorage.OpenReadAsync(materialized.StorageKey);
+    return stream is null ? Results.NotFound() : Results.File(stream, "text/csv", materialized.OriginalFileName);
 });
 
 caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
@@ -484,11 +607,18 @@ caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (str
     // PRG, but back to whichever place actually has the caseworker's next move. Advancing from
     // "review" to "record your decision" leaves real work on this same instance, and bouncing to
     // the worklist so they can immediately click back into the item they never left is pointless
-    // ceremony. Advancing into a wait (sent to the insurer) or a terminal decision genuinely does
-    // hand the instance back to the queue, so that's where those go — and the "Waiting" tag is
-    // what makes the first of those findable again.
+    // ceremony. Advancing into a terminal decision genuinely does hand the instance back to the
+    // queue, so that's where that goes — and the "Waiting" tag is what makes a since-completed
+    // item findable again if someone navigates away and back.
+    //
+    // Advancing into a wait (sent to the insurer) is different: ResponseState "defer" means the
+    // caseworker's own cursor just parked at a join, the same position the citizen flow's
+    // pre-existing wait screen already lands people on directly. There's no reason to make a
+    // caseworker take an extra click through the queue list to reach the exact page they were
+    // just on — the item's own page already renders that wait/poll screen, and the persistent
+    // "Caseworker queue" link in the header is always there for anyone who'd rather step away.
     var next = engine.GetCurrent(blueprintKey, ReferenceActors.TenantId, userId, profile, instanceId);
-    var hasMoreToDoHere = next.Render?.AvailableActions.Count > 0;
+    var hasMoreToDoHere = next.Render?.AvailableActions.Count > 0 || next.ResponseState == "defer";
 
     return Results.Redirect(hasMoreToDoHere
         ? $"/caseworker/queue/{blueprintKey}/{instanceId}"
@@ -573,6 +703,33 @@ static ServiceRequestResponseEnvelope WithFileDownloadUrls(
     return envelope with { Render = envelope.Render with { Components = components } };
 }
 
+/// <summary>
+/// Same reasoning as <see cref="WithFileDownloadUrls"/>, for the bulk-data-review component's own
+/// REST endpoints (see docs/guides/bulk-data-review.md and the caseworkerGroup routes above):
+/// the engine resolves a "bulk-data-review" component's <c>DatasetId</c> from field values, but
+/// has no opinion on this host's own URL scheme, so it's this host's job to fill in
+/// <see cref="ComponentRenderPayload.BulkDatasetApiUrl"/> before rendering. Only a component with
+/// a real dataset id gets a URL — one with none yet (nothing ingested) keeps rendering its own
+/// "Nothing to review yet" placeholder rather than linking to a 404.
+/// </summary>
+static ServiceRequestResponseEnvelope WithBulkDatasetApiUrls(
+    ServiceRequestResponseEnvelope envelope,
+    string apiUrlPrefix)
+{
+    if (envelope.Render is null)
+    {
+        return envelope;
+    }
+
+    var components = envelope.Render.Components
+        .Select(component => component.Type == "bulk-data-review" && !string.IsNullOrEmpty(component.DatasetId)
+            ? component with { BulkDatasetApiUrl = $"{apiUrlPrefix}/{Uri.EscapeDataString(component.DatasetId)}" }
+            : component)
+        .ToArray();
+
+    return envelope with { Render = envelope.Render with { Components = components } };
+}
+
 static string RenderLoginBody(string? returnUrl, string? error)
 {
     var esc = GovUk.Esc;
@@ -614,10 +771,11 @@ static string RenderLoginBody(string? returnUrl, string? error)
           </div>
         </form>
         <h2 class="govuk-heading-m">Demo accounts</h2>
-        <p class="govuk-body">Both demo accounts use the password <code class="govuk-!-font-family-sans-serif">{esc(DemoUsers.DemoPassword)}</code>.</p>
+        <p class="govuk-body">All demo accounts use the password <code class="govuk-!-font-family-sans-serif">{esc(DemoUsers.DemoPassword)}</code>.</p>
         <ul class="govuk-list govuk-list--bullet">
           <li><strong>{esc(DemoUsers.Applicant.DisplayName)}</strong> — {esc(DemoUsers.Applicant.Email)} (applicant / frontstage)</li>
-          <li><strong>{esc(DemoUsers.Caseworker.DisplayName)}</strong> — {esc(DemoUsers.Caseworker.Email)} (caseworker / backstage)</li>
+          <li><strong>{esc(DemoUsers.Caseworker.DisplayName)}</strong> — {esc(DemoUsers.Caseworker.Email)} (caseworker / backstage, juggling licences)</li>
+          <li><strong>{esc(DemoUsers.NjfOperations.DisplayName)}</strong> — {esc(DemoUsers.NjfOperations.Email)} (caseworker / backstage, NJF contributions)</li>
         </ul>
         """;
 }

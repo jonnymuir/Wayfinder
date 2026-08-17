@@ -11,7 +11,11 @@ export default defineConfig({
   // `npm run test:playwright:live` instead — see playwright.live.config.ts and
   // docs/guides/support-systems.md.
   // `tests/demo/**` is the narrated recording tool (playwright.demo.config.ts), not a test.
-  testIgnore: ['**/support-systems-live.spec.ts', '**/demo/**'],
+  // Matches playwright.live.config.ts's own testMatch (any *-live.spec.ts) rather than naming
+  // files individually — bulk-data-review-live.spec.ts was added later and missed the previous
+  // single-file version of this pattern, silently running (and failing, on a self-signed-cert
+  // error) under this single-process config until this fix.
+  testIgnore: ['**/*-live.spec.ts', '**/demo/**'],
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   // The backend under test is one shared in-memory singleton process — a fixed pair of demo

@@ -297,6 +297,76 @@ public class SupportSystemActionExecutionTests
     }
 
     [Fact]
+    public void GetQueueWorkItems_ResolvesAWaitingItemViaPoll_OnADeliberateRefresh()
+    {
+        // The queue LIST must reflect reality on a deliberate refresh, not just a single
+        // instance's own page — a caseworker staring at "Waiting" with no way to learn it's
+        // actually done except by clicking in is exactly the rough edge this covers.
+        var (engine, client) = BuildEngine(SupportSystemCompletionMode.Poll);
+        try
+        {
+            var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var afterSplit = engine.Advance(
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+
+            var stillWaiting = engine.GetQueueWorkItems(CaseworkerProfile).Items
+                .Single(i => i.InstanceId == afterSplit.InstanceId);
+            stillWaiting.StageKey.Should().Be("check-complete");
+            stillWaiting.IsWaiting.Should().BeTrue();
+
+            client.OnCheckStatus = (_, _) => new SupportSystemOutcome
+            {
+                OutcomeKey = "approved",
+                ResultPayload = new JsonObject { ["decisionNotes"] = "Looks fine" }
+            };
+
+            // "approved" is a bare terminal stage with no outbound routes, so once resolved it
+            // correctly drops off the list — same as any other completed item (see
+            // bulk-data-review's own "Accept and finish" for the identical, already-established
+            // behaviour). The proof the poll genuinely ran from inside GetQueueWorkItems, not a
+            // side-channel GetCurrent call, is that the instance is now gone from the list at
+            // all.
+            var afterRefresh = engine.GetQueueWorkItems(CaseworkerProfile).Items
+                .Where(i => i.InstanceId == afterSplit.InstanceId)
+                .ToList();
+            afterRefresh.Should().BeEmpty();
+
+            var instance = engine.GetAllInstances().Single(i => i.InstanceId == afterSplit.InstanceId);
+            instance.SupportSystemInvocations.Should().ContainSingle(i => i.Resolved && i.OutcomeKey == "approved");
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public void GetQueueWorkItems_LeavesAWaitingItemAlone_WhenTheCapabilityOnlyDeclaresWebhookSupport()
+    {
+        // A webhook-only capability must never be polled from the list either — the same rule
+        // TryPollResolveSupportSystemInvocations already enforces for a single instance's page.
+        var (engine, client) = BuildEngine(SupportSystemCompletionMode.Webhook);
+        try
+        {
+            var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var afterSplit = engine.Advance(
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+
+            client.CheckStatusCallCount.Should().Be(0);
+            var stillWaiting = engine.GetQueueWorkItems(CaseworkerProfile).Items
+                .Single(i => i.InstanceId == afterSplit.InstanceId);
+
+            stillWaiting.StageKey.Should().Be("check-complete");
+            stillWaiting.IsWaiting.Should().BeTrue();
+            client.CheckStatusCallCount.Should().Be(0, "a webhook-only capability should never be polled from the list either");
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Fact]
     public void ResolveSupportSystemOutcome_ReleasesTheJoin_SimulatingAWebhookDelivery()
     {
         var (engine, _) = BuildEngine(SupportSystemCompletionMode.Webhook);

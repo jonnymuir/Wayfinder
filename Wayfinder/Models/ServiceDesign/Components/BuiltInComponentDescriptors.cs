@@ -416,6 +416,20 @@ public static class BuiltInComponentDescriptors
             ],
         });
 
+        descriptors.Add(new ComponentDescriptor
+        {
+            Discriminator = "bulk-data-review", DisplayName = "Bulk data review", Category = ComponentCategory.DataDisplay,
+            Description = "Paginated, only-what-needs-attention review UI over a bulk-dataset-ingest action's dataset. See docs/guides/bulk-data-review.md.",
+            ClrType = typeof(BulkDataReviewComponent),
+            Properties =
+            [
+                Prop(nameof(BulkDataReviewComponent.Title), "Title", ComponentPropertyValueKind.String),
+                Prop(nameof(BulkDataReviewComponent.DatasetIdField), "Dataset id field", ComponentPropertyValueKind.String,
+                    "Must match a bulk-dataset-ingest action's own datasetIdField param.", format: "field-ref", required: true),
+                Prop(nameof(BulkDataReviewComponent.PageSize), "Rows per page", ComponentPropertyValueKind.Integer, defaultValue: 20),
+            ],
+        });
+
         // ── Flow-control / service-blueprint components ─────────────────────────────────
         descriptors.Add(new ComponentDescriptor
         {

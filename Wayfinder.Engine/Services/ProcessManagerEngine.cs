@@ -11,6 +11,7 @@ using Wayfinder.Services.Validation;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Stores;
+using Wayfinder.Models.ServiceDesign.BulkData;
 using Wayfinder.Models.ServiceDesign.SupportSystems;
 
 namespace Wayfinder.Engine.Services;
@@ -25,6 +26,7 @@ public class ProcessManagerEngine : IProcessManager
     private readonly IServiceRequestStore _instanceStore;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly IReadOnlyDictionary<string, ISupportSystemClient> _supportSystemClients;
+    private readonly IBulkDatasetStore? _bulkDatasetStore;
 
     public ProcessManagerEngine(
         ILogger logger,
@@ -32,7 +34,8 @@ public class ProcessManagerEngine : IProcessManager
         IServiceContentSanitizer sanitizer,
         Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? serviceInputsResolver = null,
         IServiceRequestStore? instanceStore = null,
-        IEnumerable<ISupportSystemClient>? supportSystemClients = null)
+        IEnumerable<ISupportSystemClient>? supportSystemClients = null,
+        IBulkDatasetStore? bulkDatasetStore = null)
     {
         Logger = logger;
         _sanitizer = sanitizer;
@@ -40,6 +43,7 @@ public class ProcessManagerEngine : IProcessManager
         _instanceStore = instanceStore ?? new InMemoryServiceRequestStore();
         _supportSystemClients = (supportSystemClients ?? [])
             .ToDictionary(client => client.SupportSystemKey, StringComparer.Ordinal);
+        _bulkDatasetStore = bulkDatasetStore;
 
         foreach (var (lookupKey, definition) in definitionStore.LoadDefinitions(logger))
         {
@@ -548,6 +552,14 @@ public class ProcessManagerEngine : IProcessManager
                     return Array.Empty<QueueWorkItem>();
                 }
 
+                // A deliberate refresh of the list should show reality, not what was true the
+                // last time anyone happened to open this specific item — give a waiting item the
+                // same poll-resolve chance BuildEnvelope already gives it on a single-instance
+                // read, just applied per row here instead of per page. No background timer: this
+                // only ever runs inside a caller's own GET, same as everywhere else this hook is
+                // used.
+                instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
+
                 // A join-gateway item legitimately has no available actions — the actor is waiting
                 // on another queue, not choosing anything. Filtering purely on "has actions" hid
                 // those entirely, so an application sent to a support system vanished from the
@@ -566,6 +578,36 @@ public class ProcessManagerEngine : IProcessManager
         {
             Items = items
         };
+    }
+
+    /// <summary>
+    /// The <see cref="GetQueueWorkItems"/> counterpart to <see cref="BuildEnvelope"/>'s own
+    /// poll-resolve step (see its remarks) — same check, same
+    /// <see cref="TryPollResolveSupportSystemInvocations"/> call, just reachable from the list
+    /// view instead of only a single instance's own page. Only fires for an instance whose
+    /// visible item is actually a join gateway the accessing actor is waiting behind; every
+    /// other row is returned untouched.
+    /// </summary>
+    private ServiceRequest RefreshIfWaitingAtJoin(
+        ServiceRequest instance,
+        ServiceBlueprint definition,
+        ActorProfile accessProfile)
+    {
+        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile).FirstOrDefault();
+        if (visibleItem is not { IsJoinGateway: true })
+        {
+            return instance;
+        }
+
+        var joinGateway = FindGateway(definition, visibleItem.StageKey);
+        if (joinGateway is null
+            || !TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
+            || !TryGetInstance(instance.InstanceId, out var refreshed))
+        {
+            return instance;
+        }
+
+        return refreshed;
     }
 
     public IEnumerable<ServiceBlueprint> GetAllDefinitions() => _definitions.Values;
@@ -1622,6 +1664,18 @@ public class ProcessManagerEngine : IProcessManager
                     });
                     break;
 
+                case BulkDataReviewComponent bulkReview:
+                    result.Add(new ComponentRenderPayload
+                    {
+                        Type = "bulk-data-review",
+                        Title = bulkReview.Title,
+                        DatasetId = displayValues.TryGetValue(bulkReview.DatasetIdField, out var datasetIdValue)
+                            ? datasetIdValue?.ToString()
+                            : null,
+                        PageSize = bulkReview.PageSize,
+                    });
+                    break;
+
                 case InputComponent input:
                 {
                     var fields = BuildFields(new[] { (Component)input }, displayValues, calc);
@@ -1986,11 +2040,21 @@ public class ProcessManagerEngine : IProcessManager
         // A branch that lands straight on a stage (not another gateway) may carry its own
         // onEnter support-system-call action — the automation-queue branch of a "send to
         // support system" split, e.g. See ExecuteOnEnterSupportSystemActions's own remarks for
-        // why this only runs for multi-cursor branches, not the single-cursor path.
-        var newInvocations = newCursors
-            .Where(cursor => !cursor.IsAtGateway)
-            .SelectMany(cursor => ExecuteOnEnterSupportSystemActions(instance.InstanceId, definition, mergedFieldValues, cursor))
-            .ToList();
+        // why this only runs for multi-cursor branches, not the single-cursor path. Bulk-dataset
+        // actions run first, per cursor, so a bulk-dataset-materialize action's refreshed file
+        // (a resubmission loop re-firing this same split) is what support-system-call reads —
+        // see ExecuteOnEnterBulkDatasetActions's own remarks.
+        var newInvocations = new List<SupportSystemInvocation>();
+        foreach (var cursor in newCursors.Where(cursor => !cursor.IsAtGateway))
+        {
+            var bulkDatasetUpdates = ExecuteOnEnterBulkDatasetActions(instance.InstanceId, definition, mergedFieldValues, cursor);
+            if (bulkDatasetUpdates.Count > 0)
+            {
+                mergedFieldValues = Merge(mergedFieldValues, bulkDatasetUpdates);
+            }
+
+            newInvocations.AddRange(ExecuteOnEnterSupportSystemActions(instance.InstanceId, definition, mergedFieldValues, cursor));
+        }
 
         foreach (var joinGroup in newCursors
                      .Where(cursor => cursor.IsAtGateway)
@@ -2311,6 +2375,257 @@ public class ProcessManagerEngine : IProcessManager
         };
     }
 
+    // ─── Bulk data review helpers ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs every <c>bulk-dataset-ingest</c>/<c>bulk-dataset-materialize</c> onEnter action on the
+    /// stage <paramref name="cursor"/> just landed on, in declared order, and returns the
+    /// FieldValues delta they produced — the caller merges this into the same field-value set it
+    /// hands <see cref="ExecuteOnEnterSupportSystemActions"/> right afterwards. Unlike a
+    /// support-system-call, both action types here talk only to host-local infrastructure (an
+    /// already-fetched file, an in-process dataset store) — no external round trip — so they
+    /// execute synchronously and resolve within this same call, never as a tracked pending
+    /// invocation. Deliberately called before <see cref="ExecuteOnEnterSupportSystemActions"/> at
+    /// every call site: a <c>bulk-dataset-materialize</c> action's whole purpose is to refresh a
+    /// file field before that same stage's own <c>support-system-call</c> action reads it on a
+    /// resubmission loop (see docs/guides/bulk-data-review.md).
+    /// </summary>
+    private Dictionary<string, object?> ExecuteOnEnterBulkDatasetActions(
+        string instanceId,
+        ServiceBlueprint definition,
+        IReadOnlyDictionary<string, object?> fieldValues,
+        RequestCursor cursor)
+    {
+        var updates = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+        var stage = definition.Stages.FirstOrDefault(s => s.StageKey == cursor.CurrentNodeKey);
+        if (stage?.Actions is not { Count: > 0 } actions)
+        {
+            return updates;
+        }
+
+        var workingFieldValues = new Dictionary<string, object?>(fieldValues, StringComparer.Ordinal);
+
+        foreach (var action in actions)
+        {
+            if (!string.Equals(action.Timing, "onEnter", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            IReadOnlyDictionary<string, object?> actionUpdates;
+            if (string.Equals(action.Type, BulkDataActionTypes.BulkDatasetMaterialize, StringComparison.Ordinal))
+            {
+                actionUpdates = TryExecuteBulkDatasetMaterialize(instanceId, workingFieldValues, cursor, action);
+            }
+            else if (string.Equals(action.Type, BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal))
+            {
+                actionUpdates = TryExecuteBulkDatasetIngest(instanceId, workingFieldValues, cursor, action);
+            }
+            else
+            {
+                continue;
+            }
+
+            foreach (var (key, value) in actionUpdates)
+            {
+                updates[key] = value;
+                workingFieldValues[key] = value;
+            }
+        }
+
+        return updates;
+    }
+
+    /// <summary>
+    /// Reconstructs the dataset named by this action's own <c>datasetIdField</c> and writes it
+    /// into <c>targetFileField</c>. A safe no-op (returns no updates) when <c>datasetIdField</c>
+    /// has no value yet — the expected case the first time this stage is entered, before
+    /// anything's been ingested; the original upload already sitting in <c>targetFileField</c>
+    /// goes through untouched.
+    /// </summary>
+    private IReadOnlyDictionary<string, object?> TryExecuteBulkDatasetMaterialize(
+        string instanceId,
+        IReadOnlyDictionary<string, object?> fieldValues,
+        RequestCursor cursor,
+        ActionDefinition action)
+    {
+        var datasetIdField = action.Parameters["datasetIdField"]?.GetValue<string>();
+        var targetFileField = action.Parameters["targetFileField"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(datasetIdField) || string.IsNullOrWhiteSpace(targetFileField))
+        {
+            Logger.LogWarning(
+                "bulk-dataset-materialize action on stage '{Stage}' is missing datasetIdField/targetFileField; skipped.",
+                cursor.CurrentNodeKey);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        if (fieldValues.GetValueOrDefault(datasetIdField) is not string { Length: > 0 } datasetId)
+        {
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        if (_bulkDatasetStore is null)
+        {
+            Logger.LogWarning(
+                "No IBulkDatasetStore registered; bulk-dataset-materialize action on stage '{Stage}' skipped.",
+                cursor.CurrentNodeKey);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        ServiceRequestFileReference materialized;
+        try
+        {
+            materialized = _bulkDatasetStore
+                .MaterializeAsync(instanceId, datasetId, targetFileField, $"{targetFileField}.csv", sanitizeForHumanExport: false)
+                .GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex, "bulk-dataset-materialize failed for dataset '{DatasetId}' on cursor '{Cursor}'.",
+                datasetId, cursor.CursorId);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        return new Dictionary<string, object?>(StringComparer.Ordinal) { [targetFileField] = materialized };
+    }
+
+    /// <summary>
+    /// Parses this action's <c>sourceFileField</c> against its declared <c>columns</c> into a
+    /// fresh dataset via <see cref="IBulkDatasetStore.IngestAsync"/>, and returns the resulting
+    /// dataset id plus any declared summary counts as field-value updates.
+    /// </summary>
+    private IReadOnlyDictionary<string, object?> TryExecuteBulkDatasetIngest(
+        string instanceId,
+        IReadOnlyDictionary<string, object?> fieldValues,
+        RequestCursor cursor,
+        ActionDefinition action)
+    {
+        var sourceFileField = action.Parameters["sourceFileField"]?.GetValue<string>();
+        var datasetIdField = action.Parameters["datasetIdField"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(sourceFileField) || string.IsNullOrWhiteSpace(datasetIdField))
+        {
+            Logger.LogWarning(
+                "bulk-dataset-ingest action on stage '{Stage}' is missing sourceFileField/datasetIdField; skipped.",
+                cursor.CurrentNodeKey);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        if (_bulkDatasetStore is null)
+        {
+            Logger.LogWarning(
+                "No IBulkDatasetStore registered; bulk-dataset-ingest action on stage '{Stage}' skipped.",
+                cursor.CurrentNodeKey);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        var sourceFile = ServiceRequestFileReference.FromFieldValue(fieldValues.GetValueOrDefault(sourceFileField));
+        if (sourceFile is null)
+        {
+            Logger.LogWarning(
+                "bulk-dataset-ingest action on stage '{Stage}' references field '{Field}', which has no file value; skipped.",
+                cursor.CurrentNodeKey, sourceFileField);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        var columns = ParseBulkDatasetColumns(action);
+        if (columns.Count == 0)
+        {
+            Logger.LogWarning(
+                "bulk-dataset-ingest action on stage '{Stage}' declares no valid columns; skipped.",
+                cursor.CurrentNodeKey);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        BulkDatasetIngestResult result;
+        try
+        {
+            result = _bulkDatasetStore.IngestAsync(instanceId, sourceFile, columns).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex, "bulk-dataset-ingest failed for field '{Field}' on cursor '{Cursor}'.",
+                sourceFileField, cursor.CursorId);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        if (!result.Succeeded)
+        {
+            Logger.LogWarning(
+                "bulk-dataset-ingest failed for field '{Field}' on cursor '{Cursor}': {Reason}",
+                sourceFileField, cursor.CursorId, result.FailureReason);
+            return ImmutableFieldValueUpdates.Empty;
+        }
+
+        var updates = new Dictionary<string, object?>(StringComparer.Ordinal) { [datasetIdField] = result.DatasetId };
+        AddDeclaredCountUpdate(action, "errorCountField", result.Summary!.ErrorRowCount, updates);
+        AddDeclaredCountUpdate(action, "warningCountField", result.Summary.WarningRowCount, updates);
+        AddDeclaredCountUpdate(action, "acceptedCountField", result.Summary.AcceptedRowCount, updates);
+
+        return updates;
+    }
+
+    private static void AddDeclaredCountUpdate(
+        ActionDefinition action, string paramName, int value, Dictionary<string, object?> updates)
+    {
+        var fieldKey = action.Parameters[paramName]?.GetValue<string>();
+        if (!string.IsNullOrWhiteSpace(fieldKey))
+        {
+            // decimal, not int: CalculationEvaluator.ValuesEqual only coerces when BOTH sides of
+            // "=" are decimal — a numeric literal in a showWhen/calculation expression parses as
+            // decimal, so a plain boxed int here would silently compare unequal to it even when
+            // numerically equal (found live: njf-contributions.json's "Accept and finish" route,
+            // showWhen: "contributionsErrorCount = 0", never became visible even once the count
+            // genuinely reached zero). Matches ToFieldValues' own JsonValue-decimal handling —
+            // "decimal for numbers in FieldValues" is this engine's established convention, not
+            // something to work around per call site.
+            updates[fieldKey] = (decimal)value;
+        }
+    }
+
+    private static IReadOnlyList<BulkDatasetColumnDescriptor> ParseBulkDatasetColumns(ActionDefinition action)
+    {
+        var columns = new List<BulkDatasetColumnDescriptor>();
+        foreach (var columnNode in action.Parameters["columns"]?.AsArray() ?? [])
+        {
+            var column = columnNode?.AsObject();
+            var key = column?["key"]?.GetValue<string>();
+            var title = column?["title"]?.GetValue<string>();
+            var roleValue = column?["role"]?.GetValue<string>();
+            var valueKindValue = column?["valueKind"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(key)
+                || string.IsNullOrWhiteSpace(title)
+                || !Enum.TryParse<BulkDatasetColumnRole>(roleValue, out var role)
+                || !Enum.TryParse<ComponentPropertyValueKind>(valueKindValue, out var valueKind))
+            {
+                continue;
+            }
+
+            columns.Add(new BulkDatasetColumnDescriptor
+            {
+                Key = key,
+                Title = title,
+                ValueKind = valueKind,
+                Format = column?["format"]?.GetValue<string>(),
+                Role = role,
+                Visible = column?["visible"]?.GetValue<bool>() ?? true,
+                Editable = column?["editable"]?.GetValue<bool>() ?? false,
+            });
+        }
+
+        return columns;
+    }
+
+    private static class ImmutableFieldValueUpdates
+    {
+        public static readonly IReadOnlyDictionary<string, object?> Empty =
+            new Dictionary<string, object?>(StringComparer.Ordinal);
+    }
+
+    // ─── end Bulk data review helpers ──────────────────────────────────────────
+
     /// <summary>
     /// Gives any support-system invocation still blocking <paramref name="joinGateway"/> a chance
     /// to resolve via poll, the generic counterpart to the webhook receiver resolving one
@@ -2601,11 +2916,26 @@ public class ProcessManagerEngine : IProcessManager
         var cleanedArrivals = new Dictionary<string, IReadOnlyList<string>>(instance.JoinArrivals);
         cleanedArrivals.Remove(gatewayKey);
 
+        // A release that lands straight on a stage (not another gateway) may carry its own
+        // onEnter bulk-dataset-ingest action — the review stage of a bulk-data flow, reached the
+        // moment its automation branch's support-system-call resolves and this join releases.
+        // See ExecuteOnEnterBulkDatasetActions's own remarks.
+        var releasedFieldValues = instance.FieldValues;
+        foreach (var cursor in releaseCursors.Where(cursor => !cursor.IsAtGateway))
+        {
+            var bulkDatasetUpdates = ExecuteOnEnterBulkDatasetActions(instance.InstanceId, definition, releasedFieldValues, cursor);
+            if (bulkDatasetUpdates.Count > 0)
+            {
+                releasedFieldValues = Merge(releasedFieldValues, bulkDatasetUpdates);
+            }
+        }
+
         var releasedInstance = instance with
         {
             CurrentStage = FirstActiveStageCursorKey(releasedCursors) ?? selectedOutgoing[0].ToState,
             Cursors = releasedCursors,
-            JoinArrivals = cleanedArrivals
+            JoinArrivals = cleanedArrivals,
+            FieldValues = releasedFieldValues
         };
 
         SaveInstance(releasedInstance);

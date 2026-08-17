@@ -8,11 +8,13 @@ didn't actually do.
 | Recording | What it shows | Produced by |
 |---|---|---|
 | `wayfinder-overview.webm` | What a service blueprint is (grounded in Nielsen Norman Group's definition, with a QR code to the source article) and every major thing declaring one buys you: real GOV.UK screens, a declarative cross-field validation rule enforced live, the GDS "Change" pattern, conditional routing, and a genuinely separate third-party system — NN/g's "support processes" lane — resolving a caseworker's wait by webhook, plus the visual editor authoring the same rules. | `Wayfinder.ReferenceApp.Tests/tests/demo/wayfinder-overview-demo.spec.ts` |
+| `bulk-data-review.webm` | An NJF operations user submitting a monthly contributions CSV to SafetyNet Underwriting, landing directly on the wait screen, reviewing only the rows that need attention (never the whole file), an autosaved correction that can't be silently lost, a genuine resubmit loop back to the same external system, an explicit confirmation stage before finishing with a non-blocking warning still on record, and — closing out — the editor's own canvas and properties panel showing the whole thing declared, not hand-coded. Written companion: [bulk-data-review-walkthrough.md](./bulk-data-review-walkthrough.md). | `Wayfinder.ReferenceApp.Tests/tests/demo/bulk-data-review-demo.spec.ts` |
 
 ## Regenerating
 
 ```
-cd Wayfinder.ReferenceApp.Tests && npm run demo:record
+cd Wayfinder.ReferenceApp.Tests && npm run demo:record:overview
+cd Wayfinder.ReferenceApp.Tests && npm run demo:record:bulk-data-review
 ```
 
 The spec owns the whole `Wayfinder.AppHost` lifecycle (see `tests/support/live-app-host.ts`), so

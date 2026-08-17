@@ -85,15 +85,20 @@ test.describe('Support systems: real cross-process round trip', () => {
 
     await caseworkerPage.getByRole('button', { name: 'Send risk assessment to insurer' }).click();
 
-    // The application must STAY on the caseworker's own worklist while it's out with the insurer,
-    // flagged "Waiting" (QueueWorkItem.IsWaiting). It previously vanished entirely — reachable
-    // only by a remembered URL — which is the bug a recorded end-to-end take surfaced.
-    await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
+    // The caseworker's own cursor is now parked at the insurer-check-complete Join gateway,
+    // waiting exactly like the citizen's post-review join already did — and lands there
+    // DIRECTLY, the same way the citizen always has, rather than forcing a detour through the
+    // queue list first just to click back in. (ResponseState "defer" counts as "more to do
+    // here" in Program.cs's post-advance redirect — see its own comment for why.)
+    await expect(caseworkerPage.getByText('SafetyNet Underwriting is reviewing the risk assessment.')).toBeVisible();
+
+    // The application must also STAY VISIBLE on the caseworker's own worklist while it's out
+    // with the insurer, flagged "Waiting" (QueueWorkItem.IsWaiting), for anyone who navigates
+    // away and comes back later. It previously vanished entirely — reachable only by a
+    // remembered URL — which is the bug a recorded end-to-end take surfaced.
+    await caseworkerPage.goto('/caseworker/queue');
     await expect(queueRow.getByText('Waiting')).toBeVisible();
     await queueRow.getByRole('link', { name: 'View' }).click();
-
-    // The caseworker's own cursor is now parked at the insurer-check-complete Join gateway,
-    // waiting exactly like the citizen's post-review join already did — same wait/poll UI.
     await expect(caseworkerPage.getByText('SafetyNet Underwriting is reviewing the risk assessment.')).toBeVisible();
 
     // A genuinely separate app, browser-driven in its own context — not an API shortcut. The
@@ -111,15 +116,20 @@ test.describe('Support systems: real cross-process round trip', () => {
     await pendingRow.getByLabel('Decision notes').fill('Adequate mitigation for a live-stack test.');
     await pendingRow.getByRole('button', { name: 'Approve' }).click();
 
-    // Check the caseworker's QUEUE LIST first, deliberately — it is the one surface that never
-    // runs the engine's poll-check hook (that only fires from GetCurrent, i.e. opening the item
-    // itself). So a released join here can only have been released by the real inbound webhook.
-    //
-    // An earlier version of this test reloaded the item page instead and claimed in a comment to
-    // be "proving this is push-driven" — it was not: opening the item polls, which silently
-    // covered for a webhook that was in fact completely broken (SafetyNetUnderwriting had no
-    // Aspire service-discovery reference back to referenceapp, so the callback URL never
-    // resolved). Assert against the non-polling surface, or this proves nothing.
+    // The queue list itself now also gives a still-waiting item a poll-resolve chance on every
+    // deliberate refresh (RefreshIfWaitingAtJoin, alongside BuildEnvelope's identical existing
+    // hook for a single instance) — a related fix for the same "caseworker stuck looking at a
+    // stale Waiting tag" complaint, but it means this list is no longer the one poll-free surface
+    // it used to be, so checking it can no longer *isolate* webhook delivery from poll the way an
+    // earlier version of this test did. That isolation now lives in
+    // SupportSystemActionExecutionTests' webhook-only fixture (Poll never even attempted there).
+    // What this still proves, and only a real cross-process test can: SafetyNetUnderwriting's own
+    // webhook code path (its POST /queue/{id}/decide handler) genuinely reaches this app over
+    // HTTP and the join releases as a result — an earlier version of this test reloaded the item
+    // page and claimed in a comment to be "proving this is push-driven" when it was not (opening
+    // an item always polls too), which silently covered for a webhook that was in fact completely
+    // broken (SafetyNetUnderwriting had no Aspire service-discovery reference back to
+    // referenceapp, so the callback URL never resolved).
     await caseworkerPage.goto('/caseworker/queue');
     await expect(queueRow.getByText('Waiting')).toHaveCount(0);
 

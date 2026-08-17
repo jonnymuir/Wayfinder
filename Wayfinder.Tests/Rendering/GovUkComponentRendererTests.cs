@@ -265,6 +265,42 @@ public class GovUkComponentRendererTests
     }
 
     [Fact]
+    public void RenderComponent_BulkDataReview_WithDatasetId_RendersTheInteractiveSkeleton()
+    {
+        var html = RenderComponentOnly(new ComponentRenderPayload
+        {
+            Type = "bulk-data-review",
+            Title = "Review contributions",
+            DatasetId = "abc123",
+            BulkDatasetApiUrl = "/caseworker/queue/njf-contributions/inst-1/bulk-datasets/abc123",
+            PageSize = 10,
+        });
+
+        Assert.Contains("Review contributions", html);
+        Assert.Contains("data-wayfinder-bulk-review", html);
+        Assert.Contains("data-wayfinder-bulk-review-api=\"/caseworker/queue/njf-contributions/inst-1/bulk-datasets/abc123\"", html);
+        Assert.Contains("data-wayfinder-bulk-review-page-size=\"10\"", html);
+        // The no-JS fallback must always be present and point at a real download link.
+        Assert.Contains("<noscript>", html);
+        Assert.Contains("/caseworker/queue/njf-contributions/inst-1/bulk-datasets/abc123/download", html);
+    }
+
+    [Fact]
+    public void RenderComponent_BulkDataReview_NoDatasetIdYet_RendersPlaceholderNotBrokenMarkup()
+    {
+        var html = RenderComponentOnly(new ComponentRenderPayload
+        {
+            Type = "bulk-data-review",
+            Title = "Review contributions",
+            DatasetId = null,
+            BulkDatasetApiUrl = null,
+        });
+
+        Assert.Contains("Nothing to review yet", html);
+        Assert.DoesNotContain("data-wayfinder-bulk-review-api", html);
+    }
+
+    [Fact]
     public void RenderComponent_WrapsShowWhenComponentsWithHiddenAttribute()
     {
         var html = RenderComponentOnly(new ComponentRenderPayload

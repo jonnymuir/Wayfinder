@@ -22,6 +22,10 @@ public static class SafetyNetUnderwriting
     public const string ApprovedOutcome = "approved";
     public const string RejectedOutcome = "rejected";
 
+    public const string ValidateContributionsFileCapability = "validate-contributions-file";
+    public const string ProcessedOutcome = "processed";
+    public const string ContributionsResponseFileOutputKey = "contributionsResponseFile";
+
     /// <summary>Named <see cref="IHttpClientFactory"/> client key for <see cref="SafetyNetUnderwritingClient"/>'s own HttpClient.</summary>
     public const string HttpClientName = "safetynet-underwriting";
 
@@ -84,6 +88,37 @@ public static class SafetyNetUnderwriting
                         new() { Key = RejectedOutcome, DisplayName = "Rejected" },
                     ],
                 },
+                new SupportSystemCapabilityDescriptor
+                {
+                    Key = ValidateContributionsFileCapability,
+                    DisplayName = "Validate a contributions file",
+                    Description = "Uploads a CSV of member contributions; SafetyNet Underwriting returns the " +
+                                  "same file annotated with a matched member ID and per-row error/warning " +
+                                  "status — see docs/guides/bulk-data-review.md.",
+                    Inputs =
+                    [
+                        new()
+                        {
+                            Key = "file", Title = "Contributions file",
+                            Description = "The file-upload field carrying the NJF's contributions CSV.",
+                            ValueKind = ComponentPropertyValueKind.String, Format = "field-ref", Required = true,
+                        },
+                    ],
+                    Outputs =
+                    [
+                        new()
+                        {
+                            Key = ContributionsResponseFileOutputKey, Title = "Annotated response file",
+                            Description = "SafetyNet's own response — the same CSV with a matched member ID " +
+                                          "and per-row error/warning columns appended.",
+                            ValueKind = ComponentPropertyValueKind.String,
+                        },
+                    ],
+                    // Automatic rules, not a human decision — no staff queue involved, so no webhook
+                    // callback to register either; poll is the only completion mode that makes sense.
+                    SupportedCompletionModes = [SupportSystemCompletionMode.Poll],
+                    Outcomes = [new() { Key = ProcessedOutcome, DisplayName = "Processed" }],
+                },
             ],
         });
 }
@@ -100,13 +135,39 @@ public sealed class SafetyNetUnderwritingClient(
     IServiceRequestFileStorage fileStorage,
     string callbackBaseUrl) : ISupportSystemClient
 {
+    // CheckStatusAsync only ever gets a capabilityKey + receipt, no instanceId — but the
+    // contributions capability needs one to save the response file via IServiceRequestFileStorage
+    // (SaveAsync partitions by instance). Captured here at InvokeAsync time instead, the same
+    // "no server-side session, just correlate by the one token we're given" shape
+    // SupportSystemInvocationContext.InvocationId already uses elsewhere. This client is a
+    // singleton shared across concurrent requests (registered once in Program.cs), so this must
+    // be concurrency-safe — same reasoning SafetyNetUnderwriting/Program.cs's own submissions map
+    // is a ConcurrentDictionary.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _instanceIdByExternalReference = new();
+
     public string SupportSystemKey => SafetyNetUnderwriting.SupportSystemKey;
 
-    public async Task<SupportSystemInvocationReceipt> InvokeAsync(
+    public Task<SupportSystemInvocationReceipt> InvokeAsync(
         string capabilityKey,
         IReadOnlyDictionary<string, SupportSystemInputValue> inputs,
         SupportSystemInvocationContext context,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        capabilityKey == SafetyNetUnderwriting.ValidateContributionsFileCapability
+            ? InvokeContributionsAsync(inputs, context, ct)
+            : InvokeRiskAssessmentAsync(inputs, context, ct);
+
+    public Task<SupportSystemOutcome?> CheckStatusAsync(
+        string capabilityKey,
+        SupportSystemInvocationReceipt receipt,
+        CancellationToken ct = default) =>
+        capabilityKey == SafetyNetUnderwriting.ValidateContributionsFileCapability
+            ? CheckContributionsStatusAsync(receipt, ct)
+            : CheckRiskAssessmentStatusAsync(receipt, ct);
+
+    private async Task<SupportSystemInvocationReceipt> InvokeRiskAssessmentAsync(
+        IReadOnlyDictionary<string, SupportSystemInputValue> inputs,
+        SupportSystemInvocationContext context,
+        CancellationToken ct)
     {
         using var form = new MultipartFormDataContent();
 
@@ -130,22 +191,7 @@ public sealed class SafetyNetUnderwritingClient(
             form.Add(new StringContent($"{callbackBaseUrl}/wayfinder/support-systems/callbacks/{context.InvocationId}"), "callbackUrl");
         }
 
-        if (inputs.GetValueOrDefault("file")?.FileReference is { } fileReference)
-        {
-            await using var fileStream = await fileStorage.OpenReadAsync(fileReference.StorageKey, ct);
-            if (fileStream is not null)
-            {
-                using var memory = new MemoryStream();
-                await fileStream.CopyToAsync(memory, ct);
-                var fileContent = new ByteArrayContent(memory.ToArray());
-                if (!string.IsNullOrWhiteSpace(fileReference.ContentType))
-                {
-                    fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(fileReference.ContentType);
-                }
-
-                form.Add(fileContent, "file", fileReference.OriginalFileName);
-            }
-        }
+        await AddFilePartAsync(form, inputs, ct);
 
         var client = httpClientFactory.CreateClient(SafetyNetUnderwriting.HttpClientName);
         var response = await client.PostAsync("/submissions", form, ct);
@@ -161,10 +207,7 @@ public sealed class SafetyNetUnderwritingClient(
         };
     }
 
-    public async Task<SupportSystemOutcome?> CheckStatusAsync(
-        string capabilityKey,
-        SupportSystemInvocationReceipt receipt,
-        CancellationToken ct = default)
+    private async Task<SupportSystemOutcome?> CheckRiskAssessmentStatusAsync(SupportSystemInvocationReceipt receipt, CancellationToken ct)
     {
         var client = httpClientFactory.CreateClient(SafetyNetUnderwriting.HttpClientName);
         var response = await client.GetAsync($"/submissions/{receipt.ExternalReference}", ct);
@@ -188,5 +231,95 @@ public sealed class SafetyNetUnderwritingClient(
                 ["insurerDecisionNotes"] = decisionNotes ?? ""
             }
         };
+    }
+
+    private async Task<SupportSystemInvocationReceipt> InvokeContributionsAsync(
+        IReadOnlyDictionary<string, SupportSystemInputValue> inputs,
+        SupportSystemInvocationContext context,
+        CancellationToken ct)
+    {
+        using var form = new MultipartFormDataContent();
+        await AddFilePartAsync(form, inputs, ct);
+
+        var client = httpClientFactory.CreateClient(SafetyNetUnderwriting.HttpClientName);
+        var response = await client.PostAsync("/contributions/submissions", form, ct);
+        response.EnsureSuccessStatusCode();
+
+        var body = await response.Content.ReadFromJsonAsync<JsonObject>(ct)
+                   ?? throw new InvalidOperationException("SafetyNet Underwriting returned an empty submission response.");
+        var submissionId = body["submissionId"]?.GetValue<string>()
+                            ?? throw new InvalidOperationException("SafetyNet Underwriting response had no submissionId.");
+
+        _instanceIdByExternalReference[submissionId] = context.InstanceId;
+        return new SupportSystemInvocationReceipt { ExternalReference = submissionId };
+    }
+
+    private async Task<SupportSystemOutcome?> CheckContributionsStatusAsync(SupportSystemInvocationReceipt receipt, CancellationToken ct)
+    {
+        var client = httpClientFactory.CreateClient(SafetyNetUnderwriting.HttpClientName);
+        var statusResponse = await client.GetAsync($"/contributions/submissions/{receipt.ExternalReference}", ct);
+        statusResponse.EnsureSuccessStatusCode();
+
+        var statusBody = await statusResponse.Content.ReadFromJsonAsync<JsonObject>(ct);
+        if (statusBody?["status"]?.GetValue<string>() != "processed")
+        {
+            return null;
+        }
+
+        var fileResponse = await client.GetAsync($"/contributions/submissions/{receipt.ExternalReference}/file", ct);
+        fileResponse.EnsureSuccessStatusCode();
+        var csvBytes = await fileResponse.Content.ReadAsByteArrayAsync(ct);
+
+        if (!_instanceIdByExternalReference.TryGetValue(receipt.ExternalReference, out var instanceId))
+        {
+            throw new InvalidOperationException(
+                $"No instance id captured for submission '{receipt.ExternalReference}' — InvokeAsync must run before CheckStatusAsync.");
+        }
+
+        await using var contentStream = new MemoryStream(csvBytes);
+        var storageKey = await fileStorage.SaveAsync(
+            instanceId, SafetyNetUnderwriting.ContributionsResponseFileOutputKey, contentStream, "contributions-response.csv", ct);
+
+        var fileReference = new ServiceRequestFileReference
+        {
+            StorageKey = storageKey,
+            OriginalFileName = "contributions-response.csv",
+            ContentType = "text/csv",
+            SizeBytes = csvBytes.LongLength,
+        };
+
+        return new SupportSystemOutcome
+        {
+            OutcomeKey = SafetyNetUnderwriting.ProcessedOutcome,
+            ResultPayload = new JsonObject
+            {
+                [SafetyNetUnderwriting.ContributionsResponseFileOutputKey] = System.Text.Json.JsonSerializer.SerializeToNode(fileReference)
+            }
+        };
+    }
+
+    private async Task AddFilePartAsync(
+        MultipartFormDataContent form, IReadOnlyDictionary<string, SupportSystemInputValue> inputs, CancellationToken ct)
+    {
+        if (inputs.GetValueOrDefault("file")?.FileReference is not { } fileReference)
+        {
+            return;
+        }
+
+        await using var fileStream = await fileStorage.OpenReadAsync(fileReference.StorageKey, ct);
+        if (fileStream is null)
+        {
+            return;
+        }
+
+        using var memory = new MemoryStream();
+        await fileStream.CopyToAsync(memory, ct);
+        var fileContent = new ByteArrayContent(memory.ToArray());
+        if (!string.IsNullOrWhiteSpace(fileReference.ContentType))
+        {
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(fileReference.ContentType);
+        }
+
+        form.Add(fileContent, "file", fileReference.OriginalFileName);
     }
 }
