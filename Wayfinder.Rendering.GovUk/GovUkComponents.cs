@@ -355,11 +355,27 @@ public static class GovUkComponents
                 <a class="govuk-link" href="{apiUrl}/download">Download full file</a>
               </div>
               <div class="wayfinder-bulk-review__rows" data-wayfinder-bulk-review-rows></div>
-              <nav class="wayfinder-bulk-review__pagination" data-wayfinder-bulk-review-pagination hidden aria-label="Row pages">
-                <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-prev>Previous</button>
-                <span data-wayfinder-bulk-review-page-status class="wayfinder-bulk-review__page-status"></span>
-                <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-next>Next</button>
-              </nav>
+              <div data-wayfinder-bulk-review-pagination hidden>
+                <nav class="govuk-pagination govuk-pagination--block" aria-label="Row pages">
+                  <div class="govuk-pagination__prev" data-wayfinder-bulk-review-prev-wrapper>
+                    <a class="govuk-link govuk-pagination__link" href="#" rel="prev" data-wayfinder-bulk-review-prev>
+                      <svg class="govuk-pagination__icon govuk-pagination__icon--prev" xmlns="http://www.w3.org/2000/svg" height="13" width="15" aria-hidden="true" focusable="false" viewBox="0 0 15 13">
+                        <path d="m6.5938-0.0078125-6.7266 6.7266 6.7441 6.4062 1.377-1.449-4.1856-3.9768h12.896v-2h-12.984l4.2931-4.293-1.414-1.414z"></path>
+                      </svg>
+                      <span class="govuk-pagination__link-title govuk-pagination__link-title--decorated">Previous<span class="govuk-visually-hidden"> page</span></span>
+                    </a>
+                  </div>
+                  <div class="govuk-pagination__next" data-wayfinder-bulk-review-next-wrapper>
+                    <a class="govuk-link govuk-pagination__link" href="#" rel="next" data-wayfinder-bulk-review-next>
+                      <span class="govuk-pagination__link-title govuk-pagination__link-title--decorated">Next<span class="govuk-visually-hidden"> page</span></span>
+                      <svg class="govuk-pagination__icon govuk-pagination__icon--next" xmlns="http://www.w3.org/2000/svg" height="13" width="15" aria-hidden="true" focusable="false" viewBox="0 0 15 13">
+                        <path d="m8.107-0.0078125-1.4136 1.414 4.2926 4.293h-12.986v2h12.896l-4.1855 3.9768 1.377 1.449 6.7441-6.4062-6.7246-6.7266z"></path>
+                      </svg>
+                    </a>
+                  </div>
+                </nav>
+                <p class="govuk-body wayfinder-bulk-review__page-status" data-wayfinder-bulk-review-page-status></p>
+              </div>
             </div>
             """;
     }

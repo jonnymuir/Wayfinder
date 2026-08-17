@@ -31,11 +31,51 @@ function initBulkReview(root) {
   const rowsEl = root.querySelector('[data-wayfinder-bulk-review-rows]');
   const paginationEl = root.querySelector('[data-wayfinder-bulk-review-pagination]');
   const pageStatusEl = root.querySelector('[data-wayfinder-bulk-review-page-status]');
+  const prevWrapper = root.querySelector('[data-wayfinder-bulk-review-prev-wrapper]');
+  const nextWrapper = root.querySelector('[data-wayfinder-bulk-review-next-wrapper]');
   const prevButton = root.querySelector('[data-wayfinder-bulk-review-prev]');
   const nextButton = root.querySelector('[data-wayfinder-bulk-review-next]');
   const filterButtons = root.querySelectorAll('[data-wayfinder-bulk-review-filter]');
+  const form = root.closest('form');
 
   const state = { filter: 'NeedsAttention', page: 0, columns: [] };
+
+  // Corrections autosave (debounced) rather than needing an explicit "Save correction" click —
+  // a manual save button meant a second edit made after clicking it, but before clicking it
+  // again, silently never reached the server: "Resubmit corrected file" materializes whatever
+  // the STORE last had, not whatever's currently sitting in the input box. rowKey -> flush()
+  // for every row with a save either pending (debounced) or in flight; a clean save removes its
+  // own entry. flushAll() is the safety net every navigation away from the current rows (page,
+  // filter, or the stage's own route-trigger form submit — Resubmit/Accept and finish/etc, all
+  // sharing one <form> per RenderForm) waits on first, so a still-focused, not-yet-debounced
+  // edit can never be silently left behind either.
+  const pendingSaves = new Map();
+  const flushAll = () => Promise.all([...pendingSaves.values()].map((flush) => flush()));
+
+  if (form) {
+    form.addEventListener('submit', (event) => {
+      if (pendingSaves.size === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      const submitter = event.submitter;
+      flushAll().then(() => {
+        if (pendingSaves.size > 0) {
+          // A save genuinely failed — its own row already explains why (see setSaveStatus's
+          // 'error' state). Don't submit with an unsaved change silently left behind; the
+          // caseworker can retry the edit once they've seen it.
+          return;
+        }
+
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit(submitter ?? undefined);
+        } else {
+          form.submit();
+        }
+      });
+    });
+  }
 
   function fetchJson(url, options) {
     return fetch(url, {
@@ -83,8 +123,11 @@ function initBulkReview(root) {
 
     const totalPages = Math.max(1, Math.ceil(page.totalMatchingRowCount / pageSize));
     pageStatusEl.textContent = `Page ${page.pageIndex + 1} of ${totalPages}`;
-    prevButton.disabled = page.pageIndex <= 0;
-    nextButton.disabled = page.pageIndex + 1 >= totalPages;
+    // The real GOV.UK pagination component omits a prev/next link entirely at either end of the
+    // range rather than rendering it disabled — matching that (via hidden, since this is one
+    // persistent page, not a server-rendered one per navigation) rather than a disabled affordance.
+    prevWrapper.hidden = page.pageIndex <= 0;
+    nextWrapper.hidden = page.pageIndex + 1 >= totalPages;
     paginationEl.hidden = page.totalMatchingRowCount === 0;
   }
 
@@ -129,40 +172,85 @@ function initBulkReview(root) {
 
     card.innerHTML = `
       <div class="wayfinder-bulk-review__card-header">
-        <span class="wayfinder-bulk-review__card-title">${escapeHtml(row.rowKey)}</span>${tag}
+        <h3 class="govuk-heading-s wayfinder-bulk-review__card-title">${escapeHtml(row.rowKey)}</h3>${tag}
       </div>
       ${structuralIssue}
       <div class="wayfinder-bulk-review__fields">${fields}</div>
-      <div class="govuk-button-group">
-        <button type="button" class="govuk-button" data-wayfinder-bulk-review-save>Save correction</button>
-        <span class="wayfinder-bulk-review__save-status" data-wayfinder-bulk-review-save-status role="status"></span>
-      </div>
+      <p class="wayfinder-bulk-review__save-status" data-wayfinder-bulk-review-save-status role="status"></p>
     `;
 
-    const saveButton = card.querySelector('[data-wayfinder-bulk-review-save]');
+    const inputs = card.querySelectorAll('[data-wayfinder-bulk-review-input]');
     const saveStatus = card.querySelector('[data-wayfinder-bulk-review-save-status]');
-    saveButton.addEventListener('click', () => {
+
+    function setSaveStatus(text, tone) {
+      saveStatus.textContent = text;
+      saveStatus.className = 'wayfinder-bulk-review__save-status' +
+        (tone ? ` wayfinder-bulk-review__save-status--${tone}` : '');
+    }
+
+    let dirty = false;
+    let debounceTimer = null;
+    // Serializes save attempts for this row so a debounce firing while a previous save is still
+    // in flight can't send two overlapping POSTs — each waits for the last to settle, then sends
+    // whatever's currently in the inputs (always read live, at send time, never a stale snapshot
+    // captured back when the edit first happened).
+    let saveChain = Promise.resolve();
+
+    function saveNow() {
+      dirty = false;
+      setSaveStatus('Saving…', 'pending');
       const values = {};
-      card.querySelectorAll('[data-wayfinder-bulk-review-input]').forEach((input) => {
+      inputs.forEach((input) => {
         values[input.getAttribute('data-wayfinder-bulk-review-input')] = input.value;
       });
 
-      saveButton.disabled = true;
-      saveStatus.textContent = 'Saving…';
-      fetch(`${apiBase}/rows/${encodeURIComponent(row.rowKey)}/correct`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(values),
-      })
+      saveChain = saveChain
+        .then(() => fetch(`${apiBase}/rows/${encodeURIComponent(row.rowKey)}/correct`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(values),
+        }))
         .then((response) => {
-          saveButton.disabled = false;
-          saveStatus.textContent = response.ok ? 'Saved' : 'Could not save — try again.';
+          if (response.ok) {
+            setSaveStatus('Saved', 'saved');
+            if (!dirty) {
+              pendingSaves.delete(row.rowKey);
+            }
+          } else {
+            dirty = true;
+            setSaveStatus('Could not save — try again.', 'error');
+          }
         })
         .catch(() => {
-          saveButton.disabled = false;
-          saveStatus.textContent = 'Could not save — try again.';
+          dirty = true;
+          setSaveStatus('Could not save — try again.', 'error');
         });
+
+      return saveChain;
+    }
+
+    function flush() {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      return dirty ? saveNow() : saveChain;
+    }
+
+    inputs.forEach((input) => {
+      input.addEventListener('input', () => {
+        dirty = true;
+        setSaveStatus('Unsaved changes…', 'pending');
+        pendingSaves.set(row.rowKey, flush);
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null;
+          saveNow();
+        }, 600);
+      });
     });
 
     return card;
@@ -170,23 +258,31 @@ function initBulkReview(root) {
 
   filterButtons.forEach((button) => {
     button.addEventListener('click', () => {
-      state.filter = button.getAttribute('data-wayfinder-bulk-review-filter');
-      state.page = 0;
-      filterButtons.forEach((b) => b.setAttribute('aria-pressed', b === button ? 'true' : 'false'));
-      loadRows();
+      flushAll().then(() => {
+        state.filter = button.getAttribute('data-wayfinder-bulk-review-filter');
+        state.page = 0;
+        filterButtons.forEach((b) => b.setAttribute('aria-pressed', b === button ? 'true' : 'false'));
+        loadRows();
+      });
     });
   });
 
-  prevButton.addEventListener('click', () => {
+  prevButton.addEventListener('click', (event) => {
+    event.preventDefault();
     if (state.page > 0) {
-      state.page -= 1;
-      loadRows();
+      flushAll().then(() => {
+        state.page -= 1;
+        loadRows();
+      });
     }
   });
 
-  nextButton.addEventListener('click', () => {
-    state.page += 1;
-    loadRows();
+  nextButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    flushAll().then(() => {
+      state.page += 1;
+      loadRows();
+    });
   });
 
   loadSummary().then(loadRows);

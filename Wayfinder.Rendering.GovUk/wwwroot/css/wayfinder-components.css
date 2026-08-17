@@ -8,7 +8,18 @@
  * shares one file instead of drifting independently. Uses GOV.UK blue (#1d70b8) directly; a host
  * that needs a different brand colour overrides these rules after loading this file, the same
  * way it would override any other govuk-frontend default.
+ *
+ * govuk-frontend never sets typography via a global html/body reset — every one of its own
+ * classes (govuk-body, govuk-label, govuk-link, ...) declares font-family itself. So anything
+ * rendered only under a wayfinder-* class, with no govuk-* class alongside it, inherits nothing
+ * and falls back to the browser's serif default. This one rule is that declaration, shared by
+ * every wayfinder-* class rather than repeated per class.
  */
+
+[class^="wayfinder-"],
+[class*=" wayfinder-"] {
+  font-family: GDS Transport, arial, sans-serif;
+}
 
 .wayfinder-slider__row {
   display: flex;
@@ -205,8 +216,9 @@
 }
 
 .wayfinder-bulk-review__card-title {
-  font-weight: 700;
-  font-size: 1.125rem;
+  /* govuk-heading-s supplies weight/size/colour; its own bottom margin would misalign it
+     against the tag beside it in this flex row, so it's zeroed here. */
+  margin: 0;
 }
 
 .wayfinder-bulk-review__structural-issue {
@@ -241,19 +253,26 @@
 }
 
 .wayfinder-bulk-review__save-status {
-  align-self: center;
-  color: #00703c;
+  margin: 0.5rem 0 0;
   font-weight: 700;
+  min-height: 1.25em;
 }
 
-.wayfinder-bulk-review__pagination {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+.wayfinder-bulk-review__save-status--pending {
+  color: #505a5f;
+}
+
+.wayfinder-bulk-review__save-status--saved {
+  color: #00703c;
+}
+
+.wayfinder-bulk-review__save-status--error {
+  color: #d4351c;
 }
 
 .wayfinder-bulk-review__page-status {
   font-variant-numeric: tabular-nums;
+  margin-top: -0.5rem;
 }
 
 /* Cards are the whole point on narrow viewports — fields already stack via the auto-fit grid

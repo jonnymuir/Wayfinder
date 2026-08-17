@@ -56,15 +56,21 @@ test.describe('Bulk data review: real cross-process round trip', () => {
     });
     await page.getByRole('button', { name: 'Submit' }).click();
 
-    // PRG: advancing through a Split gateway redirects to the caseworker's own queue list — same
-    // convention the existing risk-assessment flow already uses (support-systems-live.spec.ts).
-    // The submission must stay reachable, flagged "Waiting", not vanish while it's out with
-    // SafetyNet Underwriting.
-    await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
+    // PRG, but the caseworker's own cursor is now parked at the automation Join gateway, and
+    // lands there DIRECTLY — the same position the citizen's own post-review join has always put
+    // people on straight away, rather than forcing a detour through the queue list first just to
+    // click back in (ResponseState "defer" counts as "more to do here" in Program.cs's
+    // post-advance redirect — see its own comment for why).
+    const instanceUrl = page.url();
+    await expect(page.getByText('SafetyNet Underwriting is processing the contributions file.')).toBeVisible();
+
+    // The submission must also STAY REACHABLE from the caseworker's own worklist while it's out
+    // with SafetyNet Underwriting, flagged "Waiting" — for anyone who navigates away and comes
+    // back later, not just the person who just submitted it.
+    await page.goto('/caseworker/queue');
     const queueRow = page.locator('tr', { hasText: 'Submit an NJF contributions file' });
     await expect(queueRow.getByText('Waiting')).toBeVisible();
     await queueRow.getByRole('link', { name: 'View' }).click();
-
     await expect(page.getByText('SafetyNet Underwriting is processing the contributions file.')).toBeVisible();
 
     // Real batch processing on a genuinely separate app, with a real artificial delay
@@ -79,19 +85,17 @@ test.describe('Bulk data review: real cross-process round trip', () => {
     await expect(attentionCard.getByText(/Unrecognised tier/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Accept and finish' })).toHaveCount(0);
 
+    // No "Save correction" button — a correction autosaves (debounced) once you stop typing, so
+    // a second edit made right after the first can never be silently left out of "Resubmit
+    // corrected file" the way a forgotten manual save used to allow.
     await attentionCard.getByLabel('Membership tier').fill('Recreational');
-    await attentionCard.getByRole('button', { name: 'Save correction' }).click();
     await expect(attentionCard.getByText('Saved')).toBeVisible();
 
     // A genuine loop: this re-fires the same Split gateway, materializing the just-corrected
     // dataset (not the original upload) back to SafetyNet Underwriting for real revalidation —
-    // same PRG redirect back to the queue list as the initial submit.
+    // landing directly back on this same instance's own wait screen, same as the initial submit.
+    // List-visibility while waiting is already covered above; no need to prove it twice.
     await page.getByRole('button', { name: 'Resubmit corrected file' }).click();
-    await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
-    await expect(queueRow.getByText('Waiting')).toBeVisible();
-    await queueRow.getByRole('link', { name: 'View' }).click();
-    const instanceUrl = page.url();
-
     await expect(page.getByText('SafetyNet Underwriting is processing the contributions file.')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Review contributions file' })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: 'Accept and finish' })).toBeVisible({ timeout: 10_000 });
