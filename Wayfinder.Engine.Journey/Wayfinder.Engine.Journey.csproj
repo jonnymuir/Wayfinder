@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageId>Wayfinder.Engine.Journey</PackageId>
+    <Title>Wayfinder Engine Journey</Title>
+    <Version>0.6.0</Version>
+    <Authors>Jonny Muir</Authors>
+    <Company>Wayfinder</Company>
+    <Description>A default, optional single-actor journey surface — server-rendered GOV.UK markup for "get my current stage, advance it" against one blueprint (the applicant/citizen shape, as opposed to Wayfinder.Engine.Worklist's multi-item caseworker queue). A host wires it up with AddJourney()/MapJourney(prefix, blueprintKey, pageTitle) — once per blueprint it wants a self-service journey for — or ignores this package entirely and hand-writes the same routes itself.</Description>
+    <PackageTags>Blueprint;Wayfinder</PackageTags>
+    <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIcon>assets/icon-wayfinder-engine-journey.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Wayfinder.Engine/Wayfinder.Engine.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine.Http/Wayfinder.Engine.Http.csproj" />
+    <ProjectReference Include="../Wayfinder.Rendering.GovUk/Wayfinder.Rendering.GovUk.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../assets/icon-wayfinder-engine-journey.png" Pack="true" PackagePath="assets/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

@@ -294,6 +294,29 @@ public static class WorklistExtensions
                 : prefix);
         });
 
+        // A caseworker reviewing an application needs to actually open what was uploaded, not just
+        // read its filename — see GovUkStageJourney.WithFileDownloadUrls, which already builds
+        // exactly this URL for every file-upload field on the item page above.
+        group.MapGet("/{blueprintKey}/{instanceId}/files/{fieldKey}", async (
+            string blueprintKey, string instanceId, string fieldKey, IProcessManager engine, IServiceRequestFileStorage fileStorage) =>
+        {
+            var rawValues = engine.GetAllInstances().FirstOrDefault(request => request.InstanceId == instanceId)?.FieldValues;
+            var reference = rawValues is null ? null : ServiceRequestFileReference.FromFieldValue(rawValues.GetValueOrDefault(fieldKey));
+            if (reference is null)
+            {
+                return Results.NotFound();
+            }
+
+            var stream = await fileStorage.OpenReadAsync(reference.StorageKey);
+            if (stream is null)
+            {
+                return Results.NotFound();
+            }
+
+            var contentType = string.IsNullOrEmpty(reference.ContentType) ? "application/octet-stream" : reference.ContentType;
+            return Results.File(stream, contentType, reference.OriginalFileName);
+        });
+
         return group;
     }
 }

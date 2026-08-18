@@ -2,12 +2,13 @@ using System.Security.Claims;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Primitives;
+using Wayfinder.Editor;
+using Wayfinder.Editor.Http;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Api;
 using Wayfinder.Engine.Extensions;
 using Wayfinder.Engine.Http;
+using Wayfinder.Engine.Journey;
 using Wayfinder.Engine.Mcp;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
@@ -125,6 +126,15 @@ builder.Services.AddServiceBlueprintAuthoring();
 builder.Services.AddServiceBlueprintAuthoringApi();
 builder.Services.AddServiceBlueprintAuthoringMcp();
 
+// See Wayfinder.Engine.Journey's own README — the default single-actor journey surface (get
+// current stage, advance it) shared by /apply and /premium below.
+builder.Services.AddJourney(options =>
+{
+    options.ResolveTenantId = _ => ReferenceActors.TenantId;
+    options.ResolveAccessProfile = _ => ReferenceActors.CitizenProfile();
+    options.RenderPage = (title, body, ctx) => PageShell.Render(title, body, ctx.User);
+});
+
 // See Wayfinder.Engine.Worklist's own README — the default caseworker worklist surface
 // (list/item/advance/claim/release), covering everything about /caseworker/queue that isn't
 // specific to this reference app.
@@ -146,35 +156,13 @@ app.MapDefaultEndpoints();
 // whatever that package's own generated markup actually targets — see PageShell.cs.
 app.UseStaticFiles();
 
-// Serve Wayfinder.Editor's compiled service-blueprint-editor.html + JS/CSS assets at web root —
-// its own build emits root-relative asset references, so it must be served from "/", not the
-// package's default "_content/Wayfinder.Editor/dist/" prefix.
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new SubPathFileProvider(app.Environment.WebRootFileProvider, "_content/Wayfinder.Editor/dist"),
-    RequestPath = "",
-    OnPrepareResponse = ctx =>
-    {
-        if (ctx.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
-        {
-            ctx.Context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
-            ctx.Context.Response.Headers.Pragma = "no-cache";
-            ctx.Context.Response.Headers.Expires = "0";
-        }
-    }
-});
-
-// govuk-frontend.min.css's own @font-face rules request fonts at a hard-coded absolute
-// "/assets/fonts/..." — baked into the pre-built CSS regardless of where the CSS file itself is
-// served from, so the vendored font files (inside Wayfinder.Rendering.GovUk alongside the CSS)
-// need re-rooting onto that exact path, the same SubPathFileProvider trick as Wayfinder.Editor
-// above. Distinct sub-path from this app's own "/assets/images/..." favicon set below — both
-// static files middleware calls just fall through to the next on a miss, so there's no collision.
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new SubPathFileProvider(app.Environment.WebRootFileProvider, "_content/Wayfinder.Rendering.GovUk/govuk-frontend/assets"),
-    RequestPath = "/assets"
-});
+// Wayfinder.Editor's own compiled bundle and Wayfinder.Rendering.GovUk's own vendored
+// govuk-frontend assets, each served by the package that owns them — see their own
+// UseWayfinderEditorAssets()/UseGovUkFrontendAssets() extensions. Distinct sub-path from this
+// app's own "/assets/images/..." favicon set above — static-files middleware calls just fall
+// through to the next on a miss, so there's no collision.
+app.UseWayfinderEditorAssets();
+app.UseGovUkFrontendAssets();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -214,38 +202,12 @@ app.MapPost("/wayfinder/support-systems/callbacks/{invocationId}", async (
     return result.ResponseState == "error" ? Results.BadRequest(result) : Results.Ok(result);
 });
 
-// Wayfinder.Editor's packaged demo page (service-blueprint-editor.html, compiled from
-// Wayfinder.Editor.Client) talks to a `/mockapp/service-blueprints/*` contract — the shape
-// its bundled MockBusinessAppServiceBlueprintSource example expects — rather than the
-// `/wayfinder/service-blueprint-authoring/*` routes above. This host implements that
-// contract against the same live ServiceBlueprintAuthoringService so the packaged editor
-// works out of the box without forking Wayfinder.Editor.Client's build. Anonymous, same
-// reasoning as the authoring API/MCP above.
-app.MapGet("/mockapp/service-blueprints", async (ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
-    Results.Json(await authoring.ListAsync(ct)));
-
-app.MapGet("/mockapp/service-blueprints/{key}", async (string key, ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
-{
-    var blueprint = await authoring.ReadAsync(key, ct);
-    return blueprint is null ? Results.NotFound() : Results.Json(blueprint);
-});
-
-app.MapPut("/mockapp/service-blueprints/{key}", async (string key, HttpContext ctx, ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
-{
-    var blueprint = await ctx.Request.ReadFromJsonAsync<ServiceBlueprint>(ct);
-    if (blueprint is null || !string.Equals(blueprint.DefinitionKey, key, StringComparison.Ordinal))
-    {
-        return Results.BadRequest();
-    }
-
-    var outcome = await authoring.SaveAsync(blueprint, blueprint.Version, ct);
-    return outcome.Status switch
-    {
-        ServiceBlueprintSaveStatus.Saved => Results.NoContent(),
-        ServiceBlueprintSaveStatus.Conflict => Results.Conflict(outcome),
-        _ => Results.BadRequest(outcome)
-    };
-});
+// See Wayfinder.Editor.Http's own README — the backend half of the contract Wayfinder.Editor's
+// packaged demo page (service-blueprint-editor.html) expects from its bundled
+// MockBusinessAppServiceBlueprintSource example, rather than the
+// `/wayfinder/service-blueprint-authoring/*` routes above. Anonymous, same reasoning as the
+// authoring API/MCP above.
+app.MapMockBusinessAppServiceBlueprints();
 
 app.MapGet("/", (HttpContext ctx) =>
 {
@@ -315,106 +277,23 @@ app.MapPost("/account/logout", async (HttpContext ctx) =>
     return Results.Redirect("/account/login");
 });
 
-// ── Frontstage: the applicant's own journey ──────────────────────────────────────────────
-
-var citizenGroup = app.MapGroup("/apply").RequireAuthorization("Applicant");
-
-citizenGroup.MapGet("/", (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
-{
-    var envelope = engine.GetCurrent(
-        JugglingLicenceDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CitizenProfile());
-    return Results.Content(PageShell.Render("Apply for a juggling licence", renderer.RenderJourneyBody(envelope, "/apply"), ctx.User), "text/html");
-});
-
-citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
-{
-    var userId = GetUserId(ctx.User);
-    var profile = ReferenceActors.CitizenProfile();
-    var current = engine.GetCurrent(JugglingLicenceDefinitionKey, ReferenceActors.TenantId, userId, profile);
-
-    var form = await ctx.Request.ReadFormAsync();
-    var action = form["action"].ToString();
-    var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
-    var fieldValues = GovUkStageJourney.CoerceFieldValues(form, current.Render);
-
-    var fileErrors = await StageFileUploads.ApplyFileUploadsAsync(form, current.Render, current.InstanceId, fileStorage, fieldValues);
-    if (fileErrors.Count > 0)
-    {
-        return Results.Content(
-            PageShell.Render("Apply for a juggling licence", renderer.RenderJourneyBody(current with { Problems = fileErrors }, "/apply"), ctx.User), "text/html");
-    }
-
-    var result = engine.Advance(current.InstanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
-
-    // A rejected submission (missing/invalid field values, or a field key that isn't even
-    // declared on this stage — see ProcessManagerEngine.Advance's server-side validation)
-    // never changes instance state, so stateVersion is still current — safe to render this
-    // response directly rather than redirect, unlike a genuine advance below.
-    if (result.Problems.Count > 0 && result.Render is not null)
-    {
-        return Results.Content(
-            PageShell.Render("Apply for a juggling licence", renderer.RenderJourneyBody(result, "/apply"), ctx.User), "text/html");
-    }
-
-    // Redirect rather than render the result directly (POST-redirect-GET): rendering at the
-    // POST URL leaves that response in browser history, so reloading it — or a caseworker
-    // advancing the same instance from another tab — resubmits the same stale stateVersion
-    // and fails with a spurious VERSION_MISMATCH. Redirecting to the GET route always re-fetches
-    // whatever the instance's current state actually is.
-    return Results.Redirect("/apply");
-});
-
-// A second, independent citizen-queue demo — slider/stat-group/chart-driven interactive
-// modelling, ending in a "send to a caseworker" fan-out into the same backstage queue below.
-// Same shape as the /apply group above; a distinct route prefix and definition key are the
-// only difference, since ActorProfile/queue access is keyed by queue name, not blueprint key.
-var premiumGroup = app.MapGroup("/premium").RequireAuthorization("Applicant");
-
-premiumGroup.MapGet("/", (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
-{
-    var envelope = engine.GetCurrent(
-        InsuranceModellerDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CitizenProfile());
-    return Results.Content(PageShell.Render("Model your performance insurance premium", renderer.RenderJourneyBody(envelope, "/premium"), ctx.User), "text/html");
-});
-
-premiumGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
-{
-    var userId = GetUserId(ctx.User);
-    var profile = ReferenceActors.CitizenProfile();
-    var current = engine.GetCurrent(InsuranceModellerDefinitionKey, ReferenceActors.TenantId, userId, profile);
-
-    var form = await ctx.Request.ReadFormAsync();
-    var action = form["action"].ToString();
-    var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
-    var fieldValues = GovUkStageJourney.CoerceFieldValues(form, current.Render);
-
-    var fileErrors = await StageFileUploads.ApplyFileUploadsAsync(form, current.Render, current.InstanceId, fileStorage, fieldValues);
-    if (fileErrors.Count > 0)
-    {
-        return Results.Content(
-            PageShell.Render("Model your performance insurance premium", renderer.RenderJourneyBody(current with { Problems = fileErrors }, "/premium"), ctx.User), "text/html");
-    }
-
-    var result = engine.Advance(current.InstanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
-
-    if (result.Problems.Count > 0 && result.Render is not null)
-    {
-        return Results.Content(
-            PageShell.Render("Model your performance insurance premium", renderer.RenderJourneyBody(result, "/premium"), ctx.User), "text/html");
-    }
-
-    return Results.Redirect("/premium");
-});
+// ── Frontstage: the applicant's own journeys ─────────────────────────────────────────────
+// See Wayfinder.Engine.Journey's own README. Two independent self-service demos sharing one
+// AddJourney() registration above — a second, independent citizen-queue demo (slider/stat-group/
+// chart-driven interactive modelling) fans out into the same backstage queue below as the first,
+// since ActorProfile/queue access is keyed by queue name, not blueprint key.
+app.MapJourney("/apply", JugglingLicenceDefinitionKey, "Apply for a juggling licence").RequireAuthorization("Applicant");
+app.MapJourney("/premium", InsuranceModellerDefinitionKey, "Model your performance insurance premium").RequireAuthorization("Applicant");
 
 // ── Backstage: the caseworker's review queue ─────────────────────────────────────────────
 
 var caseworkerGroup = app.MapGroup("/caseworker").RequireAuthorization("Caseworker");
 
-// The default worklist surface (list/item/advance/claim/release) — see
-// Wayfinder.Engine.Worklist's own README. Everything else under /caseworker (the NJF "start new"
-// entry point below, plus the file-download and bulk-dataset routes further down) stays hand-wired
-// here, its URLs matching because it shares this same "/caseworker/queue" prefix.
+// The default worklist surface (list/item/advance/claim/release/file-download) plus bulk-data-review's
+// own REST endpoints — see Wayfinder.Engine.Worklist's own README. Everything else under
+// /caseworker (just the NJF "start new" entry point below) stays hand-wired here.
 app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
+app.MapBulkDatasetReview(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
 
 // njf-contributions has no citizen frontstage to originate an instance from (see
 // docs/guides/bulk-data-review.md — the NJF's own operations staff are the only actor), so it
@@ -435,119 +314,6 @@ caseworkerGroup.MapGet("/njf-contributions/new", (HttpContext ctx, IProcessManag
     var started = engine.GetCurrentOrStartFresh(
         NjfContributionsDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.NjfOperationsProfile());
     return Results.Redirect($"/caseworker/queue/{NjfContributionsDefinitionKey}/{started.InstanceId}");
-});
-
-caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/files/{fieldKey}", async (
-    string blueprintKey, string instanceId, string fieldKey, IProcessManager engine, IServiceRequestFileStorage fileStorage) =>
-{
-    var rawValues = engine.GetAllInstances().FirstOrDefault(request => request.InstanceId == instanceId)?.FieldValues;
-    var reference = rawValues is null ? null : ServiceRequestFileReference.FromFieldValue(rawValues.GetValueOrDefault(fieldKey));
-    if (reference is null)
-    {
-        return Results.NotFound();
-    }
-
-    var stream = await fileStorage.OpenReadAsync(reference.StorageKey);
-    if (stream is null)
-    {
-        return Results.NotFound();
-    }
-
-    var contentType = string.IsNullOrEmpty(reference.ContentType) ? "application/octet-stream" : reference.ContentType;
-    return Results.File(stream, contentType, reference.OriginalFileName);
-});
-
-// ── Bulk data review (see docs/guides/bulk-data-review.md) — the review component's own
-// interactivity (paging/filtering, correcting a row, downloading the full file) never goes
-// through GetCurrent/Advance; it talks to IBulkDatasetStore directly, the same way the file
-// download route above talks to IServiceRequestFileStorage directly rather than the engine.
-// Deliberately the SAME trust model as that route: the "Caseworker" role gate on the whole
-// group is the access check, no extra per-instance ownership check here — IBulkDatasetStore
-// itself still independently verifies instanceId owns datasetId regardless (defence in depth),
-// and both a dataset that doesn't exist and one that belongs to a different instance map to a
-// plain 404, deliberately not distinguished, so a client can't use the response to tell which
-// case it hit.
-caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/summary", async (
-    string blueprintKey, string instanceId, string datasetId, IBulkDatasetStore bulkDatasetStore) =>
-{
-    try
-    {
-        var summary = await bulkDatasetStore.GetSummaryAsync(instanceId, datasetId);
-        return summary is null ? Results.NotFound() : Results.Ok(summary);
-    }
-    catch (UnauthorizedAccessException)
-    {
-        return Results.NotFound();
-    }
-});
-
-caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/rows", async (
-    string blueprintKey, string instanceId, string datasetId, string? filter, int? page, int? pageSize,
-    IBulkDatasetStore bulkDatasetStore) =>
-{
-    var parsedFilter = Enum.TryParse<BulkDatasetRowFilter>(filter, ignoreCase: true, out var f)
-        ? f
-        : BulkDatasetRowFilter.NeedsAttention;
-    var pageIndex = Math.Max(page ?? 0, 0);
-    var size = Math.Clamp(pageSize ?? 20, 1, 100);
-
-    try
-    {
-        var result = await bulkDatasetStore.GetRowsAsync(instanceId, datasetId, parsedFilter, pageIndex, size);
-        return result is null ? Results.NotFound() : Results.Ok(result);
-    }
-    catch (UnauthorizedAccessException)
-    {
-        return Results.NotFound();
-    }
-});
-
-caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/rows/{rowKey}/correct", async (
-    string blueprintKey, string instanceId, string datasetId, string rowKey,
-    Dictionary<string, string?> correctedValues, HttpContext ctx, IBulkDatasetStore bulkDatasetStore) =>
-{
-    try
-    {
-        await bulkDatasetStore.ApplyCorrectionAsync(instanceId, datasetId, rowKey, correctedValues, GetUserId(ctx.User));
-        return Results.NoContent();
-    }
-    catch (UnauthorizedAccessException)
-    {
-        return Results.NotFound();
-    }
-    catch (KeyNotFoundException)
-    {
-        return Results.NotFound();
-    }
-    catch (ArgumentException ex)
-    {
-        return Results.BadRequest(new { error = ex.Message });
-    }
-});
-
-caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/download", async (
-    string blueprintKey, string instanceId, string datasetId, IBulkDatasetStore bulkDatasetStore, IServiceRequestFileStorage fileStorage) =>
-{
-    ServiceRequestFileReference materialized;
-    try
-    {
-        // A pure human-facing export, not tied to any real blueprint field — targetFieldKey here
-        // is just IServiceRequestFileStorage's own partition key, never read back by the engine.
-        materialized = await bulkDatasetStore.MaterializeAsync(
-            instanceId, datasetId, targetFieldKey: "bulkDatasetDownload", fileName: "contributions.csv",
-            sanitizeForHumanExport: true);
-    }
-    catch (UnauthorizedAccessException)
-    {
-        return Results.NotFound();
-    }
-    catch (KeyNotFoundException)
-    {
-        return Results.NotFound();
-    }
-
-    var stream = await fileStorage.OpenReadAsync(materialized.StorageKey);
-    return stream is null ? Results.NotFound() : Results.File(stream, "text/csv", materialized.OriginalFileName);
 });
 
 // ── Test isolation ────────────────────────────────────────────────────────────────────────
@@ -619,21 +385,4 @@ static string RenderLoginBody(string? returnUrl, string? error)
           <li><strong>{esc(DemoUsers.NjfOperations.DisplayName)}</strong> — {esc(DemoUsers.NjfOperations.Email)} (caseworker / backstage, NJF contributions)</li>
         </ul>
         """;
-}
-
-/// <summary>
-/// Re-roots an <see cref="IFileProvider"/> at a fixed subpath — serves Wayfinder.Editor's
-/// static web assets (found under its default "_content/Wayfinder.Editor/..." prefix inside
-/// this app's composite WebRootFileProvider) at web root instead, without hardcoding any
-/// machine-specific NuGet/build-output path.
-/// </summary>
-file sealed class SubPathFileProvider(IFileProvider inner, string subpath) : IFileProvider
-{
-    private string Rebase(string path) => $"{subpath}/{path.TrimStart('/')}";
-
-    public IFileInfo GetFileInfo(string subpath_) => inner.GetFileInfo(Rebase(subpath_));
-
-    public IDirectoryContents GetDirectoryContents(string subpath_) => inner.GetDirectoryContents(Rebase(subpath_));
-
-    public IChangeToken Watch(string filter) => inner.Watch(Rebase(filter));
 }

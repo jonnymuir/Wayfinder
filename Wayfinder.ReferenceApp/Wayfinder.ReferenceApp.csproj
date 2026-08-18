@@ -12,9 +12,11 @@
     <ProjectReference Include="../Wayfinder.Engine/Wayfinder.Engine.csproj" />
     <ProjectReference Include="../Wayfinder.Engine.Api/Wayfinder.Engine.Api.csproj" />
     <ProjectReference Include="../Wayfinder.Engine.Http/Wayfinder.Engine.Http.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine.Journey/Wayfinder.Engine.Journey.csproj" />
     <ProjectReference Include="../Wayfinder.Engine.Mcp/Wayfinder.Engine.Mcp.csproj" />
     <ProjectReference Include="../Wayfinder.Engine.Worklist/Wayfinder.Engine.Worklist.csproj" />
     <ProjectReference Include="../Wayfinder.Editor/Wayfinder.Editor.csproj" />
+    <ProjectReference Include="../Wayfinder.Editor.Http/Wayfinder.Editor.Http.csproj" />
     <ProjectReference Include="../Wayfinder.Rendering.GovUk/Wayfinder.Rendering.GovUk.csproj" />
     <ProjectReference Include="../Wayfinder.ServiceDefaults/Wayfinder.ServiceDefaults.csproj" />
   </ItemGroup>
