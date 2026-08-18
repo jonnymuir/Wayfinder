@@ -41,7 +41,11 @@ public class NjfContributionsBlueprintTests
         VisibleQueues = ["caseworker"],
         StartableQueues = ["caseworker"],
         ActionableQueues = ["caseworker"],
-        RestrictToInstanceOwner = false
+        RestrictToInstanceOwner = false,
+        // The real njf-contributions.json now gates its "caseworker" queue with
+        // roleGates: ["njf-contributions-review"] (see docs/guides/work-allocation.md) — matches
+        // Wayfinder.ReferenceApp/Services/ReferenceActors.NjfOperationsProfile's own capability.
+        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-review" }
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new()

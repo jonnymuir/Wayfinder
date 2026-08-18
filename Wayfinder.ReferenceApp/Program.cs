@@ -427,7 +427,7 @@ caseworkerGroup.MapGet("/queue", (
     // Genuinely multi-blueprint: GetQueueWorkItems has no blueprint filter, so both demos'
     // caseworker-queue items already show up here side by side, keyed by queue name alone.
     var envelope = engine.GetQueueWorkItems(
-        ReferenceActors.CaseworkerProfile(), statuses, parsedSort, q, pageIndex, size);
+        GetUserId(ctx.User), ReferenceActors.ProfileForCaseworkerUser(GetUserId(ctx.User)), statuses, parsedSort, q, pageIndex, size);
     var esc = GovUk.Esc;
 
     string CheckboxItem(QueueWorkItemStatus value, string label) =>
@@ -501,8 +501,27 @@ caseworkerGroup.MapGet("/queue", (
         _ => ""
     };
 
+    // See docs/guides/work-allocation.md — claim/ownership is per-cursor, orthogonal to
+    // QueueWorkItemStatus. A Claim/Release button posts back to this same page (PRG), so claiming
+    // never leaves a caseworker mid-way through a stale filtered view.
+    string ClaimReleaseControl(QueueWorkItem item) => item.ClaimState switch
+    {
+        QueueWorkItemClaimState.Unclaimed => $"""
+            <form method="post" action="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/claim?cursorId={Uri.EscapeDataString(item.CursorId)}">
+              <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Claim</button>
+            </form>
+            """,
+        QueueWorkItemClaimState.ClaimedByMe => $"""
+            <strong class="govuk-tag">Claimed by you</strong>
+            <form method="post" action="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/release?cursorId={Uri.EscapeDataString(item.CursorId)}">
+              <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Release</button>
+            </form>
+            """,
+        _ => ""
+    };
+
     var rows = envelope.Items.Count == 0
-        ? """<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="4">No applications match the current filters</td></tr>"""
+        ? """<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="5">No applications match the current filters</td></tr>"""
         // A waiting item (this caseworker's own cursor parked at a join gateway, waiting on
         // another queue) has nothing to act on yet, but must stay visible and reachable: before
         // it did, an application sent to SafetyNet Underwriting disappeared from this queue
@@ -518,6 +537,7 @@ caseworkerGroup.MapGet("/queue", (
               </td>
               <td class="govuk-table__cell">{esc(item.InstanceId[..Math.Min(8, item.InstanceId.Length)])}…</td>
               <td class="govuk-table__cell"><a class="govuk-link" href="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">{(item.Status == QueueWorkItemStatus.Actionable ? "Review" : "View")}</a></td>
+              <td class="govuk-table__cell">{ClaimReleaseControl(item)}</td>
             </tr>
             """));
 
@@ -542,6 +562,7 @@ caseworkerGroup.MapGet("/queue", (
               <th class="govuk-table__header" scope="col">Stage</th>
               <th class="govuk-table__header" scope="col">Instance</th>
               <th class="govuk-table__header" scope="col"><span class="govuk-visually-hidden">Actions</span></th>
+              <th class="govuk-table__header" scope="col"><span class="govuk-visually-hidden">Claim</span></th>
             </tr>
           </thead>
           <tbody class="govuk-table__body">{rows}</tbody>
@@ -549,6 +570,26 @@ caseworkerGroup.MapGet("/queue", (
         {pagination}
         """;
     return Results.Content(PageShell.Render("Caseworker queue", body, ctx.User), "text/html");
+});
+
+// Claim/release — see docs/guides/work-allocation.md. PRG back to the worklist itself, same
+// plain-server-rendered convention as everything else on this route; the query-string cursorId
+// (not a route segment) matches how QueueWorkItem.CursorId is already surfaced to the caseworker
+// queue's own Claim/Release form actions above.
+caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/claim", (
+    string blueprintKey, string instanceId, string cursorId, HttpContext ctx, IProcessManager engine) =>
+{
+    var userId = GetUserId(ctx.User);
+    engine.ClaimWorkItem(instanceId, cursorId, ReferenceActors.TenantId, userId, ReferenceActors.ProfileForCaseworkerUser(userId));
+    return Results.Redirect("/caseworker/queue");
+});
+
+caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/release", (
+    string blueprintKey, string instanceId, string cursorId, HttpContext ctx, IProcessManager engine) =>
+{
+    var userId = GetUserId(ctx.User);
+    engine.ReleaseWorkItem(instanceId, cursorId, ReferenceActors.TenantId, userId, ReferenceActors.ProfileForCaseworkerUser(userId));
+    return Results.Redirect("/caseworker/queue");
 });
 
 // njf-contributions has no citizen frontstage to originate an instance from (see
@@ -574,8 +615,9 @@ caseworkerGroup.MapGet("/njf-contributions/new", (HttpContext ctx, IProcessManag
 
 caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}", (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
 {
+    var userId = GetUserId(ctx.User);
     var envelope = engine.GetCurrent(
-        blueprintKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile(), instanceId);
+        blueprintKey, ReferenceActors.TenantId, userId, ReferenceActors.ProfileForCaseworkerUser(userId), instanceId);
     envelope = WithFileDownloadUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/files");
     envelope = WithBulkDatasetApiUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/bulk-datasets");
     return Results.Content(
@@ -702,7 +744,7 @@ caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datase
 caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
 {
     var userId = GetUserId(ctx.User);
-    var profile = ReferenceActors.CaseworkerProfile();
+    var profile = ReferenceActors.ProfileForCaseworkerUser(userId);
     var current = engine.GetCurrent(blueprintKey, ReferenceActors.TenantId, userId, profile, instanceId);
 
     var form = await ctx.Request.ReadFormAsync();

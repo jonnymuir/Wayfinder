@@ -26,6 +26,24 @@ public enum QueueWorkItemStatus
     Done,
 }
 
+/// <summary>
+/// Per-cursor claim/ownership state — a genuinely different axis from <see cref="QueueWorkItemStatus"/>
+/// (status answers "what can be done"; claim state answers "who's doing it"). Non-null only for a
+/// genuine shared-pool row (<c>Status == Actionable</c> and the actor profile isn't restricted to
+/// its own instances) — null everywhere else, since a <see cref="QueueWorkItemStatus.Waiting"/>/
+/// <see cref="QueueWorkItemStatus.Done"/> row, or one already owner-restricted to a single actor,
+/// has nothing to claim. A row claimed by someone else never produces a row at all for anyone but
+/// its claimant (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership filter), so
+/// there is no third "claimed by someone else" value here to enumerate. See
+/// docs/guides/work-allocation.md — and note this is unrelated to <c>IQueueCapabilitiesProvider</c>'s
+/// own pre-existing, differently-scoped use of the word "capability".
+/// </summary>
+public enum QueueWorkItemClaimState
+{
+    Unclaimed,
+    ClaimedByMe,
+}
+
 /// <summary>Ordering for <see cref="Services.ProcessManagerEngine.GetQueueWorkItems"/> — every
 /// non-<see cref="Default"/> value still ends in an <c>InstanceId</c> tiebreak internally, since
 /// <c>IServiceRequestStore.GetAll()</c> gives no ordering guarantee of its own and a paged list
@@ -72,6 +90,14 @@ public record QueueWorkItem
     public string StateDisplayName { get; init; } = "";
 
     public string? QueueName { get; init; }
+
+    /// <summary>The cursor this row was built from — <see cref="RequestCursor.PrimaryCursorId"/>
+    /// for an instance that hasn't crossed its first gateway yet. What <c>ClaimWorkItem</c>/
+    /// <c>ReleaseWorkItem</c> take as their own <c>cursorId</c> argument.</summary>
+    public string CursorId { get; init; } = "";
+
+    /// <summary>See <see cref="QueueWorkItemClaimState"/>. Null for a row with nothing to claim.</summary>
+    public QueueWorkItemClaimState? ClaimState { get; init; }
 
     public string TenantId { get; init; } = "";
 

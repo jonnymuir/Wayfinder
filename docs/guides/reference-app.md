@@ -34,6 +34,8 @@ scratch. It models NN/g's frontstage/backstage split
 - **`caseworker`** (backstage) — the review team's worklist at `/caseworker/queue`: see what's
   waiting, approve or reject. The worklist's own status filter/sort/free-text search is covered
   separately — see [docs/guides/queue-worklist-filtering.md](./queue-worklist-filtering.md).
+  Queue eligibility (which team can see a queue at all) and per-item claim/ownership (Claim/Release
+  buttons on the worklist) are covered in [docs/guides/work-allocation.md](./work-allocation.md).
 
 A third **support-systems** lane (a downstream/API-driven actor — the third leg of NN/g's model)
 now also runs alongside these two: **SafetyNet Underwriting**, a genuinely separate ASP.NET Core

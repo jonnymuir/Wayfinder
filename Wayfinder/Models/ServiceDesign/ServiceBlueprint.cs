@@ -1307,6 +1307,14 @@ public record QueueDefinition
         init => _key = value;
     }
 
+    /// <summary>
+    /// Which team/skill capabilities may claim from or start work in this queue — an any-of list
+    /// checked against <c>ActorProfile.Capabilities</c> (see <c>ProcessManagerEngine.HasQueueEligibility</c>).
+    /// Null/empty (the default) means unrestricted, exactly matching every blueprint that predates
+    /// this — the same convention <c>ActorProfile</c>'s own allow-lists already use. Distinct from
+    /// <c>IQueueCapabilitiesProvider</c>'s unrelated, pre-existing use of the word "capability"
+    /// (which component types a host can render for a queue) — see docs/guides/work-allocation.md.
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? RoleGates { get; init; }
 

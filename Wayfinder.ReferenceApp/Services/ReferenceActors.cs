@@ -74,12 +74,20 @@ public static class ReferenceActors
     /// <summary>
     /// A caseworker sees and acts on every instance sitting in the caseworker queue, not just
     /// ones they personally started — this is the backstage worklist, shared across the team.
+    ///
+    /// <see cref="ActorProfile.Capabilities"/> is what actually keeps this team's own worklist
+    /// separate from NJF operations' — before this existed, both blueprints' "caseworker" queue
+    /// keys collided (both literally "caseworker"), so Casey and Priya could each already see the
+    /// *other's* rows purely because of the naming coincidence, regardless of which blueprint they
+    /// actually work on. <c>juggling-licence.json</c>'s own "caseworker" queue now declares
+    /// <c>roleGates: ["juggling-licence-review"]</c> — see docs/guides/work-allocation.md.
     /// </summary>
     public static ActorProfile CaseworkerProfile() => new()
     {
         VisibleQueues = [CaseworkerQueue],
         ActionableQueues = [CaseworkerQueue],
-        RestrictToInstanceOwner = false
+        RestrictToInstanceOwner = false,
+        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "juggling-licence-review" }
     };
 
     /// <summary>
@@ -90,11 +98,32 @@ public static class ReferenceActors
     /// shares this same key, so GetCurrent/GetCurrentOrStartFresh treat them as one owner for
     /// concurrency purposes regardless of which of them actually submits a file, even though
     /// they can already all see and act on the same shared queue either way.
+    ///
+    /// <see cref="ActorProfile.Capabilities"/> is explicitly its own set here, not
+    /// <see cref="CaseworkerProfile"/>'s — Priya's team is eligible for
+    /// <c>njf-contributions.json</c>'s own "caseworker" queue (<c>roleGates: ["njf-contributions-review"]</c>),
+    /// not Casey's juggling-licence one, even though both are still the same "caseworker" role at
+    /// the auth layer (see DemoUsers.cs).
     /// </summary>
     public static ActorProfile NjfOperationsProfile() => CaseworkerProfile() with
     {
-        ConcurrencyScopeKey = "njf-contributions-org:njf"
+        ConcurrencyScopeKey = "njf-contributions-org:njf",
+        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-review" }
     };
+
+    /// <summary>
+    /// Every generic backstage route (the worklist, an item's own page, advance, claim/release)
+    /// is shared across every "caseworker"-role persona — it has no per-blueprint knowledge of its
+    /// own, so it can't just call <see cref="CaseworkerProfile"/> or <see cref="NjfOperationsProfile"/>
+    /// directly without silently locking one persona out of the other's now-capability-gated queue
+    /// (see docs/guides/work-allocation.md). Resolves by the demo login itself — a real host would
+    /// resolve this from whatever its own team/role directory says about the signed-in user, the
+    /// same way <c>tenantId</c>/<c>userId</c> already are.
+    /// </summary>
+    public static ActorProfile ProfileForCaseworkerUser(string userId) =>
+        string.Equals(userId, DemoUsers.NjfOperations.Email, StringComparison.OrdinalIgnoreCase)
+            ? NjfOperationsProfile()
+            : CaseworkerProfile();
 
     public static IQueueCapabilitiesProvider CapabilitiesProvider() => new StaticQueueCapabilitiesProvider(
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)

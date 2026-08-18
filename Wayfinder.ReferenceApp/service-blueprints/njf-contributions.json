@@ -12,7 +12,7 @@
     }
   },
   "queues": [
-    { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
+    { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker", "roleGates": ["njf-contributions-review"] },
     { "key": "automation", "displayName": "SafetyNet Underwriting", "actor": "system" }
   ],
   "stages": [

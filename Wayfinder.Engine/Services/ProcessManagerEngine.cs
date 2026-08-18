@@ -28,6 +28,7 @@ public class ProcessManagerEngine : IProcessManager
     private readonly IReadOnlyDictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
     private readonly IReadOnlyDictionary<string, IRequestConcurrencyPolicy> _requestConcurrencyPolicies;
+    private readonly IAuditLogStore _auditLogStore;
 
     public ProcessManagerEngine(
         ILogger logger,
@@ -37,7 +38,8 @@ public class ProcessManagerEngine : IProcessManager
         IServiceRequestStore? instanceStore = null,
         IEnumerable<ISupportSystemClient>? supportSystemClients = null,
         IBulkDatasetStore? bulkDatasetStore = null,
-        IEnumerable<IRequestConcurrencyPolicy>? requestConcurrencyPolicies = null)
+        IEnumerable<IRequestConcurrencyPolicy>? requestConcurrencyPolicies = null,
+        IAuditLogStore? auditLogStore = null)
     {
         Logger = logger;
         _sanitizer = sanitizer;
@@ -49,6 +51,7 @@ public class ProcessManagerEngine : IProcessManager
         _requestConcurrencyPolicies = (requestConcurrencyPolicies ?? [])
             .SelectMany(policy => policy.DefinitionKeys.Select(key => (key, policy)))
             .ToDictionary(pair => pair.key, pair => pair.policy, StringComparer.OrdinalIgnoreCase);
+        _auditLogStore = auditLogStore ?? new InMemoryAuditLogStore();
 
         foreach (var (lookupKey, definition) in definitionStore.LoadDefinitions(logger))
         {
@@ -110,7 +113,7 @@ public class ProcessManagerEngine : IProcessManager
             }
 
             Logger.LogInformation("Resuming specific instance {Id}", instanceId);
-            return BuildEnvelope(specificInstance, definition, accessProfile);
+            return BuildEnvelope(specificInstance, definition, accessProfile, userId);
         }
 
         var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey, accessProfile);
@@ -138,7 +141,7 @@ public class ProcessManagerEngine : IProcessManager
             if (existingInstance is not null)
             {
                 Logger.LogInformation("Resuming existing instance {Id} (action=resume)", existingInstance.InstanceId);
-                return BuildEnvelope(existingInstance, definition, accessProfile);
+                return BuildEnvelope(existingInstance, definition, accessProfile, userId);
             }
 
             return CreateAndRegisterNewInstance(
@@ -175,7 +178,7 @@ public class ProcessManagerEngine : IProcessManager
                     return BuildEnvelope(
                         decision.ExistingInstance ?? throw new InvalidOperationException(
                             $"{customPolicy.GetType().Name} returned ReuseExisting with no ExistingInstance."),
-                        definition, accessProfile);
+                        definition, accessProfile, userId);
                 case RequestConcurrencyOutcome.Deny:
                     return ErrorEnvelope(
                         decision.DenyReason ?? "This request was denied by a registered concurrency policy.",
@@ -272,7 +275,7 @@ public class ProcessManagerEngine : IProcessManager
         // silently-reset blank form). ServiceRequestPageController's PRG redirect after a POST
         // relies on this same fallthrough to show the confirmation page for the visit that just
         // submitted it.
-        return BuildEnvelope(existingInstance, definition, accessProfile);
+        return BuildEnvelope(existingInstance, definition, accessProfile, userId);
     }
 
     /// <summary>
@@ -382,15 +385,27 @@ public class ProcessManagerEngine : IProcessManager
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            SaveInstance(jumped);
+            // Atomic against a concurrent writer between the version check above and this save —
+            // unlike a plain SaveInstance, which would silently overwrite whatever another caller
+            // just wrote in that window. See IServiceRequestStore.TrySaveIfVersionMatches.
+            var jumpAuditEvent = TransitionAuditEvent(
+                instance.InstanceId, userId, cursorId: null,
+                fromStageKey: instance.CurrentStage, toStageKey: targetStageKey, action: action, detail: "admin change-link jump");
+            if (!TrySaveInstanceIfVersionMatches(jumped, instance.StateVersion, jumpAuditEvent))
+            {
+                return ErrorEnvelope(
+                    $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
+                    "VERSION_MISMATCH");
+            }
+
             Logger.LogInformation(
                 "Change-link: jumped instance {Id} to stage '{State}'",
                 instanceId,
                 targetStageKey);
-            return BuildEnvelope(jumped, definition, accessProfile);
+            return BuildEnvelope(jumped, definition, accessProfile, userId);
         }
 
-        var visibleWorkItem = FindAccessibleWorkItems(instance, definition, accessProfile)
+        var visibleWorkItem = FindAccessibleWorkItems(instance, definition, accessProfile, userId)
             .FirstOrDefault(item => item.AvailableActions.Any(candidate =>
                 string.Equals(candidate.ActionKey, action, StringComparison.Ordinal)));
 
@@ -458,7 +473,7 @@ public class ProcessManagerEngine : IProcessManager
                 // unmodified instance would blank every field on this stage back to whatever was
                 // there before the user started typing — not just the one that failed validation.
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
-                return BuildEnvelope(previewInstance, definition, accessProfile) with { Problems = problems };
+                return BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = problems };
             }
 
             // Declarative cross-field business rules (StageDefinition.Validations) — the
@@ -470,7 +485,7 @@ public class ProcessManagerEngine : IProcessManager
             if (stageValidationProblems.Count > 0)
             {
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
-                return BuildEnvelope(previewInstance, definition, accessProfile) with { Problems = stageValidationProblems };
+                return BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = stageValidationProblems };
             }
         }
 
@@ -484,8 +499,8 @@ public class ProcessManagerEngine : IProcessManager
         if (nextGateway != null)
         {
             return string.Equals(nextGateway.GatewayType, "Split", StringComparison.Ordinal)
-                ? HandleSplitGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile)
-                : HandleJoinGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile);
+                ? HandleSplitGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile, userId)
+                : HandleJoinGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile, userId);
         }
 
         // Regular stage transition (single- or multi-cursor).
@@ -510,11 +525,20 @@ public class ProcessManagerEngine : IProcessManager
                 FieldValues = mergedMultiFieldValues,
                 SupportSystemInvocations = instance.SupportSystemInvocations.Concat(newInvocations).ToArray()
             };
-            SaveInstance(updatedMulti);
+            var multiAuditEvent = TransitionAuditEvent(
+                instance.InstanceId, userId, cursorId: sourceCursor?.CursorId,
+                fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
+            if (!TrySaveInstanceIfVersionMatches(updatedMulti, instance.StateVersion, multiAuditEvent))
+            {
+                return ErrorEnvelope(
+                    $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
+                    "VERSION_MISMATCH");
+            }
+
             Logger.LogInformation(
                 "Multi-cursor advance instance {Id}: cursor {CursorId} → {To}",
                 instanceId, sourceCursor?.CursorId ?? "(none)", transition.ToState);
-            return BuildEnvelope(updatedMulti, definition, accessProfile);
+            return BuildEnvelope(updatedMulti, definition, accessProfile, userId);
         }
 
         var updated = instance with
@@ -525,14 +549,23 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = Merge(instance.FieldValues, fieldValues)
         };
 
-        SaveInstance(updated);
+        var advanceAuditEvent = TransitionAuditEvent(
+            instance.InstanceId, userId, cursorId: null,
+            fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
+        if (!TrySaveInstanceIfVersionMatches(updated, instance.StateVersion, advanceAuditEvent))
+        {
+            return ErrorEnvelope(
+                $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
+                "VERSION_MISMATCH");
+        }
+
         Logger.LogInformation(
             "Advanced instance {Id}: {From} → {To}",
             instanceId,
             visibleWorkItem.StageKey,
             transition.ToState);
 
-        return BuildEnvelope(updated, definition, accessProfile);
+        return BuildEnvelope(updated, definition, accessProfile, userId);
     }
 
     public IEnumerable<ServiceRequest> GetAllInstances() => _instanceStore.GetAll();
@@ -625,6 +658,235 @@ public class ProcessManagerEngine : IProcessManager
         return claimed;
     }
 
+    /// <summary>
+    /// Claims one specific work item for <paramref name="userId"/> — see <see cref="IProcessManager.ClaimWorkItem"/>'s
+    /// own remarks for the full error-code contract. Reads fresh and retries its own internal CAS
+    /// (<see cref="IServiceRequestStore.TrySaveIfVersionMatches"/>) a bounded number of times rather
+    /// than asking the caller for an expected version — claiming carries no field edits to lose.
+    /// Materializes a real cursor the first time an instance that hasn't yet crossed a gateway
+    /// (<c>Cursors.Count == 0</c>) is claimed — see <see cref="RequestCursor.PrimaryCursorId"/>'s
+    /// own remarks; this permanently switches the instance onto the multi-cursor bookkeeping path
+    /// for the rest of its life, the same as crossing a real gateway would.
+    /// </summary>
+    public ServiceRequestResponseEnvelope ClaimWorkItem(
+        string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!_instanceStore.TryGet(instanceId, out var instance))
+            {
+                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+            }
+
+            if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
+            {
+                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+            }
+
+            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            {
+                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+            }
+
+            // Resolved WITHOUT the ownership filter (no userId) — unlike every other caller of
+            // FindAccessibleWorkItems, claiming needs to see a cursor that's genuinely eligible but
+            // already held by someone else, in order to report ALREADY_CLAIMED rather than
+            // INVALID_TRANSITION. Queue visibility/capability eligibility is still fully enforced
+            // (CanViewQueue/HasQueueEligibility never depend on userId), so this can't be used to
+            // discover anything about a queue this actor genuinely isn't eligible for.
+            var item = FindAccessibleWorkItems(instance, definition, accessProfile)
+                .FirstOrDefault(candidate => string.Equals(candidate.CursorId, cursorId, StringComparison.Ordinal));
+            if (item is null)
+            {
+                return ErrorEnvelope($"Cursor '{cursorId}' is not accessible on this instance.", "INVALID_TRANSITION");
+            }
+
+            if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
+            {
+                return ErrorEnvelope("This item is already claimed by someone else.", "ALREADY_CLAIMED");
+            }
+
+            if (ClassifyStatus(item, definition) != QueueWorkItemStatus.Actionable || accessProfile.RestrictToInstanceOwner)
+            {
+                return ErrorEnvelope("This item cannot be claimed.", "NOT_CLAIMABLE");
+            }
+
+            var claimedAt = DateTimeOffset.UtcNow;
+            var updatedInstance = instance.Cursors.Count == 0
+                ? instance with
+                {
+                    Cursors =
+                    [
+                        new RequestCursor
+                        {
+                            CursorId = RequestCursor.PrimaryCursorId,
+                            QueueKey = GetQueueKey(definition.Stages.FirstOrDefault(s =>
+                                string.Equals(s.StageKey, instance.CurrentStage, StringComparison.Ordinal))) ?? "",
+                            CurrentNodeKey = instance.CurrentStage,
+                            IsAtGateway = false,
+                            AssignedTo = userId,
+                            AssignedAt = claimedAt
+                        }
+                    ],
+                    StateVersion = instance.StateVersion + 1,
+                    UpdatedAt = claimedAt
+                }
+                : instance with
+                {
+                    Cursors = instance.Cursors
+                        .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
+                            ? c with { AssignedTo = userId, AssignedAt = claimedAt }
+                            : c)
+                        .ToArray(),
+                    StateVersion = instance.StateVersion + 1,
+                    UpdatedAt = claimedAt
+                };
+
+            if (TrySaveInstanceIfVersionMatches(updatedInstance, instance.StateVersion,
+                    ClaimAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.Claimed, "claimed")))
+            {
+                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+            }
+        }
+
+        return ErrorEnvelope(
+            $"Could not claim '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
+            "CLAIM_CONFLICT");
+    }
+
+    /// <summary>
+    /// Releases a claim <paramref name="userId"/> currently holds, back to the shared pool — see
+    /// <see cref="IProcessManager.ReleaseWorkItem"/>'s own remarks. Self-service only: someone
+    /// else's claim can't be released this way (see docs/guides/work-allocation.md's reassignment
+    /// seam for the future manager-initiated case).
+    /// </summary>
+    public ServiceRequestResponseEnvelope ReleaseWorkItem(
+        string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!_instanceStore.TryGet(instanceId, out var instance))
+            {
+                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+            }
+
+            if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
+            {
+                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+            }
+
+            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            {
+                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+            }
+
+            var cursor = instance.Cursors.FirstOrDefault(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal));
+            if (cursor is null)
+            {
+                return ErrorEnvelope($"Cursor '{cursorId}' not found.", "INVALID_TRANSITION");
+            }
+
+            if (cursor.AssignedTo is null)
+            {
+                return BuildEnvelope(instance, definition, accessProfile, userId);
+            }
+
+            if (!string.Equals(cursor.AssignedTo, userId, StringComparison.Ordinal))
+            {
+                return ErrorEnvelope("This item is claimed by someone else.", "ALREADY_CLAIMED_BY_OTHER");
+            }
+
+            var updatedInstance = instance with
+            {
+                Cursors = instance.Cursors
+                    .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
+                        ? c with { AssignedTo = null, AssignedAt = null }
+                        : c)
+                    .ToArray(),
+                StateVersion = instance.StateVersion + 1,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+
+            if (TrySaveInstanceIfVersionMatches(updatedInstance, instance.StateVersion,
+                    ClaimAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.Released, "released back to pool")))
+            {
+                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+            }
+        }
+
+        return ErrorEnvelope(
+            $"Could not release '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
+            "CLAIM_CONFLICT");
+    }
+
+    private static AuditEvent ClaimAuditEvent(string instanceId, string actor, string cursorId, AuditEventType eventType, string detail) => new()
+    {
+        EventId = Guid.NewGuid().ToString("N"),
+        InstanceId = instanceId,
+        CursorId = cursorId,
+        EventType = eventType,
+        Actor = actor,
+        Detail = detail,
+        Severity = AuditEventSeverity.Info,
+        OccurredAt = DateTimeOffset.UtcNow
+    };
+
+    /// <summary>
+    /// See <see cref="IProcessManager.ClaimNextAvailableWorkItem"/>. Scans for the oldest eligible,
+    /// unclaimed, Actionable row (by <see cref="ServiceRequest.CreatedAt"/>, tiebroken by
+    /// <see cref="ServiceRequest.InstanceId"/> for determinism — the same ordering
+    /// <c>GetQueueWorkItems</c>'s own sort uses) and attempts <see cref="ClaimWorkItem"/> on it;
+    /// if that loses the race to a concurrent caller, moves on to the next candidate rather than
+    /// giving up — <see cref="ClaimWorkItem"/>'s own internal CAS retry only covers contention on
+    /// the *same* row, not two different automated callers converging on different rows that both
+    /// turn out already spoken for by the time each is attempted.
+    /// </summary>
+    public QueueWorkItem? ClaimNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile)
+    {
+        var candidates = _instanceStore.GetAll()
+            .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
+            .SelectMany(instance =>
+            {
+                if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+                {
+                    return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
+                }
+
+                return FindAccessibleWorkItems(instance, definition, accessProfile)
+                    .Where(item => item.AssignedTo is null
+                        && !accessProfile.RestrictToInstanceOwner
+                        && ClassifyStatus(item, definition) == QueueWorkItemStatus.Actionable)
+                    .Select(item => (Instance: instance, Definition: definition, Item: item))
+                    .ToArray();
+            })
+            .OrderBy(candidate => candidate.Instance.CreatedAt)
+            .ThenBy(candidate => candidate.Instance.InstanceId, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var (instance, definition, item) in candidates)
+        {
+            var claimed = ClaimWorkItem(instance.InstanceId, item.CursorId, tenantId, userId, accessProfile);
+            if (claimed.ResponseState != "error" && TryGetInstance(instance.InstanceId, out var refreshedInstance))
+            {
+                // Resolved from refreshedInstance, not the pre-claim `instance` this loop iterates
+                // over — AssignedTo only reflects the claim just performed once read fresh.
+                var refreshedItem = FindAccessibleWorkItems(refreshedInstance, definition, accessProfile, userId)
+                    .FirstOrDefault(candidate => string.Equals(candidate.CursorId, item.CursorId, StringComparison.Ordinal));
+                if (refreshedItem is not null)
+                {
+                    return refreshedItem.ToEnvelopeItem(
+                        refreshedInstance, definition, QueueWorkItemStatus.Actionable, accessProfile, userId);
+                }
+            }
+            // Someone else claimed this exact row between the scan and this attempt — try the
+            // next-oldest candidate rather than giving up.
+        }
+
+        return null;
+    }
+
     private static readonly IReadOnlyCollection<QueueWorkItemStatus> DefaultQueueWorkItemStatuses =
         [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting];
 
@@ -710,6 +972,7 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     public QueueWorkListEnvelope GetQueueWorkItems(
+        string userId,
         ActorProfile accessProfile,
         IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
         QueueWorkListSort sort = QueueWorkListSort.Default,
@@ -743,10 +1006,10 @@ public class ProcessManagerEngine : IProcessManager
                 // everywhere else this hook is used.
                 instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
 
-                return FindAccessibleWorkItems(instance, definition, accessProfile)
+                return FindAccessibleWorkItems(instance, definition, accessProfile, userId)
                     .Select(item => (item, status: ClassifyStatus(item, definition)))
                     .Where(pair => pair.status is not null && effectiveStatuses.Contains(pair.status.Value))
-                    .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value))
+                    .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value, accessProfile, userId))
                     .Where(projected => MatchesQueueSearch(instance, projected, searchText))
                     .ToArray();
             })
@@ -882,8 +1145,52 @@ public class ProcessManagerEngine : IProcessManager
     protected bool TryGetInstance(string instanceId, out ServiceRequest instance) =>
         _instanceStore.TryGet(instanceId, out instance!);
 
-    protected void SaveInstance(ServiceRequest instance) =>
+    protected void SaveInstance(ServiceRequest instance, AuditEvent? auditEvent = null)
+    {
         _instanceStore.Save(instance);
+        if (auditEvent is not null)
+        {
+            _auditLogStore.Record(auditEvent);
+        }
+    }
+
+    /// <summary>
+    /// The audited counterpart to <see cref="IServiceRequestStore.TrySaveIfVersionMatches"/> — used
+    /// by <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>'s
+    /// own plain (non-gateway) mutation paths, where two callers racing against the same unclaimed
+    /// item is a real, user-facing concern (see docs/guides/work-allocation.md). Records
+    /// <paramref name="auditEvent"/> only when the save actually lands.
+    /// </summary>
+    private bool TrySaveInstanceIfVersionMatches(ServiceRequest instance, int expectedStateVersion, AuditEvent? auditEvent)
+    {
+        if (!_instanceStore.TrySaveIfVersionMatches(instance, expectedStateVersion))
+        {
+            return false;
+        }
+
+        if (auditEvent is not null)
+        {
+            _auditLogStore.Record(auditEvent);
+        }
+
+        return true;
+    }
+
+    private static AuditEvent TransitionAuditEvent(
+        string instanceId, string actor, string? cursorId, string? fromStageKey, string? toStageKey, string? action, string? detail = null) => new()
+    {
+        EventId = Guid.NewGuid().ToString("N"),
+        InstanceId = instanceId,
+        CursorId = cursorId,
+        EventType = AuditEventType.Transition,
+        Actor = actor,
+        FromStageKey = fromStageKey,
+        ToStageKey = toStageKey,
+        Action = action,
+        Detail = detail,
+        Severity = AuditEventSeverity.Info,
+        OccurredAt = DateTimeOffset.UtcNow
+    };
 
     /// <summary>
     /// The most recently computed <see cref="CalculationResult"/> for an instance, if its
@@ -898,9 +1205,10 @@ public class ProcessManagerEngine : IProcessManager
     protected ServiceRequestResponseEnvelope BuildEnvelope(
         ServiceRequest instance,
         ServiceBlueprint definition,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string userId)
     {
-        var workItems = FindAccessibleWorkItems(instance, definition, accessProfile);
+        var workItems = FindAccessibleWorkItems(instance, definition, accessProfile, userId);
         var visibleItem = workItems.FirstOrDefault();
 
         if (visibleItem is null)
@@ -928,7 +1236,7 @@ public class ProcessManagerEngine : IProcessManager
                 if (TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
                     && TryGetInstance(instance.InstanceId, out var refreshed))
                 {
-                    return BuildEnvelope(refreshed, definition, accessProfile);
+                    return BuildEnvelope(refreshed, definition, accessProfile, userId);
                 }
 
                 return BuildJoinWaitingEnvelope(instance, definition, joinGateway);
@@ -1005,13 +1313,36 @@ public class ProcessManagerEngine : IProcessManager
             string.Equals(stage.StageKey, definition.InitialStage, StringComparison.Ordinal));
 
         var queueName = initialStage is null ? null : ResolveQueueName(definition, initialStage);
-        return accessProfile.CanViewQueue(queueName) && accessProfile.CanStartQueue(queueName);
+        var queueKey = initialStage is null ? null : GetQueueKey(initialStage);
+        return accessProfile.CanViewQueue(queueName)
+            && accessProfile.CanStartQueue(queueName)
+            && HasQueueEligibility(definition, queueKey, queueName, accessProfile);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="accessProfile"/> holds a capability <see cref="QueueDefinition.RoleGates"/>
+    /// requires for this queue — a genuine, enforced check, unlike the pre-existing
+    /// <c>ServiceBlueprintRouteDefinition.RequiresRole</c> (declared on routes but never actually
+    /// validated against the accessing actor; see docs/guides/work-allocation.md). Null/no matching
+    /// <see cref="QueueDefinition"/>, or one with no declared <c>RoleGates</c>, is unrestricted.
+    /// </summary>
+    private static bool HasQueueEligibility(ServiceBlueprint definition, string? queueKey, string? queueName, ActorProfile accessProfile)
+    {
+        var lookupKey = FirstNonEmpty(queueKey, queueName);
+        if (string.IsNullOrWhiteSpace(lookupKey))
+        {
+            return true;
+        }
+
+        var queue = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, lookupKey, StringComparison.Ordinal));
+        return accessProfile.HasCapability(queue?.RoleGates);
     }
 
     protected IReadOnlyList<AccessibleWorkItem> FindAccessibleWorkItems(
         ServiceRequest instance,
         ServiceBlueprint definition,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string? userId = null)
     {
         var items = new List<AccessibleWorkItem>();
 
@@ -1031,7 +1362,9 @@ public class ProcessManagerEngine : IProcessManager
                         stage.DisplayName,
                         queueName,
                         IsJoinGateway: false,
-                        BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile)));
+                        BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile),
+                        CursorId: RequestCursor.PrimaryCursorId,
+                        AssignedTo: null));
                 }
             }
 
@@ -1040,6 +1373,17 @@ public class ProcessManagerEngine : IProcessManager
 
         foreach (var cursor in instance.Cursors.Where(candidate => !candidate.IsAtGateway))
         {
+            // A cursor claimed by someone else is hidden entirely for every other actor — not a
+            // disabled row — the same enforcement Advance's own target resolution relies on (see
+            // docs/guides/work-allocation.md). No userId (an internal check that never resolves a
+            // specific actor, e.g. RefreshIfWaitingAtJoin peeking at the primary item) skips this
+            // filter rather than hiding everything.
+            if (userId is not null && cursor.AssignedTo is not null
+                && !string.Equals(cursor.AssignedTo, userId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             var stage = definition.Stages.FirstOrDefault(candidate =>
                 string.Equals(candidate.StageKey, cursor.CurrentNodeKey, StringComparison.Ordinal));
 
@@ -1059,7 +1403,9 @@ public class ProcessManagerEngine : IProcessManager
                 stage.DisplayName,
                 queueName,
                 IsJoinGateway: false,
-                BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile)));
+                BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile),
+                CursorId: cursor.CursorId,
+                AssignedTo: cursor.AssignedTo));
         }
 
         foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
@@ -1081,7 +1427,9 @@ public class ProcessManagerEngine : IProcessManager
                 gateway.DisplayName,
                 queueName,
                 IsJoinGateway: true,
-                []));
+                [],
+                CursorId: cursor.CursorId,
+                AssignedTo: null));
         }
 
         return items
@@ -1097,7 +1445,8 @@ public class ProcessManagerEngine : IProcessManager
         string? queueName,
         ActorProfile accessProfile)
     {
-        return accessProfile.CanViewQueue(queueName);
+        return accessProfile.CanViewQueue(queueName)
+            && HasQueueEligibility(definition, queueKey, queueName, accessProfile);
     }
 
     protected IReadOnlyList<ServiceRequestAction> BuildAvailableActions(
@@ -1109,14 +1458,22 @@ public class ProcessManagerEngine : IProcessManager
     {
         var transitions = GetOutgoingTransitions(definition, stageKey);
 
-        if (string.IsNullOrWhiteSpace(queueName))
-        {
-            transitions = transitions.Where(transition => transition.RequiresRole is null).ToArray();
-        }
-        else if (!accessProfile.CanActInQueue(queueName))
+        if (!string.IsNullOrWhiteSpace(queueName) && !accessProfile.CanActInQueue(queueName))
         {
             return [];
         }
+
+        // ServiceBlueprintRouteDefinition.RequiresRole — genuinely enforced against
+        // ActorProfile.Capabilities, unlike the check this replaced (which only ever excluded a
+        // role-gated route when there was no queue context at all, and never validated the actor's
+        // specific role even then). Reuses Capabilities rather than a separate "Roles" set, since
+        // both already express "does this actor hold X" — see docs/guides/work-allocation.md for
+        // why this is a different, pre-existing concept from RequiredCapabilities/RoleGates'
+        // queue-eligibility gate above it.
+        transitions = transitions
+            .Where(transition => string.IsNullOrWhiteSpace(transition.RequiresRole)
+                || accessProfile.Capabilities.Contains(transition.RequiresRole))
+            .ToArray();
 
         // ServiceBlueprintRouteDefinition.ShowWhen excludes a route from AvailableActions
         // entirely (not merely disables it) — the same mechanism a stage's own components use via
@@ -1301,12 +1658,16 @@ public class ProcessManagerEngine : IProcessManager
         string DisplayName,
         string? QueueName,
         bool IsJoinGateway,
-        IReadOnlyList<ServiceRequestAction> AvailableActions)
+        IReadOnlyList<ServiceRequestAction> AvailableActions,
+        string CursorId,
+        string? AssignedTo)
     {
         public QueueWorkItem ToEnvelopeItem(
             ServiceRequest instance,
             ServiceBlueprint definition,
-            QueueWorkItemStatus status) =>
+            QueueWorkItemStatus status,
+            ActorProfile accessProfile,
+            string userId) =>
             new()
             {
                 InstanceId = instance.InstanceId,
@@ -1315,13 +1676,17 @@ public class ProcessManagerEngine : IProcessManager
                 StageKey = StageKey,
                 StateDisplayName = DisplayName,
                 QueueName = QueueName,
+                CursorId = CursorId,
                 TenantId = instance.TenantId,
                 UserId = instance.UserId,
                 StateVersion = instance.StateVersion,
                 AvailableActions = AvailableActions,
                 CreatedAt = instance.CreatedAt,
                 UpdatedAt = instance.UpdatedAt,
-                Status = status
+                Status = status,
+                ClaimState = status == QueueWorkItemStatus.Actionable && !accessProfile.RestrictToInstanceOwner
+                    ? (AssignedTo is null ? QueueWorkItemClaimState.Unclaimed : QueueWorkItemClaimState.ClaimedByMe)
+                    : null
             };
     }
 
@@ -1357,7 +1722,7 @@ public class ProcessManagerEngine : IProcessManager
         _instanceStore.Save(instance);
 
         Logger.LogInformation(logMessage, [instance.InstanceId, .. additionalLogArgs]);
-        return BuildEnvelope(instance, definition, accessProfile);
+        return BuildEnvelope(instance, definition, accessProfile, userId);
     }
 
     private static ServiceRequest CreateNewInstance(
@@ -2166,7 +2531,8 @@ public class ProcessManagerEngine : IProcessManager
         RouteFile arrivingTransition,
         ServiceBlueprintGatewayDefinition splitGateway,
         Dictionary<string, object?>? fieldValues,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string userId)
     {
         // Find all outgoing branches from the split gateway.
         // Split gateway transitions carry the action "split-auto" by convention or any action
@@ -2289,18 +2655,21 @@ public class ProcessManagerEngine : IProcessManager
                 continue;
             }
 
-            if (TryReleaseJoinIfReady(updated, definition, joinGateway, accessProfile) is { } released)
+            if (TryReleaseJoinIfReady(updated, definition, joinGateway, accessProfile, userId) is { } released)
             {
                 return released;
             }
         }
 
-        SaveInstance(updated);
+        SaveInstance(updated, TransitionAuditEvent(
+            instance.InstanceId, userId, cursorId: null,
+            fromStageKey: arrivingTransition.FromState, toStageKey: splitGateway.Key, action: arrivingTransition.Action,
+            detail: $"split gateway fanned out to {newCursors.Count} cursors"));
         Logger.LogInformation(
             "Split gateway '{Gateway}': instance {Id} fanned out to {Count} cursors.",
             splitGateway.Key, instance.InstanceId, newCursors.Count);
 
-        return BuildEnvelope(updated, definition, accessProfile);
+        return BuildEnvelope(updated, definition, accessProfile, userId);
     }
 
     protected ServiceRequestResponseEnvelope HandleJoinGatewayAdvance(
@@ -2309,7 +2678,8 @@ public class ProcessManagerEngine : IProcessManager
         RouteFile arrivingTransition,
         ServiceBlueprintGatewayDefinition joinGateway,
         Dictionary<string, object?>? fieldValues,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string userId)
     {
         var gatewayKey = joinGateway.Key;
         var requiredQueues = joinGateway.RequiredIncomingQueues ?? [];
@@ -2372,7 +2742,10 @@ public class ProcessManagerEngine : IProcessManager
                 FieldValues = Merge(instance.FieldValues, fieldValues)
             };
 
-            SaveInstance(waitingInstance);
+            SaveInstance(waitingInstance, TransitionAuditEvent(
+                instance.InstanceId, userId, cursorId: arrivingCursorId,
+                fromStageKey: arrivingTransition.FromState, toStageKey: gatewayKey, action: arrivingTransition.Action,
+                detail: $"arrived at join, waiting ({arrivedQueues.Count}/{requiredQueues.Count} queues)"));
             Logger.LogInformation(
                 "Join gateway '{Gateway}': instance {Id} waiting ({Arrived}/{Required} queues).",
                 gatewayKey, instance.InstanceId, arrivedQueues.Count, requiredQueues.Count);
@@ -2390,7 +2763,7 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = Merge(instance.FieldValues, fieldValues)
         };
 
-        return TryReleaseJoinIfReady(arrivedInstance, definition, joinGateway, accessProfile)
+        return TryReleaseJoinIfReady(arrivedInstance, definition, joinGateway, accessProfile, userId)
                ?? BuildJoinWaitingEnvelope(arrivedInstance, definition, joinGateway);
     }
 
@@ -3017,7 +3390,8 @@ public class ProcessManagerEngine : IProcessManager
         ServiceRequest instance,
         ServiceBlueprint definition,
         ServiceBlueprintGatewayDefinition joinGateway,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string userId)
     {
         var gatewayKey = joinGateway.Key;
         var requiredQueues = joinGateway.RequiredIncomingQueues ?? [];
@@ -3128,8 +3502,11 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = releasedFieldValues
         };
 
-        SaveInstance(releasedInstance);
-        return BuildEnvelope(releasedInstance, definition, accessProfile);
+        SaveInstance(releasedInstance, TransitionAuditEvent(
+            instance.InstanceId, userId, cursorId: null,
+            fromStageKey: gatewayKey, toStageKey: selectedOutgoing[0].ToState, action: selectedOutgoing[0].Action,
+            detail: "join released"));
+        return BuildEnvelope(releasedInstance, definition, accessProfile, userId);
     }
 
     private static IReadOnlyList<RequestCursor> MoveCursor(
