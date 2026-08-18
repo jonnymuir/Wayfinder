@@ -7,9 +7,11 @@ using Microsoft.Extensions.Primitives;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Api;
 using Wayfinder.Engine.Extensions;
+using Wayfinder.Engine.Http;
 using Wayfinder.Engine.Mcp;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
+using Wayfinder.Engine.Worklist;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.ReferenceApp.Services;
 using Wayfinder.ReferenceApp.Services.SupportSystems;
@@ -122,6 +124,18 @@ builder.Services.AddSingleton<IServiceBlueprintSourceStore>(sp => sp.GetRequired
 builder.Services.AddServiceBlueprintAuthoring();
 builder.Services.AddServiceBlueprintAuthoringApi();
 builder.Services.AddServiceBlueprintAuthoringMcp();
+
+// See Wayfinder.Engine.Worklist's own README — the default caseworker worklist surface
+// (list/item/advance/claim/release), covering everything about /caseworker/queue that isn't
+// specific to this reference app.
+builder.Services.AddWorklist(options =>
+{
+    options.ResolveTenantId = _ => ReferenceActors.TenantId;
+    options.ResolveAccessProfile = ctx => ReferenceActors.ProfileForCaseworkerUser(GetUserId(ctx.User));
+    options.RenderPage = (title, body, ctx) => PageShell.Render(title, body, ctx.User);
+    options.WorklistPageTitle = "Caseworker queue";
+    options.ReviewPageTitle = "Review application";
+});
 
 var app = builder.Build();
 
@@ -309,7 +323,7 @@ citizenGroup.MapGet("/", (HttpContext ctx, IProcessManager engine, GovUkComponen
 {
     var envelope = engine.GetCurrent(
         JugglingLicenceDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CitizenProfile());
-    return Results.Content(PageShell.Render("Apply for a juggling licence", RenderJourneyBody(envelope, "/apply", renderer), ctx.User), "text/html");
+    return Results.Content(PageShell.Render("Apply for a juggling licence", renderer.RenderJourneyBody(envelope, "/apply"), ctx.User), "text/html");
 });
 
 citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
@@ -321,13 +335,13 @@ citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkC
     var form = await ctx.Request.ReadFormAsync();
     var action = form["action"].ToString();
     var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
-    var fieldValues = CoerceFieldValues(form, current.Render);
+    var fieldValues = GovUkStageJourney.CoerceFieldValues(form, current.Render);
 
-    var fileErrors = await ApplyFileUploadsAsync(form, current.Render, current.InstanceId, fileStorage, fieldValues);
+    var fileErrors = await StageFileUploads.ApplyFileUploadsAsync(form, current.Render, current.InstanceId, fileStorage, fieldValues);
     if (fileErrors.Count > 0)
     {
         return Results.Content(
-            PageShell.Render("Apply for a juggling licence", RenderJourneyBody(current with { Problems = fileErrors }, "/apply", renderer), ctx.User), "text/html");
+            PageShell.Render("Apply for a juggling licence", renderer.RenderJourneyBody(current with { Problems = fileErrors }, "/apply"), ctx.User), "text/html");
     }
 
     var result = engine.Advance(current.InstanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
@@ -339,7 +353,7 @@ citizenGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkC
     if (result.Problems.Count > 0 && result.Render is not null)
     {
         return Results.Content(
-            PageShell.Render("Apply for a juggling licence", RenderJourneyBody(result, "/apply", renderer), ctx.User), "text/html");
+            PageShell.Render("Apply for a juggling licence", renderer.RenderJourneyBody(result, "/apply"), ctx.User), "text/html");
     }
 
     // Redirect rather than render the result directly (POST-redirect-GET): rendering at the
@@ -360,7 +374,7 @@ premiumGroup.MapGet("/", (HttpContext ctx, IProcessManager engine, GovUkComponen
 {
     var envelope = engine.GetCurrent(
         InsuranceModellerDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CitizenProfile());
-    return Results.Content(PageShell.Render("Model your performance insurance premium", RenderJourneyBody(envelope, "/premium", renderer), ctx.User), "text/html");
+    return Results.Content(PageShell.Render("Model your performance insurance premium", renderer.RenderJourneyBody(envelope, "/premium"), ctx.User), "text/html");
 });
 
 premiumGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
@@ -372,13 +386,13 @@ premiumGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkC
     var form = await ctx.Request.ReadFormAsync();
     var action = form["action"].ToString();
     var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
-    var fieldValues = CoerceFieldValues(form, current.Render);
+    var fieldValues = GovUkStageJourney.CoerceFieldValues(form, current.Render);
 
-    var fileErrors = await ApplyFileUploadsAsync(form, current.Render, current.InstanceId, fileStorage, fieldValues);
+    var fileErrors = await StageFileUploads.ApplyFileUploadsAsync(form, current.Render, current.InstanceId, fileStorage, fieldValues);
     if (fileErrors.Count > 0)
     {
         return Results.Content(
-            PageShell.Render("Model your performance insurance premium", RenderJourneyBody(current with { Problems = fileErrors }, "/premium", renderer), ctx.User), "text/html");
+            PageShell.Render("Model your performance insurance premium", renderer.RenderJourneyBody(current with { Problems = fileErrors }, "/premium"), ctx.User), "text/html");
     }
 
     var result = engine.Advance(current.InstanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
@@ -386,7 +400,7 @@ premiumGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkC
     if (result.Problems.Count > 0 && result.Render is not null)
     {
         return Results.Content(
-            PageShell.Render("Model your performance insurance premium", RenderJourneyBody(result, "/premium", renderer), ctx.User), "text/html");
+            PageShell.Render("Model your performance insurance premium", renderer.RenderJourneyBody(result, "/premium"), ctx.User), "text/html");
     }
 
     return Results.Redirect("/premium");
@@ -396,201 +410,11 @@ premiumGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkC
 
 var caseworkerGroup = app.MapGroup("/caseworker").RequireAuthorization("Caseworker");
 
-// Filter/sort/search/pagination controls for the worklist (see
-// docs/guides/queue-worklist-filtering.md) — a real <form method="get">, full-page reload,
-// matching this route's existing plain-server-rendered convention rather than bulk-data-review's
-// fetch()/JS pattern, since this is a read-only list with no interactivity need beyond a normal
-// GET. A plain HTML checkbox form can't distinguish "bare initial load" from "every status box
-// unchecked and submitted" — both produce zero `status` values on the wire — so a hidden
-// `statusFilterApplied` field disambiguates: absent means "use GetQueueWorkItems' own default",
-// present means "take the (possibly empty) parsed set literally".
-caseworkerGroup.MapGet("/queue", (
-    HttpContext ctx, IProcessManager engine,
-    string[]? status, string? sort, string? q, int? page, int? pageSize, string? statusFilterApplied) =>
-{
-    IReadOnlyCollection<QueueWorkItemStatus>? statuses = statusFilterApplied is null
-        ? null
-        : (status ?? [])
-            .Select(s => Enum.TryParse<QueueWorkItemStatus>(s, ignoreCase: true, out var parsed) ? (QueueWorkItemStatus?)parsed : null)
-            .Where(s => s is not null)
-            .Select(s => s!.Value)
-            .Distinct()
-            .ToArray();
-    var selectedStatuses = statuses ?? [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting];
-
-    var parsedSort = Enum.TryParse<QueueWorkListSort>(sort, ignoreCase: true, out var sortValue)
-        ? sortValue
-        : QueueWorkListSort.Default;
-    var pageIndex = Math.Max(page ?? 0, 0);
-    var size = Math.Clamp(pageSize ?? 20, 1, 100);
-
-    // Genuinely multi-blueprint: GetQueueWorkItems has no blueprint filter, so both demos'
-    // caseworker-queue items already show up here side by side, keyed by queue name alone.
-    var envelope = engine.GetQueueWorkItems(
-        GetUserId(ctx.User), ReferenceActors.ProfileForCaseworkerUser(GetUserId(ctx.User)), statuses, parsedSort, q, pageIndex, size);
-    var esc = GovUk.Esc;
-
-    string CheckboxItem(QueueWorkItemStatus value, string label) =>
-        $"""
-        <div class="govuk-checkboxes__item">
-          <input class="govuk-checkboxes__input" id="status-{value}" name="status" type="checkbox" value="{value}" {(selectedStatuses.Contains(value) ? "checked" : "")}>
-          <label class="govuk-label govuk-checkboxes__label" for="status-{value}">{label}</label>
-        </div>
-        """;
-
-    string SortOption(QueueWorkListSort value, string label) =>
-        $"""<option value="{value}" {(parsedSort == value ? "selected" : "")}>{label}</option>""";
-
-    // Preserves every other current filter/sort/search choice — only `page` varies — so paging
-    // never silently resets a caseworker's status/sort/search selection.
-    string PageLink(int targetPageIndex, string label)
-    {
-        var query = string.Join("&", selectedStatuses.Select(s => $"status={Uri.EscapeDataString(s.ToString())}")
-            .Append($"sort={Uri.EscapeDataString(parsedSort.ToString())}")
-            .Append(string.IsNullOrWhiteSpace(q) ? null : $"q={Uri.EscapeDataString(q)}")
-            .Append($"page={targetPageIndex}")
-            .Append($"pageSize={size}")
-            .Append("statusFilterApplied=1")
-            .Where(part => part is not null));
-        return $"""<a class="govuk-link" href="/caseworker/queue?{query}">{label}</a>""";
-    }
-
-    var filterForm = $"""
-        <form method="get" class="govuk-!-margin-bottom-6">
-          <input type="hidden" name="statusFilterApplied" value="1">
-          <div class="govuk-grid-row">
-            <div class="govuk-grid-column-one-third">
-              <div class="govuk-form-group">
-                <fieldset class="govuk-fieldset">
-                  <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Status</legend>
-                  <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
-                    {CheckboxItem(QueueWorkItemStatus.Actionable, "Actionable")}
-                    {CheckboxItem(QueueWorkItemStatus.Waiting, "Waiting")}
-                    {CheckboxItem(QueueWorkItemStatus.Done, "Done")}
-                  </div>
-                </fieldset>
-              </div>
-            </div>
-            <div class="govuk-grid-column-one-third">
-              <div class="govuk-form-group">
-                <label class="govuk-label" for="q">Search</label>
-                <input class="govuk-input" id="q" name="q" type="search" value="{esc(q ?? "")}">
-              </div>
-            </div>
-            <div class="govuk-grid-column-one-third">
-              <div class="govuk-form-group">
-                <label class="govuk-label" for="sort">Sort by</label>
-                <select class="govuk-select" id="sort" name="sort">
-                  {SortOption(QueueWorkListSort.Default, "Service, then stage")}
-                  {SortOption(QueueWorkListSort.UpdatedAtNewestFirst, "Most recently updated")}
-                  {SortOption(QueueWorkListSort.UpdatedAtOldestFirst, "Least recently updated")}
-                  {SortOption(QueueWorkListSort.CreatedAtNewestFirst, "Newest first")}
-                  {SortOption(QueueWorkListSort.CreatedAtOldestFirst, "Oldest first")}
-                </select>
-              </div>
-            </div>
-          </div>
-          <button class="govuk-button govuk-button--secondary" data-module="govuk-button">Apply filters</button>
-        </form>
-        """;
-
-    string StatusTag(QueueWorkItemStatus itemStatus) => itemStatus switch
-    {
-        QueueWorkItemStatus.Waiting => """<strong class="govuk-tag govuk-tag--yellow">Waiting</strong>""",
-        QueueWorkItemStatus.Done => """<strong class="govuk-tag govuk-tag--green">Done</strong>""",
-        _ => ""
-    };
-
-    // See docs/guides/work-allocation.md — claim/ownership is per-cursor, orthogonal to
-    // QueueWorkItemStatus. A Claim/Release button posts back to this same page (PRG), so claiming
-    // never leaves a caseworker mid-way through a stale filtered view.
-    string ClaimReleaseControl(QueueWorkItem item) => item.ClaimState switch
-    {
-        QueueWorkItemClaimState.Unclaimed => $"""
-            <form method="post" action="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/claim?cursorId={Uri.EscapeDataString(item.CursorId)}">
-              <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Claim</button>
-            </form>
-            """,
-        QueueWorkItemClaimState.ClaimedByMe => $"""
-            <strong class="govuk-tag">Claimed by you</strong>
-            <form method="post" action="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/release?cursorId={Uri.EscapeDataString(item.CursorId)}">
-              <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Release</button>
-            </form>
-            """,
-        _ => ""
-    };
-
-    var rows = envelope.Items.Count == 0
-        ? """<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="5">No applications match the current filters</td></tr>"""
-        // A waiting item (this caseworker's own cursor parked at a join gateway, waiting on
-        // another queue) has nothing to act on yet, but must stay visible and reachable: before
-        // it did, an application sent to SafetyNet Underwriting disappeared from this queue
-        // entirely. A done item is genuinely finished — neither can be "reviewed", so both get a
-        // "View" link rather than "Review", making the difference between "you can decide this
-        // now" and "nothing (more) to decide" obvious at a glance.
-        : string.Join("\n", envelope.Items.Select(item => $"""
-            <tr class="govuk-table__row">
-              <td class="govuk-table__cell">{esc(item.BlueprintDisplayName)}</td>
-              <td class="govuk-table__cell">
-                {esc(item.StateDisplayName)}
-                {StatusTag(item.Status)}
-              </td>
-              <td class="govuk-table__cell">{esc(item.InstanceId[..Math.Min(8, item.InstanceId.Length)])}…</td>
-              <td class="govuk-table__cell"><a class="govuk-link" href="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">{(item.Status == QueueWorkItemStatus.Actionable ? "Review" : "View")}</a></td>
-              <td class="govuk-table__cell">{ClaimReleaseControl(item)}</td>
-            </tr>
-            """));
-
-    var hasNextPage = (pageIndex + 1) * size < envelope.TotalMatchingCount;
-    var pagination = envelope.TotalMatchingCount == 0
-        ? ""
-        : $"""
-        <nav class="govuk-!-margin-top-4">
-          {(pageIndex > 0 ? PageLink(pageIndex - 1, "Previous") : """<span class="govuk-body">Previous</span>""")}
-          <span class="govuk-body">Page {pageIndex + 1} — showing {envelope.Items.Count} of {envelope.TotalMatchingCount}</span>
-          {(hasNextPage ? PageLink(pageIndex + 1, "Next") : """<span class="govuk-body">Next</span>""")}
-        </nav>
-        """;
-
-    var body = $"""
-        <h1 class="govuk-heading-xl">Caseworker queue</h1>
-        {filterForm}
-        <table class="govuk-table">
-          <thead class="govuk-table__head">
-            <tr class="govuk-table__row">
-              <th class="govuk-table__header" scope="col">Service</th>
-              <th class="govuk-table__header" scope="col">Stage</th>
-              <th class="govuk-table__header" scope="col">Instance</th>
-              <th class="govuk-table__header" scope="col"><span class="govuk-visually-hidden">Actions</span></th>
-              <th class="govuk-table__header" scope="col"><span class="govuk-visually-hidden">Claim</span></th>
-            </tr>
-          </thead>
-          <tbody class="govuk-table__body">{rows}</tbody>
-        </table>
-        {pagination}
-        """;
-    return Results.Content(PageShell.Render("Caseworker queue", body, ctx.User), "text/html");
-});
-
-// Claim/release — see docs/guides/work-allocation.md. PRG back to the worklist itself, same
-// plain-server-rendered convention as everything else on this route; the query-string cursorId
-// (not a route segment) matches how QueueWorkItem.CursorId is already surfaced to the caseworker
-// queue's own Claim/Release form actions above.
-caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/claim", (
-    string blueprintKey, string instanceId, string cursorId, HttpContext ctx, IProcessManager engine) =>
-{
-    var userId = GetUserId(ctx.User);
-    engine.ClaimWorkItem(instanceId, cursorId, ReferenceActors.TenantId, userId, ReferenceActors.ProfileForCaseworkerUser(userId));
-    return Results.Redirect("/caseworker/queue");
-});
-
-caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/release", (
-    string blueprintKey, string instanceId, string cursorId, HttpContext ctx, IProcessManager engine) =>
-{
-    var userId = GetUserId(ctx.User);
-    engine.ReleaseWorkItem(instanceId, cursorId, ReferenceActors.TenantId, userId, ReferenceActors.ProfileForCaseworkerUser(userId));
-    return Results.Redirect("/caseworker/queue");
-});
+// The default worklist surface (list/item/advance/claim/release) — see
+// Wayfinder.Engine.Worklist's own README. Everything else under /caseworker (the NJF "start new"
+// entry point below, plus the file-download and bulk-dataset routes further down) stays hand-wired
+// here, its URLs matching because it shares this same "/caseworker/queue" prefix.
+app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
 
 // njf-contributions has no citizen frontstage to originate an instance from (see
 // docs/guides/bulk-data-review.md — the NJF's own operations staff are the only actor), so it
@@ -611,21 +435,6 @@ caseworkerGroup.MapGet("/njf-contributions/new", (HttpContext ctx, IProcessManag
     var started = engine.GetCurrentOrStartFresh(
         NjfContributionsDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.NjfOperationsProfile());
     return Results.Redirect($"/caseworker/queue/{NjfContributionsDefinitionKey}/{started.InstanceId}");
-});
-
-caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}", (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer) =>
-{
-    var userId = GetUserId(ctx.User);
-    var envelope = engine.GetCurrent(
-        blueprintKey, ReferenceActors.TenantId, userId, ReferenceActors.ProfileForCaseworkerUser(userId), instanceId);
-    envelope = WithFileDownloadUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/files");
-    envelope = WithBulkDatasetApiUrls(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/bulk-datasets");
-    return Results.Content(
-        PageShell.Render(
-            "Review application",
-            RenderJourneyBody(envelope, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer),
-            ctx.User),
-        "text/html");
 });
 
 caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/files/{fieldKey}", async (
@@ -741,53 +550,6 @@ caseworkerGroup.MapGet("/queue/{blueprintKey}/{instanceId}/bulk-datasets/{datase
     return stream is null ? Results.NotFound() : Results.File(stream, "text/csv", materialized.OriginalFileName);
 });
 
-caseworkerGroup.MapPost("/queue/{blueprintKey}/{instanceId}/advance", async (string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine, GovUkComponentRenderer renderer, IServiceRequestFileStorage fileStorage) =>
-{
-    var userId = GetUserId(ctx.User);
-    var profile = ReferenceActors.ProfileForCaseworkerUser(userId);
-    var current = engine.GetCurrent(blueprintKey, ReferenceActors.TenantId, userId, profile, instanceId);
-
-    var form = await ctx.Request.ReadFormAsync();
-    var action = form["action"].ToString();
-    var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
-    var fieldValues = CoerceFieldValues(form, current.Render);
-
-    var fileErrors = await ApplyFileUploadsAsync(form, current.Render, instanceId, fileStorage, fieldValues);
-    if (fileErrors.Count > 0)
-    {
-        return Results.Content(
-            PageShell.Render("Review application", RenderJourneyBody(current with { Problems = fileErrors }, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer), ctx.User), "text/html");
-    }
-
-    var result = engine.Advance(instanceId, ReferenceActors.TenantId, userId, profile, action, stateVersion, fieldValues);
-
-    if (result.Problems.Count > 0 && result.Render is not null)
-    {
-        return Results.Content(
-            PageShell.Render("Review application", RenderJourneyBody(result, $"/caseworker/queue/{blueprintKey}/{instanceId}/advance", renderer), ctx.User), "text/html");
-    }
-
-    // PRG, but back to whichever place actually has the caseworker's next move. Advancing from
-    // "review" to "record your decision" leaves real work on this same instance, and bouncing to
-    // the worklist so they can immediately click back into the item they never left is pointless
-    // ceremony. Advancing into a terminal decision genuinely does hand the instance back to the
-    // queue, so that's where that goes — and the "Waiting" tag is what makes a since-completed
-    // item findable again if someone navigates away and back.
-    //
-    // Advancing into a wait (sent to the insurer) is different: ResponseState "defer" means the
-    // caseworker's own cursor just parked at a join, the same position the citizen flow's
-    // pre-existing wait screen already lands people on directly. There's no reason to make a
-    // caseworker take an extra click through the queue list to reach the exact page they were
-    // just on — the item's own page already renders that wait/poll screen, and the persistent
-    // "Caseworker queue" link in the header is always there for anyone who'd rather step away.
-    var next = engine.GetCurrent(blueprintKey, ReferenceActors.TenantId, userId, profile, instanceId);
-    var hasMoreToDoHere = next.Render?.AvailableActions.Count > 0 || next.ResponseState == "defer";
-
-    return Results.Redirect(hasMoreToDoHere
-        ? $"/caseworker/queue/{blueprintKey}/{instanceId}"
-        : "/caseworker/queue");
-});
-
 // ── Test isolation ────────────────────────────────────────────────────────────────────────
 // Development-only: wipes every in-memory instance and authoring override, so a Playwright
 // spec starts each test from the same seeded-but-empty state instead of restarting the process.
@@ -808,90 +570,6 @@ app.Run();
 static string GetUserId(ClaimsPrincipal user) =>
     user.FindFirst(ClaimTypes.NameIdentifier)?.Value
     ?? throw new InvalidOperationException("Authenticated request has no NameIdentifier claim.");
-
-static string RenderJourneyBody(ServiceRequestResponseEnvelope envelope, string formAction, GovUkComponentRenderer renderer)
-{
-    var esc = GovUk.Esc;
-    if (envelope.Render is null)
-    {
-        var message = envelope.Problems.FirstOrDefault()?.Message ?? "Nothing to show.";
-        return $"""<p class="govuk-body">{esc(message)}</p>""";
-    }
-
-    // A panel component (confirmation/outcome stages) already renders its own <h1> — a second
-    // page heading here would be a duplicate, which the real GOV.UK panel component isn't
-    // designed to sit under.
-    var heading = GovUkComponentRenderer.HasPanel(envelope.Render)
-        ? ""
-        : $"""<h1 class="govuk-heading-xl">{esc(envelope.Render.StateDisplayName)}</h1>""";
-
-    return $"{heading}{renderer.RenderForm(envelope.Render, envelope.Problems, formAction, envelope.StateVersion)}";
-}
-
-/// <summary>
-/// A caseworker reviewing an application needs to actually open what was uploaded, not just read
-/// its filename. The engine deliberately can't do this itself — it only ever holds an opaque
-/// <see cref="ServiceRequestFileReference"/> and knows nothing about this host's URL space (see
-/// <c>IServiceRequestFileStorage</c>: the host owns storage *and* routing) — so the host fills in
-/// <see cref="FieldRenderPayload.FileUrl"/> on the way to the renderer, which turns the summary
-/// row's filename into a real link. That's why viewing an uploaded file needs no new component
-/// type: it's a host rendering concern hung off the existing <c>file-upload</c> field.
-///
-/// Generic over every file-upload field on the stage, so it needs no per-blueprint wiring — any
-/// new file-upload field anywhere starts working here too. Only a field with a real value gets a
-/// URL; an empty one keeps rendering "Not provided" rather than linking to a 404.
-/// </summary>
-static ServiceRequestResponseEnvelope WithFileDownloadUrls(
-    ServiceRequestResponseEnvelope envelope,
-    string downloadUrlPrefix)
-{
-    if (envelope.Render is null)
-    {
-        return envelope;
-    }
-
-    var components = envelope.Render.Components
-        .Select(component => component.Fields.Any(field => field.FieldType == "file-upload")
-            ? component with
-            {
-                Fields = component.Fields
-                    .Select(field => field.FieldType == "file-upload" && !string.IsNullOrEmpty(field.Value?.ToString())
-                        ? field with { FileUrl = $"{downloadUrlPrefix}/{Uri.EscapeDataString(field.FieldKey)}" }
-                        : field)
-                    .ToArray()
-            }
-            : component)
-        .ToArray();
-
-    return envelope with { Render = envelope.Render with { Components = components } };
-}
-
-/// <summary>
-/// Same reasoning as <see cref="WithFileDownloadUrls"/>, for the bulk-data-review component's own
-/// REST endpoints (see docs/guides/bulk-data-review.md and the caseworkerGroup routes above):
-/// the engine resolves a "bulk-data-review" component's <c>DatasetId</c> from field values, but
-/// has no opinion on this host's own URL scheme, so it's this host's job to fill in
-/// <see cref="ComponentRenderPayload.BulkDatasetApiUrl"/> before rendering. Only a component with
-/// a real dataset id gets a URL — one with none yet (nothing ingested) keeps rendering its own
-/// "Nothing to review yet" placeholder rather than linking to a 404.
-/// </summary>
-static ServiceRequestResponseEnvelope WithBulkDatasetApiUrls(
-    ServiceRequestResponseEnvelope envelope,
-    string apiUrlPrefix)
-{
-    if (envelope.Render is null)
-    {
-        return envelope;
-    }
-
-    var components = envelope.Render.Components
-        .Select(component => component.Type == "bulk-data-review" && !string.IsNullOrEmpty(component.DatasetId)
-            ? component with { BulkDatasetApiUrl = $"{apiUrlPrefix}/{Uri.EscapeDataString(component.DatasetId)}" }
-            : component)
-        .ToArray();
-
-    return envelope with { Render = envelope.Render with { Components = components } };
-}
 
 static string RenderLoginBody(string? returnUrl, string? error)
 {
@@ -941,170 +619,6 @@ static string RenderLoginBody(string? returnUrl, string? error)
           <li><strong>{esc(DemoUsers.NjfOperations.DisplayName)}</strong> — {esc(DemoUsers.NjfOperations.Email)} (caseworker / backstage, NJF contributions)</li>
         </ul>
         """;
-}
-
-/// <summary>
-/// Reads posted <c>field:{fieldKey}</c> values back into the CLR shapes the engine expects,
-/// using the field-type map from the stage that produced the form (a checkbox posts nothing at
-/// all when unchecked, so boolean fields need explicit false; number/decimal fields parse to a
-/// real number rather than staying a string).
-/// </summary>
-static Dictionary<string, object?> CoerceFieldValues(IFormCollection form, StepContent? render)
-{
-    var fieldValues = new Dictionary<string, object?>();
-    if (render is null)
-    {
-        return fieldValues;
-    }
-
-    // Only components that actually render editable controls. A summary-list is always a
-    // read-only display of values captured earlier (GovUkComponents.RenderSummaryList is
-    // deliberately not routed through the overridable field renderer for exactly this reason), so
-    // its rows are never posted back — and must never be *coerced* as though they had been.
-    //
-    // This mattered, silently and destructively: the boolean branch below writes
-    // `form.ContainsKey(...)` unconditionally, because an unchecked checkbox genuinely posts
-    // nothing and "absent" is the only way to detect false. Applied to a read-only summary row
-    // that was never on the form, that turns every displayed-but-not-editable boolean into false
-    // the moment the stage is submitted. On juggling-licence, submitting "check your answers"
-    // (whose summary shows hasDangerousProps) wiped the applicant's own "yes" — so the caseworker
-    // reviewing a fire act read "Fire, knives or other dangerous props: No". Found by watching a
-    // recorded end-to-end take contradict its own narration.
-    var fieldsByKey = render.Components
-        .Where(component => component.Type != "summary-list")
-        .SelectMany(component => component.Fields)
-        .ToDictionary(field => field.FieldKey, field => field.FieldType, StringComparer.Ordinal);
-
-    foreach (var (fieldKey, fieldType) in fieldsByKey)
-    {
-        var formKey = $"field:{fieldKey}";
-
-        if (fieldType == "boolean")
-        {
-            fieldValues[fieldKey] = form.ContainsKey(formKey);
-            continue;
-        }
-
-        // file-upload is exclusively ApplyFileUploadsAsync's concern (below), never this
-        // generic text branch's. An <input type="file"> with nothing newly selected still posts
-        // a real multipart section for its field name — empty filename, zero bytes — and that
-        // section's own Content-Disposition also satisfies form.TryGetValue, so without this
-        // guard the generic branch below would set fieldValues[fieldKey] = "" explicitly.
-        // ApplyFileUploadsAsync correctly leaves an unchanged file field's key absent when
-        // nothing new was posted (letting Merge preserve whatever's already stored) — but that
-        // protection is worthless if this loop already stamped an explicit "" over the same key
-        // first. Reproduced live: revisiting an earlier stage via a "Change" link and continuing
-        // back through a file-upload stage without reselecting a file silently wiped the
-        // already-uploaded file's reference the moment the stage was resubmitted.
-        if (fieldType == "file-upload")
-        {
-            continue;
-        }
-
-        // The real GOV.UK date-input component posts three separate day/month/year fields
-        // rather than one native date value — see Wayfinder.Rendering.GovUk.GovUkFields' date field.
-        if (fieldType == "date")
-        {
-            var combined = GovUk.CombineIsoDate(
-                form[$"{formKey}-day"], form[$"{formKey}-month"], form[$"{formKey}-year"]);
-            if (combined is not null)
-            {
-                fieldValues[fieldKey] = combined;
-            }
-            continue;
-        }
-
-        if (!form.TryGetValue(formKey, out var raw))
-        {
-            continue;
-        }
-
-        fieldValues[fieldKey] = fieldType switch
-        {
-            "number" or "decimal" => decimal.TryParse(raw, out var number) ? number : raw.ToString(),
-            _ => raw.ToString()
-        };
-    }
-
-    return fieldValues;
-}
-
-/// <summary>
-/// Handles every <c>file-upload</c> field on the current stage: validates a posted file against
-/// its own declared <c>MaxSizeBytes</c>/<c>AcceptedFileTypes</c> — server-side, since the engine
-/// itself never sees bytes and can't be the enforcement point (see
-/// Wayfinder.Engine.Abstractions.IServiceRequestFileStorage) — then saves it and writes the
-/// resulting reference into <paramref name="fieldValues"/>. A field with no file posted this
-/// time round is left untouched entirely, so the engine's own merge preserves whatever
-/// reference (if any) the instance already has stored, the same as any other unchanged field.
-/// Returns one <see cref="ServiceRequestProblem"/> per rejected file; empty means every posted
-/// file was accepted (or none were posted at all).
-/// </summary>
-static async Task<List<ServiceRequestProblem>> ApplyFileUploadsAsync(
-    IFormCollection form, StepContent? render, string instanceId, IServiceRequestFileStorage fileStorage, Dictionary<string, object?> fieldValues)
-{
-    const long defaultMaxSizeBytes = 10 * 1024 * 1024;
-    var problems = new List<ServiceRequestProblem>();
-    if (render is null)
-    {
-        return problems;
-    }
-
-    var fileUploadFields = render.Components
-        .SelectMany(component => component.Fields)
-        .Where(field => field.FieldType == "file-upload");
-
-    foreach (var field in fileUploadFields)
-    {
-        var formKey = $"field:{field.FieldKey}";
-        var file = form.Files.GetFile(formKey);
-        if (file is null || file.Length == 0)
-        {
-            continue; // Nothing new posted — leave the instance's existing reference (if any) untouched.
-        }
-
-        var maxSizeBytes = field.MaxSizeBytes ?? defaultMaxSizeBytes;
-        if (file.Length > maxSizeBytes)
-        {
-            problems.Add(new ServiceRequestProblem
-            {
-                FieldKey = field.FieldKey,
-                Message = $"{field.Label} must be smaller than {maxSizeBytes / (1024 * 1024)}MB.",
-                Code = "VALIDATION_ERROR"
-            });
-            continue;
-        }
-
-        var extension = Path.GetExtension(file.FileName);
-        if (field.AcceptedFileTypes is { Count: > 0 } accepted
-            && !accepted.Contains(extension, StringComparer.OrdinalIgnoreCase))
-        {
-            problems.Add(new ServiceRequestProblem
-            {
-                FieldKey = field.FieldKey,
-                Message = $"{field.Label} must be one of: {string.Join(", ", accepted)}.",
-                Code = "VALIDATION_ERROR"
-            });
-            continue;
-        }
-
-        await using var stream = file.OpenReadStream();
-        var storageKey = await fileStorage.SaveAsync(instanceId, field.FieldKey, stream, file.FileName);
-        // The engine's own GetDisplayValue (ProcessManagerEngine) only recognises a file-upload
-        // field's persisted value as a ServiceRequestFileReference (or its JsonElement round
-        // trip) — a bare storage-key string displays as nothing at all, which also leaves the
-        // rendered <input> incorrectly marked required after a validation bounce-back, since a
-        // browser can't pre-populate a file input from a prior selection.
-        fieldValues[field.FieldKey] = new ServiceRequestFileReference
-        {
-            StorageKey = storageKey,
-            OriginalFileName = file.FileName,
-            ContentType = file.ContentType,
-            SizeBytes = file.Length,
-        };
-    }
-
-    return problems;
 }
 
 /// <summary>
