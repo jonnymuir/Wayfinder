@@ -58,7 +58,12 @@ test.describe('Caseworker queue: review and decide', () => {
       await expect(caseworkerPage.getByRole('heading', { name: 'Record your decision' })).toBeVisible();
       await caseworkerPage.getByRole('button', { name: 'Approve' }).click();
       await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
-      await expect(caseworkerPage.getByText('No applications waiting for review')).toBeVisible();
+      // juggling-licence's own "approve" route hands off entirely into the CITIZEN queue's own
+      // post-review Join (see the blueprint's own gateway graph) — the caseworker's cursor has no
+      // accessible work item left in their own queue at all once approved, "Done" filter or not.
+      // See njf-contributions-concurrency-live.spec.ts for the worklist's status filter/search UI
+      // proven against a blueprint whose caseworker queue genuinely does reach "Done".
+      await expect(caseworkerPage.getByText('No applications match the current filters')).toBeVisible();
     });
 
     await test.step('Applicant sees the granted licence', async () => {

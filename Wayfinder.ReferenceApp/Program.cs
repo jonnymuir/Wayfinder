@@ -396,34 +396,145 @@ premiumGroup.MapPost("/", async (HttpContext ctx, IProcessManager engine, GovUkC
 
 var caseworkerGroup = app.MapGroup("/caseworker").RequireAuthorization("Caseworker");
 
-caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
+// Filter/sort/search/pagination controls for the worklist (see
+// docs/guides/queue-worklist-filtering.md) — a real <form method="get">, full-page reload,
+// matching this route's existing plain-server-rendered convention rather than bulk-data-review's
+// fetch()/JS pattern, since this is a read-only list with no interactivity need beyond a normal
+// GET. A plain HTML checkbox form can't distinguish "bare initial load" from "every status box
+// unchecked and submitted" — both produce zero `status` values on the wire — so a hidden
+// `statusFilterApplied` field disambiguates: absent means "use GetQueueWorkItems' own default",
+// present means "take the (possibly empty) parsed set literally".
+caseworkerGroup.MapGet("/queue", (
+    HttpContext ctx, IProcessManager engine,
+    string[]? status, string? sort, string? q, int? page, int? pageSize, string? statusFilterApplied) =>
 {
+    IReadOnlyCollection<QueueWorkItemStatus>? statuses = statusFilterApplied is null
+        ? null
+        : (status ?? [])
+            .Select(s => Enum.TryParse<QueueWorkItemStatus>(s, ignoreCase: true, out var parsed) ? (QueueWorkItemStatus?)parsed : null)
+            .Where(s => s is not null)
+            .Select(s => s!.Value)
+            .Distinct()
+            .ToArray();
+    var selectedStatuses = statuses ?? [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting];
+
+    var parsedSort = Enum.TryParse<QueueWorkListSort>(sort, ignoreCase: true, out var sortValue)
+        ? sortValue
+        : QueueWorkListSort.Default;
+    var pageIndex = Math.Max(page ?? 0, 0);
+    var size = Math.Clamp(pageSize ?? 20, 1, 100);
+
     // Genuinely multi-blueprint: GetQueueWorkItems has no blueprint filter, so both demos'
     // caseworker-queue items already show up here side by side, keyed by queue name alone.
-    var items = engine.GetQueueWorkItems(ReferenceActors.CaseworkerProfile()).Items;
+    var envelope = engine.GetQueueWorkItems(
+        ReferenceActors.CaseworkerProfile(), statuses, parsedSort, q, pageIndex, size);
     var esc = GovUk.Esc;
-    var rows = items.Count == 0
-        ? """<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="4">No applications waiting for review</td></tr>"""
-        // A waiting item (QueueWorkItem.IsWaiting — this caseworker's own cursor parked at a join
-        // gateway, waiting on another queue) has nothing to act on yet, but must stay visible and
-        // reachable: before it did, an application sent to SafetyNet Underwriting disappeared from
-        // this queue entirely. Tagged with a real GOV.UK "Waiting" status tag and a "View" link
-        // rather than "Review", so the difference between "you can decide this now" and "something
-        // else is happening to this" is obvious at a glance.
-        : string.Join("\n", items.Select(item => $"""
+
+    string CheckboxItem(QueueWorkItemStatus value, string label) =>
+        $"""
+        <div class="govuk-checkboxes__item">
+          <input class="govuk-checkboxes__input" id="status-{value}" name="status" type="checkbox" value="{value}" {(selectedStatuses.Contains(value) ? "checked" : "")}>
+          <label class="govuk-label govuk-checkboxes__label" for="status-{value}">{label}</label>
+        </div>
+        """;
+
+    string SortOption(QueueWorkListSort value, string label) =>
+        $"""<option value="{value}" {(parsedSort == value ? "selected" : "")}>{label}</option>""";
+
+    // Preserves every other current filter/sort/search choice — only `page` varies — so paging
+    // never silently resets a caseworker's status/sort/search selection.
+    string PageLink(int targetPageIndex, string label)
+    {
+        var query = string.Join("&", selectedStatuses.Select(s => $"status={Uri.EscapeDataString(s.ToString())}")
+            .Append($"sort={Uri.EscapeDataString(parsedSort.ToString())}")
+            .Append(string.IsNullOrWhiteSpace(q) ? null : $"q={Uri.EscapeDataString(q)}")
+            .Append($"page={targetPageIndex}")
+            .Append($"pageSize={size}")
+            .Append("statusFilterApplied=1")
+            .Where(part => part is not null));
+        return $"""<a class="govuk-link" href="/caseworker/queue?{query}">{label}</a>""";
+    }
+
+    var filterForm = $"""
+        <form method="get" class="govuk-!-margin-bottom-6">
+          <input type="hidden" name="statusFilterApplied" value="1">
+          <div class="govuk-grid-row">
+            <div class="govuk-grid-column-one-third">
+              <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                  <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Status</legend>
+                  <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                    {CheckboxItem(QueueWorkItemStatus.Actionable, "Actionable")}
+                    {CheckboxItem(QueueWorkItemStatus.Waiting, "Waiting")}
+                    {CheckboxItem(QueueWorkItemStatus.Done, "Done")}
+                  </div>
+                </fieldset>
+              </div>
+            </div>
+            <div class="govuk-grid-column-one-third">
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="q">Search</label>
+                <input class="govuk-input" id="q" name="q" type="search" value="{esc(q ?? "")}">
+              </div>
+            </div>
+            <div class="govuk-grid-column-one-third">
+              <div class="govuk-form-group">
+                <label class="govuk-label" for="sort">Sort by</label>
+                <select class="govuk-select" id="sort" name="sort">
+                  {SortOption(QueueWorkListSort.Default, "Service, then stage")}
+                  {SortOption(QueueWorkListSort.UpdatedAtNewestFirst, "Most recently updated")}
+                  {SortOption(QueueWorkListSort.UpdatedAtOldestFirst, "Least recently updated")}
+                  {SortOption(QueueWorkListSort.CreatedAtNewestFirst, "Newest first")}
+                  {SortOption(QueueWorkListSort.CreatedAtOldestFirst, "Oldest first")}
+                </select>
+              </div>
+            </div>
+          </div>
+          <button class="govuk-button govuk-button--secondary" data-module="govuk-button">Apply filters</button>
+        </form>
+        """;
+
+    string StatusTag(QueueWorkItemStatus itemStatus) => itemStatus switch
+    {
+        QueueWorkItemStatus.Waiting => """<strong class="govuk-tag govuk-tag--yellow">Waiting</strong>""",
+        QueueWorkItemStatus.Done => """<strong class="govuk-tag govuk-tag--green">Done</strong>""",
+        _ => ""
+    };
+
+    var rows = envelope.Items.Count == 0
+        ? """<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="4">No applications match the current filters</td></tr>"""
+        // A waiting item (this caseworker's own cursor parked at a join gateway, waiting on
+        // another queue) has nothing to act on yet, but must stay visible and reachable: before
+        // it did, an application sent to SafetyNet Underwriting disappeared from this queue
+        // entirely. A done item is genuinely finished — neither can be "reviewed", so both get a
+        // "View" link rather than "Review", making the difference between "you can decide this
+        // now" and "nothing (more) to decide" obvious at a glance.
+        : string.Join("\n", envelope.Items.Select(item => $"""
             <tr class="govuk-table__row">
               <td class="govuk-table__cell">{esc(item.BlueprintDisplayName)}</td>
               <td class="govuk-table__cell">
                 {esc(item.StateDisplayName)}
-                {(item.IsWaiting ? """<strong class="govuk-tag govuk-tag--yellow">Waiting</strong>""" : "")}
+                {StatusTag(item.Status)}
               </td>
               <td class="govuk-table__cell">{esc(item.InstanceId[..Math.Min(8, item.InstanceId.Length)])}…</td>
-              <td class="govuk-table__cell"><a class="govuk-link" href="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">{(item.IsWaiting ? "View" : "Review")}</a></td>
+              <td class="govuk-table__cell"><a class="govuk-link" href="/caseworker/queue/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">{(item.Status == QueueWorkItemStatus.Actionable ? "Review" : "View")}</a></td>
             </tr>
             """));
 
+    var hasNextPage = (pageIndex + 1) * size < envelope.TotalMatchingCount;
+    var pagination = envelope.TotalMatchingCount == 0
+        ? ""
+        : $"""
+        <nav class="govuk-!-margin-top-4">
+          {(pageIndex > 0 ? PageLink(pageIndex - 1, "Previous") : """<span class="govuk-body">Previous</span>""")}
+          <span class="govuk-body">Page {pageIndex + 1} — showing {envelope.Items.Count} of {envelope.TotalMatchingCount}</span>
+          {(hasNextPage ? PageLink(pageIndex + 1, "Next") : """<span class="govuk-body">Next</span>""")}
+        </nav>
+        """;
+
     var body = $"""
         <h1 class="govuk-heading-xl">Caseworker queue</h1>
+        {filterForm}
         <table class="govuk-table">
           <thead class="govuk-table__head">
             <tr class="govuk-table__row">
@@ -435,6 +546,7 @@ caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
           </thead>
           <tbody class="govuk-table__body">{rows}</tbody>
         </table>
+        {pagination}
         """;
     return Results.Content(PageShell.Render("Caseworker queue", body, ctx.User), "text/html");
 });
@@ -442,12 +554,21 @@ caseworkerGroup.MapGet("/queue", (HttpContext ctx, IProcessManager engine) =>
 // njf-contributions has no citizen frontstage to originate an instance from (see
 // docs/guides/bulk-data-review.md — the NJF's own operations staff are the only actor), so it
 // needs its own "start" entry point the way /apply and /premium give the citizen-facing demos —
-// GetCurrent with no instanceId resumes this caseworker's own latest instance if one's already
-// in progress, or starts a fresh one, same as those two.
+// A distinct "start a new one" affordance, not "continue where I left off" — GetCurrentOrStartFresh
+// reinstates a still-running submission (never abandons in-progress work), but genuinely starts a
+// fresh one once the existing one has reached "Contributions file accepted", rather than returning
+// that stale confirmation forever the way plain ambient GetCurrent would. The terminal instance
+// stays fully reachable either way — via the caseworker queue list's own "Done" status filter (see
+// docs/guides/queue-worklist-filtering.md), which is what this route's own visibility gap led to —
+// so nothing is lost by not returning it here.
+//
+// NjfOperationsProfile's own ConcurrencyScopeKey means this also already enforces "only one bulk
+// load per juggling authority" — every NJF operations user shares that scope, so this finds (and
+// reinstates, or replaces once terminal) the same instance regardless of which of them started it.
 caseworkerGroup.MapGet("/njf-contributions/new", (HttpContext ctx, IProcessManager engine) =>
 {
-    var started = engine.GetCurrent(
-        NjfContributionsDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.CaseworkerProfile());
+    var started = engine.GetCurrentOrStartFresh(
+        NjfContributionsDefinitionKey, ReferenceActors.TenantId, GetUserId(ctx.User), ReferenceActors.NjfOperationsProfile());
     return Results.Redirect($"/caseworker/queue/{NjfContributionsDefinitionKey}/{started.InstanceId}");
 });
 

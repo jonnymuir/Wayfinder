@@ -32,7 +32,8 @@ scratch. It models NN/g's frontstage/backstage split
   the event, optionally upload a risk assessment, check answers and declare, then wait behind
   the line of visibility.
 - **`caseworker`** (backstage) — the review team's worklist at `/caseworker/queue`: see what's
-  waiting, approve or reject.
+  waiting, approve or reject. The worklist's own status filter/sort/free-text search is covered
+  separately — see [docs/guides/queue-worklist-filtering.md](./queue-worklist-filtering.md).
 
 A third **support-systems** lane (a downstream/API-driven actor — the third leg of NN/g's model)
 now also runs alongside these two: **SafetyNet Underwriting**, a genuinely separate ASP.NET Core

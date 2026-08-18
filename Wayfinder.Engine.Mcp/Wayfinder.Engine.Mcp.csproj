@@ -42,6 +42,8 @@
     <EmbeddedResource Include="../docs/guides/extending-the-component-catalog.md" LogicalName="Wayfinder.Engine.Mcp.docs.extending-the-component-catalog.md" />
     <EmbeddedResource Include="../docs/guides/support-systems.md" LogicalName="Wayfinder.Engine.Mcp.docs.support-systems.md" />
     <EmbeddedResource Include="../docs/guides/bulk-data-review.md" LogicalName="Wayfinder.Engine.Mcp.docs.bulk-data-review.md" />
+    <EmbeddedResource Include="../docs/guides/request-concurrency.md" LogicalName="Wayfinder.Engine.Mcp.docs.request-concurrency.md" />
+    <EmbeddedResource Include="../docs/guides/queue-worklist-filtering.md" LogicalName="Wayfinder.Engine.Mcp.docs.queue-worklist-filtering.md" />
   </ItemGroup>
 
   <ItemGroup>

@@ -27,6 +27,7 @@ public class ProcessManagerEngine : IProcessManager
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly IReadOnlyDictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
+    private readonly IReadOnlyDictionary<string, IRequestConcurrencyPolicy> _requestConcurrencyPolicies;
 
     public ProcessManagerEngine(
         ILogger logger,
@@ -35,7 +36,8 @@ public class ProcessManagerEngine : IProcessManager
         Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? serviceInputsResolver = null,
         IServiceRequestStore? instanceStore = null,
         IEnumerable<ISupportSystemClient>? supportSystemClients = null,
-        IBulkDatasetStore? bulkDatasetStore = null)
+        IBulkDatasetStore? bulkDatasetStore = null,
+        IEnumerable<IRequestConcurrencyPolicy>? requestConcurrencyPolicies = null)
     {
         Logger = logger;
         _sanitizer = sanitizer;
@@ -44,6 +46,9 @@ public class ProcessManagerEngine : IProcessManager
         _supportSystemClients = (supportSystemClients ?? [])
             .ToDictionary(client => client.SupportSystemKey, StringComparer.Ordinal);
         _bulkDatasetStore = bulkDatasetStore;
+        _requestConcurrencyPolicies = (requestConcurrencyPolicies ?? [])
+            .SelectMany(policy => policy.DefinitionKeys.Select(key => (key, policy)))
+            .ToDictionary(pair => pair.key, pair => pair.policy, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (lookupKey, definition) in definitionStore.LoadDefinitions(logger))
         {
@@ -108,7 +113,7 @@ public class ProcessManagerEngine : IProcessManager
             return BuildEnvelope(specificInstance, definition, accessProfile);
         }
 
-        var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey);
+        var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey, accessProfile);
 
         if (!CanStartInitialState(definition, accessProfile))
         {
@@ -147,6 +152,48 @@ public class ProcessManagerEngine : IProcessManager
                 blueprintKey);
         }
 
+        // A host-registered custom policy (see IRequestConcurrencyPolicy's own remarks) takes over
+        // entirely for the blueprints it names — every other blueprint never touches this
+        // dictionary lookup at all and falls straight through to the built-in switch below,
+        // completely unaffected. Explicit start-new/resume already returned above regardless of
+        // policy, matching how the built-in single/multiple/prompt switch already treats them.
+        if (_requestConcurrencyPolicies.TryGetValue(blueprintKey, out var customPolicy))
+        {
+            var candidateInstances = _instanceStore.GetAll()
+                .Where(instance =>
+                    string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal)
+                    && string.Equals(instance.BlueprintKey, blueprintKey, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var decision = customPolicy
+                .EvaluateAsync(definition, tenantId, userId, accessProfile, candidateInstances)
+                .GetAwaiter().GetResult();
+
+            switch (decision.Outcome)
+            {
+                case RequestConcurrencyOutcome.ReuseExisting:
+                    return BuildEnvelope(
+                        decision.ExistingInstance ?? throw new InvalidOperationException(
+                            $"{customPolicy.GetType().Name} returned ReuseExisting with no ExistingInstance."),
+                        definition, accessProfile);
+                case RequestConcurrencyOutcome.Deny:
+                    return ErrorEnvelope(
+                        decision.DenyReason ?? "This request was denied by a registered concurrency policy.",
+                        "CONCURRENCY_POLICY_DENIED");
+                case RequestConcurrencyOutcome.AllowNew:
+                default:
+                    return CreateAndRegisterNewInstance(
+                        blueprintKey,
+                        tenantId,
+                        userId,
+                        definition,
+                        accessProfile,
+                        action,
+                        "Created new service request {Id} for key={Key} (custom concurrency policy: AllowNew)",
+                        blueprintKey);
+            }
+        }
+
         var policy = definition.RequestPolicy;
 
         if (string.Equals(policy, "multiple", StringComparison.OrdinalIgnoreCase))
@@ -168,7 +215,7 @@ public class ProcessManagerEngine : IProcessManager
             {
                 var currentStage = definition.Stages.FirstOrDefault(s => s.StageKey == existingInstance.CurrentStage);
 
-                if (!IsTerminalInstance(existingInstance, definition))
+                if (!IsTerminalInstance(existingInstance, definition, accessProfile))
                 {
                     Logger.LogInformation(
                         "Active instance {Id} exists for key={Key}; returning instance_picker",
@@ -226,6 +273,33 @@ public class ProcessManagerEngine : IProcessManager
         // relies on this same fallthrough to show the confirmation page for the visit that just
         // submitted it.
         return BuildEnvelope(existingInstance, definition, accessProfile);
+    }
+
+    /// <summary>
+    /// The "start" affordance a genuine ambient <see cref="GetCurrent(string,string,string,ActorProfile,string?,string?)"/>
+    /// (a "continue where I left off" link) deliberately isn't: an ordinary visit must keep
+    /// showing a terminal instance forever under "single" (a returning citizen sees "Thank you",
+    /// not a silently-reset blank form — see the comment just above this method), but a distinct
+    /// "start a new one" link shouldn't hand back a stale confirmation from months ago either. A
+    /// non-terminal existing instance is reinstated exactly as ambient <c>GetCurrent</c> already
+    /// does — never abandons in-progress work; only a genuinely terminal (or absent) existing
+    /// instance triggers a real fresh one, via the same explicit <c>action: "start-new"</c> that
+    /// already exists for this (<see cref="ServiceBlueprintSimulationRunner"/> is the other caller
+    /// of that action, and needs it to stay unconditionally-always-fresh — that's exactly why this
+    /// is a new method rather than a change to what "start-new" itself means).
+    /// </summary>
+    public ServiceRequestResponseEnvelope GetCurrentOrStartFresh(
+        string blueprintKey, string tenantId, string userId, ActorProfile accessProfile)
+    {
+        var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey, accessProfile);
+        if (existingInstance is not null
+            && _definitions.TryGetValue(blueprintKey, out var definition)
+            && IsTerminalInstance(existingInstance, definition, accessProfile))
+        {
+            return GetCurrent(blueprintKey, tenantId, userId, accessProfile, action: "start-new");
+        }
+
+        return GetCurrent(blueprintKey, tenantId, userId, accessProfile);
     }
 
     public virtual ServiceRequestResponseEnvelope Advance(
@@ -530,9 +604,18 @@ public class ProcessManagerEngine : IProcessManager
                 continue;
             }
 
+            // ConcurrencyScopeKey only ever moves with the re-key when it was still the implicit
+            // default (equal to fromUserId, set that way at creation — see CreateNewInstance).
+            // An explicit host-chosen scope (e.g. an organisation key) isn't something "this one
+            // anonymous browser session later signed in" should silently reassign.
+            var concurrencyScopeKey = string.Equals(instance.ConcurrencyScopeKey, fromUserId, StringComparison.Ordinal)
+                ? toUserId
+                : instance.ConcurrencyScopeKey;
+
             _instanceStore.Save(instance with
             {
                 UserId = toUserId,
+                ConcurrencyScopeKey = concurrencyScopeKey,
                 IsAuthenticated = true,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
@@ -542,9 +625,107 @@ public class ProcessManagerEngine : IProcessManager
         return claimed;
     }
 
-    public QueueWorkListEnvelope GetQueueWorkItems(ActorProfile accessProfile)
+    private static readonly IReadOnlyCollection<QueueWorkItemStatus> DefaultQueueWorkItemStatuses =
+        [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting];
+
+    /// <summary>
+    /// Which bucket a work item falls into — <see langword="null"/> for a row that is none of the
+    /// three: no available actions, not waiting at a join gateway (the actor may simply lack
+    /// permission to act in that queue, or every outgoing route may be <c>showWhen</c>-hidden),
+    /// and not genuinely terminal either. Those rows stay invisible under every status filter,
+    /// including all three selected at once — the same as they always have been, deliberately not
+    /// promoted to a fourth bucket nobody asked for.
+    /// </summary>
+    private static QueueWorkItemStatus? ClassifyStatus(AccessibleWorkItem item, ServiceBlueprint definition)
     {
-        var items = _instanceStore.GetAll()
+        if (item.AvailableActions.Count > 0)
+        {
+            return QueueWorkItemStatus.Actionable;
+        }
+
+        if (item.IsJoinGateway)
+        {
+            return QueueWorkItemStatus.Waiting;
+        }
+
+        return IsTerminalWorkItem(item, definition) ? QueueWorkItemStatus.Done : null;
+    }
+
+    private static IReadOnlyList<QueueWorkItem> ApplyQueueWorkListSort(
+        IReadOnlyList<QueueWorkItem> items, QueueWorkListSort sort) => sort switch
+    {
+        QueueWorkListSort.CreatedAtNewestFirst => items
+            .OrderByDescending(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToArray(),
+        QueueWorkListSort.CreatedAtOldestFirst => items
+            .OrderBy(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToArray(),
+        QueueWorkListSort.UpdatedAtNewestFirst => items
+            .OrderByDescending(i => i.UpdatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToArray(),
+        QueueWorkListSort.UpdatedAtOldestFirst => items
+            .OrderBy(i => i.UpdatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToArray(),
+        _ => items
+            .OrderBy(i => i.BlueprintDisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(i => i.StateDisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(i => i.InstanceId, StringComparer.Ordinal)
+            .ToArray(),
+    };
+
+    /// <summary>
+    /// Free-text match against the projected display fields plus every raw
+    /// <see cref="ServiceRequest.FieldValues"/> value — not added to <see cref="QueueWorkItem"/>
+    /// itself, since <c>FieldValues</c> is arbitrary, blueprint-defined, and never otherwise
+    /// rendered in the list. A <see cref="System.Text.Json.JsonElement"/> value (a real shape here,
+    /// not merely defensive) is stringified via its own JSON text rather than
+    /// <see cref="object.ToString"/>, which would just yield its CLR type name.
+    /// </summary>
+    private static bool MatchesQueueSearch(ServiceRequest instance, QueueWorkItem projected, string? searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            return true;
+        }
+
+        bool Contains(string? haystack) =>
+            !string.IsNullOrEmpty(haystack) && haystack.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+
+        if (Contains(projected.InstanceId) || Contains(projected.BlueprintDisplayName) || Contains(projected.StateDisplayName))
+        {
+            return true;
+        }
+
+        foreach (var value in instance.FieldValues.Values)
+        {
+            if (value is null)
+            {
+                continue;
+            }
+
+            var text = value is System.Text.Json.JsonElement jsonElement ? jsonElement.ToString() : value.ToString();
+            if (Contains(text))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public QueueWorkListEnvelope GetQueueWorkItems(
+        ActorProfile accessProfile,
+        IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
+        QueueWorkListSort sort = QueueWorkListSort.Default,
+        string? searchText = null,
+        int pageIndex = 0,
+        int pageSize = 20)
+    {
+        // null (the C# default) means "apply the engine's own default view" — an explicitly empty,
+        // non-null collection means "show nothing", respected literally. A host route can't rely
+        // on C# defaults over an HTTP call, so it must preserve this distinction itself (see
+        // docs/guides/queue-worklist-filtering.md).
+        var effectiveStatuses = statuses ?? DefaultQueueWorkItemStatuses;
+        var effectivePageIndex = Math.Max(pageIndex, 0);
+        var effectivePageSize = Math.Clamp(pageSize, 1, 100);
+
+        var matched = _instanceStore.GetAll()
             .SelectMany(instance =>
             {
                 if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
@@ -555,28 +736,31 @@ public class ProcessManagerEngine : IProcessManager
                 // A deliberate refresh of the list should show reality, not what was true the
                 // last time anyone happened to open this specific item — give a waiting item the
                 // same poll-resolve chance BuildEnvelope already gives it on a single-instance
-                // read, just applied per row here instead of per page. No background timer: this
-                // only ever runs inside a caller's own GET, same as everywhere else this hook is
-                // used.
+                // read, just applied per row here instead of per page. Unconditional, regardless
+                // of whether "Waiting" is even in the requested status set: an item that has just
+                // resolved must be reclassified off its stale pre-refresh status this request. No
+                // background timer: this only ever runs inside a caller's own GET, same as
+                // everywhere else this hook is used.
                 instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
 
-                // A join-gateway item legitimately has no available actions — the actor is waiting
-                // on another queue, not choosing anything. Filtering purely on "has actions" hid
-                // those entirely, so an application sent to a support system vanished from the
-                // caseworker's own queue with no way back to it (see QueueWorkItem.IsWaiting).
                 return FindAccessibleWorkItems(instance, definition, accessProfile)
-                    .Where(item => item.AvailableActions.Count > 0 || item.IsJoinGateway)
-                    .Select(item => item.ToEnvelopeItem(instance, definition))
+                    .Select(item => (item, status: ClassifyStatus(item, definition)))
+                    .Where(pair => pair.status is not null && effectiveStatuses.Contains(pair.status.Value))
+                    .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value))
+                    .Where(projected => MatchesQueueSearch(instance, projected, searchText))
                     .ToArray();
             })
-            .OrderBy(item => item.BlueprintDisplayName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(item => item.StateDisplayName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(item => item.InstanceId, StringComparer.Ordinal)
             .ToArray();
+
+        var ordered = ApplyQueueWorkListSort(matched, sort);
+        var page = ordered.Skip(effectivePageIndex * effectivePageSize).Take(effectivePageSize).ToArray();
 
         return new QueueWorkListEnvelope
         {
-            Items = items
+            Items = page,
+            PageIndex = effectivePageIndex,
+            PageSize = effectivePageSize,
+            TotalMatchingCount = ordered.Count
         };
     }
 
@@ -1121,7 +1305,8 @@ public class ProcessManagerEngine : IProcessManager
     {
         public QueueWorkItem ToEnvelopeItem(
             ServiceRequest instance,
-            ServiceBlueprint definition) =>
+            ServiceBlueprint definition,
+            QueueWorkItemStatus status) =>
             new()
             {
                 InstanceId = instance.InstanceId,
@@ -1134,7 +1319,9 @@ public class ProcessManagerEngine : IProcessManager
                 UserId = instance.UserId,
                 StateVersion = instance.StateVersion,
                 AvailableActions = AvailableActions,
-                IsWaiting = IsJoinGateway
+                CreatedAt = instance.CreatedAt,
+                UpdatedAt = instance.UpdatedAt,
+                Status = status
             };
     }
 
@@ -1160,7 +1347,8 @@ public class ProcessManagerEngine : IProcessManager
         params object?[] additionalLogArgs)
     {
         var instance = CreateNewInstance(
-            blueprintKey, tenantId, userId, definition.InitialStage, ResolveIsAuthenticated(tenantId, userId));
+            blueprintKey, tenantId, userId, definition.InitialStage, ResolveIsAuthenticated(tenantId, userId),
+            accessProfile.ConcurrencyScopeKey ?? userId);
         if (InitializeNewInstance(instance, definition, action) is { } error)
         {
             return error;
@@ -1177,7 +1365,8 @@ public class ProcessManagerEngine : IProcessManager
         string tenantId,
         string userId,
         string initialStage,
-        bool isAuthenticated)
+        bool isAuthenticated,
+        string concurrencyScopeKey)
     {
         var now = DateTimeOffset.UtcNow;
         return new ServiceRequest
@@ -1186,6 +1375,7 @@ public class ProcessManagerEngine : IProcessManager
             BlueprintKey = blueprintKey,
             TenantId = tenantId,
             UserId = userId,
+            ConcurrencyScopeKey = concurrencyScopeKey,
             IsAuthenticated = isAuthenticated,
             CurrentStage = initialStage,
             StateVersion = 0,
@@ -2967,21 +3157,63 @@ public class ProcessManagerEngine : IProcessManager
 
     // ─── end Gateway helpers ──────────────────────────────────────────────────
 
-    private static bool IsTerminalInstance(ServiceRequest instance, ServiceBlueprint definition)
+    /// <summary>
+    /// "Terminal" from <paramref name="accessProfile"/>'s own point of view — deliberately not a
+    /// blind read of <see cref="ServiceRequest.CurrentStage"/>, which is a single legacy field
+    /// covering every cursor a multi-queue instance has (see its own remarks:
+    /// "reflects the first active stage cursor", not any *particular* one). A caseworker's cursor
+    /// waiting at a join gateway is never terminal, no matter what some other queue's cursor
+    /// (e.g. an automation-queue "please wait" stage, itself rendered as a bare panel — the exact
+    /// same shape a genuine confirmation stage uses) happens to be sitting on. Found live: an
+    /// in-progress njf-contributions submission was misclassified as terminal purely because its
+    /// automation-queue cursor had already reached such a stage while the caseworker's own cursor
+    /// was still waiting at the join — reuses the same actor-relative resolution
+    /// <see cref="BuildEnvelope"/> already gets right via <see cref="FindAccessibleWorkItems"/>,
+    /// rather than the older, simpler check this replaced.
+    /// </summary>
+    private bool IsTerminalInstance(ServiceRequest instance, ServiceBlueprint definition, ActorProfile accessProfile)
     {
-        var currentStage = definition.Stages.FirstOrDefault(s => s.StageKey == instance.CurrentStage);
-        return currentStage != null && currentStage.Components.InferStepType() == "confirmation";
+        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile).FirstOrDefault();
+        return visibleItem is not null && IsTerminalWorkItem(visibleItem, definition);
     }
 
-    private ServiceRequest? FindLatestInstance(string tenantId, string userId, string blueprintKey) =>
-        _instanceStore.GetAll()
+    /// <summary>
+    /// The per-item predicate <see cref="IsTerminalInstance"/> is built from — extracted so
+    /// <see cref="GetQueueWorkItems"/> can classify every row of a multi-cursor instance
+    /// individually, rather than the first-accessible-item-only view <see cref="IsTerminalInstance"/>
+    /// needs for its own "is *the* instance terminal" question.
+    /// </summary>
+    private static bool IsTerminalWorkItem(AccessibleWorkItem item, ServiceBlueprint definition)
+    {
+        if (item.IsJoinGateway)
+        {
+            return false;
+        }
+
+        var stage = definition.Stages.FirstOrDefault(s => s.StageKey == item.StageKey);
+        return stage != null && stage.Components.InferStepType() == "confirmation";
+    }
+
+    /// <summary>
+    /// Groups "is there already one?" by <paramref name="accessProfile"/>'s own
+    /// <see cref="ActorProfile.ConcurrencyScopeKey"/> when set, falling back to
+    /// <paramref name="userId"/> otherwise — matching how each candidate instance's own
+    /// <see cref="ServiceRequest.ConcurrencyScopeKey"/> was resolved at creation time
+    /// (<see cref="CreateAndRegisterNewInstance"/>), so this stays exactly today's per-user
+    /// behaviour for every caller that never sets a scope key.
+    /// </summary>
+    private ServiceRequest? FindLatestInstance(string tenantId, string userId, string blueprintKey, ActorProfile accessProfile)
+    {
+        var scopeKey = accessProfile.ConcurrencyScopeKey ?? userId;
+        return _instanceStore.GetAll()
             .Where(instance =>
                 string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal)
-                && string.Equals(instance.UserId, userId, StringComparison.Ordinal)
+                && string.Equals(instance.ConcurrencyScopeKey, scopeKey, StringComparison.Ordinal)
                 && string.Equals(instance.BlueprintKey, blueprintKey, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(instance => instance.UpdatedAt)
             .ThenByDescending(instance => instance.CreatedAt)
             .FirstOrDefault();
+    }
 
     private static Dictionary<string, object?> Merge(
         Dictionary<string, object?> existing,

@@ -101,6 +101,33 @@ public static class ServiceBlueprintAuthoringResources
         "blueprint against a host with IBulkDatasetStore registered.")]
     public static string BulkDataReview() => ReadEmbeddedDoc("bulk-data-review.md");
 
+    [McpServerResource(
+        Name = "request-concurrency",
+        UriTemplate = "service-blueprint-docs://request-concurrency",
+        Title = "Request Concurrency",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "How a host controls 'is there already one?' beyond a blueprint's own declared requestPolicy: " +
+        "GetCurrentOrStartFresh (a distinct 'start a new one' affordance from ambient GetCurrent's " +
+        "'continue where I left off'), ActorProfile.ConcurrencyScopeKey (grouping existing instances by " +
+        "something other than the literal requesting user), and IRequestConcurrencyPolicy (an injectable " +
+        "escape hatch for rules a scope key can't express). For whoever is building a Wayfinder host, not " +
+        "whoever is authoring a blueprint against one — that agent just declares requestPolicy.")]
+    public static string RequestConcurrency() => ReadEmbeddedDoc("request-concurrency.md");
+
+    [McpServerResource(
+        Name = "queue-worklist-filtering",
+        UriTemplate = "service-blueprint-docs://queue-worklist-filtering",
+        Title = "Queue Worklist Filtering, Sorting, and Search",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "How GetQueueWorkItems supports a real caseworker worklist: the QueueWorkItemStatus " +
+        "three-bucket status filter (Actionable/Waiting/Done — and why Done isn't simply 'has no " +
+        "actions'), the null-vs-empty-collection distinction for the statuses parameter, sort " +
+        "options, free-text search semantics, and pagination. For whoever is building a Wayfinder " +
+        "host, not whoever is authoring a blueprint against one.")]
+    public static string QueueWorklistFiltering() => ReadEmbeddedDoc("queue-worklist-filtering.md");
+
     private static string ReadEmbeddedDoc(string fileName)
     {
         var assembly = Assembly.GetExecutingAssembly();

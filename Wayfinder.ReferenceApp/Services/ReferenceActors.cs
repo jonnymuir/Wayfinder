@@ -82,6 +82,20 @@ public static class ReferenceActors
         RestrictToInstanceOwner = false
     };
 
+    /// <summary>
+    /// Same backstage worklist as <see cref="CaseworkerProfile"/> — NjfOperations is a distinct
+    /// persona under the same CaseworkerRole, not a separate access boundary (see
+    /// DemoUsers.cs's own remarks) — plus a <see cref="ActorProfile.ConcurrencyScopeKey"/>
+    /// demonstrating "only one bulk load per juggling authority": every NJF operations user
+    /// shares this same key, so GetCurrent/GetCurrentOrStartFresh treat them as one owner for
+    /// concurrency purposes regardless of which of them actually submits a file, even though
+    /// they can already all see and act on the same shared queue either way.
+    /// </summary>
+    public static ActorProfile NjfOperationsProfile() => CaseworkerProfile() with
+    {
+        ConcurrencyScopeKey = "njf-contributions-org:njf"
+    };
+
     public static IQueueCapabilitiesProvider CapabilitiesProvider() => new StaticQueueCapabilitiesProvider(
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
