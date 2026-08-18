@@ -42,6 +42,19 @@ public sealed class WorklistOptions
 
     public string ReviewPageTitle { get; set; } = "Review item";
 
+    public string TeamWorklistPageTitle { get; set; } = "Team work queue";
+
+    /// <summary>
+    /// Optional. If set, <see cref="WorklistExtensions.MapWorklist"/> also exposes a team-view
+    /// route (<c>{prefix}/team/{teamId}</c>) — a team's own aggregate view of everything it owns
+    /// (see <c>IProcessManager.GetTeamWorkItems</c> and docs/guides/team-assignment.md), alongside
+    /// the personal worklist at <c>{prefix}</c>. Returns every team the current actor belongs to
+    /// that's worth surfacing a link for (id, display name) — used to render a small "my work /
+    /// my team's work" nav at the top of both pages. A host with no team-owned queues can leave
+    /// this unset; the personal worklist works unchanged either way.
+    /// </summary>
+    public Func<HttpContext, IReadOnlyList<(string TeamId, string DisplayName)>>? ResolveTeams { get; set; }
+
     private static string DefaultResolveUserId(HttpContext ctx) =>
         ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
         ?? throw new InvalidOperationException("Authenticated request has no NameIdentifier claim.");

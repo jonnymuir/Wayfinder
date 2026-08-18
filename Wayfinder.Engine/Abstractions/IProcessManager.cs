@@ -80,6 +80,28 @@ public interface IProcessManager
         int pageSize = 20);
 
     /// <summary>
+    /// A team's own aggregate view of everything it owns (see docs/guides/team-assignment.md) —
+    /// every row belonging to a queue with <c>QueueDefinition.OwningTeamId == teamId</c>, whether
+    /// still sitting unpicked in the tray or already picked up by a specific teammate. Unlike
+    /// <see cref="GetQueueWorkItems"/> (which only ever shows what's actionable to one calling
+    /// <c>userId</c>), this is "what does my team currently own", not "what can I personally do
+    /// right now". <paramref name="accessProfile"/> must itself be a member of <paramref name="teamId"/>
+    /// (<see cref="ActorProfile.IsTeamMember"/>) — otherwise an empty envelope, the same permissive-
+    /// method/host-enforces-the-denial contract already used for tenant scoping elsewhere in this
+    /// interface. Only ever returns rows from a team-owned queue — a legacy queue (no
+    /// <c>AssignmentPolicy</c>) has no team to own it, so never appears here.
+    /// </summary>
+    QueueWorkListEnvelope GetTeamWorkItems(
+        string tenantId,
+        string teamId,
+        ActorProfile accessProfile,
+        IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
+        QueueWorkListSort sort = QueueWorkListSort.Default,
+        string? searchText = null,
+        int pageIndex = 0,
+        int pageSize = 20);
+
+    /// <summary>
     /// Claims one specific work item for <paramref name="userId"/> — becomes its sole owner, hidden
     /// from every other actor sharing the queue until released (see <see cref="ReleaseWorkItem"/>).
     /// No <c>expectedStateVersion</c>: unlike <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>,

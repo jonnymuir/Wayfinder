@@ -34,6 +34,17 @@ public record ActorProfile
     /// </summary>
     public IReadOnlySet<string> Capabilities { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Host-resolved team memberships — same resolution pattern as <see cref="Capabilities"/>/
+    /// <see cref="ConcurrencyScopeKey"/> (a claim, a lookup, static config), matched
+    /// case-insensitively. Matched against a queue's own declared
+    /// <c>QueueDefinition.OwningTeamId</c> (see <see cref="IsTeamMember"/>) — a distinct concept
+    /// from <see cref="Capabilities"/>/<c>RoleGates</c>, which govern whether an actor may see/act
+    /// on a queue at all; <see cref="TeamIds"/> instead governs who, among those already eligible,
+    /// actually owns a given row on a team-assigned queue. See docs/guides/team-assignment.md.
+    /// </summary>
+    public IReadOnlySet<string> TeamIds { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     public bool CanViewQueue(string? queueName) => IsAllowed(queueName, VisibleQueues);
 
     public bool CanStartQueue(string? queueName) => IsAllowed(queueName, StartableQueues);
@@ -67,6 +78,13 @@ public record ActorProfile
 
         return requiredCapabilities.Any(required => Capabilities.Contains(required));
     }
+
+    /// <summary>
+    /// True when <paramref name="teamId"/> is null/blank (the queue declares no team ownership —
+    /// every queue that predates this feature) or this profile's <see cref="TeamIds"/> contains it.
+    /// </summary>
+    public bool IsTeamMember(string? teamId) =>
+        string.IsNullOrWhiteSpace(teamId) || TeamIds.Contains(teamId);
 
     private static bool IsAllowed(string? queueName, IReadOnlyList<string> allowedQueues)
     {

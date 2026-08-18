@@ -3,14 +3,14 @@ namespace Wayfinder.Models.ServiceDesign;
 /// <summary>
 /// A queue work item's status, derived by <see cref="Services.ProcessManagerEngine.GetQueueWorkItems"/>
 /// from the actor-relative <c>AccessibleWorkItem</c> it was built from — never independently set.
-/// A row that is none of these (no available actions, not waiting at a join gateway, and not
-/// genuinely terminal — e.g. the actor lacks permission to act in that queue, or every outgoing
-/// route is <c>showWhen</c>-hidden) has no <see cref="QueueWorkItemStatus"/> at all and stays
-/// invisible under every filter, exactly as it always has — deliberately not a fourth bucket.
+/// A row that is none of these (the actor lacks permission to act in that queue at all, or every
+/// outgoing route is <c>showWhen</c>-hidden — genuinely zero eligible routes, not merely zero
+/// available ones) has no <see cref="QueueWorkItemStatus"/> at all and stays invisible under every
+/// filter, exactly as it always has.
 /// </summary>
 public enum QueueWorkItemStatus
 {
-    /// <summary>Has at least one available action — today's plain, undecorated row.</summary>
+    /// <summary>Has at least one available action the caller may submit right now.</summary>
     Actionable,
 
     /// <summary>Nothing to do *yet* — the actor's own cursor is parked at a join gateway, waiting
@@ -24,19 +24,36 @@ public enum QueueWorkItemStatus
     /// also true for a permission gap or a hidden route — neither is completion).
     /// </summary>
     Done,
+
+    /// <summary>
+    /// Eligible routes exist here — the actor has permission to act in this queue and at least one
+    /// route isn't <c>showWhen</c>-hidden — but this specific row isn't individually assigned to
+    /// them yet. Only ever produced for a queue declaring <c>QueueDefinition.AssignmentPolicy</c>
+    /// (see docs/guides/team-assignment.md): a "team-tray" row nobody has picked up. Distinct from
+    /// today's legacy queues, where "eligible" and "actionable" have always been the same thing.
+    /// <c>AvailableActions</c> is always empty for these — pick it up via <c>ClaimWorkItem</c> (same
+    /// verb as a legacy claim) to move to <see cref="Actionable"/>.
+    /// </summary>
+    Unassigned,
 }
 
 /// <summary>
-/// Per-cursor claim/ownership state — a genuinely different axis from <see cref="QueueWorkItemStatus"/>
-/// (status answers "what can be done"; claim state answers "who's doing it"). Non-null only for a
-/// genuine shared-pool row (<c>Status == Actionable</c> and the actor profile isn't restricted to
-/// its own instances) — null everywhere else, since a <see cref="QueueWorkItemStatus.Waiting"/>/
-/// <see cref="QueueWorkItemStatus.Done"/> row, or one already owner-restricted to a single actor,
-/// has nothing to claim. A row claimed by someone else never produces a row at all for anyone but
-/// its claimant (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership filter), so
-/// there is no third "claimed by someone else" value here to enumerate. See
-/// docs/guides/work-allocation.md — and note this is unrelated to <c>IQueueCapabilitiesProvider</c>'s
-/// own pre-existing, differently-scoped use of the word "capability".
+/// Per-cursor (or, for a team-owned queue, per-<c>QueueAssignment</c>) claim/ownership state — a
+/// genuinely different axis from <see cref="QueueWorkItemStatus"/> (status answers "what can be
+/// done"; claim state answers "who's doing it"). Non-null only for a genuine shared-pool row on a
+/// queue whose actor profile isn't restricted to its own instances: for a legacy queue, that means
+/// <c>Status == Actionable</c> (unclaimed vs. claimed-by-me — claiming is what makes it actionable
+/// in the first place there); for a team-owned queue, both <see cref="QueueWorkItemStatus.Unassigned"/>
+/// (unclaimed, sitting in the team tray) and <c>Actionable</c> (already picked up, by me) apply. Null
+/// everywhere else — a <see cref="QueueWorkItemStatus.Waiting"/>/<see cref="QueueWorkItemStatus.Done"/>
+/// row, an owner-restricted instance, or an "assign-to-initiator" queue (nothing to pick up — it's
+/// always already owned) has nothing to claim. A row held by someone else — an individual on a
+/// legacy queue, or a different team member on a team-owned one — never produces a row at all for
+/// anyone but its holder (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership
+/// filter), so there is no third "claimed by someone else" value here to enumerate. See
+/// docs/guides/work-allocation.md and docs/guides/team-assignment.md — and note this is unrelated
+/// to <c>IQueueCapabilitiesProvider</c>'s own pre-existing, differently-scoped use of the word
+/// "capability".
 /// </summary>
 public enum QueueWorkItemClaimState
 {

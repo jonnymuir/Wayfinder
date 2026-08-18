@@ -1318,6 +1318,23 @@ public record QueueDefinition
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? RoleGates { get; init; }
 
+    /// <summary>
+    /// Null (the default) means legacy: no mandatory-assignment enforcement for this queue —
+    /// <c>RequestCursor.AssignedTo</c> governs any optional claim exactly as it did before this
+    /// field existed. <c>"assign-to-initiator"</c>: whoever's action lands work here becomes its
+    /// individual owner immediately. <c>"team-tray"</c>: work lands owned by <see cref="OwningTeamId"/>
+    /// as a whole, pickable by any member, actionable only once picked up. Orthogonal to
+    /// <see cref="RoleGates"/> — RoleGates governs eligibility to see/act on this queue at all;
+    /// this governs who, among those already eligible, actually owns a given row. See
+    /// docs/guides/team-assignment.md.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AssignmentPolicy { get; init; }
+
+    /// <summary>The team that owns this queue — only meaningful when <see cref="AssignmentPolicy"/> is set.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OwningTeamId { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, string>? Tags { get; init; }
 }

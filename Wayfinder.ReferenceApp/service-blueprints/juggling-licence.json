@@ -780,7 +780,9 @@
       "key": "caseworker",
       "displayName": "Caseworker",
       "actor": "caseworker",
-      "roleGates": ["juggling-licence-review"]
+      "roleGates": ["juggling-licence-review"],
+      "assignmentPolicy": "team-tray",
+      "owningTeamId": "juggling-licence-reviewers"
     },
     {
       "key": "automation",

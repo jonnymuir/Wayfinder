@@ -25,20 +25,28 @@ public class CaseworkerQueueCrossVisibilityTests
     private const string CaseyUserId = "caseworker@example.test";
     private const string PriyaUserId = "njf-operations@example.test";
 
+    // juggling-licence.json's own "caseworker" queue is now team-tray (see
+    // docs/guides/team-assignment.md) — TeamIds is required for Casey to see even her own
+    // unclaimed row in the worklist, not just optional polish.
     private static readonly ActorProfile CaseyProfile = new()
     {
         VisibleQueues = ["caseworker"],
         ActionableQueues = ["caseworker"],
         RestrictToInstanceOwner = false,
-        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "juggling-licence-review" }
+        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "juggling-licence-review" },
+        TeamIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "juggling-licence-reviewers" }
     };
 
+    // njf-contributions.json's own queue is "njf-team", not "caseworker" (see
+    // docs/guides/team-assignment.md — it used to share that key with juggling-licence.json,
+    // disambiguated only by RoleGates, but now gets its own distinct, team-scoped identity).
     private static readonly ActorProfile PriyaProfile = new()
     {
-        VisibleQueues = ["caseworker"],
-        ActionableQueues = ["caseworker"],
+        VisibleQueues = ["njf-team"],
+        ActionableQueues = ["njf-team"],
         RestrictToInstanceOwner = false,
-        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-review" }
+        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-review" },
+        TeamIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-team" }
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new()

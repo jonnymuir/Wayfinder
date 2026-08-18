@@ -9,11 +9,20 @@ import { expect, type APIRequestContext, type Locator, type Page } from '@playwr
  */
 export const DEMO_USERS = {
   applicant: { email: 'applicant@example.test', password: 'wayfinder-demo' },
+  // A second, otherwise-identical applicant — proves cross-citizen isolation (see
+  // docs/guides/team-assignment.md).
+  secondApplicant: { email: 'jamie-applicant@example.test', password: 'wayfinder-demo' },
   caseworker: { email: 'caseworker@example.test', password: 'wayfinder-demo' },
+  // Shares Casey's juggling-licence-reviewers team — proves real team-tray contention (see
+  // docs/guides/team-assignment.md).
+  secondCaseworker: { email: 'jordan-reviewer@example.test', password: 'wayfinder-demo' },
   // Same CaseworkerRole as `caseworker` above (one shared backstage worklist — see
   // DemoUsers.cs's own remarks) — a distinct persona for the NJF contributions demo, not a
   // separate access boundary.
-  njfOperations: { email: 'njf-operations@example.test', password: 'wayfinder-demo' }
+  njfOperations: { email: 'njf-operations@example.test', password: 'wayfinder-demo' },
+  // Shares Priya's njf-contributions-team — proves assign-to-initiator with more than one
+  // possible actor (see docs/guides/team-assignment.md).
+  secondNjfOperations: { email: 'sam-ops@example.test', password: 'wayfinder-demo' }
 } as const;
 
 export type DemoUser = (typeof DEMO_USERS)[keyof typeof DEMO_USERS];

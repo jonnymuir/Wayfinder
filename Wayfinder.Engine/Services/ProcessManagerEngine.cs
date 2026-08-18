@@ -391,7 +391,7 @@ public class ProcessManagerEngine : IProcessManager
             var jumpAuditEvent = TransitionAuditEvent(
                 instance.InstanceId, userId, cursorId: null,
                 fromStageKey: instance.CurrentStage, toStageKey: targetStageKey, action: action, detail: "admin change-link jump");
-            if (!TrySaveInstanceIfVersionMatches(jumped, instance.StateVersion, jumpAuditEvent))
+            if (!TrySaveInstanceIfVersionMatches(jumped, userId, instance.StateVersion, jumpAuditEvent))
             {
                 return ErrorEnvelope(
                     $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
@@ -528,7 +528,7 @@ public class ProcessManagerEngine : IProcessManager
             var multiAuditEvent = TransitionAuditEvent(
                 instance.InstanceId, userId, cursorId: sourceCursor?.CursorId,
                 fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
-            if (!TrySaveInstanceIfVersionMatches(updatedMulti, instance.StateVersion, multiAuditEvent))
+            if (!TrySaveInstanceIfVersionMatches(updatedMulti, userId, instance.StateVersion, multiAuditEvent))
             {
                 return ErrorEnvelope(
                     $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
@@ -552,7 +552,7 @@ public class ProcessManagerEngine : IProcessManager
         var advanceAuditEvent = TransitionAuditEvent(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
-        if (!TrySaveInstanceIfVersionMatches(updated, instance.StateVersion, advanceAuditEvent))
+        if (!TrySaveInstanceIfVersionMatches(updated, userId, instance.StateVersion, advanceAuditEvent))
         {
             return ErrorEnvelope(
                 $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
@@ -645,13 +645,13 @@ public class ProcessManagerEngine : IProcessManager
                 ? toUserId
                 : instance.ConcurrencyScopeKey;
 
-            _instanceStore.Save(instance with
+            SaveInstance(instance with
             {
                 UserId = toUserId,
                 ConcurrencyScopeKey = concurrencyScopeKey,
                 IsAuthenticated = true,
                 UpdatedAt = DateTimeOffset.UtcNow
-            });
+            }, toUserId);
             claimed.Add(instance.InstanceId);
         }
 
@@ -702,48 +702,103 @@ public class ProcessManagerEngine : IProcessManager
                 return ErrorEnvelope($"Cursor '{cursorId}' is not accessible on this instance.", "INVALID_TRANSITION");
             }
 
-            if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
-            {
-                return ErrorEnvelope("This item is already claimed by someone else.", "ALREADY_CLAIMED");
-            }
-
-            if (ClassifyStatus(item, definition) != QueueWorkItemStatus.Actionable || accessProfile.RestrictToInstanceOwner)
+            if (accessProfile.RestrictToInstanceOwner)
             {
                 return ErrorEnvelope("This item cannot be claimed.", "NOT_CLAIMABLE");
             }
 
-            var claimedAt = DateTimeOffset.UtcNow;
-            var updatedInstance = instance.Cursors.Count == 0
-                ? instance with
-                {
-                    Cursors =
-                    [
-                        new RequestCursor
-                        {
-                            CursorId = RequestCursor.PrimaryCursorId,
-                            QueueKey = GetQueueKey(definition.Stages.FirstOrDefault(s =>
-                                string.Equals(s.StageKey, instance.CurrentStage, StringComparison.Ordinal))) ?? "",
-                            CurrentNodeKey = instance.CurrentStage,
-                            IsAtGateway = false,
-                            AssignedTo = userId,
-                            AssignedAt = claimedAt
-                        }
-                    ],
-                    StateVersion = instance.StateVersion + 1,
-                    UpdatedAt = claimedAt
-                }
-                : instance with
-                {
-                    Cursors = instance.Cursors
-                        .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
-                            ? c with { AssignedTo = userId, AssignedAt = claimedAt }
-                            : c)
-                        .ToArray(),
-                    StateVersion = instance.StateVersion + 1,
-                    UpdatedAt = claimedAt
-                };
+            ServiceRequest updatedInstance;
+            if (item.AssignmentPolicy == AssignToInitiatorPolicy)
+            {
+                // Always already owned by whoever started it — see docs/guides/team-assignment.md's
+                // reassignment scope note.
+                return ErrorEnvelope(
+                    "This item is always assigned to whoever started it — there's nothing to claim.", "NOT_CLAIMABLE");
+            }
 
-            if (TrySaveInstanceIfVersionMatches(updatedInstance, instance.StateVersion,
+            if (item.AssignmentPolicy == TeamTrayPolicy)
+            {
+                if (!accessProfile.IsTeamMember(item.AssignedTeamId))
+                {
+                    return ErrorEnvelope("You must be a member of the owning team to claim this item.", "TEAM_MEMBERSHIP_REQUIRED");
+                }
+
+                if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
+                {
+                    return ErrorEnvelope("This item is already claimed by someone else.", "ALREADY_CLAIMED");
+                }
+
+                // Not ClassifyStatus(item, definition) != Unassigned here: item was resolved via
+                // the userId-less internal peek above, so IsEntitledToActNow's "no specific actor"
+                // shortcut always reports entitled, which would make ClassifyStatus report
+                // Actionable even for a genuinely unclaimed row — EligibleActions (assignment-
+                // agnostic) is the right check for "is there really something to claim here at all".
+                if (item.EligibleActions.Count == 0)
+                {
+                    return ErrorEnvelope("This item cannot be claimed.", "NOT_CLAIMABLE");
+                }
+
+                var teamClaimedAt = DateTimeOffset.UtcNow;
+                var queueKey = item.QueueKey ?? "";
+                var existingAssignment = instance.QueueAssignments.GetValueOrDefault(queueKey);
+                var assignment = (existingAssignment
+                        ?? new QueueAssignment { QueueKey = queueKey, TeamId = item.AssignedTeamId, EstablishedAt = teamClaimedAt })
+                    with
+                { AssignedUserId = userId, AssignedAt = teamClaimedAt };
+
+                updatedInstance = instance with
+                {
+                    QueueAssignments = new Dictionary<string, QueueAssignment>(instance.QueueAssignments) { [queueKey] = assignment },
+                    StateVersion = instance.StateVersion + 1,
+                    UpdatedAt = teamClaimedAt
+                };
+            }
+            else
+            {
+                // Legacy queue — byte-for-byte the pre-team-assignment behavior.
+                if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
+                {
+                    return ErrorEnvelope("This item is already claimed by someone else.", "ALREADY_CLAIMED");
+                }
+
+                if (ClassifyStatus(item, definition) != QueueWorkItemStatus.Actionable)
+                {
+                    return ErrorEnvelope("This item cannot be claimed.", "NOT_CLAIMABLE");
+                }
+
+                var claimedAt = DateTimeOffset.UtcNow;
+                updatedInstance = instance.Cursors.Count == 0
+                    ? instance with
+                    {
+                        Cursors =
+                        [
+                            new RequestCursor
+                            {
+                                CursorId = RequestCursor.PrimaryCursorId,
+                                QueueKey = GetQueueKey(definition.Stages.FirstOrDefault(s =>
+                                    string.Equals(s.StageKey, instance.CurrentStage, StringComparison.Ordinal))) ?? "",
+                                CurrentNodeKey = instance.CurrentStage,
+                                IsAtGateway = false,
+                                AssignedTo = userId,
+                                AssignedAt = claimedAt
+                            }
+                        ],
+                        StateVersion = instance.StateVersion + 1,
+                        UpdatedAt = claimedAt
+                    }
+                    : instance with
+                    {
+                        Cursors = instance.Cursors
+                            .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
+                                ? c with { AssignedTo = userId, AssignedAt = claimedAt }
+                                : c)
+                            .ToArray(),
+                        StateVersion = instance.StateVersion + 1,
+                        UpdatedAt = claimedAt
+                    };
+            }
+
+            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
                     ClaimAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.Claimed, "claimed")))
             {
                 return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
@@ -788,28 +843,64 @@ public class ProcessManagerEngine : IProcessManager
                 return ErrorEnvelope($"Cursor '{cursorId}' not found.", "INVALID_TRANSITION");
             }
 
-            if (cursor.AssignedTo is null)
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
+
+            ServiceRequest updatedInstance;
+            if (queueDef?.AssignmentPolicy == TeamTrayPolicy)
             {
-                return BuildEnvelope(instance, definition, accessProfile, userId);
+                var queueKey = cursor.QueueKey;
+                var existingAssignment = instance.QueueAssignments.GetValueOrDefault(queueKey);
+
+                if (existingAssignment?.AssignedUserId is null)
+                {
+                    return BuildEnvelope(instance, definition, accessProfile, userId);
+                }
+
+                if (!string.Equals(existingAssignment.AssignedUserId, userId, StringComparison.Ordinal))
+                {
+                    return ErrorEnvelope("This item is claimed by someone else.", "ALREADY_CLAIMED_BY_OTHER");
+                }
+
+                // Back to the team tray — still team-owned, just not by a specific individual.
+                var released = existingAssignment with { AssignedUserId = null, AssignedAt = null };
+                updatedInstance = instance with
+                {
+                    QueueAssignments = new Dictionary<string, QueueAssignment>(instance.QueueAssignments) { [queueKey] = released },
+                    StateVersion = instance.StateVersion + 1,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+            }
+            else if (queueDef?.AssignmentPolicy == AssignToInitiatorPolicy)
+            {
+                return ErrorEnvelope(
+                    "This item is always assigned to whoever started it and can't be released.", "NOT_CLAIMABLE");
+            }
+            else
+            {
+                // Legacy queue — byte-for-byte the pre-team-assignment behavior.
+                if (cursor.AssignedTo is null)
+                {
+                    return BuildEnvelope(instance, definition, accessProfile, userId);
+                }
+
+                if (!string.Equals(cursor.AssignedTo, userId, StringComparison.Ordinal))
+                {
+                    return ErrorEnvelope("This item is claimed by someone else.", "ALREADY_CLAIMED_BY_OTHER");
+                }
+
+                updatedInstance = instance with
+                {
+                    Cursors = instance.Cursors
+                        .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
+                            ? c with { AssignedTo = null, AssignedAt = null }
+                            : c)
+                        .ToArray(),
+                    StateVersion = instance.StateVersion + 1,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
             }
 
-            if (!string.Equals(cursor.AssignedTo, userId, StringComparison.Ordinal))
-            {
-                return ErrorEnvelope("This item is claimed by someone else.", "ALREADY_CLAIMED_BY_OTHER");
-            }
-
-            var updatedInstance = instance with
-            {
-                Cursors = instance.Cursors
-                    .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
-                        ? c with { AssignedTo = null, AssignedAt = null }
-                        : c)
-                    .ToArray(),
-                StateVersion = instance.StateVersion + 1,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-
-            if (TrySaveInstanceIfVersionMatches(updatedInstance, instance.StateVersion,
+            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
                     ClaimAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.Released, "released back to pool")))
             {
                 return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
@@ -854,10 +945,16 @@ public class ProcessManagerEngine : IProcessManager
                     return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
                 }
 
+                if (accessProfile.RestrictToInstanceOwner)
+                {
+                    return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
+                }
+
                 return FindAccessibleWorkItems(instance, definition, accessProfile)
                     .Where(item => item.AssignedTo is null
-                        && !accessProfile.RestrictToInstanceOwner
-                        && ClassifyStatus(item, definition) == QueueWorkItemStatus.Actionable)
+                        && (item.AssignmentPolicy is null && ClassifyStatus(item, definition) == QueueWorkItemStatus.Actionable
+                            || item.AssignmentPolicy == TeamTrayPolicy && accessProfile.IsTeamMember(item.AssignedTeamId)
+                                && ClassifyStatus(item, definition) == QueueWorkItemStatus.Unassigned))
                     .Select(item => (Instance: instance, Definition: definition, Item: item))
                     .ToArray();
             })
@@ -888,21 +985,23 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     private static readonly IReadOnlyCollection<QueueWorkItemStatus> DefaultQueueWorkItemStatuses =
-        [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting];
+        [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting, QueueWorkItemStatus.Unassigned];
 
     /// <summary>
     /// Which bucket a work item falls into — <see langword="null"/> for a row that is none of the
-    /// three: no available actions, not waiting at a join gateway (the actor may simply lack
-    /// permission to act in that queue, or every outgoing route may be <c>showWhen</c>-hidden),
-    /// and not genuinely terminal either. Those rows stay invisible under every status filter,
-    /// including all three selected at once — the same as they always have been, deliberately not
-    /// promoted to a fourth bucket nobody asked for.
+    /// four: no eligible routes at all (the actor may simply lack permission to act in that queue,
+    /// or every outgoing route may be <c>showWhen</c>-hidden), not waiting at a join gateway, and
+    /// not genuinely terminal either. Those rows stay invisible under every status filter,
+    /// including all four selected at once — the same as they always have been. Eligible routes
+    /// exist but aren't individually available right now → <see cref="QueueWorkItemStatus.Unassigned"/>
+    /// (a team-tray row nobody has picked up — see docs/guides/team-assignment.md); eligible AND
+    /// available → <see cref="QueueWorkItemStatus.Actionable"/>.
     /// </summary>
     private static QueueWorkItemStatus? ClassifyStatus(AccessibleWorkItem item, ServiceBlueprint definition)
     {
-        if (item.AvailableActions.Count > 0)
+        if (item.EligibleActions.Count > 0)
         {
-            return QueueWorkItemStatus.Actionable;
+            return item.AvailableActions.Count > 0 ? QueueWorkItemStatus.Actionable : QueueWorkItemStatus.Unassigned;
         }
 
         if (item.IsJoinGateway)
@@ -1027,6 +1126,174 @@ public class ProcessManagerEngine : IProcessManager
         };
     }
 
+    /// <inheritdoc cref="IProcessManager.GetTeamWorkItems"/>
+    public QueueWorkListEnvelope GetTeamWorkItems(
+        string tenantId,
+        string teamId,
+        ActorProfile accessProfile,
+        IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
+        QueueWorkListSort sort = QueueWorkListSort.Default,
+        string? searchText = null,
+        int pageIndex = 0,
+        int pageSize = 20)
+    {
+        var effectiveStatuses = statuses ?? DefaultQueueWorkItemStatuses;
+        var effectivePageIndex = Math.Max(pageIndex, 0);
+        var effectivePageSize = Math.Clamp(pageSize, 1, 100);
+
+        if (!accessProfile.IsTeamMember(teamId))
+        {
+            return new QueueWorkListEnvelope { PageIndex = effectivePageIndex, PageSize = effectivePageSize };
+        }
+
+        var matched = _instanceStore.GetAll()
+            .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
+            .SelectMany(instance =>
+            {
+                if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+                {
+                    return Array.Empty<QueueWorkItem>();
+                }
+
+                instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
+
+                return FindTeamWorkItems(instance, definition, accessProfile, teamId)
+                    .Select(item => (item, status: ClassifyStatus(item, definition)))
+                    .Where(pair => pair.status is not null && effectiveStatuses.Contains(pair.status.Value))
+                    .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value, accessProfile, teamId))
+                    .Where(projected => MatchesQueueSearch(instance, projected, searchText))
+                    .ToArray();
+            })
+            .ToArray();
+
+        var orderedTeamItems = ApplyQueueWorkListSort(matched, sort);
+        var teamPage = orderedTeamItems.Skip(effectivePageIndex * effectivePageSize).Take(effectivePageSize).ToArray();
+
+        return new QueueWorkListEnvelope
+        {
+            Items = teamPage,
+            PageIndex = effectivePageIndex,
+            PageSize = effectivePageSize,
+            TotalMatchingCount = orderedTeamItems.Count
+        };
+    }
+
+    /// <summary>
+    /// Team-scoped counterpart to <see cref="FindAccessibleWorkItems"/> — every row whose queue is
+    /// owned by <paramref name="teamId"/>, regardless of which individual (if any) currently holds
+    /// it, for a team's own aggregate dashboard rather than one caller's personal actionability.
+    /// <c>AvailableActions</c> reflects whether *anyone* has picked the row up (not whether the
+    /// specific caller has) — "Actionable" here means "a teammate is already on this", not "I can
+    /// act on this". See docs/guides/team-assignment.md. Never returns a legacy-queue row (no
+    /// <c>OwningTeamId</c> to match against).
+    /// </summary>
+    private IReadOnlyList<AccessibleWorkItem> FindTeamWorkItems(
+        ServiceRequest instance, ServiceBlueprint definition, ActorProfile accessProfile, string teamId)
+    {
+        var items = new List<AccessibleWorkItem>();
+
+        if (instance.Cursors.Count == 0)
+        {
+            var stage = definition.Stages.FirstOrDefault(candidate =>
+                string.Equals(candidate.StageKey, instance.CurrentStage, StringComparison.Ordinal));
+
+            if (stage is not null)
+            {
+                var queueKey = GetQueueKey(stage);
+                var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
+                if (string.Equals(queueDef?.OwningTeamId, teamId, StringComparison.Ordinal))
+                {
+                    var queueName = ResolveQueueName(definition, stage);
+                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, legacyCursorAssignedTo: null);
+                    var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+
+                    items.Add(new AccessibleWorkItem(
+                        stage.StageKey,
+                        stage.DisplayName,
+                        queueName,
+                        queueKey,
+                        IsJoinGateway: false,
+                        eligibleActions,
+                        assignedTo is not null ? eligibleActions : [],
+                        queueDef?.AssignmentPolicy,
+                        CursorId: RequestCursor.PrimaryCursorId,
+                        AssignedTo: assignedTo,
+                        AssignedTeamId: assignedTeamId));
+                }
+            }
+
+            return items;
+        }
+
+        foreach (var cursor in instance.Cursors.Where(candidate => !candidate.IsAtGateway))
+        {
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
+            if (!string.Equals(queueDef?.OwningTeamId, teamId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var stage = definition.Stages.FirstOrDefault(candidate =>
+                string.Equals(candidate.StageKey, cursor.CurrentNodeKey, StringComparison.Ordinal));
+            if (stage is null)
+            {
+                continue;
+            }
+
+            var queueName = ResolveQueueName(definition, cursor.QueueKey);
+            var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, cursor.QueueKey, cursor.AssignedTo);
+            var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+
+            items.Add(new AccessibleWorkItem(
+                stage.StageKey,
+                stage.DisplayName,
+                queueName,
+                cursor.QueueKey,
+                IsJoinGateway: false,
+                eligibleActions,
+                assignedTo is not null ? eligibleActions : [],
+                queueDef?.AssignmentPolicy,
+                CursorId: cursor.CursorId,
+                AssignedTo: assignedTo,
+                AssignedTeamId: assignedTeamId));
+        }
+
+        foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
+        {
+            var gateway = FindGateway(definition, cursor.CurrentNodeKey);
+            if (gateway is null || !string.Equals(gateway.GatewayType, "Join", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, gateway.QueueKey, StringComparison.Ordinal));
+            if (!string.Equals(queueDef?.OwningTeamId, teamId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var queueName = ResolveQueueName(definition, gateway);
+            items.Add(new AccessibleWorkItem(
+                gateway.Key,
+                gateway.DisplayName,
+                queueName,
+                gateway.QueueKey,
+                IsJoinGateway: true,
+                [],
+                [],
+                queueDef!.AssignmentPolicy,
+                CursorId: cursor.CursorId,
+                AssignedTo: null,
+                AssignedTeamId: teamId));
+        }
+
+        return items
+            .OrderByDescending(item => string.Equals(item.StageKey, instance.CurrentStage, StringComparison.Ordinal))
+            .ThenBy(item => item.IsJoinGateway)
+            .ThenBy(item => item.StageKey, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     /// <summary>
     /// The <see cref="GetQueueWorkItems"/> counterpart to <see cref="BuildEnvelope"/>'s own
     /// poll-resolve step (see its remarks) — same check, same
@@ -1145,9 +1412,17 @@ public class ProcessManagerEngine : IProcessManager
     protected bool TryGetInstance(string instanceId, out ServiceRequest instance) =>
         _instanceStore.TryGet(instanceId, out instance!);
 
-    protected void SaveInstance(ServiceRequest instance, AuditEvent? auditEvent = null)
+    /// <summary>Queue-level assignment policy: whoever's action lands work here becomes its
+    /// individual owner immediately. See docs/guides/team-assignment.md.</summary>
+    private const string AssignToInitiatorPolicy = "assign-to-initiator";
+
+    /// <summary>Queue-level assignment policy: work lands owned by the team as a whole, pickable
+    /// by any member, actionable only once picked up. See docs/guides/team-assignment.md.</summary>
+    private const string TeamTrayPolicy = "team-tray";
+
+    protected void SaveInstance(ServiceRequest instance, string actingUserId, AuditEvent? auditEvent = null)
     {
-        _instanceStore.Save(instance);
+        _instanceStore.Save(EstablishQueueAssignmentsIfNeeded(instance, actingUserId));
         if (auditEvent is not null)
         {
             _auditLogStore.Record(auditEvent);
@@ -1161,9 +1436,9 @@ public class ProcessManagerEngine : IProcessManager
     /// item is a real, user-facing concern (see docs/guides/work-allocation.md). Records
     /// <paramref name="auditEvent"/> only when the save actually lands.
     /// </summary>
-    private bool TrySaveInstanceIfVersionMatches(ServiceRequest instance, int expectedStateVersion, AuditEvent? auditEvent)
+    private bool TrySaveInstanceIfVersionMatches(ServiceRequest instance, string actingUserId, int expectedStateVersion, AuditEvent? auditEvent)
     {
-        if (!_instanceStore.TrySaveIfVersionMatches(instance, expectedStateVersion))
+        if (!_instanceStore.TrySaveIfVersionMatches(EstablishQueueAssignmentsIfNeeded(instance, actingUserId), expectedStateVersion))
         {
             return false;
         }
@@ -1174,6 +1449,83 @@ public class ProcessManagerEngine : IProcessManager
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Establishes a durable <see cref="QueueAssignment"/> the first time any of this instance's
+    /// current cursors (or, pre-first-gateway, its own <see cref="ServiceRequest.CurrentStage"/>)
+    /// lands in a team-owned queue (<see cref="QueueDefinition.AssignmentPolicy"/> declared) it has
+    /// no existing record for — add-if-absent, never overwritten, so a later re-entry into the same
+    /// queue key reuses the same record rather than re-running that queue's policy. This is the one
+    /// hook every <see cref="SaveInstance"/>/<see cref="TrySaveInstanceIfVersionMatches"/> call goes
+    /// through — deliberately not threaded into each individual cursor-minting call site (Split
+    /// fan-out, Join arrival/release) so a future new mint site can't silently skip establishment.
+    /// A legacy queue (no <see cref="QueueDefinition.AssignmentPolicy"/>) is never touched here —
+    /// see <see cref="RequestCursor.AssignedTo"/> for that case. See docs/guides/team-assignment.md.
+    /// </summary>
+    private ServiceRequest EstablishQueueAssignmentsIfNeeded(ServiceRequest instance, string actingUserId)
+    {
+        if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+        {
+            return instance;
+        }
+
+        Dictionary<string, QueueAssignment>? additions = null;
+
+        void TryAddAssignment(string? queueKey)
+        {
+            if (string.IsNullOrWhiteSpace(queueKey)
+                || instance.QueueAssignments.ContainsKey(queueKey)
+                || additions?.ContainsKey(queueKey) == true)
+            {
+                return;
+            }
+
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
+            if (queueDef?.AssignmentPolicy is null)
+            {
+                return;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            additions ??= new Dictionary<string, QueueAssignment>();
+            additions[queueKey] = queueDef.AssignmentPolicy == AssignToInitiatorPolicy
+                ? new QueueAssignment
+                {
+                    QueueKey = queueKey,
+                    TeamId = queueDef.OwningTeamId,
+                    AssignedUserId = actingUserId,
+                    AssignedAt = now,
+                    EstablishedAt = now
+                }
+                : new QueueAssignment { QueueKey = queueKey, TeamId = queueDef.OwningTeamId, EstablishedAt = now };
+        }
+
+        if (instance.Cursors.Count == 0)
+        {
+            var stage = definition.Stages.FirstOrDefault(s => string.Equals(s.StageKey, instance.CurrentStage, StringComparison.Ordinal));
+            TryAddAssignment(GetQueueKey(stage));
+        }
+        else
+        {
+            foreach (var cursor in instance.Cursors.Where(c => !c.IsAtGateway))
+            {
+                TryAddAssignment(cursor.QueueKey);
+            }
+        }
+
+        if (additions is null)
+        {
+            return instance;
+        }
+
+        var merged = new Dictionary<string, QueueAssignment>(instance.QueueAssignments);
+        foreach (var (key, value) in additions)
+        {
+            merged[key] = value;
+        }
+
+        return instance with { QueueAssignments = merged };
     }
 
     private static AuditEvent TransitionAuditEvent(
@@ -1357,14 +1709,27 @@ public class ProcessManagerEngine : IProcessManager
                 var queueName = ResolveQueueName(definition, stage);
                 if (CanViewQueue(definition, queueKey, queueName, accessProfile))
                 {
-                    items.Add(new AccessibleWorkItem(
-                        stage.StageKey,
-                        stage.DisplayName,
-                        queueName,
-                        IsJoinGateway: false,
-                        BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile),
-                        CursorId: RequestCursor.PrimaryCursorId,
-                        AssignedTo: null));
+                    var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
+                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, legacyCursorAssignedTo: null);
+
+                    if (IsVisibleToActor(queueDef, assignedTo, accessProfile, userId))
+                    {
+                        var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+                        var availableActions = IsEntitledToActNow(queueDef, assignedTo, userId) ? eligibleActions : [];
+
+                        items.Add(new AccessibleWorkItem(
+                            stage.StageKey,
+                            stage.DisplayName,
+                            queueName,
+                            queueKey,
+                            IsJoinGateway: false,
+                            eligibleActions,
+                            availableActions,
+                            queueDef?.AssignmentPolicy,
+                            CursorId: RequestCursor.PrimaryCursorId,
+                            AssignedTo: assignedTo,
+                            AssignedTeamId: assignedTeamId));
+                    }
                 }
             }
 
@@ -1373,13 +1738,16 @@ public class ProcessManagerEngine : IProcessManager
 
         foreach (var cursor in instance.Cursors.Where(candidate => !candidate.IsAtGateway))
         {
-            // A cursor claimed by someone else is hidden entirely for every other actor — not a
-            // disabled row — the same enforcement Advance's own target resolution relies on (see
-            // docs/guides/work-allocation.md). No userId (an internal check that never resolves a
-            // specific actor, e.g. RefreshIfWaitingAtJoin peeking at the primary item) skips this
-            // filter rather than hiding everything.
-            if (userId is not null && cursor.AssignedTo is not null
-                && !string.Equals(cursor.AssignedTo, userId, StringComparison.Ordinal))
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
+            var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, cursor.QueueKey, cursor.AssignedTo);
+
+            // A row held by someone else — a specific individual on a legacy queue, or a different
+            // team member on a team-owned one — is hidden entirely, not shown-but-disabled — the
+            // same enforcement Advance's own target resolution relies on (see
+            // docs/guides/work-allocation.md and docs/guides/team-assignment.md). No userId (an
+            // internal check that never resolves a specific actor, e.g. RefreshIfWaitingAtJoin
+            // peeking at the primary item) skips this filter rather than hiding everything.
+            if (!IsVisibleToActor(queueDef, assignedTo, accessProfile, userId))
             {
                 continue;
             }
@@ -1398,14 +1766,21 @@ public class ProcessManagerEngine : IProcessManager
                 continue;
             }
 
+            var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+            var availableActions = IsEntitledToActNow(queueDef, assignedTo, userId) ? eligibleActions : [];
+
             items.Add(new AccessibleWorkItem(
                 stage.StageKey,
                 stage.DisplayName,
                 queueName,
+                cursor.QueueKey,
                 IsJoinGateway: false,
-                BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile),
+                eligibleActions,
+                availableActions,
+                queueDef?.AssignmentPolicy,
                 CursorId: cursor.CursorId,
-                AssignedTo: cursor.AssignedTo));
+                AssignedTo: assignedTo,
+                AssignedTeamId: assignedTeamId));
         }
 
         foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
@@ -1426,10 +1801,14 @@ public class ProcessManagerEngine : IProcessManager
                 gateway.Key,
                 gateway.DisplayName,
                 queueName,
+                gateway.QueueKey,
                 IsJoinGateway: true,
                 [],
+                [],
+                AssignmentPolicy: null,
                 CursorId: cursor.CursorId,
-                AssignedTo: null));
+                AssignedTo: null,
+                AssignedTeamId: null));
         }
 
         return items
@@ -1438,6 +1817,65 @@ public class ProcessManagerEngine : IProcessManager
             .ThenBy(item => item.StageKey, StringComparer.Ordinal)
             .ToArray();
     }
+
+    /// <summary>
+    /// Resolves who (if anyone) currently owns a queue's row on this instance — for a legacy queue
+    /// (no <see cref="QueueDefinition.AssignmentPolicy"/>), that's just <paramref name="legacyCursorAssignedTo"/>
+    /// (<see cref="RequestCursor.AssignedTo"/>), no team; for a team-owned queue, it's
+    /// <see cref="ServiceRequest.QueueAssignments"/> instead — <see cref="RequestCursor.AssignedTo"/>
+    /// is never touched for those. See docs/guides/team-assignment.md.
+    /// </summary>
+    private static (string? AssignedTo, string? AssignedTeamId) ResolveQueueOwnership(
+        QueueDefinition? queueDef, ServiceRequest instance, string? queueKey, string? legacyCursorAssignedTo)
+    {
+        if (queueDef?.AssignmentPolicy is null)
+        {
+            return (legacyCursorAssignedTo, null);
+        }
+
+        var assignment = instance.QueueAssignments.GetValueOrDefault(queueKey ?? "");
+        return (assignment?.AssignedUserId, assignment?.TeamId ?? queueDef.OwningTeamId);
+    }
+
+    /// <summary>
+    /// Whether a row is visible to <paramref name="userId"/> at all. Held by a specific different
+    /// individual → hidden, always (legacy or team-owned alike). Otherwise unassigned: a legacy
+    /// queue's unassigned row is visible to any eligible actor (today's behavior, unchanged); a
+    /// team-owned queue's unpicked tray row is visible only to team members — except when
+    /// <paramref name="accessProfile"/> is the synthetic <see cref="ActorProfile.UnrestrictedOwner"/>,
+    /// meaning this is an internal, system-driven call recursing with a real <paramref name="userId"/>
+    /// but no real resolved profile (e.g. <see cref="ResolveSupportSystemOutcome"/>'s webhook
+    /// resolution path) — such a call can never carry real team membership and must not be blocked
+    /// by a check it structurally can't satisfy. See docs/guides/team-assignment.md.
+    /// </summary>
+    private static bool IsVisibleToActor(QueueDefinition? queueDef, string? assignedTo, ActorProfile accessProfile, string? userId)
+    {
+        if (userId is null)
+        {
+            return true;
+        }
+
+        if (assignedTo is not null)
+        {
+            return string.Equals(assignedTo, userId, StringComparison.Ordinal);
+        }
+
+        return queueDef?.AssignmentPolicy is null
+            || accessProfile.IsTeamMember(queueDef.OwningTeamId)
+            || ReferenceEquals(accessProfile, ActorProfile.UnrestrictedOwner);
+    }
+
+    /// <summary>
+    /// Whether the caller may actually submit an eligible action right now, as opposed to merely
+    /// being allowed to see the row exists. Legacy queues and internal peeks (no <paramref name="userId"/>)
+    /// are always entitled once eligible/visible — unchanged from before this feature. A team-owned
+    /// queue's row is only ever available to whoever <see cref="ServiceRequest.QueueAssignments"/>
+    /// actually names.
+    /// </summary>
+    private static bool IsEntitledToActNow(QueueDefinition? queueDef, string? assignedTo, string? userId) =>
+        queueDef?.AssignmentPolicy is null
+        || userId is null
+        || string.Equals(assignedTo, userId, StringComparison.Ordinal);
 
     protected bool CanViewQueue(
         ServiceBlueprint definition,
@@ -1449,7 +1887,12 @@ public class ProcessManagerEngine : IProcessManager
             && HasQueueEligibility(definition, queueKey, queueName, accessProfile);
     }
 
-    protected IReadOnlyList<ServiceRequestAction> BuildAvailableActions(
+    /// <summary>
+    /// Assignment-agnostic — route/role/showWhen-gated only. See
+    /// <see cref="AccessibleWorkItem.EligibleActions"/>'s own remarks for why this is a distinct
+    /// concept from what actually renders/what <c>Advance</c> accepts.
+    /// </summary>
+    protected IReadOnlyList<ServiceRequestAction> BuildEligibleActions(
         ServiceRequest instance,
         ServiceBlueprint definition,
         string stageKey,
@@ -1653,14 +2096,29 @@ public class ProcessManagerEngine : IProcessManager
     }
 
 
+    /// <summary>
+    /// <paramref name="EligibleActions"/> is route/role/showWhen-gated only — assignment-agnostic,
+    /// feeds <see cref="ClassifyStatus"/>. <paramref name="AvailableActions"/> narrows that to
+    /// nothing unless the caller is individually entitled to act on this row *right now* — feeds
+    /// rendering (<see cref="BuildEnvelope"/>'s <c>StepContent.AvailableActions</c>) and what
+    /// <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>
+    /// will accept. Splitting these two is what lets an unassigned team-tray row stay visible and
+    /// claimable (eligible) while still rendering zero action buttons (not yet available) — see
+    /// docs/guides/team-assignment.md. <paramref name="AssignmentPolicy"/>/<paramref name="AssignedTeamId"/>
+    /// are null for a legacy queue.
+    /// </summary>
     protected sealed record AccessibleWorkItem(
         string StageKey,
         string DisplayName,
         string? QueueName,
+        string? QueueKey,
         bool IsJoinGateway,
+        IReadOnlyList<ServiceRequestAction> EligibleActions,
         IReadOnlyList<ServiceRequestAction> AvailableActions,
+        string? AssignmentPolicy,
         string CursorId,
-        string? AssignedTo)
+        string? AssignedTo,
+        string? AssignedTeamId)
     {
         public QueueWorkItem ToEnvelopeItem(
             ServiceRequest instance,
@@ -1684,10 +2142,38 @@ public class ProcessManagerEngine : IProcessManager
                 CreatedAt = instance.CreatedAt,
                 UpdatedAt = instance.UpdatedAt,
                 Status = status,
-                ClaimState = status == QueueWorkItemStatus.Actionable && !accessProfile.RestrictToInstanceOwner
-                    ? (AssignedTo is null ? QueueWorkItemClaimState.Unclaimed : QueueWorkItemClaimState.ClaimedByMe)
-                    : null
+                ClaimState = ResolveClaimState(status, accessProfile)
             };
+
+        /// <summary>
+        /// See docs/guides/work-allocation.md and docs/guides/team-assignment.md. A legacy queue's
+        /// claim state is unchanged from before this feature (Actionable + unclaimed/claimed-by-me).
+        /// A team-tray queue's Unassigned status is itself the "unclaimed, pick me up" affordance;
+        /// its Actionable status means already picked up by this caller. An assign-to-initiator
+        /// queue always has nothing to claim/release in v1 — it's already owned the moment it
+        /// exists (see docs/guides/team-assignment.md's reassignment scope note).
+        /// </summary>
+        private QueueWorkItemClaimState? ResolveClaimState(QueueWorkItemStatus status, ActorProfile accessProfile)
+        {
+            if (accessProfile.RestrictToInstanceOwner)
+            {
+                return null;
+            }
+
+            return AssignmentPolicy switch
+            {
+                null => status == QueueWorkItemStatus.Actionable
+                    ? (AssignedTo is null ? QueueWorkItemClaimState.Unclaimed : QueueWorkItemClaimState.ClaimedByMe)
+                    : null,
+                TeamTrayPolicy => status switch
+                {
+                    QueueWorkItemStatus.Unassigned => QueueWorkItemClaimState.Unclaimed,
+                    QueueWorkItemStatus.Actionable => QueueWorkItemClaimState.ClaimedByMe,
+                    _ => null
+                },
+                _ => null
+            };
+        }
     }
 
     protected static ServiceRequestResponseEnvelope ErrorEnvelope(string message, string code) =>
@@ -1719,7 +2205,7 @@ public class ProcessManagerEngine : IProcessManager
             return error;
         }
 
-        _instanceStore.Save(instance);
+        SaveInstance(instance, userId);
 
         Logger.LogInformation(logMessage, [instance.InstanceId, .. additionalLogArgs]);
         return BuildEnvelope(instance, definition, accessProfile, userId);
@@ -1802,7 +2288,7 @@ public class ProcessManagerEngine : IProcessManager
             // Last computed result is kept on the instance so a composed caller (e.g. the
             // simulation runner, which builds this engine rather than subclassing it) can
             // read raw calculated values without duplicating evaluation itself.
-            SaveInstance(instance with { LastCalculationResult = result });
+            SaveInstance(instance with { LastCalculationResult = result }, instance.UserId);
 
             return new CalculationRenderContext(definition.Calculations, fullScope, result, display);
         }
@@ -2661,7 +3147,7 @@ public class ProcessManagerEngine : IProcessManager
             }
         }
 
-        SaveInstance(updated, TransitionAuditEvent(
+        SaveInstance(updated, userId, TransitionAuditEvent(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: arrivingTransition.FromState, toStageKey: splitGateway.Key, action: arrivingTransition.Action,
             detail: $"split gateway fanned out to {newCursors.Count} cursors"));
@@ -2742,7 +3228,7 @@ public class ProcessManagerEngine : IProcessManager
                 FieldValues = Merge(instance.FieldValues, fieldValues)
             };
 
-            SaveInstance(waitingInstance, TransitionAuditEvent(
+            SaveInstance(waitingInstance, userId, TransitionAuditEvent(
                 instance.InstanceId, userId, cursorId: arrivingCursorId,
                 fromStageKey: arrivingTransition.FromState, toStageKey: gatewayKey, action: arrivingTransition.Action,
                 detail: $"arrived at join, waiting ({arrivedQueues.Count}/{requiredQueues.Count} queues)"));
@@ -3330,7 +3816,7 @@ public class ProcessManagerEngine : IProcessManager
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            SaveInstance(withResolvedInvocation);
+            SaveInstance(withResolvedInvocation, withResolvedInvocation.UserId);
 
             var advanced = Advance(
                 withResolvedInvocation.InstanceId,
@@ -3502,7 +3988,7 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = releasedFieldValues
         };
 
-        SaveInstance(releasedInstance, TransitionAuditEvent(
+        SaveInstance(releasedInstance, userId, TransitionAuditEvent(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: gatewayKey, toStageKey: selectedOutgoing[0].ToState, action: selectedOutgoing[0].Action,
             detail: "join released"));

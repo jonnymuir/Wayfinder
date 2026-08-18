@@ -145,6 +145,13 @@ builder.Services.AddWorklist(options =>
     options.RenderPage = (title, body, ctx) => PageShell.Render(title, body, ctx.User);
     options.WorklistPageTitle = "Caseworker queue";
     options.ReviewPageTitle = "Review application";
+    options.TeamWorklistPageTitle = "Team queue";
+    // See Wayfinder.Engine.Worklist's own README — a small "my work / my team's work" nav, driven
+    // by whichever teams ReferenceActors.ProfileForCaseworkerUser already resolved for the signed-
+    // in user (see docs/guides/team-assignment.md).
+    options.ResolveTeams = ctx => ReferenceActors.ProfileForCaseworkerUser(GetUserId(ctx.User)).TeamIds
+        .Select(teamId => (TeamId: teamId, DisplayName: ReferenceActors.TeamDisplayName(teamId)))
+        .ToArray();
 });
 
 var app = builder.Build();
@@ -381,8 +388,11 @@ static string RenderLoginBody(string? returnUrl, string? error)
         <p class="govuk-body">All demo accounts use the password <code class="govuk-!-font-family-sans-serif">{esc(DemoUsers.DemoPassword)}</code>.</p>
         <ul class="govuk-list govuk-list--bullet">
           <li><strong>{esc(DemoUsers.Applicant.DisplayName)}</strong> — {esc(DemoUsers.Applicant.Email)} (applicant / frontstage)</li>
+          <li><strong>{esc(DemoUsers.SecondApplicant.DisplayName)}</strong> — {esc(DemoUsers.SecondApplicant.Email)} (applicant / frontstage — a second applicant, to try cross-citizen isolation)</li>
           <li><strong>{esc(DemoUsers.Caseworker.DisplayName)}</strong> — {esc(DemoUsers.Caseworker.Email)} (caseworker / backstage, juggling licences)</li>
+          <li><strong>{esc(DemoUsers.SecondCaseworker.DisplayName)}</strong> — {esc(DemoUsers.SecondCaseworker.Email)} (caseworker / backstage, juggling licences — shares Casey's team, to try team-tray pick-up)</li>
           <li><strong>{esc(DemoUsers.NjfOperations.DisplayName)}</strong> — {esc(DemoUsers.NjfOperations.Email)} (caseworker / backstage, NJF contributions)</li>
+          <li><strong>{esc(DemoUsers.SecondNjfOperations.DisplayName)}</strong> — {esc(DemoUsers.SecondNjfOperations.Email)} (caseworker / backstage, NJF contributions — shares Priya's team, to try assign-to-initiator)</li>
         </ul>
         """;
 }

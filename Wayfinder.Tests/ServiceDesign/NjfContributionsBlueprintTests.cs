@@ -38,14 +38,21 @@ public class NjfContributionsBlueprintTests
     // exercises the wait/poll experience instead of exposing the machine-only automation stage.
     private static readonly ActorProfile CaseworkerProfile = new()
     {
-        VisibleQueues = ["caseworker"],
-        StartableQueues = ["caseworker"],
-        ActionableQueues = ["caseworker"],
+        // The real njf-contributions.json's own queue is "njf-team", not "caseworker" (see
+        // docs/guides/team-assignment.md — it used to share that key with juggling-licence.json,
+        // disambiguated only by RoleGates, but now gets its own distinct, team-scoped identity).
+        VisibleQueues = ["njf-team"],
+        StartableQueues = ["njf-team"],
+        ActionableQueues = ["njf-team"],
         RestrictToInstanceOwner = false,
-        // The real njf-contributions.json now gates its "caseworker" queue with
+        // The real njf-contributions.json now gates its "njf-team" queue with
         // roleGates: ["njf-contributions-review"] (see docs/guides/work-allocation.md) — matches
         // Wayfinder.ReferenceApp/Services/ReferenceActors.NjfOperationsProfile's own capability.
-        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-review" }
+        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-review" },
+        // assign-to-initiator (see docs/guides/team-assignment.md) doesn't strictly need this to
+        // function — establishment attributes ownership to whoever started it, not to team
+        // membership — but matches ReferenceActors.NjfOperationsProfile's own real shape.
+        TeamIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-team" }
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new()

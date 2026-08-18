@@ -127,4 +127,54 @@ test.describe('NJF contributions: terminal-aware "start a new one"', () => {
 
     await context.close();
   });
+
+  // See docs/guides/team-assignment.md — njf-team's own "assign-to-initiator" policy, as opposed
+  // to juggling-licence's team-tray one: whoever uploads a contributions file owns it immediately,
+  // a teammate on the very same team genuinely cannot see it at all (not merely "can't act on
+  // it"), and that ownership must survive resubmit's own Split/Join round trip through SafetyNet
+  // Underwriting and back into the same "njf-team" queue key — the exact frustration that
+  // motivated making assignment mandatory in the first place.
+  test('assign-to-initiator: whoever uploads owns it, blocks a teammate on the same team, and survives the resubmit round trip', async ({
+    browser
+  }) => {
+    const priyaContext = await browser.newContext({ baseURL: REFERENCE_APP });
+    const priyaPage = await priyaContext.newPage();
+    await loginAs(priyaPage, DEMO_USERS.njfOperations);
+
+    const samContext = await browser.newContext({ baseURL: REFERENCE_APP });
+    const samPage = await samContext.newPage();
+    await loginAs(samPage, DEMO_USERS.secondNjfOperations);
+
+    await test.step('Priya uploads a contributions file and owns it immediately', async () => {
+      await priyaPage.goto('/caseworker/njf-contributions/new');
+      await priyaPage.getByLabel('Contributions file').setInputFiles({
+        name: 'contributions.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(cleanCsv)
+      });
+      await priyaPage.getByRole('button', { name: 'Submit' }).click();
+      await expect(priyaPage.getByRole('heading', { name: 'Review contributions file' })).toBeVisible({ timeout: 20_000 });
+    });
+
+    await test.step("Sam, sharing Priya's own NJF team, cannot see it in the queue at all — assign-to-initiator, not a shared tray", async () => {
+      await samPage.goto('/caseworker/queue');
+      await expect(samPage.getByText('No applications match the current filters')).toBeVisible();
+    });
+
+    await test.step('Priya resubmits — a genuine Split/Join round trip through SafetyNet Underwriting and back into her own queue', async () => {
+      await priyaPage.getByRole('button', { name: 'Resubmit corrected file' }).click();
+      await expect(priyaPage.getByText('SafetyNet Underwriting is processing the contributions file.')).toBeVisible();
+      await expect(priyaPage.getByRole('heading', { name: 'Review contributions file' })).toBeVisible({ timeout: 20_000 });
+    });
+
+    await test.step("Still Priya's, not Sam's, after the round trip — the exact case that motivated mandatory assignment", async () => {
+      await samPage.goto('/caseworker/queue');
+      await expect(samPage.getByText('No applications match the current filters')).toBeVisible();
+      await priyaPage.goto('/caseworker/queue');
+      await expect(priyaPage.locator('tr', { hasText: 'Submit an NJF contributions file' })).toBeVisible();
+    });
+
+    await priyaContext.close();
+    await samContext.close();
+  });
 });
