@@ -25,12 +25,18 @@ app.MapJourney("/premium", "another-blueprint-key", "Model a premium").RequireAu
 every journey a host maps. `MapJourney` is called once per blueprint a host wants a self-service
 journey for, each with its own `prefix`, `blueprintKey`, and page title.
 
-`MapJourney` maps two routes under `prefix`, both the *same* URL — GET to view the current stage,
-POST to advance it (POST-redirect-GET back to the same URL, so a reload or a second tab never
-resubmits a stale `stateVersion`):
+`MapJourney` maps three routes under `prefix`:
 
-- `GET  {prefix}`
-- `POST {prefix}`
+- `GET  {prefix}` — the current stage. Ambient `GetCurrent`, deliberately: an ordinary visit keeps
+  showing a just-reached terminal stage forever (a returning citizen sees "Thank you", not a
+  silently-reset blank form). Automatically renders a "Start a new one" link (customize the label
+  via `MapJourney`'s own optional `startNewLabel` parameter) whenever the current response is
+  genuinely terminal — no blueprint content authoring needed for it.
+- `POST {prefix}` — advances it (POST-redirect-GET back to the same URL, so a reload or a second
+  tab never resubmits a stale `stateVersion`).
+- `GET  {prefix}/new` — the distinct "start a new one" affordance the link above points at
+  (`IProcessManager.GetCurrentOrStartFresh`): reinstates a still-in-progress instance rather than
+  abandoning it, only actually starting fresh once the existing one is genuinely terminal.
 
 ## Why a separate package from `Wayfinder.Engine.Worklist`
 

@@ -2823,6 +2823,9 @@ public class ProcessManagerEngine : IProcessManager
                             ? datasetIdValue?.ToString()
                             : null,
                         PageSize = bulkReview.PageSize,
+                        SyncedLabel = bulkReview.SyncedLabel,
+                        PendingLabel = bulkReview.PendingLabel,
+                        SinceLabel = bulkReview.SinceLabel,
                     });
                     break;
 

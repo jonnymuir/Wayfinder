@@ -281,6 +281,27 @@ Same footgun as `errorCountField` (see above) applies here just as easily forgot
 `contributionsDirtyCount` under `calculations.fields` with `source: "service"` too, or referencing
 it in `showWhen` throws and the route **stays visible regardless of the real value**.
 
+### Terminology is per-service, and configurable on the component
+
+"Pending resubmission" only makes sense for a service that literally works by resubmitting a whole
+file — a different service might revalidate some other way entirely, where that word would be
+wrong. `BulkDataReviewComponent` exposes three optional properties rather than baking in fixed
+copy:
+
+| Property | Default | `njf-contributions.json` sets it to |
+|---|---|---|
+| `syncedLabel` | `"Synced"` | *(left at the default)* |
+| `pendingLabel` | `"Needs resubmission"` | `"Pending resubmission"` |
+| `sinceLabel` | `"since the file was last checked"` | `"since the file was last submitted"` |
+
+One shared `pendingLabel` drives *both* surfaces — a row's own status text right after a correction
+saves, and the dataset-level sync-status line — so the two can never say something different from
+each other for the same blueprint. `sinceLabel` is likewise shared between the sync-status line and
+the "discard all pending changes" confirmation warning. `GovUkComponents.RenderBulkDataReview`
+resolves every default exactly once, server-side, and passes the concrete strings to the client as
+`data-wayfinder-bulk-review-*-label` attributes — `wayfinder-bulk-data-review.js` never has its own
+fallback copy to keep in sync.
+
 ### `IProcessManager.SyncServiceFields` — the general primitive underneath
 
 Nothing before this fed a value into `FieldValues` outside of `Advance`'s own transition/onEnter

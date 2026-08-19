@@ -87,7 +87,9 @@
           "type": "bulk-data-review",
           "title": "Rows needing attention",
           "datasetIdField": "contributionsDatasetId",
-          "pageSize": 20
+          "pageSize": 20,
+          "pendingLabel": "Pending resubmission",
+          "sinceLabel": "since the file was last submitted"
         }
       ],
       "actions": [

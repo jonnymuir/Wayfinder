@@ -35,9 +35,20 @@ public static class JourneyExtensions
     /// reload or a second tab never resubmits a stale <c>stateVersion</c>). A rejected submission
     /// (validation problems) renders directly instead of redirecting — state didn't change, so
     /// there's nothing stale to protect against.
+    ///
+    /// GET is deliberately ambient <c>GetCurrent</c>, not <c>GetCurrentOrStartFresh</c> — an
+    /// ordinary visit to this same link must keep showing a just-reached terminal stage forever
+    /// (a returning citizen sees "Thank you", not a silently-reset blank form; existing tests
+    /// depend on a reload behaving exactly this way). What was missing is the *other* half:
+    /// there was no way to explicitly start a new one at all once terminal — <c>{prefix}/new</c>
+    /// below is that distinct affordance (see <c>IProcessManager.GetCurrentOrStartFresh</c>'s own
+    /// remarks), and GET itself offers a link to it automatically whenever the current response
+    /// is genuinely terminal, so a host using this package gets it for free without authoring any
+    /// blueprint content for it.
     /// </summary>
     public static RouteGroupBuilder MapJourney(
-        this IEndpointRouteBuilder endpoints, string prefix, string blueprintKey, string pageTitle)
+        this IEndpointRouteBuilder endpoints, string prefix, string blueprintKey, string pageTitle,
+        string startNewLabel = "Start a new one")
     {
         var group = endpoints.MapGroup(prefix);
 
@@ -46,7 +57,24 @@ public static class JourneyExtensions
             var options = optionsAccessor.Value;
             var envelope = engine.GetCurrent(
                 blueprintKey, options.ResolveTenantId!(ctx), options.ResolveUserId(ctx), options.ResolveAccessProfile!(ctx));
-            return Results.Content(options.RenderPage!(pageTitle, renderer.RenderJourneyBody(envelope, prefix), ctx), "text/html");
+            var body = renderer.RenderJourneyBody(envelope, prefix);
+            if (envelope.ResponseState == "complete")
+            {
+                body += $"""<p class="govuk-body"><a class="govuk-link" href="{prefix}/new">{GovUk.Esc(startNewLabel)}</a></p>""";
+            }
+            return Results.Content(options.RenderPage!(pageTitle, body, ctx), "text/html");
+        });
+
+        // The distinct "start a new one" affordance — see this method's own remarks above and
+        // IProcessManager.GetCurrentOrStartFresh's. Reinstates a still-in-progress instance rather
+        // than abandoning it; only actually starts fresh once the existing one is genuinely
+        // terminal.
+        group.MapGet("/new", (HttpContext ctx, IProcessManager engine, IOptions<JourneyOptions> optionsAccessor) =>
+        {
+            var options = optionsAccessor.Value;
+            engine.GetCurrentOrStartFresh(
+                blueprintKey, options.ResolveTenantId!(ctx), options.ResolveUserId(ctx), options.ResolveAccessProfile!(ctx));
+            return Results.Redirect(prefix);
         });
 
         group.MapPost("", async (

@@ -289,8 +289,8 @@ app.MapPost("/account/logout", async (HttpContext ctx) =>
 // AddJourney() registration above — a second, independent citizen-queue demo (slider/stat-group/
 // chart-driven interactive modelling) fans out into the same backstage queue below as the first,
 // since ActorProfile/queue access is keyed by queue name, not blueprint key.
-app.MapJourney("/apply", JugglingLicenceDefinitionKey, "Apply for a juggling licence").RequireAuthorization("Applicant");
-app.MapJourney("/premium", InsuranceModellerDefinitionKey, "Model your performance insurance premium").RequireAuthorization("Applicant");
+app.MapJourney("/apply", JugglingLicenceDefinitionKey, "Apply for a juggling licence", "Apply for another licence").RequireAuthorization("Applicant");
+app.MapJourney("/premium", InsuranceModellerDefinitionKey, "Model your performance insurance premium", "Model another premium").RequireAuthorization("Applicant");
 
 // ── Backstage: the caseworker's review queue ─────────────────────────────────────────────
 

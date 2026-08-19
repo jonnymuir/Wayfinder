@@ -111,6 +111,12 @@ function applyActionBarUpdate(html) {
 function initBulkReview(root) {
   const apiBase = root.getAttribute('data-wayfinder-bulk-review-api');
   const pageSize = Number(root.getAttribute('data-wayfinder-bulk-review-page-size')) || 20;
+  // Per-service vocabulary (see BulkDataReviewComponent's own remarks) — GovUkComponents.RenderBulkDataReview
+  // has already resolved these to concrete strings (never blank), so no fallback logic is needed
+  // here too.
+  const syncedLabel = root.getAttribute('data-wayfinder-bulk-review-synced-label');
+  const pendingLabel = root.getAttribute('data-wayfinder-bulk-review-pending-label');
+  const sinceLabel = root.getAttribute('data-wayfinder-bulk-review-since-label');
   const summaryEl = root.querySelector('[data-wayfinder-bulk-review-summary]');
   const controlsEl = root.querySelector('[data-wayfinder-bulk-review-controls]');
   const rowsEl = root.querySelector('[data-wayfinder-bulk-review-rows]');
@@ -184,15 +190,16 @@ function initBulkReview(root) {
 
       state.columns = summary.columns ?? [];
       const dirtyCount = summary.dirtyRowCount ?? 0;
-      // "Synced"/"Needs resubmission", not "saved"/"unsaved" — a correction is never validated by
-      // this system itself, only by resubmitting through the external system that owns the real
-      // verdict (see docs/guides/bulk-data-review.md's sync-state section). Deliberately its own
-      // line, distinct from the per-row "Saved for resubmission" status below: that describes
-      // whether one field reached the server; this describes whether the *file as a whole* still
-      // matches what was last actually checked.
+      // syncedLabel/pendingLabel/sinceLabel, not hardcoded "saved"/"unsaved" wording — a correction
+      // is never validated by this system itself, only by resubmitting through whatever external
+      // system owns the real verdict (see docs/guides/bulk-data-review.md's sync-state section, and
+      // BulkDataReviewComponent's own remarks on why this is per-service vocabulary). Deliberately
+      // its own line, distinct from the per-row status below: that describes whether one field
+      // reached the server; this describes whether the *file as a whole* still matches what was
+      // last actually checked.
       const syncStatus = dirtyCount > 0
-        ? `<p class="govuk-body wayfinder-bulk-review__sync-status wayfinder-bulk-review__sync-status--dirty">Needs resubmission — ${escapeHtml(dirtyCount)} row${dirtyCount === 1 ? '' : 's'} changed since the file was last checked.</p>`
-        : '<p class="govuk-body wayfinder-bulk-review__sync-status">Synced with the last check.</p>';
+        ? `<p class="govuk-body wayfinder-bulk-review__sync-status wayfinder-bulk-review__sync-status--dirty">${escapeHtml(pendingLabel)} — ${escapeHtml(dirtyCount)} row${dirtyCount === 1 ? '' : 's'} changed ${escapeHtml(sinceLabel)}.</p>`
+        : `<p class="govuk-body wayfinder-bulk-review__sync-status">${escapeHtml(syncedLabel)} ${escapeHtml(sinceLabel)}.</p>`;
 
       summaryEl.innerHTML = `<p class="govuk-body">${escapeHtml(summary.totalRowCount)} rows in total &mdash; ` +
         `${escapeHtml(summary.errorRowCount)} with errors, ${escapeHtml(summary.warningRowCount)} with warnings, ` +
@@ -321,11 +328,12 @@ function initBulkReview(root) {
         }))
         .then((response) => {
           if (response.ok) {
-            // Not "Saved" — this system never validates a correction itself, only the external
-            // system a resubmit sends it to does (see loadSummary's own sync-status line above,
-            // and docs/guides/bulk-data-review.md's sync-state section for why "saved" alone was
-            // the misleading word here).
-            setSaveStatus('Saved for resubmission', 'saved');
+            // Not "Saved" — this system never validates a correction itself, only whatever
+            // external system a resubmit sends it to does (see loadSummary's own sync-status line
+            // above, and docs/guides/bulk-data-review.md's sync-state section for why "saved"
+            // alone was the misleading word here). pendingLabel, the same word the dataset-level
+            // line uses when dirty — consistent vocabulary, one property controls both.
+            setSaveStatus(pendingLabel, 'saved');
             if (!dirty) {
               pendingSaves.delete(row.rowKey);
             }

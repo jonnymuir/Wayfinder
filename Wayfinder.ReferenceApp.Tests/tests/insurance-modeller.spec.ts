@@ -58,6 +58,22 @@ test.describe('Insurance premium modeller: model, request, review', () => {
       await expect(applicantPage.getByRole('heading', { name: 'Your premium has been confirmed' })).toBeVisible();
     });
 
+    await test.step('A reload keeps showing the same confirmation — an ordinary visit must not silently reset it', async () => {
+      // requestPolicy "single" is deliberately sticky on ambient GetCurrent — a returning
+      // applicant sees "confirmed", not a blank form (see JourneyExtensions.MapJourney's own
+      // remarks). Only the distinct "Model another premium" link (below) starts fresh.
+      await applicantPage.reload();
+      await expect(applicantPage.getByRole('heading', { name: 'Your premium has been confirmed' })).toBeVisible();
+    });
+
+    await test.step('"Model another premium" is the explicit, distinct way to start fresh', async () => {
+      await applicantPage.getByRole('link', { name: 'Model another premium' }).click();
+      await expect(applicantPage.getByRole('heading', { name: 'Model your performance insurance premium' })).toBeVisible();
+      // A genuinely fresh instance, not the same confirmed one re-rendered — no stale total left
+      // over from the first modelling round.
+      await expect(applicantPage.locator('.wayfinder-stat-card--emphasis .wayfinder-stat-card__value')).toHaveText('£64');
+    });
+
     await applicantContext.close();
     await caseworkerContext.close();
   });
