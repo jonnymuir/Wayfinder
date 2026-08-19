@@ -1566,8 +1566,8 @@ public class ProcessManagerEngine : IProcessManager
     /// <summary>
     /// The audited counterpart to <see cref="IServiceRequestStore.TrySaveIfVersionMatches"/> — used
     /// by <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>'s
-    /// own plain (non-gateway) mutation paths, where two callers racing against the same unclaimed
-    /// item is a real, user-facing concern (see docs/guides/work-allocation.md). Records
+    /// own plain (non-gateway) mutation paths, where two callers racing against the same
+    /// not-yet-picked-up item is a real, user-facing concern (see docs/guides/work-allocation.md). Records
     /// <paramref name="auditEvent"/> only when the save actually lands.
     /// </summary>
     private bool TrySaveInstanceIfVersionMatches(ServiceRequest instance, string actingUserId, int expectedStateVersion, AuditEvent? auditEvent)
