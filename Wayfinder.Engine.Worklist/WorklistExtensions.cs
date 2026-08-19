@@ -270,8 +270,14 @@ public static class WorklistExtensions
             $"{prefix}/team/{Uri.EscapeDataString(team.TeamId)}", team.DisplayName,
             string.Equals(team.TeamId, currentTeamId, StringComparison.Ordinal)));
 
+        // govuk-frontend never sets font-family on body/html globally — only per typography class
+        // (.govuk-body, .govuk-link, .govuk-heading-*, ...). The "current page" label below is a
+        // bare <strong> with no typography class of its own, so without govuk-body here to cascade
+        // font-family down to it, it silently falls back to the browser's serif default — found
+        // live (rendered as Times New Roman). The <a class="govuk-link"> siblings already carry
+        // their own font-family regardless, so this is belt-and-braces for them, not a fix.
         return $"""
-            <nav class="govuk-!-margin-bottom-4">
+            <nav class="govuk-body govuk-!-margin-bottom-4">
               {NavLink(prefix, "My work", currentTeamId is null)}
               {string.Join("\n", teamLinks)}
             </nav>
