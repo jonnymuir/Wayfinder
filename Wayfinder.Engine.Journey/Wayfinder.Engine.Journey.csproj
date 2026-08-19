@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Journey</PackageId>
     <Title>Wayfinder Engine Journey</Title>
-    <Version>0.6.0</Version>
+    <Version>0.1.0</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>A default, optional single-actor journey surface — server-rendered GOV.UK markup for "get my current stage, advance it" against one blueprint (the applicant/citizen shape, as opposed to Wayfinder.Engine.Worklist's multi-item caseworker queue). A host wires it up with AddJourney()/MapJourney(prefix, blueprintKey, pageTitle) — once per blueprint it wants a self-service journey for — or ignores this package entirely and hand-writes the same routes itself.</Description>

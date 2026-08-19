@@ -27,7 +27,7 @@ public class CaseworkerQueueCrossVisibilityTests
 
     // juggling-licence.json's own "caseworker" queue is now team-tray (see
     // docs/guides/team-assignment.md) — TeamIds is required for Casey to see even her own
-    // unclaimed row in the worklist, not just optional polish.
+    // not-yet-picked-up row in the worklist, not just optional polish.
     private static readonly ActorProfile CaseyProfile = new()
     {
         VisibleQueues = ["caseworker"],
