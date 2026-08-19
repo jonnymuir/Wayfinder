@@ -221,5 +221,8 @@ together:
   is shared across both personas, so it can't hardcode either profile without locking one out of
   the other's now-gated queue.
 
-Claim/Release buttons are wired into `/caseworker/queue`'s own worklist template — claim shows
-"Claimed by you" plus a Release button; an unclaimed shared-pool row shows a Claim button.
+Claim/Release buttons are wired into `/caseworker/queue`'s own worklist template, rendered as
+"Pick up"/"Put back" — plain-English labels for what this doc and the engine API still call
+claim/release internally (see `WorklistExtensions.RenderClaimReleaseControl`'s own doc comment for
+why the rendered copy doesn't have to match the engine's internal verb). A claimed row shows a
+"With you" tag plus a Put back button; an unclaimed shared-pool row shows a Pick up button.

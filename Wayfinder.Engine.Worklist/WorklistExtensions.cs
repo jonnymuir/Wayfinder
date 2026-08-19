@@ -433,24 +433,37 @@ public static class WorklistExtensions
 
     /// <summary>
     /// See docs/guides/work-allocation.md — claim/ownership is per-cursor (or, for a team-owned
-    /// queue, per-<c>QueueAssignment</c>), orthogonal to <see cref="QueueWorkItemStatus"/>. A
-    /// Claim/Release button posts back to this same page (PRG, via the hidden "returnTo" field —
-    /// see <see cref="ResolveReturnTo"/>), so claiming never leaves a caseworker mid-way through a
+    /// queue, per-<c>QueueAssignment</c>), orthogonal to <see cref="QueueWorkItemStatus"/>. Rendered
+    /// as "pick up"/"put back" — plain-English labels for what the engine's own API still calls
+    /// claim/release internally (see docs/guides/work-allocation.md's own "claim" vocabulary,
+    /// deliberately unchanged — it matches the wider workflow-engine convention this feature's own
+    /// design follows, e.g. Camunda's "claim"/"unclaim" task lifecycle; nothing here says a host's
+    /// own rendered copy has to match its engine's internal verb). No NN/g guidance was found for
+    /// this specific term (checked); "assign to me" is the closer real-world UK-government-service
+    /// convention (e.g. MyHMCTS), but "pick up"/"put back" reads more naturally in plain English and
+    /// pairs as an obvious verb/its-opposite, which "assign"/"unassign" doesn't as cleanly.
+    ///
+    /// A pick-up/put-back button posts back to this same page (PRG, via the hidden "returnTo" field
+    /// — see <see cref="ResolveReturnTo"/>), so acting never leaves a caseworker mid-way through a
     /// stale filtered view, and never bounces someone from a team view back to their personal one.
+    /// The tag's own <c>govuk-tag</c> class bakes in a negative top/bottom margin (govuk-frontend's
+    /// own choice, so a tag sits flush inline with surrounding text) — stacked directly above a
+    /// zero-margin button that reads as visually cramped/overlapping, not two distinct controls; the
+    /// button gets its own top margin back to compensate, found live.
     /// </summary>
     private static string RenderClaimReleaseControl(QueueWorkItem item, string itemUrlPrefix, string returnTo) => item.ClaimState switch
     {
         QueueWorkItemClaimState.Unclaimed => $"""
             <form method="post" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/claim?cursorId={Uri.EscapeDataString(item.CursorId)}">
               <input type="hidden" name="returnTo" value="{GovUk.Esc(returnTo)}">
-              <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Claim</button>
+              <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Pick up</button>
             </form>
             """,
         QueueWorkItemClaimState.ClaimedByMe => $"""
-            <strong class="govuk-tag">Claimed by you</strong>
-            <form method="post" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/release?cursorId={Uri.EscapeDataString(item.CursorId)}">
+            <strong class="govuk-tag">With you</strong>
+            <form method="post" class="govuk-!-margin-top-2" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/release?cursorId={Uri.EscapeDataString(item.CursorId)}">
               <input type="hidden" name="returnTo" value="{GovUk.Esc(returnTo)}">
-              <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Release</button>
+              <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Put back</button>
             </form>
             """,
         _ => ""

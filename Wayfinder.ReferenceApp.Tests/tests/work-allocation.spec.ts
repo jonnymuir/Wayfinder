@@ -38,19 +38,19 @@ test.describe('Caseworker worklist: claim and release', () => {
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
 
-    await test.step('An unclaimed row shows a Claim button', async () => {
+    await test.step('An unclaimed row shows a Pick up button', async () => {
       await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
-      await expect(caseworkerPage.getByRole('button', { name: 'Claim' })).toBeVisible();
-      await expect(caseworkerPage.getByText('Claimed by you')).not.toBeVisible();
+      await expect(caseworkerPage.getByRole('button', { name: 'Pick up' })).toBeVisible();
+      await expect(caseworkerPage.getByText('With you')).not.toBeVisible();
     });
 
-    await test.step('Claiming shows "Claimed by you" and a Release button', async () => {
-      await caseworkerPage.getByRole('button', { name: 'Claim' }).click();
+    await test.step('Claiming shows "With you" and a Put back button', async () => {
+      await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
 
       await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
-      await expect(caseworkerPage.getByText('Claimed by you')).toBeVisible();
-      await expect(caseworkerPage.getByRole('button', { name: 'Release' })).toBeVisible();
-      await expect(caseworkerPage.getByRole('button', { name: 'Claim' })).not.toBeVisible();
+      await expect(caseworkerPage.getByText('With you')).toBeVisible();
+      await expect(caseworkerPage.getByRole('button', { name: 'Put back' })).toBeVisible();
+      await expect(caseworkerPage.getByRole('button', { name: 'Pick up' })).not.toBeVisible();
     });
 
     await test.step('The item is still fully reviewable while claimed', async () => {
@@ -60,11 +60,11 @@ test.describe('Caseworker worklist: claim and release', () => {
     });
 
     await test.step('Releasing returns the row to the unclaimed pool', async () => {
-      await caseworkerPage.getByRole('button', { name: 'Release' }).click();
+      await caseworkerPage.getByRole('button', { name: 'Put back' }).click();
 
       await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
-      await expect(caseworkerPage.getByRole('button', { name: 'Claim' })).toBeVisible();
-      await expect(caseworkerPage.getByText('Claimed by you')).not.toBeVisible();
+      await expect(caseworkerPage.getByRole('button', { name: 'Pick up' })).toBeVisible();
+      await expect(caseworkerPage.getByText('With you')).not.toBeVisible();
     });
 
     await caseworkerContext.close();

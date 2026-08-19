@@ -122,8 +122,8 @@ test.describe('File upload: risk assessment', () => {
     const caseworkerContext = await browser.newContext();
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
-    await caseworkerPage.getByRole('button', { name: 'Claim' }).click();
-    await expect(caseworkerPage.getByText('Claimed by you')).toBeVisible();
+    await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
+    await expect(caseworkerPage.getByText('With you')).toBeVisible();
     await caseworkerPage.getByRole('link', { name: 'Review' }).click();
 
     // The summary row proves IServiceRequestFileStorage's persisted reference round-trips back

@@ -115,8 +115,8 @@ test.describe('Accessibility: WCAG 2.2 AA', () => {
     await expect(page.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
     await auditPage(page, 'Caseworker queue');
 
-    await page.getByRole('button', { name: 'Claim' }).click();
-    await expect(page.getByText('Claimed by you')).toBeVisible();
+    await page.getByRole('button', { name: 'Pick up' }).click();
+    await expect(page.getByText('With you')).toBeVisible();
     await page.getByRole('link', { name: 'Review' }).click();
     await expect(page.getByRole('heading', { name: 'Review application' })).toBeVisible();
     await auditPage(page, 'Caseworker review');

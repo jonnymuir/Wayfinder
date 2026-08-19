@@ -43,13 +43,13 @@ test.describe('Team worklist: shared tray, personal vs team view', () => {
     await loginAs(jordanPage, DEMO_USERS.secondCaseworker);
 
     await test.step('Both Casey and Jordan see the unpicked row in their own personal worklist', async () => {
-      await expect(caseyPage.getByRole('button', { name: 'Claim' })).toBeVisible();
-      await expect(jordanPage.getByRole('button', { name: 'Claim' })).toBeVisible();
+      await expect(caseyPage.getByRole('button', { name: 'Pick up' })).toBeVisible();
+      await expect(jordanPage.getByRole('button', { name: 'Pick up' })).toBeVisible();
     });
 
     await test.step('Jordan picks it up', async () => {
-      await jordanPage.getByRole('button', { name: 'Claim' }).click();
-      await expect(jordanPage.getByText('Claimed by you')).toBeVisible();
+      await jordanPage.getByRole('button', { name: 'Pick up' }).click();
+      await expect(jordanPage.getByText('With you')).toBeVisible();
     });
 
     await test.step("Casey's own personal worklist no longer shows it at all", async () => {
@@ -68,15 +68,15 @@ test.describe('Team worklist: shared tray, personal vs team view', () => {
     });
 
     await test.step('Jordan releases it back to the tray', async () => {
-      await jordanPage.getByRole('button', { name: 'Release' }).click();
-      await expect(jordanPage.getByRole('button', { name: 'Claim' })).toBeVisible();
+      await jordanPage.getByRole('button', { name: 'Put back' }).click();
+      await expect(jordanPage.getByRole('button', { name: 'Pick up' })).toBeVisible();
     });
 
     await test.step('Visible again to both in their own personal worklist', async () => {
       await caseyPage.getByRole('link', { name: 'My work' }).click();
-      await expect(caseyPage.getByRole('button', { name: 'Claim' })).toBeVisible();
+      await expect(caseyPage.getByRole('button', { name: 'Pick up' })).toBeVisible();
       await jordanPage.reload();
-      await expect(jordanPage.getByRole('button', { name: 'Claim' })).toBeVisible();
+      await expect(jordanPage.getByRole('button', { name: 'Pick up' })).toBeVisible();
     });
 
     await caseyContext.close();
