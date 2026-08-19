@@ -245,6 +245,103 @@ navigation away from the current page of rows (paging, filtering, or submitting 
 stage) flushes any still-pending save first and waits for it, so a change can't be silently
 dropped by clicking away before the debounce fires.
 
+## Sync state: catching an edit made after a clean revalidation
+
+A gap in the model above, as originally shipped: `errorCountField`/`warningCountField` are only
+ever refreshed by `bulk-dataset-ingest`, which only runs on a fresh stage entry — i.e. once per
+resubmit round trip. A correction alone never touches `ServiceRequest.FieldValues` at all. So
+correcting a row *after* a clean revalidation (`errorCountField = 0`, "Accept and finish" already
+showing) was invisible to every `showWhen` gate: the edit was genuinely never re-validated by the
+external system, but nothing said so — the caseworker could finish with it anyway. Found live,
+not designed for up front.
+
+The fix adds one more count field, `dirtyCountField` — a row is "dirty" when its
+`CurrentValues` currently differs from its own `OriginalValues` (a value-diff, not a
+`Corrections.Count > 0` check: a row corrected back to its original value, by hand or via revert
+below, is no longer dirty even though its audit history isn't empty). Reset to 0 by every fresh
+ingest, same as the other three counts; kept live for the rest of the stage's dwell by
+`IProcessManager.SyncBulkDatasetSyncState`, called automatically by the correction/revert endpoints
+below.
+
+```json
+{
+  "params": {
+    "errorCountField": "contributionsErrorCount",
+    "warningCountField": "contributionsWarningCount",
+    "dirtyCountField": "contributionsDirtyCount"
+  }
+}
+```
+
+```json
+{ "trigger": "accept", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0 and contributionsDirtyCount = 0" }
+```
+
+Same footgun as `errorCountField` (see above) applies here just as easily forgotten: declare
+`contributionsDirtyCount` under `calculations.fields` with `source: "service"` too, or referencing
+it in `showWhen` throws and the route **stays visible regardless of the real value**.
+
+### `IProcessManager.SyncServiceFields` — the general primitive underneath
+
+Nothing before this fed a value into `FieldValues` outside of `Advance`'s own transition/onEnter
+pipeline. `SyncServiceFields(instanceId, tenantId, userId, accessProfile, updates)` is a new,
+genuinely general engine primitive for exactly that: a CAS-retried write (the same bounded-attempts
+shape `PickupWorkItem`/`PutbackWorkItem` already use — see docs/guides/work-allocation.md) with no
+cursor move and no onEnter/onExit actions. Its only authorization boundary — and the reason it's
+safe to expose at all — is that every key in `updates` must already be declared
+`source: "service"` under the current blueprint's `calculations.fields`; anything else is rejected
+with `NOT_SERVICE_FIELD`. That reuses an existing, already-understood blueprint concept rather than
+inventing a second one: a captured input or a formula-computed field can never be written this way,
+only a real `Advance` touches those.
+
+No separate recalculation step exists, or is needed, to make a synced value take effect: both
+`Advance` and every render path already re-derive `AvailableActions` and every calculated field
+fresh from `FieldValues` on every single call, never from a cache. Once `SyncServiceFields` lands a
+write, the very next request — whether that's the worklist re-rendering, or a direct POST of a
+route trigger — sees it. This is also why the feature is safe against a client that never calls the
+sync endpoints, has JavaScript disabled, or is actively hostile: `Advance`'s own trigger resolution
+already fails **closed**, rejecting with `INVALID_TRANSITION` any action not present in a
+freshly-rebuilt eligible-action set — it was never something this feature had to add.
+`SyncBulkDatasetSyncState(instanceId, tenantId, userId, accessProfile, datasetId)` is the
+bulk-dataset-specific caller: it resolves which `bulk-dataset-ingest` action declared `datasetId`
+(matching `datasetIdField`'s current `FieldValues` value — the same cross-reference
+`bulk-dataset-materialize` already relies on), reads that action's own `dirtyCountField`, and syncs
+it to the dataset's current dirty-row count. Deliberately narrow: it only ever touches
+`dirtyCountField` — `errorCountField`/`warningCountField`/`acceptedCountField` are the external
+system's own verdict and must never change from a local correction.
+
+### Reverting
+
+`IBulkDatasetStore.RevertCorrectionsAsync(instanceId, datasetId, revertedBy)` reverts every
+currently-dirty row back to its own `OriginalValues` in one call — a genuinely local operation, no
+round trip to the external system, so a caseworker who wants to discard their own edits isn't
+forced to wait out a real revalidation just to get back to what was last checked. Not a special
+"undo" primitive: it's implemented as an ordinary, attributable correction per differing column
+(`NewValue` = the original value), so it stays in the audit trail exactly like every other edit —
+"audit trail is data, never silently discarded" (see Performance and security below) holds here
+too. `BulkDatasetReviewExtensions` exposes it as `POST .../bulk-datasets/{datasetId}/revert`,
+scoped to the whole dataset (not a single row) — reverting one bad row at a time is possible by
+hand (retype it), but a caseworker who's made several edits and decides to bail entirely shouldn't
+have to undo them one by one.
+
+### Live route-availability updates, without a full page reload
+
+`GovUkComponentRenderer.RenderActionButtons` — the route-trigger button group `RenderForm` already
+renders inline — is a standalone, public method precisely so it can also be called from a small new
+endpoint (`GET .../{blueprintKey}/{instanceId}/action-bar`) and returned directly by the
+correction/revert endpoints, all rendering the identical fragment `RenderForm` itself would. No
+button markup is duplicated in JavaScript. The fragment carries `data-wayfinder-state-version`
+alongside the buttons — essential, not decorative: a correction/revert genuinely bumps the
+persisted `StateVersion` (exactly like a real `Advance` would), and a page that never learns the
+new value would post the stale one on its very next real submit and get rejected with
+`VERSION_MISMATCH`. `wayfinder-bulk-data-review.js` updates the page's own hidden `stateVersion`
+input on every sync, and only actually swaps the visible button group when the *set* of available
+triggers genuinely differs — most corrections don't change it at all (e.g. correcting one field on
+a row that still has other errors), and replacing a button element out from under a click already
+in flight is a real, avoidable race. No `aria-live` on the button group itself, which would
+announce on every routine sync; only a dedicated `role="status"` paragraph inside the fragment gets
+a message, and only when availability genuinely changed. Nothing here ever moves focus.
+
 ## Performance and security
 
 Both are first-class requirements of the underlying `IBulkDatasetStore`, not afterthoughts —

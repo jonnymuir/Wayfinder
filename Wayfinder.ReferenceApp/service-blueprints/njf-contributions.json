@@ -8,7 +8,8 @@
   "calculations": {
     "fields": {
       "contributionsErrorCount": { "source": "service" },
-      "contributionsWarningCount": { "source": "service" }
+      "contributionsWarningCount": { "source": "service" },
+      "contributionsDirtyCount": { "source": "service" }
     }
   },
   "queues": [
@@ -78,7 +79,8 @@
           "items": [
             { "label": "Rows with errors", "fieldKey": "contributionsErrorCount" },
             { "label": "Rows with warnings", "fieldKey": "contributionsWarningCount" },
-            { "label": "Accepted rows", "fieldKey": "contributionsAcceptedCount" }
+            { "label": "Accepted rows", "fieldKey": "contributionsAcceptedCount" },
+            { "label": "Rows changed since last check", "fieldKey": "contributionsDirtyCount" }
           ]
         },
         {
@@ -98,6 +100,7 @@
             "errorCountField": "contributionsErrorCount",
             "warningCountField": "contributionsWarningCount",
             "acceptedCountField": "contributionsAcceptedCount",
+            "dirtyCountField": "contributionsDirtyCount",
             "columns": [
               { "key": "memberRef", "title": "Member reference", "valueKind": "String", "role": "RowKey" },
               { "key": "memberName", "title": "Name", "valueKind": "String", "role": "Data", "editable": true },
@@ -115,8 +118,8 @@
       ],
       "routes": [
         { "id": "review--resubmit--split", "target": "to-support-system", "trigger": "resubmit", "label": "Resubmit corrected file" },
-        { "id": "review--accept--split", "target": "to-done", "trigger": "accept", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0" },
-        { "id": "review--accept-with-warnings--split", "target": "to-confirm-warnings", "trigger": "accept-with-warnings", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount > 0" }
+        { "id": "review--accept--split", "target": "to-done", "trigger": "accept", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0 and contributionsDirtyCount = 0" },
+        { "id": "review--accept-with-warnings--split", "target": "to-confirm-warnings", "trigger": "accept-with-warnings", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount > 0 and contributionsDirtyCount = 0" }
       ]
     },
     {
@@ -140,7 +143,7 @@
       ],
       "routes": [
         { "id": "confirm-warnings--back--split", "target": "to-review-from-warnings", "trigger": "back-to-review", "label": "Back to review", "style": "secondary" },
-        { "id": "confirm-warnings--confirm--split", "target": "to-done", "trigger": "accept", "label": "Yes, accept with warnings" }
+        { "id": "confirm-warnings--confirm--split", "target": "to-done", "trigger": "accept", "label": "Yes, accept with warnings", "showWhen": "contributionsDirtyCount = 0" }
       ]
     },
     {

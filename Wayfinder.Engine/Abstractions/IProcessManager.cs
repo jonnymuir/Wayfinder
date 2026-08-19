@@ -127,6 +127,57 @@ public interface IProcessManager
         string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile);
 
     /// <summary>
+    /// Writes <paramref name="updates"/> straight into <c>FieldValues</c> — no cursor move, no
+    /// onEnter/onExit actions, not even a stage re-evaluation beyond what merging the values
+    /// implies. For a host extension that computes something outside the normal
+    /// <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>
+    /// pipeline (a bulk-dataset row correction is the first caller — see
+    /// docs/guides/bulk-data-review.md) but still needs it to be genuinely visible to every
+    /// <c>showWhen</c>/calculation evaluation from this point on, the same way any other field
+    /// value already is. No new recalculation step exists to trigger, or is needed: both
+    /// <c>Advance</c> and every render path already re-derive <c>AvailableActions</c> and every
+    /// calculated field fresh from <c>FieldValues</c> on every single call, never from a cache —
+    /// so a value written here is picked up automatically, everywhere, starting with the very next
+    /// request. In particular this means <c>Advance</c>'s own trigger resolution — which already
+    /// fails closed against a freshly-rebuilt eligible-action set, not whatever a client claims —
+    /// enforces the *result* of a sync exactly as strictly as it enforces every other field, with
+    /// no separate authorization code required here.
+    ///
+    /// <para><b>Authorization boundary</b>: every key in <paramref name="updates"/> must be
+    /// declared under the current blueprint's own <c>calculations.fields</c> with
+    /// <c>source: "service"</c> — the same category <c>errorCountField</c>/<c>warningCountField</c>
+    /// (see docs/guides/bulk-data-review.md) already require for <c>showWhen</c> visibility. This
+    /// is deliberate, not incidental: it reuses an existing, already-understood blueprint concept
+    /// as the sole authorization boundary, rather than inventing a second one. A captured input or
+    /// a formula-computed field can never be written this way — only a real <c>Advance</c> touches
+    /// those. Returns <c>NOT_SERVICE_FIELD</c> for any key that isn't so declared.</para>
+    ///
+    /// CAS-retried the same bounded number of times as <see cref="PickupWorkItem"/> — no
+    /// <c>expectedStateVersion</c> parameter, since (like a pickup) this carries no user-typed
+    /// field edits a caller could lose by retrying against fresher data.
+    /// </summary>
+    ServiceRequestResponseEnvelope SyncServiceFields(
+        string instanceId, string tenantId, string userId, ActorProfile accessProfile,
+        Dictionary<string, object?> updates);
+
+    /// <summary>
+    /// The bulk-dataset-specific caller of <see cref="SyncServiceFields"/> — resolves which
+    /// <c>bulk-dataset-ingest</c> action declared <paramref name="datasetId"/> (the one whose own
+    /// <c>datasetIdField</c>, read from this instance's current <c>FieldValues</c>, equals it —
+    /// the same cross-reference <c>bulk-dataset-materialize</c>'s own <c>datasetIdField</c> match
+    /// already relies on), reads that action's <c>dirtyCountField</c> param, and syncs it to the
+    /// dataset's current <c>BulkDatasetSummary.DirtyRowCount</c>. A no-op — returns
+    /// <see cref="GetCurrent(string,string,string,ActorProfile,string,string)"/>'s own fresh
+    /// envelope, nothing written — when either the dataset can't be matched to a declaring action
+    /// or that action never declared <c>dirtyCountField</c> (the feature is opt-in, like every
+    /// other declared count field). Deliberately narrow: never touches <c>errorCountField</c>/
+    /// <c>warningCountField</c>/<c>acceptedCountField</c> — those are SafetyNet's own verdict and
+    /// must only ever change via a real ingest. See docs/guides/bulk-data-review.md.
+    /// </summary>
+    ServiceRequestResponseEnvelope SyncBulkDatasetSyncState(
+        string instanceId, string tenantId, string userId, ActorProfile accessProfile, string datasetId);
+
+    /// <summary>
     /// For an automated/scaled-out caller — atomically picks up the single oldest eligible,
     /// not-picked-up, Actionable row this profile can see across every instance, or <see langword="null"/>
     /// if nothing is currently available. Safe against multiple concurrent workers calling this

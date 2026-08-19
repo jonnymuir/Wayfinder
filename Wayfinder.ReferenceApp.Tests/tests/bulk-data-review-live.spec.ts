@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { LiveAppHost } from './support/live-app-host';
 import { DEMO_USERS, loginAs } from './fixtures';
 
@@ -99,6 +100,86 @@ test.describe('Bulk data review: real cross-process round trip', () => {
     await expect(page.getByText('SafetyNet Underwriting is processing the contributions file.')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Review contributions file' })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: 'Accept and finish' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Synced with the last check.')).toBeVisible();
+
+    // The real bug this whole feature exists to fix: editing a row *after* a clean revalidation
+    // must hide "Accept and finish" immediately, live, with no page reload — not just eventually,
+    // on the next navigation. Both rows are clean now, so "Needs attention" (the default filter)
+    // shows neither; switch to "All rows" to reach them.
+    await page.getByRole('button', { name: 'All rows' }).click();
+    const row1Card = page.locator('.wayfinder-bulk-review__card', { hasText: 'NJF-001' });
+    const row2Card = page.locator('.wayfinder-bulk-review__card', { hasText: 'NJF-002' });
+    await expect(row1Card).toBeVisible();
+    await expect(row2Card).toBeVisible();
+
+    // Start (but don't wait out) a second, unrelated edit on a different row first — proves the
+    // first row's own correction/live-swap round trip never disturbs it.
+    await row2Card.getByLabel('Name').fill('Robert');
+    await row1Card.getByLabel('Monthly contribution').fill('99.00');
+    await expect(page.getByRole('button', { name: 'Accept and finish' })).toHaveCount(0);
+    await expect(page.getByText('Needs resubmission')).toBeVisible();
+    // Still exactly what was just typed — a wholesale page reload would have reset it back to
+    // whatever SafetyNet last returned ("Bob").
+    await expect(row2Card.getByLabel('Name')).toHaveValue('Robert');
+
+    await expect(row1Card.getByText('Saved for resubmission')).toBeVisible();
+    await expect(row2Card.getByText('Saved for resubmission')).toBeVisible();
+
+    // Discard all pending changes — keyboard-only open, then Cancel (keyboard), proving the
+    // control is genuinely operable without a mouse and that Cancel is a real no-op first.
+    const revertTrigger = page.getByRole('button', { name: 'Discard all pending changes' });
+    await revertTrigger.focus();
+    await page.keyboard.press('Enter');
+    const revertPanel = page.getByText('This will discard every change made since the file was last checked.');
+    await expect(revertPanel).toBeVisible();
+    await expect(revertTrigger).toHaveAttribute('aria-expanded', 'true');
+
+    const axeResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(axeResults.violations, JSON.stringify(axeResults.violations, null, 2)).toEqual([]);
+
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(revertPanel).toBeHidden();
+    // Cancel must not have discarded anything.
+    await expect(page.getByText('Needs resubmission')).toBeVisible();
+    await expect(row1Card.getByLabel('Monthly contribution')).toHaveValue('99.00');
+
+    await revertTrigger.click();
+    await expect(revertPanel).toBeVisible();
+    await page.getByRole('button', { name: 'Yes, discard changes' }).click();
+
+    // Back to exactly what SafetyNet last validated, and "Accept and finish" reachable again —
+    // all without ever going back through SafetyNet a second time (a pure local operation).
+    await expect(page.getByRole('button', { name: 'Accept and finish' })).toBeVisible();
+    await expect(page.getByText('Synced with the last check.')).toBeVisible();
+    await expect(row1Card.getByLabel('Monthly contribution')).toHaveValue('15.00');
+    await expect(row2Card.getByLabel('Name')).toHaveValue('Bob');
+
+    // The failsafe, not just the UI: even a request that bypasses the page entirely and posts the
+    // "accept" trigger directly — with the genuinely current, freshly-synced stateVersion, not a
+    // stale one — must still be rejected while the dataset is dirty. Never trust the client: see
+    // ProcessManagerEngine.Advance's own fail-closed trigger resolution, proved at the unit level
+    // in SyncBulkDatasetSyncStateTests; this proves the same guarantee holds through the real HTTP
+    // surface, not just in-process.
+    await row1Card.getByLabel('Monthly contribution').fill('42.00');
+    await expect(page.getByText('Needs resubmission')).toBeVisible();
+    const currentStateVersion = await page.locator('input[name="stateVersion"]').getAttribute('value');
+    const bypassAttempt = await page.request.post(`${page.url()}/advance`, {
+      form: { action: 'accept', stateVersion: currentStateVersion ?? '0' },
+    });
+    // A rejected Advance() re-renders the same stage rather than a distinct HTTP error status —
+    // the real proof is that the instance never actually left "Review contributions file".
+    expect(bypassAttempt.ok()).toBeTruthy();
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Review contributions file' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Accept and finish' })).toHaveCount(0);
+
+    // Clean up back to a genuinely synced state via the real UI before finishing the journey.
+    await page.getByRole('button', { name: 'All rows' }).click();
+    await revertTrigger.click();
+    await page.getByRole('button', { name: 'Yes, discard changes' }).click();
+    await expect(page.getByRole('button', { name: 'Accept and finish' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Accept and finish' }).click();
 

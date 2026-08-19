@@ -97,8 +97,10 @@ public static class ServiceBlueprintAuthoringResources
         "review experience layered on top of Support Systems, for an external system that only ever " +
         "speaks whole-file-in/whole-file-out. The bulk-dataset-ingest/bulk-dataset-materialize action " +
         "convention, column role vocabulary (RowKey/Data/ResponseMatchedId/ResponseError/ResponseWarning), " +
-        "and how a BulkDataReviewComponent binds to the resulting dataset. For whoever is authoring a " +
-        "blueprint against a host with IBulkDatasetStore registered.")]
+        "how a BulkDataReviewComponent binds to the resulting dataset, and its sync-state gating " +
+        "(dirtyCountField, IProcessManager.SyncServiceFields) for catching a correction made after a " +
+        "clean revalidation before it can be finished unchecked. For whoever is authoring a blueprint " +
+        "against a host with IBulkDatasetStore registered.")]
     public static string BulkDataReview() => ReadEmbeddedDoc("bulk-data-review.md");
 
     [McpServerResource(

@@ -251,6 +251,53 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
         return Task.CompletedTask;
     }
 
+    public Task<int> RevertCorrectionsAsync(
+        string instanceId,
+        string datasetId,
+        string revertedBy,
+        CancellationToken ct = default)
+    {
+        var dataset = GetOwnedDataset(instanceId, datasetId)
+            ?? throw new KeyNotFoundException($"Dataset '{datasetId}' not found.");
+
+        var revertedAt = DateTimeOffset.UtcNow;
+        var revertedCount = 0;
+
+        lock (dataset)
+        {
+            foreach (var row in dataset.Rows)
+            {
+                if (!IsDirty(row))
+                {
+                    continue;
+                }
+
+                foreach (var (columnKey, originalValue) in row.OriginalValues)
+                {
+                    var currentValue = row.CurrentValues.GetValueOrDefault(columnKey);
+                    if (string.Equals(currentValue, originalValue, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    row.Corrections.Add(new BulkDatasetRowCorrection
+                    {
+                        ColumnKey = columnKey,
+                        PreviousValue = currentValue,
+                        NewValue = originalValue,
+                        CorrectedBy = revertedBy,
+                        CorrectedAt = revertedAt,
+                    });
+                    row.CurrentValues[columnKey] = originalValue;
+                }
+
+                revertedCount++;
+            }
+        }
+
+        return Task.FromResult(revertedCount);
+    }
+
     public async Task<ServiceRequestFileReference> MaterializeAsync(
         string instanceId,
         string datasetId,
@@ -341,6 +388,7 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
         var errorCount = dataset.Rows.Count(row => row.HasError);
         var warningCount = dataset.Rows.Count(row => row.HasWarning);
         var acceptedCount = dataset.Rows.Count(row => !row.HasError && !row.HasWarning);
+        var dirtyCount = dataset.Rows.Count(IsDirty);
 
         return new BulkDatasetSummary
         {
@@ -349,9 +397,20 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
             ErrorRowCount = errorCount,
             WarningRowCount = warningCount,
             AcceptedRowCount = acceptedCount,
+            DirtyRowCount = dirtyCount,
             Columns = dataset.Columns,
         };
     }
+
+    /// <summary>
+    /// A value-diff, not a <c>Corrections.Count &gt; 0</c> check — see
+    /// <see cref="BulkDatasetSummary.DirtyRowCount"/>'s own remarks for why. <c>CurrentValues</c>
+    /// and <c>OriginalValues</c> always share the same key set (only declared editable columns are
+    /// ever corrected, and those keys already exist from ingest), so comparing every
+    /// <c>OriginalValues</c> entry against its current counterpart is exhaustive.
+    /// </summary>
+    private static bool IsDirty(MutableRow row) =>
+        row.OriginalValues.Any(kv => !string.Equals(kv.Value, row.CurrentValues.GetValueOrDefault(kv.Key), StringComparison.Ordinal));
 
     private static bool Matches(MutableRow row, BulkDatasetRowFilter filter) => filter switch
     {

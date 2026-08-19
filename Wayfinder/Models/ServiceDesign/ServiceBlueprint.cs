@@ -747,7 +747,7 @@ public record ServiceBlueprint
     /// <summary>
     /// Every field key a <c>bulk-dataset-ingest</c> action anywhere in this blueprint declares
     /// via its <c>datasetIdField</c>/<c>errorCountField</c>/<c>warningCountField</c>/
-    /// <c>acceptedCountField</c> params —
+    /// <c>acceptedCountField</c>/<c>dirtyCountField</c> params —
     /// <see cref="ValidateDataDisplayBindings"/>'s "known field" set for stat-group/summary-list
     /// bindings, the same role <see cref="GetSupportSystemOutputFieldKeys"/> plays for a support
     /// system's own declared <c>Outputs</c>.
@@ -765,7 +765,7 @@ public record ServiceBlueprint
                     continue;
                 }
 
-                foreach (var countFieldParam in new[] { "datasetIdField", "errorCountField", "warningCountField", "acceptedCountField" })
+                foreach (var countFieldParam in new[] { "datasetIdField", "errorCountField", "warningCountField", "acceptedCountField", "dirtyCountField" })
                 {
                     var fieldKey = action.Parameters[countFieldParam]?.GetValue<string>();
                     if (!string.IsNullOrWhiteSpace(fieldKey))

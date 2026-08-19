@@ -925,6 +925,115 @@ public class ProcessManagerEngine : IProcessManager
     };
 
     /// <summary>
+    /// See <see cref="IProcessManager.SyncServiceFields"/>. Every key in <paramref name="updates"/>
+    /// is checked against <c>definition.Calculations.Fields</c> before anything is written — the
+    /// sole authorization boundary this method has — so a caller can never use this to smuggle a
+    /// write into a captured-input or formula-computed field.
+    /// </summary>
+    public ServiceRequestResponseEnvelope SyncServiceFields(
+        string instanceId, string tenantId, string userId, ActorProfile accessProfile,
+        Dictionary<string, object?> updates)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!_instanceStore.TryGet(instanceId, out var instance))
+            {
+                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+            }
+
+            if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
+            {
+                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+            }
+
+            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            {
+                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+            }
+
+            var serviceFields = definition.Calculations?.Fields;
+            foreach (var key in updates.Keys)
+            {
+                if (serviceFields is null
+                    || !serviceFields.TryGetValue(key, out var field)
+                    || !string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase))
+                {
+                    return ErrorEnvelope(
+                        $"Field '{key}' is not declared with source: \"service\" on this blueprint and cannot be synced.",
+                        "NOT_SERVICE_FIELD");
+                }
+            }
+
+            var updatedInstance = instance with
+            {
+                FieldValues = Merge(instance.FieldValues, updates),
+                StateVersion = instance.StateVersion + 1,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+
+            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion, auditEvent: null))
+            {
+                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+            }
+        }
+
+        return ErrorEnvelope(
+            $"Could not sync fields on '{instanceId}' after {maxAttempts} attempts due to concurrent updates.",
+            "SYNC_CONFLICT");
+    }
+
+    /// <summary>See <see cref="IProcessManager.SyncBulkDatasetSyncState"/>.</summary>
+    public ServiceRequestResponseEnvelope SyncBulkDatasetSyncState(
+        string instanceId, string tenantId, string userId, ActorProfile accessProfile, string datasetId)
+    {
+        if (!_instanceStore.TryGet(instanceId, out var instance))
+        {
+            return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+        }
+
+        if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+        {
+            return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+        }
+
+        var dirtyCountField = FindDeclaringBulkDatasetIngestAction(definition, instance.FieldValues, datasetId)
+            ?.Parameters["dirtyCountField"]?.GetValue<string>();
+
+        if (_bulkDatasetStore is null || string.IsNullOrWhiteSpace(dirtyCountField))
+        {
+            // Not opted in for this blueprint/dataset — same "declared-but-unused count field is a
+            // no-op" convention errorCountField/warningCountField/acceptedCountField already follow.
+            return GetCurrent(instance.BlueprintKey, tenantId, userId, accessProfile, instanceId);
+        }
+
+        var summary = _bulkDatasetStore.GetSummaryAsync(instanceId, datasetId).GetAwaiter().GetResult();
+        if (summary is null)
+        {
+            return GetCurrent(instance.BlueprintKey, tenantId, userId, accessProfile, instanceId);
+        }
+
+        return SyncServiceFields(
+            instanceId, tenantId, userId, accessProfile,
+            new Dictionary<string, object?> { [dirtyCountField] = (decimal)summary.DirtyRowCount });
+    }
+
+    /// <summary>
+    /// Finds the <c>bulk-dataset-ingest</c> action (anywhere in the blueprint) whose own
+    /// <c>datasetIdField</c>, read back off this instance's current <paramref name="fieldValues"/>,
+    /// equals <paramref name="datasetId"/> — the same cross-reference
+    /// <c>bulk-dataset-materialize</c>'s own <c>datasetIdField</c> match already relies on.
+    /// </summary>
+    private static ActionDefinition? FindDeclaringBulkDatasetIngestAction(
+        ServiceBlueprint definition, IReadOnlyDictionary<string, object?> fieldValues, string datasetId) =>
+        definition.Stages
+            .SelectMany(stage => stage.Actions ?? [])
+            .FirstOrDefault(action =>
+                string.Equals(action.Type, BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal)
+                && action.Parameters["datasetIdField"]?.GetValue<string>() is { Length: > 0 } datasetIdField
+                && string.Equals(fieldValues.GetValueOrDefault(datasetIdField) as string, datasetId, StringComparison.Ordinal));
+
+    /// <summary>
     /// See <see cref="IProcessManager.PickupNextAvailableWorkItem"/>. Scans for the oldest eligible,
     /// not-picked-up, Actionable row (by <see cref="ServiceRequest.CreatedAt"/>, tiebroken by
     /// <see cref="ServiceRequest.InstanceId"/> for determinism — the same ordering
@@ -3612,6 +3721,11 @@ public class ProcessManagerEngine : IProcessManager
         AddDeclaredCountUpdate(action, "errorCountField", result.Summary!.ErrorRowCount, updates);
         AddDeclaredCountUpdate(action, "warningCountField", result.Summary.WarningRowCount, updates);
         AddDeclaredCountUpdate(action, "acceptedCountField", result.Summary.AcceptedRowCount, updates);
+        // Always 0 immediately after a fresh ingest (a brand-new dataset starts with every row's
+        // CurrentValues equal to its own OriginalValues) — see docs/guides/bulk-data-review.md's
+        // sync-state section and SyncBulkDatasetSyncState, which is what keeps this field correct
+        // for the rest of the stage's dwell, as corrections land outside of another ingest.
+        AddDeclaredCountUpdate(action, "dirtyCountField", result.Summary.DirtyRowCount, updates);
 
         return updates;
     }

@@ -4,25 +4,28 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Models.ServiceDesign;
+using Wayfinder.Rendering.GovUk;
 
 namespace Wayfinder.Engine.Worklist;
 
 /// <summary>
 /// Maps the bulk-data-review component's own REST endpoints (see docs/guides/bulk-data-review.md)
-/// — paging/filtering, correcting a row, downloading the full reconstructed file. A separate call
-/// from <see cref="WorklistExtensions.MapWorklist"/> rather than folded into it: <see cref="IBulkDatasetStore"/>
-/// is a real DI dependency <c>MapWorklist</c>'s other routes don't need, and forcing every worklist
-/// consumer to register a dataset store just to get list/item/advance/pickup/putback would be the
-/// wrong coupling. A host that wants bulk-data-review support calls both, with the same prefix:
+/// — paging/filtering, correcting a row, reverting to last-validated values, downloading the full
+/// reconstructed file. A separate call from <see cref="WorklistExtensions.MapWorklist"/> rather
+/// than folded into it: <see cref="IBulkDatasetStore"/> is a real DI dependency
+/// <c>MapWorklist</c>'s other routes don't need, and forcing every worklist consumer to register a
+/// dataset store just to get list/item/advance/pickup/putback would be the wrong coupling. A host
+/// that wants bulk-data-review support calls both, with the same prefix:
 /// <code>
 /// app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
 /// app.MapBulkDatasetReview(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
 /// </code>
-/// Ported verbatim from Wayfinder.ReferenceApp/Program.cs. Takes no options of its own — it reuses
-/// <see cref="WorklistOptions.ResolveUserId"/> (via <see cref="IOptions{TOptions}"/>, so a host
-/// calling this always also calls <see cref="WorklistExtensions.AddWorklist"/>) purely to
-/// attribute <c>correctedBy</c> on the correct route. <c>{blueprintKey}</c> is accepted but never
-/// read in any handler — kept in every route pattern anyway, for URL-shape symmetry with
+/// Ported verbatim from Wayfinder.ReferenceApp/Program.cs. Reuses <see cref="WorklistOptions"/> (via
+/// <see cref="IOptions{TOptions}"/>, so a host calling this always also calls
+/// <see cref="WorklistExtensions.AddWorklist"/>) both to attribute <c>correctedBy</c>/<c>revertedBy</c>
+/// and — new for the sync-state feature — to resolve the tenant/access profile
+/// <see cref="IProcessManager.SyncBulkDatasetSyncState"/> needs. <c>{blueprintKey}</c> is accepted
+/// but never read in any handler — kept in every route pattern anyway, for URL-shape symmetry with
 /// <c>GovUkStageJourney.WithBulkDatasetApiUrls</c>, which already builds
 /// <c>{prefix}/{blueprintKey}/{instanceId}/bulk-datasets/...</c> from the item page.
 ///
@@ -75,15 +78,23 @@ public static class BulkDatasetReviewExtensions
             }
         });
 
+        // Both correct/revert below also sync the dataset's own dirty-row count back into
+        // FieldValues (see docs/guides/bulk-data-review.md's sync-state section) and hand back the
+        // freshly-rendered action-bar fragment in the same round trip — a client swaps it in place
+        // rather than needing a second fetch to learn whether e.g. "Accept and finish" just became
+        // unavailable. This is a UX nicety only: Advance() independently re-derives route
+        // eligibility from FieldValues on every call regardless of what any client renders or
+        // caches, so a stale/never-refreshed action bar can never let a since-blocked route through.
         group.MapPost("/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/rows/{rowKey}/correct", async (
             string blueprintKey, string instanceId, string datasetId, string rowKey,
             Dictionary<string, string?> correctedValues, HttpContext ctx, IBulkDatasetStore bulkDatasetStore,
-            IOptions<WorklistOptions> optionsAccessor) =>
+            IProcessManager engine, IOptions<WorklistOptions> optionsAccessor) =>
         {
             try
             {
-                await bulkDatasetStore.ApplyCorrectionAsync(instanceId, datasetId, rowKey, correctedValues, optionsAccessor.Value.ResolveUserId(ctx));
-                return Results.NoContent();
+                var options = optionsAccessor.Value;
+                await bulkDatasetStore.ApplyCorrectionAsync(instanceId, datasetId, rowKey, correctedValues, options.ResolveUserId(ctx));
+                return Results.Content(RenderSyncedActionBar(engine, options, ctx, instanceId, datasetId), "text/html");
             }
             catch (UnauthorizedAccessException)
             {
@@ -97,6 +108,41 @@ public static class BulkDatasetReviewExtensions
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
+        });
+
+        group.MapPost("/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/revert", async (
+            string blueprintKey, string instanceId, string datasetId, HttpContext ctx,
+            IBulkDatasetStore bulkDatasetStore, IProcessManager engine, IOptions<WorklistOptions> optionsAccessor) =>
+        {
+            try
+            {
+                var options = optionsAccessor.Value;
+                await bulkDatasetStore.RevertCorrectionsAsync(instanceId, datasetId, options.ResolveUserId(ctx));
+                return Results.Content(RenderSyncedActionBar(engine, options, ctx, instanceId, datasetId), "text/html");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.NotFound();
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        });
+
+        // The fallback path for anywhere a full state recheck already happens without a page
+        // reload (paging, filtering) — nothing here depends on the live-swap-after-correct/revert
+        // path above being reachable at all (e.g. JavaScript disabled, or the fetch simply lost a
+        // race); an explicit re-fetch always gets the current, correct answer, straight from the
+        // same rendering RenderForm's own page-load path uses.
+        group.MapGet("/{blueprintKey}/{instanceId}/action-bar", (
+            string blueprintKey, string instanceId, HttpContext ctx, IProcessManager engine,
+            IOptions<WorklistOptions> optionsAccessor) =>
+        {
+            var options = optionsAccessor.Value;
+            var envelope = engine.GetCurrent(
+                blueprintKey, options.ResolveTenantId!(ctx), options.ResolveUserId(ctx), options.ResolveAccessProfile!(ctx), instanceId);
+            return Results.Content(RenderActionBarFragment(envelope), "text/html");
         });
 
         group.MapGet("/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/download", async (
@@ -127,4 +173,17 @@ public static class BulkDatasetReviewExtensions
 
         return group;
     }
+
+    private static string RenderSyncedActionBar(
+        IProcessManager engine, WorklistOptions options, HttpContext ctx, string instanceId, string datasetId)
+    {
+        var envelope = engine.SyncBulkDatasetSyncState(
+            instanceId, options.ResolveTenantId!(ctx), options.ResolveUserId(ctx), options.ResolveAccessProfile!(ctx), datasetId);
+        return RenderActionBarFragment(envelope);
+    }
+
+    private static string RenderActionBarFragment(ServiceRequestResponseEnvelope envelope) =>
+        envelope.Render is { } render
+            ? GovUkComponentRenderer.RenderActionButtons(render.AvailableActions, envelope.StateVersion)
+            : GovUkComponentRenderer.RenderActionButtons([], envelope.StateVersion);
 }

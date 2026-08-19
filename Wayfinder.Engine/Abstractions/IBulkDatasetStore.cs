@@ -84,6 +84,19 @@ public sealed record BulkDatasetSummary
     public required int AcceptedRowCount { get; init; }
 
     /// <summary>
+    /// Rows whose <see cref="BulkDatasetRow.CurrentValues"/> currently differs from their own
+    /// <see cref="BulkDatasetRow.OriginalValues"/> — deliberately a value-diff, not a
+    /// <c>Corrections.Count &gt; 0</c> check, so a row corrected back to its original value (by
+    /// hand, or via <see cref="IBulkDatasetStore.RevertCorrectionsAsync"/>) is no longer counted
+    /// dirty even though its audit history isn't empty. Unlike <see cref="ErrorRowCount"/>/
+    /// <see cref="WarningRowCount"/> (SafetyNet's own verdict, frozen at ingest), this changes the
+    /// moment a correction lands — see docs/guides/bulk-data-review.md's sync-state section for
+    /// what a blueprint does with it (<c>dirtyCountField</c>, gating "Accept and finish" via
+    /// <c>showWhen</c> until a fresh resubmit clears it back to zero).
+    /// </summary>
+    public required int DirtyRowCount { get; init; }
+
+    /// <summary>
     /// The column schema this dataset was ingested against — a row's own <c>OriginalValues</c>/
     /// <c>CurrentValues</c> are just key→value dictionaries, with no per-column title/role/
     /// editability of their own, so a client rendering rows (see <c>wayfinder-bulk-data-review.js</c>)
@@ -176,6 +189,21 @@ public interface IBulkDatasetStore
         string rowKey,
         IReadOnlyDictionary<string, string?> correctedValues,
         string correctedBy,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Reverts every currently-dirty row (see <see cref="BulkDatasetSummary.DirtyRowCount"/>) back
+    /// to its own <see cref="BulkDatasetRow.OriginalValues"/> — an ordinary, attributable
+    /// correction per differing column (<c>NewValue</c> = that column's original value), not a
+    /// special "undo" primitive that erases history: the audit trail stays data, never silently
+    /// discarded, exactly like every other correction (see docs/guides/bulk-data-review.md). A row
+    /// that's already clean is left untouched — no-op, no phantom correction recorded against it.
+    /// Returns the number of rows reverted.
+    /// </summary>
+    Task<int> RevertCorrectionsAsync(
+        string instanceId,
+        string datasetId,
+        string revertedBy,
         CancellationToken ct = default);
 
     /// <summary>

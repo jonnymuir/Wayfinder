@@ -354,6 +354,20 @@ public static class GovUkComponents
                 </div>
                 <a class="govuk-link" href="{apiUrl}/download">Download full file</a>
               </div>
+              <div class="wayfinder-bulk-review__revert" data-wayfinder-bulk-review-revert hidden>
+                <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-revert-trigger aria-expanded="false" aria-controls="wayfinder-bulk-review-revert-panel">Discard all pending changes</button>
+                <div class="govuk-warning-text" id="wayfinder-bulk-review-revert-panel" data-wayfinder-bulk-review-revert-panel hidden tabindex="-1">
+                  <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                  <strong class="govuk-warning-text__text">
+                    <span class="govuk-visually-hidden">Warning</span>
+                    This will discard every change made since the file was last checked. This cannot be undone.
+                  </strong>
+                  <div class="govuk-button-group">
+                    <button type="button" class="govuk-button govuk-button--warning" data-wayfinder-bulk-review-revert-confirm>Yes, discard changes</button>
+                    <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-revert-cancel>Cancel</button>
+                  </div>
+                </div>
+              </div>
               <div class="wayfinder-bulk-review__rows" data-wayfinder-bulk-review-rows></div>
               <div data-wayfinder-bulk-review-pagination hidden>
                 <nav class="govuk-pagination govuk-pagination--block" aria-label="Row pages">
