@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
@@ -189,7 +190,8 @@ public class GetCurrentOrStartFreshTests
             new PassthroughContentSanitizer());
 
         var started = engine.GetCurrentOrStartFresh("split-join-terminal-check", TenantId, UserId, CaseworkerOnlyProfile);
-        var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerOnlyProfile, "send", started.StateVersion, null);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerOnlyProfile);
+        var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerOnlyProfile, "send", pickedUp.StateVersion, null);
         afterSplit.ResponseState.Should().Be("defer", "sanity check: the caseworker's own cursor is now genuinely waiting at the join");
 
         var again = engine.GetCurrentOrStartFresh("split-join-terminal-check", TenantId, UserId, CaseworkerOnlyProfile);

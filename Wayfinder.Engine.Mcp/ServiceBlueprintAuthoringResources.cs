@@ -145,6 +145,21 @@ public static class ServiceBlueprintAuthoringResources
         "building a Wayfinder host; a blueprint author only needs RoleGates.")]
     public static string WorkAllocation() => ReadEmbeddedDoc("work-allocation.md");
 
+    [McpServerResource(
+        Name = "team-assignment",
+        UriTemplate = "service-blueprint-docs://team-assignment",
+        Title = "Team-Based Work Assignment: AssignmentPolicy, Team Trays, and Initiator Ownership",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "How Wayfinder scopes pickup to a specific team (QueueDefinition.AssignmentPolicy: " +
+        "'team-tray', OwningTeamId, ActorProfile.TeamIds) or skips it entirely because a row is " +
+        "already owned the instant it exists ('assign-to-initiator'). Covers where ownership " +
+        "actually lives (ServiceRequest.QueueAssignments, not RequestCursor.AssignedTo, once a " +
+        "policy is declared) and the queue-boundary reset when an instance crosses into a " +
+        "genuinely different team-owned queue. Builds on the mandatory-pickup rule in " +
+        "work-allocation.md, which applies regardless of whether a queue declares anything here.")]
+    public static string TeamAssignment() => ReadEmbeddedDoc("team-assignment.md");
+
     private static string ReadEmbeddedDoc(string fileName)
     {
         var assembly = Assembly.GetExecutingAssembly();

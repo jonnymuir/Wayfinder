@@ -28,11 +28,13 @@ public enum QueueWorkItemStatus
     /// <summary>
     /// Eligible routes exist here — the actor has permission to act in this queue and at least one
     /// route isn't <c>showWhen</c>-hidden — but this specific row isn't individually assigned to
-    /// them yet. Only ever produced for a queue declaring <c>QueueDefinition.AssignmentPolicy</c>
-    /// (see docs/guides/team-assignment.md): a "team-tray" row nobody has picked up. Distinct from
-    /// today's legacy queues, where "eligible" and "actionable" have always been the same thing.
-    /// <c>AvailableActions</c> is always empty for these — pick it up via <c>PickupWorkItem</c> to
-    /// move to <see cref="Actionable"/>.
+    /// them yet. Produced for any genuine shared-pool queue whose accessing profile isn't
+    /// owner-restricted, whether or not that queue declares a <c>QueueDefinition.AssignmentPolicy</c>
+    /// (see docs/guides/work-allocation.md and docs/guides/team-assignment.md) — pickup is
+    /// mandatory everywhere, no per-queue opt-out; a queue declaring nothing just means any actor
+    /// already eligible to see it may pick a row up, rather than a specific team's own members
+    /// only. <c>AvailableActions</c> is always empty for these — pick it up via
+    /// <c>PickupWorkItem</c> to move to <see cref="Actionable"/>.
     /// </summary>
     Unassigned,
 }
@@ -41,19 +43,18 @@ public enum QueueWorkItemStatus
 /// Per-cursor (or, for a team-owned queue, per-<c>QueueAssignment</c>) pickup/ownership state — a
 /// genuinely different axis from <see cref="QueueWorkItemStatus"/> (status answers "what can be
 /// done"; pickup state answers "who's doing it"). Non-null only for a genuine shared-pool row on a
-/// queue whose actor profile isn't restricted to its own instances: for a legacy queue, that means
-/// <c>Status == Actionable</c> (not picked up vs. picked up by me — picking it up is what makes it
-/// actionable in the first place there); for a team-owned queue, both
-/// <see cref="QueueWorkItemStatus.Unassigned"/> (not picked up, sitting in the team tray) and
-/// <c>Actionable</c> (already picked up, by me) apply. Null everywhere else — a
-/// <see cref="QueueWorkItemStatus.Waiting"/>/<see cref="QueueWorkItemStatus.Done"/> row, an
-/// owner-restricted instance, or an "assign-to-initiator" queue (nothing to pick up — it's always
-/// already owned) has nothing to pick up. A row held by someone else — an individual on a legacy
-/// queue, or a different team member on a team-owned one — never produces a row at all for anyone
-/// but its holder (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership filter), so
-/// there is no third "picked up by someone else" value here to enumerate. See
-/// docs/guides/work-allocation.md and docs/guides/team-assignment.md — and note this is unrelated
-/// to <c>IQueueCapabilitiesProvider</c>'s own pre-existing, differently-scoped use of the word
+/// queue whose actor profile isn't restricted to its own instances: both
+/// <see cref="QueueWorkItemStatus.Unassigned"/> (not picked up yet) and <c>Actionable</c> (already
+/// picked up, by me) apply, whether or not the queue declares an <c>AssignmentPolicy</c> — pickup
+/// is mandatory everywhere. Null everywhere else — a <see cref="QueueWorkItemStatus.Waiting"/>/
+/// <see cref="QueueWorkItemStatus.Done"/> row, an owner-restricted instance, or an
+/// "assign-to-initiator" queue (nothing to pick up — it's always already owned) has nothing to
+/// pick up. A row held by someone else — an individual on a queue with no declared team, or a
+/// different team member on a team-owned one — never produces a row at all for anyone but its
+/// holder (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership filter), so there is
+/// no third "picked up by someone else" value here to enumerate. See docs/guides/work-allocation.md
+/// and docs/guides/team-assignment.md — and note this is unrelated to
+/// <c>IQueueCapabilitiesProvider</c>'s own pre-existing, differently-scoped use of the word
 /// "capability".
 /// </summary>
 public enum QueueWorkItemPickupState

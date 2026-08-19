@@ -42,6 +42,13 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     await test.step('Caseworker sees it in the shared queue alongside the licence demo', async () => {
       await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
       await expect(caseworkerPage.getByText('Model your performance insurance premium')).toBeVisible();
+
+      // This queue declares no AssignmentPolicy — pickup is still mandatory (see
+      // docs/guides/work-allocation.md), same as work-allocation.spec.ts's own juggling-licence
+      // row: nobody can review a shared-queue item they haven't picked up.
+      await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
+      await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
+
       await caseworkerPage.getByRole('link', { name: 'Review' }).click();
     });
 
@@ -136,6 +143,12 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     const caseworkerContext = await browser.newContext();
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
+
+    // This queue declares no AssignmentPolicy — pickup is still mandatory (see
+    // docs/guides/work-allocation.md).
+    await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
+    await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
+
     await caseworkerPage.getByRole('link', { name: 'Review' }).click();
     await caseworkerPage.getByRole('button', { name: 'Refer to a broker' }).click();
 

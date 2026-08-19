@@ -65,7 +65,8 @@ public class SyncServiceFieldsTests
               "queueKey": "caseworker",
               "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
               "routes": [
-                { "id": "start--finish--done", "target": "done", "trigger": "finish", "showWhen": "syncedFlag = 1" }
+                { "id": "start--finish--done", "target": "done", "trigger": "finish", "showWhen": "syncedFlag = 1" },
+                { "id": "start--hold--start", "target": "start", "trigger": "hold" }
               ]
             },
             {
@@ -101,7 +102,8 @@ public class SyncServiceFieldsTests
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", Profile);
-        started.Render!.AvailableActions.Should().NotContain(a => a.ActionKey == "finish",
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", Profile);
+        pickedUp.Render!.AvailableActions.Should().NotContain(a => a.ActionKey == "finish",
             "syncedFlag hasn't been set yet, so showWhen: \"syncedFlag = 1\" must hide the route");
 
         var synced = engine.SyncServiceFields(

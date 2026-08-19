@@ -45,6 +45,7 @@
     <EmbeddedResource Include="../docs/guides/request-concurrency.md" LogicalName="Wayfinder.Engine.Mcp.docs.request-concurrency.md" />
     <EmbeddedResource Include="../docs/guides/queue-worklist-filtering.md" LogicalName="Wayfinder.Engine.Mcp.docs.queue-worklist-filtering.md" />
     <EmbeddedResource Include="../docs/guides/work-allocation.md" LogicalName="Wayfinder.Engine.Mcp.docs.work-allocation.md" />
+    <EmbeddedResource Include="../docs/guides/team-assignment.md" LogicalName="Wayfinder.Engine.Mcp.docs.team-assignment.md" />
   </ItemGroup>
 
   <ItemGroup>

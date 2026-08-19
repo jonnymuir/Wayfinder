@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
@@ -79,9 +80,10 @@ public class RouteRequiresRoleEnforcementTests
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, ProfileWith());
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, ProfileWith());
 
-        started.Render!.AvailableActions.Should().NotContain(a => a.ActionKey == "approve");
-        started.Render.AvailableActions.Should().Contain(a => a.ActionKey == "continue", "an ungated route on the same stage stays available");
+        pickedUp.Render!.AvailableActions.Should().NotContain(a => a.ActionKey == "approve");
+        pickedUp.Render.AvailableActions.Should().Contain(a => a.ActionKey == "continue", "an ungated route on the same stage stays available");
     }
 
     [Fact]
@@ -89,8 +91,9 @@ public class RouteRequiresRoleEnforcementTests
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, ProfileWith("senior-caseworker"));
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, ProfileWith("senior-caseworker"));
 
-        started.Render!.AvailableActions.Should().Contain(a => a.ActionKey == "approve");
+        pickedUp.Render!.AvailableActions.Should().Contain(a => a.ActionKey == "approve");
     }
 
     [Fact]

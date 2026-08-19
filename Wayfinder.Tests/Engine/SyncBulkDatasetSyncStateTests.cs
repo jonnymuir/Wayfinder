@@ -151,13 +151,21 @@ public class SyncBulkDatasetSyncStateTests
         ProcessManagerEngine engine, InMemoryServiceRequestFileStorage fileStorage)
     {
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", Profile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", Profile);
         var file = await SaveCsvAsync(fileStorage, started.InstanceId, string.Join('\n', "memberRef,memberName", "NJF-001,Alice"));
 
         var atReview = engine.Advance(
-            started.InstanceId, TenantId, "alice", Profile, "submit", started.StateVersion,
+            started.InstanceId, TenantId, "alice", Profile, "submit", pickedUp.StateVersion,
             new Dictionary<string, object?> { ["contributionsFile"] = file });
 
         atReview.Render!.StateDisplayName.Should().Be("Review");
+
+        // A Split gateway always fans out to fresh, unpicked cursors (see ProcessManagerEngine's
+        // HandleSplitGatewayAdvance) — crossing into "review" doesn't carry alice's pickup of
+        // "upload" forward, so it must be picked up again before it's actionable.
+        var reviewItem = engine.GetQueueWorkItems("alice", Profile).Items.Single(i => i.InstanceId == atReview.InstanceId);
+        atReview = engine.PickupWorkItem(atReview.InstanceId, reviewItem.CursorId, TenantId, "alice", Profile);
+
         var instance = engine.GetAllInstances().Single(i => i.InstanceId == started.InstanceId);
         var datasetId = instance.FieldValues["contributionsDatasetId"].Should().BeOfType<string>().Subject;
         return (atReview, datasetId);

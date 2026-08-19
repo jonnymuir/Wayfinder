@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Abstractions;
+using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
@@ -137,8 +138,9 @@ public class AuditLogTests
     {
         var (engine, auditLog) = BuildEngine();
         var started = engine.GetCurrent("audit-log-test", TenantId, UserId, CaseworkerProfile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
 
-        engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "continue", started.StateVersion, null);
+        engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "continue", pickedUp.StateVersion, null);
 
         var events = auditLog.GetByInstance(started.InstanceId);
         var transition = events.Should().ContainSingle(e => e.EventType == AuditEventType.Transition).Subject;
@@ -170,8 +172,9 @@ public class AuditLogTests
     {
         var (engine, auditLog) = BuildEngine();
         var started = engine.GetCurrent("audit-log-test", TenantId, UserId, CaseworkerProfile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
 
-        engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", started.StateVersion, null);
+        engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", pickedUp.StateVersion, null);
 
         var events = auditLog.GetByInstance(started.InstanceId);
         var splitEvent = events.Should().ContainSingle(e => e.EventType == AuditEventType.Transition).Subject;
@@ -229,7 +232,8 @@ public class AuditLogTests
                 auditLogStore: auditLog);
 
             var started = engine.GetCurrent("audit-log-test", TenantId, UserId, CaseworkerProfile);
-            var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", started.StateVersion, null);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+            var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", pickedUp.StateVersion, null);
 
             // The caseworker's own cursor arrives at the join as part of the split's own fan-out
             // (TryReleaseJoinIfReady sees automation hasn't arrived yet, so it returns null without
@@ -261,9 +265,11 @@ public class AuditLogTests
     {
         var (engine, auditLog) = BuildEngine();
         var started1 = engine.GetCurrent("audit-log-test", TenantId, "alice", CaseworkerProfile);
-        engine.Advance(started1.InstanceId, TenantId, "alice", CaseworkerProfile, "continue", started1.StateVersion, null);
+        var pickedUp1 = engine.PickupWorkItem(started1.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", CaseworkerProfile);
+        engine.Advance(started1.InstanceId, TenantId, "alice", CaseworkerProfile, "continue", pickedUp1.StateVersion, null);
         var started2 = engine.GetCurrent("audit-log-test", TenantId, "bob", CaseworkerProfile);
-        engine.Advance(started2.InstanceId, TenantId, "bob", CaseworkerProfile, "continue", started2.StateVersion, null);
+        var pickedUp2 = engine.PickupWorkItem(started2.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "bob", CaseworkerProfile);
+        engine.Advance(started2.InstanceId, TenantId, "bob", CaseworkerProfile, "continue", pickedUp2.StateVersion, null);
 
         auditLog.Query(actor: "alice").Should().OnlyContain(e => e.Actor == "alice");
         auditLog.Query(instanceId: started2.InstanceId).Should().OnlyContain(e => e.InstanceId == started2.InstanceId);
@@ -276,7 +282,8 @@ public class AuditLogTests
     {
         var (engine, auditLog) = BuildEngine();
         var started = engine.GetCurrent("audit-log-test", TenantId, UserId, CaseworkerProfile);
-        engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "continue", started.StateVersion, null);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+        engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "continue", pickedUp.StateVersion, null);
 
         auditLog.GetByInstance(started.InstanceId).Should().NotBeEmpty();
 

@@ -35,7 +35,9 @@ scratch. It models NN/g's frontstage/backstage split
   waiting, approve or reject. The worklist's own status filter/sort/free-text search is covered
   separately — see [docs/guides/queue-worklist-filtering.md](./queue-worklist-filtering.md).
   Queue eligibility (which team can see a queue at all) and per-item pickup/ownership (Pick up/Put
-  back buttons on the worklist) are covered in [docs/guides/work-allocation.md](./work-allocation.md).
+  back buttons on the worklist) are covered in [docs/guides/work-allocation.md](./work-allocation.md);
+  scoping pickup to a specific team, or skipping it because a row is owned the instant it's
+  created, is covered in [docs/guides/team-assignment.md](./team-assignment.md).
 
 A third **support-systems** lane (a downstream/API-driven actor — the third leg of NN/g's model)
 now also runs alongside these two: **SafetyNet Underwriting**, a genuinely separate ASP.NET Core

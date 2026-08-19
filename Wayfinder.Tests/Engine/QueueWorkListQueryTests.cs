@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Abstractions;
+using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
@@ -126,27 +127,38 @@ public class QueueWorkListQueryTests
             new PassthroughContentSanitizer());
     }
 
-    private static string StartActionable(ProcessManagerEngine engine) =>
-        engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile).InstanceId;
+    // "caseworker" declares no AssignmentPolicy — pickup is still mandatory (see
+    // docs/guides/work-allocation.md), same as any other shared queue, so every fixture helper
+    // below picks its instance up before advancing (or, for StartActionable, before returning) —
+    // otherwise the row would classify as Unassigned rather than the state its name promises.
+    private static string StartActionable(ProcessManagerEngine engine)
+    {
+        var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+        engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+        return started.InstanceId;
+    }
 
     private static string CreateWaiting(ProcessManagerEngine engine)
     {
         var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
-        var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", started.StateVersion, null);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+        var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", pickedUp.StateVersion, null);
         return afterSplit.InstanceId;
     }
 
     private static string CreateDone(ProcessManagerEngine engine, Dictionary<string, object?>? fieldValues = null)
     {
         var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
-        var afterDone = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-done", started.StateVersion, fieldValues);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+        var afterDone = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-done", pickedUp.StateVersion, fieldValues);
         return afterDone.InstanceId;
     }
 
     private static string CreateOrphan(ProcessManagerEngine engine)
     {
         var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
-        var afterHidden = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-hidden", started.StateVersion, null);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+        var afterHidden = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "go-hidden", pickedUp.StateVersion, null);
         return afterHidden.InstanceId;
     }
 
@@ -269,12 +281,14 @@ public class QueueWorkListQueryTests
     {
         var engine = BuildEngine();
         var untouched = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+        engine.PickupWorkItem(untouched.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
         var toBump = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+        var toBumpPickedUp = engine.PickupWorkItem(toBump.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
         Thread.Sleep(15);
         // Advancing bumps UpdatedAt regardless of the resulting status — compare the two
         // instances' own natural ordering: the one touched more recently (afterSplit, now
         // Waiting) has a newer UpdatedAt than the untouched one (still Actionable at "start").
-        var afterSplit = engine.Advance(toBump.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", toBump.StateVersion, null);
+        var afterSplit = engine.Advance(toBump.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", toBumpPickedUp.StateVersion, null);
 
         var newestFirst = engine.GetQueueWorkItems(
             UserId, CaseworkerProfile,
@@ -466,8 +480,9 @@ public class QueueWorkListQueryTests
                 supportSystemClients: [client]);
 
             var started = engine.GetCurrent("queue-query-refresh-test", TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send", started.StateVersion, null);
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send", pickedUp.StateVersion, null);
 
             // Excluding Waiting entirely from the requested filter must not skip the refresh step
             // — a caseworker who has already unchecked "Waiting" still needs a genuinely-resolved
@@ -478,12 +493,16 @@ public class QueueWorkListQueryTests
 
             client.OnCheckStatus = (_, _) => new SupportSystemOutcome { OutcomeKey = "approved", ResultPayload = new JsonObject() };
 
+            // The join release mints a fresh, unpicked cursor on "approved" (see
+            // ProcessManagerEngine.TryReleaseJoinIfReady) — pickup is mandatory (see
+            // docs/guides/work-allocation.md), so a genuinely-resolved-but-not-yet-picked-up row
+            // is Unassigned, not Actionable, even though it must still promote itself into view.
             var afterResolution = engine.GetQueueWorkItems(
-                UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Actionable]).Items;
+                UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Unassigned]).Items;
 
             var resolved = afterResolution.Should().ContainSingle(i => i.InstanceId == afterSplit.InstanceId).Subject;
             resolved.StageKey.Should().Be("approved");
-            resolved.Status.Should().Be(QueueWorkItemStatus.Actionable);
+            resolved.Status.Should().Be(QueueWorkItemStatus.Unassigned);
         }
         finally
         {

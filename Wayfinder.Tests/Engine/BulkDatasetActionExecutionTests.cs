@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Abstractions;
+using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
@@ -263,10 +264,14 @@ public class BulkDatasetActionExecutionTests
                 SizeBytes = originalCsv.Length,
             };
 
+            // "operations" declares no AssignmentPolicy — pickup is still mandatory (see
+            // docs/guides/work-allocation.md), same as any other shared queue.
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, OperationsProfile);
+
             // Round 1: submits the real upload — bulk-dataset-materialize is a no-op (no dataset
             // id exists yet), so the client should see exactly the original upload's bytes.
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, OperationsProfile, "submit", started.StateVersion,
+                started.InstanceId, TenantId, UserId, OperationsProfile, "submit", pickedUp.StateVersion,
                 new Dictionary<string, object?> { ["contributionsFile"] = originalFileReference });
 
             afterSplit.ResponseState.Should().Be("defer");
@@ -296,8 +301,14 @@ public class BulkDatasetActionExecutionTests
             // original upload.
             client.ReadyToResolve = false;
             client.NextResponseCsv = string.Join('\n', Columns, "NJF-001,Alice,", "NJF-002,Bob,");
+
+            // The Split/Join round trip always fans into a fresh, unpicked cursor on arrival at
+            // "review" — must be picked up again before "resubmit" is actionable.
+            var reviewItem = engine.GetQueueWorkItems(UserId, OperationsProfile).Items.Single(i => i.InstanceId == resolved.InstanceId);
+            var reviewPickedUp = engine.PickupWorkItem(resolved.InstanceId, reviewItem.CursorId, TenantId, UserId, OperationsProfile);
+
             var afterResubmit = engine.Advance(
-                resolved.InstanceId, TenantId, UserId, OperationsProfile, "resubmit", resolved.StateVersion, null);
+                resolved.InstanceId, TenantId, UserId, OperationsProfile, "resubmit", reviewPickedUp.StateVersion, null);
 
             afterResubmit.ResponseState.Should().Be("defer");
             client.ReceivedFileContents.Should().HaveCount(2);

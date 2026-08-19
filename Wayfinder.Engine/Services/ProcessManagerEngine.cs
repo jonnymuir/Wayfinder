@@ -506,10 +506,21 @@ public class ProcessManagerEngine : IProcessManager
         // Regular stage transition (single- or multi-cursor).
         if (instance.Cursors.Count > 0)
         {
-            // Multi-cursor: advance only the cursor currently at this stage.
+            // Multi-cursor: advance only the cursor currently at this stage. A plain (non-gateway)
+            // hop can still cross into a differently-queued stage with no gateway in between — the
+            // cursor's own QueueKey must follow it there, or FindAccessibleWorkItems (which resolves
+            // ownership/eligibility from cursor.QueueKey directly for a non-gateway cursor) keeps
+            // checking the stage the cursor just left. Found live: PickupWorkItem mints a real
+            // cursor the first time an instance without one is picked up, which permanently switches
+            // it onto this multi-cursor path even for a blueprint with no gateways at all — before
+            // mandatory pickup, such an instance always stayed on the Cursors.Count == 0 path, which
+            // re-derives queueKey fresh from the stage on every call and never went stale.
             var sourceCursor = instance.Cursors.FirstOrDefault(c =>
                 c.CurrentNodeKey == visibleWorkItem.StageKey && !c.IsAtGateway);
-            var updatedCursors = MoveCursor(instance.Cursors, sourceCursor?.CursorId, transition.ToState, isAtGateway: false);
+            var targetStage = definition.Stages.FirstOrDefault(s => s.StageKey == transition.ToState);
+            var updatedCursors = MoveCursor(
+                instance.Cursors, sourceCursor?.CursorId, transition.ToState, isAtGateway: false,
+                newQueueKey: GetQueueKey(targetStage));
             var primaryStage = FirstActiveStageCursorKey(updatedCursors) ?? transition.ToState;
             var mergedMultiFieldValues = Merge(instance.FieldValues, fieldValues);
             var movedCursor = updatedCursors.FirstOrDefault(c => c.CursorId == sourceCursor?.CursorId);
@@ -755,13 +766,18 @@ public class ProcessManagerEngine : IProcessManager
             }
             else
             {
-                // Legacy queue — byte-for-byte the pre-team-assignment behavior.
+                // No AssignmentPolicy declared — pickup is still mandatory (see
+                // docs/guides/work-allocation.md), just not scoped to any particular team: any
+                // actor already eligible to see this queue at all may pick it up. Same
+                // EligibleActions check as the team-tray branch above, for the identical reason —
+                // ClassifyStatus would report Actionable here even for a genuinely not-picked-up
+                // row, since this call resolved the item via the userId-less internal peek.
                 if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
                 {
                     return ErrorEnvelope("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
                 }
 
-                if (ClassifyStatus(item, definition) != QueueWorkItemStatus.Actionable)
+                if (item.EligibleActions.Count == 0)
                 {
                     return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
                 }
@@ -877,7 +893,8 @@ public class ProcessManagerEngine : IProcessManager
             }
             else
             {
-                // Legacy queue — byte-for-byte the pre-team-assignment behavior.
+                // No AssignmentPolicy declared — ownership tracked on RequestCursor.AssignedTo
+                // directly rather than ServiceRequest.QueueAssignments (see ResolveQueueOwnership).
                 if (cursor.AssignedTo is null)
                 {
                     return BuildEnvelope(instance, definition, accessProfile, userId);
@@ -1059,11 +1076,19 @@ public class ProcessManagerEngine : IProcessManager
                     return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
                 }
 
+                // EligibleActions.Count > 0, not ClassifyStatus — this resolves items via the
+                // userId-less internal peek (no userId passed to FindAccessibleWorkItems below), so
+                // IsEntitledToActNow's own "no specific actor" shortcut always reports entitled,
+                // which would make ClassifyStatus report Actionable even for a genuinely
+                // not-picked-up row (the same reason PickupWorkItem's own two branches check
+                // EligibleActions rather than ClassifyStatus). Found live as a pre-existing gap:
+                // the team-tray clause here never correctly matched an unpicked row before this
+                // fix, since ClassifyStatus == Unassigned could never be true at this call site.
                 return FindAccessibleWorkItems(instance, definition, accessProfile)
                     .Where(item => item.AssignedTo is null
-                        && (item.AssignmentPolicy is null && ClassifyStatus(item, definition) == QueueWorkItemStatus.Actionable
-                            || item.AssignmentPolicy == TeamTrayPolicy && accessProfile.IsTeamMember(item.AssignedTeamId)
-                                && ClassifyStatus(item, definition) == QueueWorkItemStatus.Unassigned))
+                        && item.EligibleActions.Count > 0
+                        && (item.AssignmentPolicy is null
+                            || item.AssignmentPolicy == TeamTrayPolicy && accessProfile.IsTeamMember(item.AssignedTeamId)))
                     .Select(item => (Instance: instance, Definition: definition, Item: item))
                     .ToArray();
             })
@@ -1313,7 +1338,7 @@ public class ProcessManagerEngine : IProcessManager
                 if (string.Equals(queueDef?.OwningTeamId, teamId, StringComparison.Ordinal))
                 {
                     var queueName = ResolveQueueName(definition, stage);
-                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, legacyCursorAssignedTo: null);
+                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, cursorAssignedTo: null);
                     var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
 
                     items.Add(new AccessibleWorkItem(
@@ -1819,12 +1844,12 @@ public class ProcessManagerEngine : IProcessManager
                 if (CanViewQueue(definition, queueKey, queueName, accessProfile))
                 {
                     var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
-                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, legacyCursorAssignedTo: null);
+                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, cursorAssignedTo: null);
 
                     if (IsVisibleToActor(queueDef, assignedTo, accessProfile, userId))
                     {
                         var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
-                        var availableActions = IsEntitledToActNow(queueDef, assignedTo, userId) ? eligibleActions : [];
+                        var availableActions = IsEntitledToActNow(accessProfile, assignedTo, userId) ? eligibleActions : [];
 
                         items.Add(new AccessibleWorkItem(
                             stage.StageKey,
@@ -1876,7 +1901,7 @@ public class ProcessManagerEngine : IProcessManager
             }
 
             var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
-            var availableActions = IsEntitledToActNow(queueDef, assignedTo, userId) ? eligibleActions : [];
+            var availableActions = IsEntitledToActNow(accessProfile, assignedTo, userId) ? eligibleActions : [];
 
             items.Add(new AccessibleWorkItem(
                 stage.StageKey,
@@ -1928,18 +1953,19 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     /// <summary>
-    /// Resolves who (if anyone) currently owns a queue's row on this instance — for a legacy queue
-    /// (no <see cref="QueueDefinition.AssignmentPolicy"/>), that's just <paramref name="legacyCursorAssignedTo"/>
-    /// (<see cref="RequestCursor.AssignedTo"/>), no team; for a team-owned queue, it's
-    /// <see cref="ServiceRequest.QueueAssignments"/> instead — <see cref="RequestCursor.AssignedTo"/>
-    /// is never touched for those. See docs/guides/team-assignment.md.
+    /// Resolves who (if anyone) currently owns a queue's row on this instance — for a queue with no
+    /// declared <see cref="QueueDefinition.AssignmentPolicy"/>, that's just
+    /// <paramref name="cursorAssignedTo"/> (<see cref="RequestCursor.AssignedTo"/>), no team; for a
+    /// team-owned queue, it's <see cref="ServiceRequest.QueueAssignments"/> instead —
+    /// <see cref="RequestCursor.AssignedTo"/> is never touched for those. See
+    /// docs/guides/team-assignment.md.
     /// </summary>
     private static (string? AssignedTo, string? AssignedTeamId) ResolveQueueOwnership(
-        QueueDefinition? queueDef, ServiceRequest instance, string? queueKey, string? legacyCursorAssignedTo)
+        QueueDefinition? queueDef, ServiceRequest instance, string? queueKey, string? cursorAssignedTo)
     {
         if (queueDef?.AssignmentPolicy is null)
         {
-            return (legacyCursorAssignedTo, null);
+            return (cursorAssignedTo, null);
         }
 
         var assignment = instance.QueueAssignments.GetValueOrDefault(queueKey ?? "");
@@ -1948,14 +1974,16 @@ public class ProcessManagerEngine : IProcessManager
 
     /// <summary>
     /// Whether a row is visible to <paramref name="userId"/> at all. Held by a specific different
-    /// individual → hidden, always (legacy or team-owned alike). Otherwise unassigned: a legacy
-    /// queue's unassigned row is visible to any eligible actor (today's behavior, unchanged); a
-    /// team-owned queue's unpicked tray row is visible only to team members — except when
-    /// <paramref name="accessProfile"/> is the synthetic <see cref="ActorProfile.UnrestrictedOwner"/>,
-    /// meaning this is an internal, system-driven call recursing with a real <paramref name="userId"/>
-    /// but no real resolved profile (e.g. <see cref="ResolveSupportSystemOutcome"/>'s webhook
-    /// resolution path) — such a call can never carry real team membership and must not be blocked
-    /// by a check it structurally can't satisfy. See docs/guides/team-assignment.md.
+    /// individual → hidden, always (whether or not the queue declares a team). Otherwise not yet
+    /// picked up: a queue with no declared team is visible to any eligible actor (pickup is
+    /// mandatory to *act*, but every eligible actor still needs to be able to see the row exists in
+    /// order to pick it up at all); a team-owned queue's unpicked tray row is visible only to team
+    /// members — except when <paramref name="accessProfile"/> is the synthetic
+    /// <see cref="ActorProfile.UnrestrictedOwner"/>, meaning this is an internal, system-driven call
+    /// recursing with a real <paramref name="userId"/> but no real resolved profile (e.g.
+    /// <see cref="ResolveSupportSystemOutcome"/>'s webhook resolution path) — such a call can never
+    /// carry real team membership and must not be blocked by a check it structurally can't satisfy.
+    /// See docs/guides/team-assignment.md.
     /// </summary>
     private static bool IsVisibleToActor(QueueDefinition? queueDef, string? assignedTo, ActorProfile accessProfile, string? userId)
     {
@@ -1976,13 +2004,20 @@ public class ProcessManagerEngine : IProcessManager
 
     /// <summary>
     /// Whether the caller may actually submit an eligible action right now, as opposed to merely
-    /// being allowed to see the row exists. Legacy queues and internal peeks (no <paramref name="userId"/>)
-    /// are always entitled once eligible/visible — unchanged from before this feature. A team-owned
-    /// queue's row is only ever available to whoever <see cref="ServiceRequest.QueueAssignments"/>
-    /// actually names.
+    /// being allowed to see the row exists. The rule is universal, no per-queue opt-out: if a row
+    /// isn't assigned to <paramref name="userId"/>, they can't act on it, full stop — whether that
+    /// queue declares a <c>QueueDefinition.AssignmentPolicy</c> or not. A queue declaring nothing
+    /// still requires an explicit <c>PickupWorkItem</c> first (see docs/guides/work-allocation.md);
+    /// it's simply not scoped to any particular team the way <c>"team-tray"</c> is, so any actor
+    /// already eligible to see the queue at all may pick it up. The one genuine exemption is
+    /// <paramref name="accessProfile"/>.<see cref="ActorProfile.RestrictToInstanceOwner"/> — an
+    /// owner-restricted (citizen-style) profile's own instance has exactly one possible actor by
+    /// construction, so "assignment" isn't a concept that applies there at all (the same
+    /// discriminator <see cref="AccessibleWorkItem.ResolvePickupState"/> already uses for the
+    /// identical reason). Internal peeks (no <paramref name="userId"/>) are always entitled too.
     /// </summary>
-    private static bool IsEntitledToActNow(QueueDefinition? queueDef, string? assignedTo, string? userId) =>
-        queueDef?.AssignmentPolicy is null
+    private static bool IsEntitledToActNow(ActorProfile accessProfile, string? assignedTo, string? userId) =>
+        accessProfile.RestrictToInstanceOwner
         || userId is null
         || string.Equals(assignedTo, userId, StringComparison.Ordinal);
 
@@ -2255,12 +2290,13 @@ public class ProcessManagerEngine : IProcessManager
             };
 
         /// <summary>
-        /// See docs/guides/work-allocation.md and docs/guides/team-assignment.md. A legacy queue's
-        /// pickup state is unchanged from before this feature (Actionable + not-picked-up/picked-up-by-me).
-        /// A team-tray queue's Unassigned status is itself the "not picked up, pick me up" affordance;
-        /// its Actionable status means already picked up by this caller. An assign-to-initiator
-        /// queue always has nothing to pick up/put back in v1 — it's already owned the moment it
-        /// exists (see docs/guides/team-assignment.md's reassignment scope note).
+        /// See docs/guides/work-allocation.md and docs/guides/team-assignment.md. A queue with no
+        /// declared <c>AssignmentPolicy</c> behaves identically to <c>"team-tray"</c> here — pickup
+        /// is mandatory either way, the only difference is team-tray additionally scopes who may
+        /// pick a row up to a specific team's own members. Unassigned status is itself the "not
+        /// picked up, pick me up" affordance; Actionable means already picked up by this caller. An
+        /// assign-to-initiator queue always has nothing to pick up/put back — it's already owned
+        /// the moment it exists (see docs/guides/team-assignment.md's reassignment scope note).
         /// </summary>
         private QueueWorkItemPickupState? ResolvePickupState(QueueWorkItemStatus status, ActorProfile accessProfile)
         {
@@ -2271,10 +2307,7 @@ public class ProcessManagerEngine : IProcessManager
 
             return AssignmentPolicy switch
             {
-                null => status == QueueWorkItemStatus.Actionable
-                    ? (AssignedTo is null ? QueueWorkItemPickupState.NotPickedUp : QueueWorkItemPickupState.PickedUpByMe)
-                    : null,
-                TeamTrayPolicy => status switch
+                null or TeamTrayPolicy => status switch
                 {
                     QueueWorkItemStatus.Unassigned => QueueWorkItemPickupState.NotPickedUp,
                     QueueWorkItemStatus.Actionable => QueueWorkItemPickupState.PickedUpByMe,
@@ -4117,14 +4150,21 @@ public class ProcessManagerEngine : IProcessManager
         string? cursorId,
         string newNodeKey,
         bool isAtGateway,
-        string? arrivedViaAction = null)
+        string? arrivedViaAction = null,
+        string? newQueueKey = null)
     {
         if (cursorId == null)
             return cursors;
 
         return cursors
             .Select(c => c.CursorId == cursorId
-                ? c with { CurrentNodeKey = newNodeKey, IsAtGateway = isAtGateway, ArrivedViaAction = isAtGateway ? arrivedViaAction : null }
+                ? c with
+                {
+                    CurrentNodeKey = newNodeKey,
+                    IsAtGateway = isAtGateway,
+                    ArrivedViaAction = isAtGateway ? arrivedViaAction : null,
+                    QueueKey = newQueueKey ?? c.QueueKey
+                }
                 : c)
             .ToArray();
     }

@@ -23,8 +23,9 @@ sit on top of it, and they answer genuinely different questions:
   queue this actor is already eligible for.
 
 Both apply to any shared (non-owner-restricted) queue, independently of each other and of whether
-the other is even in use. A queue with no declared eligibility restriction and nobody ever calling
-`PickupWorkItem` on it behaves exactly as it always has — this is fully backward-compatible.
+the other is even in use. Queue eligibility is opt-in (a queue with no declared `RoleGates` stays
+fully unrestricted, exactly as it always has); pickup/ownership is **not** — see the mandatory-pickup
+rule immediately below.
 
 **A naming collision to know about**: `IQueueCapabilitiesProvider` already used the word
 "capability" before this feature existed, for something unrelated — which *component types* a
@@ -68,8 +69,42 @@ ServiceRequestResponseEnvelope PutbackWorkItem(string instanceId, string cursorI
 QueueWorkItem? PickupNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile);
 ```
 
-**Terminology**: "pick up"/"put back" — not "claim"/"release" or "assign"/"unassign" — is the
-vocabulary used throughout the engine API, the worklist UI, the audit log, and this document.
+### The rule: if a row isn't assigned to you, you can't action it — full stop
+
+Pickup is mandatory on every shared (non-owner-restricted) queue, with **no per-queue opt-out**.
+This applies whether or not the queue declares a `QueueDefinition.AssignmentPolicy` at all:
+
+- A queue declaring `"team-tray"` scopes *who* may pick a row up to a specific team's members —
+  see `docs/guides/team-assignment.md`.
+- A queue declaring `"assign-to-initiator"` has nothing to pick up — it's owned by whoever started
+  it the instant it exists.
+- A queue declaring **no** `AssignmentPolicy` at all still requires pickup — it's just not scoped
+  to any particular team, so any actor already eligible to see the queue may pick a row up. This is
+  the same mandatory-pickup rule as `"team-tray"`, minus the team-membership restriction — not a
+  legacy, optional-pickup mode. Every real blueprint in this reference app either declares
+  `"team-tray"`/`"assign-to-initiator"` explicitly, or falls into this "no policy, still mandatory"
+  bucket — there is no third, opt-out shape.
+
+The single enforcement choke point is `ProcessManagerEngine.IsEntitledToActNow`: a row's
+`AvailableActions` stays empty — regardless of how many `EligibleActions` the row has — unless
+`RequestCursor.AssignedTo`/the team's `QueueAssignment` already matches the calling `userId`.
+`Advance()` re-derives this fresh on every call from the current, persisted state, so a client
+that bypasses whatever the UI renders and posts a trigger directly for a not-picked-up row gets
+`INVALID_TRANSITION`, the same as any other genuinely inaccessible action — there's no
+client-trust shortcut to defeat.
+
+**The one genuine exemption**: `ActorProfile.RestrictToInstanceOwner` — an owner-restricted
+(citizen-style) profile's own instance has exactly one possible actor by construction, so
+"assignment" isn't a concept that applies there at all. This is *not* a second opt-out for shared
+queues; it only ever applies to a profile that is itself restricted to viewing its own instances
+(a citizen journey, or the synthetic `ActorProfile.UnrestrictedOwner` a support-system
+poll/webhook resolution recurses through — see `ResolveSupportSystemOutcome`, which always
+advances via `UnrestrictedOwner` using the instance's own owning `userId`, precisely so an
+automation queue's system-driven resolution never needs a human-style pickup of its own).
+
+**Terminology**: "pick up"/"put back" — not "claim"/"release", "unclaimed"/"claimed", or
+"assign"/"unassign" — is the vocabulary used throughout the engine API, the worklist UI, the audit
+log, and this document.
 Deliberately not "claim": that word already means something else entirely in the same codebase
 (OAuth/identity claims — a token's own claims, nothing to do with queue ownership), and reusing it
 for a second, unrelated concept invites exactly the kind of confusion ubiquitous language is meant
@@ -89,10 +124,12 @@ already has the `instanceId`/`cursorId` of a picked-up item and calls `Advance` 
 
 `QueueWorkItemPickupState` (`NotPickedUp`/`PickedUpByMe`) is a field on `QueueWorkItem`, orthogonal
 to `QueueWorkItemStatus` — status answers "what can be done", pickup state answers "who's doing
-it". Non-null only for a genuine shared-pool `Actionable` row on a non-owner-restricted queue; null
-for `Waiting`/`Done` rows and owner-restricted queues, since there's nothing to pick up there.
-There's no "picked up by someone else" value — that row simply never appears for anyone but whoever
-holds it.
+it". Non-null for a genuine shared-pool row on a non-owner-restricted queue in either
+`QueueWorkItemStatus.Unassigned` (not yet picked up) or `Actionable` (already picked up, by the
+caller) state — whether or not the queue declares an `AssignmentPolicy`, since pickup is mandatory
+either way. Null for `Waiting`/`Done` rows, owner-restricted queues, and `"assign-to-initiator"`
+queues, since none of those have anything to pick up. There's no "picked up by someone else" value
+— that row simply never appears for anyone but whoever holds it.
 
 ### Pickup lifecycle — which transitions preserve it, which clear it
 

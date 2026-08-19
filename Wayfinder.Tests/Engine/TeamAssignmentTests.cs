@@ -171,9 +171,16 @@ public class TeamAssignmentTests
         var automationStart = engine.GetCurrent(DefinitionKey, TenantId, "system", AutomationProfile, instanceId);
         automationStart.Render!.StateDisplayName.Should().Be("Processing");
 
+        // "automation" declares no AssignmentPolicy — pickup is still mandatory (see
+        // docs/guides/work-allocation.md), same as any other shared queue. The Split gateway that
+        // fanned out into this cursor always mints a fresh, real cursor id (never PrimaryCursorId),
+        // so it has to be resolved via the worklist rather than assumed.
+        var automationItem = engine.GetQueueWorkItems("system", AutomationProfile).Items.Single(i => i.InstanceId == instanceId);
+        var automationPickedUp = engine.PickupWorkItem(instanceId, automationItem.CursorId, TenantId, "system", AutomationProfile);
+
         // AutomationProfile has nothing left to see once the join releases into ops-team — same
         // ACCESS_DENIED-on-the-releasing-call shape WorkAllocationPickupTests already established.
-        engine.Advance(instanceId, TenantId, "system", AutomationProfile, "processed", automationStart.StateVersion, null);
+        engine.Advance(instanceId, TenantId, "system", AutomationProfile, "processed", automationPickedUp.StateVersion, null);
 
         return engine.GetCurrent(DefinitionKey, TenantId, "priya", OpsProfile, instanceId);
     }

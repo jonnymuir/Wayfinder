@@ -276,13 +276,19 @@ public class WorkAllocationPickupTests
         // nuance (see IsTerminalInstance's own doc comment), not something this test is about.
         var automationStart = engine.GetCurrent(DefinitionKey, TenantId, "system", AutomationProfile, afterSplit.InstanceId);
         automationStart.Render!.StateDisplayName.Should().Be("In review");
+
+        // "automation" declares no AssignmentPolicy — pickup is still mandatory (see
+        // docs/guides/work-allocation.md), same as any other shared queue.
+        var automationItem = engine.GetQueueWorkItems("system", AutomationProfile).Items.Single(i => i.InstanceId == afterSplit.InstanceId);
+        var automationPickedUp = engine.PickupWorkItem(afterSplit.InstanceId, automationItem.CursorId, TenantId, "system", AutomationProfile);
+
         // The release moves the instance's primary visible position into the CASEWORKER queue's
         // "approved" stage — AutomationProfile (VisibleQueues: ["automation"] only) genuinely has
         // nothing left to see on this instance at all once that happens, so `released` itself
         // (built with AutomationProfile) correctly reports ACCESS_DENIED; check the release landed
         // via a caseworker-side view instead.
         var released = engine.Advance(
-            afterSplit.InstanceId, TenantId, "system", AutomationProfile, "approved", automationStart.StateVersion, null);
+            afterSplit.InstanceId, TenantId, "system", AutomationProfile, "approved", automationPickedUp.StateVersion, null);
         released.ResponseState.Should().Be("error");
         released.Problems.Should().Contain(p => p.Code == "ACCESS_DENIED");
 
@@ -300,7 +306,8 @@ public class WorkAllocationPickupTests
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        var afterSplit = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "go-wait", started.StateVersion, null);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var afterSplit = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "go-wait", pickedUp.StateVersion, null);
 
         // The join gateway's own cursor id — fetch it from the queue list first.
         var waitingItem = engine.GetQueueWorkItems("alice", SharedQueueProfile).Items.Single(i => i.InstanceId == afterSplit.InstanceId);
@@ -315,7 +322,8 @@ public class WorkAllocationPickupTests
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        var afterMiddle = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "continue", started.StateVersion, null);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var afterMiddle = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "continue", pickedUp.StateVersion, null);
         var afterDone = engine.Advance(afterMiddle.InstanceId, TenantId, "alice", SharedQueueProfile, "finish", afterMiddle.StateVersion, null);
         afterDone.ResponseState.Should().Be("complete");
 

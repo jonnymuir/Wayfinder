@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
@@ -128,7 +129,8 @@ public class QueueEligibilityTests
     {
         var engine = BuildEngine();
         var startedByTeamA = engine.GetCurrent("queue-eligibility-test", TenantId, "userA", ProfileWith("njf-review", "team-a"));
-        engine.Advance(startedByTeamA.InstanceId, TenantId, "userA", ProfileWith("njf-review", "team-a"), "continue", startedByTeamA.StateVersion, null);
+        var pickedUpByTeamA = engine.PickupWorkItem(startedByTeamA.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "userA", ProfileWith("njf-review", "team-a"));
+        engine.Advance(startedByTeamA.InstanceId, TenantId, "userA", ProfileWith("njf-review", "team-a"), "continue", pickedUpByTeamA.StateVersion, null);
 
         var teamAView = engine.GetCurrent("queue-eligibility-test", TenantId, "userA", ProfileWith("team-a"), startedByTeamA.InstanceId);
         teamAView.ResponseState.Should().Be("render", "team-a alone satisfies the any-of ['team-a','team-b'] gate");
@@ -146,7 +148,8 @@ public class QueueEligibilityTests
         var engine = BuildEngine();
         var noCapabilitiesAtAll = ProfileWith();
         var started = engine.GetCurrent("queue-eligibility-test", TenantId, UserId, ProfileWith("njf-review", "team-a"));
-        engine.Advance(started.InstanceId, TenantId, UserId, ProfileWith("njf-review", "team-a"), "continue", started.StateVersion, null);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, ProfileWith("njf-review", "team-a"));
+        engine.Advance(started.InstanceId, TenantId, UserId, ProfileWith("njf-review", "team-a"), "continue", pickedUp.StateVersion, null);
         var afterAnyOf = engine.GetCurrent("queue-eligibility-test", TenantId, UserId, ProfileWith("team-b"), started.InstanceId);
         engine.Advance(afterAnyOf.InstanceId, TenantId, UserId, ProfileWith("team-b"), "continue", afterAnyOf.StateVersion, null);
 
