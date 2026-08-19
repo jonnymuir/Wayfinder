@@ -245,14 +245,14 @@ public class JugglingLicenceStageValidationTests
             "submit", atDeclaration.StateVersion,
             new Dictionary<string, object?> { ["declarationConfirmed"] = true });
 
-        // The caseworker queue is now team-tray (see docs/guides/team-assignment.md) — claim the
+        // The caseworker queue is now team-tray (see docs/guides/team-assignment.md) — pick up the
         // row before returning, the same way a real caseworker would have to before anything is
         // offered. Not what this test class is actually about (see ShowWhen's own remarks above),
         // so kept out of the two callers' own assertions.
         var item = engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items.Single(i => i.InstanceId == started.InstanceId);
-        var claimed = engine.ClaimWorkItem(started.InstanceId, item.CursorId, TenantId, UserId, CaseworkerProfile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, UserId, CaseworkerProfile);
 
-        return (engine, started.InstanceId, claimed.StateVersion);
+        return (engine, started.InstanceId, pickedUp.StateVersion);
     }
 
     [Fact]

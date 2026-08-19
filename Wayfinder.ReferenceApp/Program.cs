@@ -136,7 +136,7 @@ builder.Services.AddJourney(options =>
 });
 
 // See Wayfinder.Engine.Worklist's own README — the default caseworker worklist surface
-// (list/item/advance/claim/release), covering everything about /caseworker/queue that isn't
+// (list/item/advance/pickup/putback), covering everything about /caseworker/queue that isn't
 // specific to this reference app.
 builder.Services.AddWorklist(options =>
 {
@@ -296,7 +296,7 @@ app.MapJourney("/premium", InsuranceModellerDefinitionKey, "Model your performan
 
 var caseworkerGroup = app.MapGroup("/caseworker").RequireAuthorization("Caseworker");
 
-// The default worklist surface (list/item/advance/claim/release/file-download) plus bulk-data-review's
+// The default worklist surface (list/item/advance/pickup/putback/file-download) plus bulk-data-review's
 // own REST endpoints — see Wayfinder.Engine.Worklist's own README. Everything else under
 // /caseworker (just the NJF "start new" entry point below) stays hand-wired here.
 app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");

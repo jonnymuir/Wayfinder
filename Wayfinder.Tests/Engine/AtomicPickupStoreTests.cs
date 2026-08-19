@@ -6,11 +6,11 @@ namespace Wayfinder.Tests.Engine;
 
 /// <summary>
 /// <see cref="InMemoryServiceRequestStore.TrySaveIfVersionMatches"/> — the toolkit's sole
-/// compare-and-swap primitive, the foundation the claim/ownership work-allocation feature (see
-/// docs/guides/work-allocation.md) builds atomic claiming on. Must be genuinely safe against real
+/// compare-and-swap primitive, the foundation the pickup/ownership work-allocation feature (see
+/// docs/guides/work-allocation.md) builds atomic pickup on. Must be genuinely safe against real
 /// concurrent callers, not merely "works because tests are single-threaded."
 /// </summary>
-public class AtomicClaimStoreTests
+public class AtomicPickupStoreTests
 {
     private static ServiceRequest NewInstance(string instanceId, int stateVersion) => new()
     {

@@ -6,8 +6,8 @@ public enum AuditEventType
 {
     Created,
     Transition,
-    Claimed,
-    Released,
+    PickedUp,
+    PutBack,
 
     /// <summary>Reserved for a future manager-initiated reassignment — not emitted by anything
     /// in this version. See docs/guides/work-allocation.md's reassignment seam.</summary>

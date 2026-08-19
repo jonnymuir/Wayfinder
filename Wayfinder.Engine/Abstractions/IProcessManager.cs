@@ -62,8 +62,8 @@ public interface IProcessManager
     IReadOnlyList<string> ClaimInstances(string tenantId, string fromUserId, string toUserId);
 
     /// <summary>
-    /// The caseworker worklist. <paramref name="userId"/> is who's asking — a cursor claimed by
-    /// someone else is hidden from this call entirely (see <see cref="ClaimWorkItem"/> and
+    /// The caseworker worklist. <paramref name="userId"/> is who's asking — a cursor picked up by
+    /// someone else is hidden from this call entirely (see <see cref="PickupWorkItem"/> and
     /// docs/guides/work-allocation.md). <paramref name="statuses"/> defaults (when
     /// <see langword="null"/>) to <c>{Actionable, Waiting}</c> — today's exact view; pass an
     /// explicit, possibly-empty collection to override it (see docs/guides/queue-worklist-filtering.md
@@ -102,40 +102,40 @@ public interface IProcessManager
         int pageSize = 20);
 
     /// <summary>
-    /// Claims one specific work item for <paramref name="userId"/> — becomes its sole owner, hidden
-    /// from every other actor sharing the queue until released (see <see cref="ReleaseWorkItem"/>).
+    /// Picks up one specific work item for <paramref name="userId"/> — becomes its sole owner, hidden
+    /// from every other actor sharing the queue until put back (see <see cref="PutbackWorkItem"/>).
     /// No <c>expectedStateVersion</c>: unlike <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>,
-    /// claiming carries no field edits to lose, so the engine reads fresh and retries its own
+    /// picking up carries no field edits to lose, so the engine reads fresh and retries its own
     /// internal compare-and-swap a bounded number of times rather than asking the caller to supply
     /// a version. Errors (as <c>ServiceRequestResponseEnvelope.Problems</c>' <c>Code</c>):
     /// <c>INSTANCE_NOT_FOUND</c>, <c>ACCESS_DENIED</c>, <c>INVALID_TRANSITION</c> (the row isn't
     /// visible to this actor at all — this is what capability ineligibility surfaces as too, since
-    /// both go through the same resolution), <c>NOT_CLAIMABLE</c> (Waiting/Done/owner-restricted —
-    /// nothing to claim), <c>ALREADY_CLAIMED</c> (someone else holds it), <c>CLAIM_CONFLICT</c>
+    /// both go through the same resolution), <c>PICKUP_NOT_AVAILABLE</c> (Waiting/Done/owner-restricted
+    /// — nothing to pick up), <c>ALREADY_PICKED_UP</c> (someone else holds it), <c>PICKUP_CONFLICT</c>
     /// (lost the internal race after retrying). See docs/guides/work-allocation.md.
     /// </summary>
-    ServiceRequestResponseEnvelope ClaimWorkItem(
+    ServiceRequestResponseEnvelope PickupWorkItem(
         string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile);
 
     /// <summary>
-    /// Releases a claim <paramref name="userId"/> currently holds on <paramref name="cursorId"/>,
-    /// back to the shared pool — a no-op success if already unclaimed.
-    /// <c>ALREADY_CLAIMED_BY_OTHER</c> if held by someone else (release is self-service only; see
-    /// docs/guides/work-allocation.md's reassignment seam for the future manager-initiated case).
+    /// Puts back a pickup <paramref name="userId"/> currently holds on <paramref name="cursorId"/>,
+    /// to the shared pool — a no-op success if already not picked up.
+    /// <c>ALREADY_PICKED_UP_BY_OTHER</c> if held by someone else (putting back is self-service only;
+    /// see docs/guides/work-allocation.md's reassignment seam for the future manager-initiated case).
     /// </summary>
-    ServiceRequestResponseEnvelope ReleaseWorkItem(
+    ServiceRequestResponseEnvelope PutbackWorkItem(
         string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile);
 
     /// <summary>
-    /// For an automated/scaled-out caller — atomically claims the single oldest eligible,
-    /// unclaimed, Actionable row this profile can see across every instance, or <see langword="null"/>
+    /// For an automated/scaled-out caller — atomically picks up the single oldest eligible,
+    /// not-picked-up, Actionable row this profile can see across every instance, or <see langword="null"/>
     /// if nothing is currently available. Safe against multiple concurrent workers calling this
     /// simultaneously (see <see cref="IServiceRequestStore.TrySaveIfVersionMatches"/>) — no two
     /// callers can ever be handed the same row. Deliberately simple: no lease, no heartbeat, no
-    /// auto-expiry back to the pool if the caller that claimed a row never finishes it — see
+    /// auto-expiry back to the pool if the caller that picked up a row never finishes it — see
     /// docs/guides/work-allocation.md for why v1 stops here.
     /// </summary>
-    QueueWorkItem? ClaimNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile);
+    QueueWorkItem? PickupNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile);
 
     IEnumerable<ServiceRequest> GetAllInstances();
 

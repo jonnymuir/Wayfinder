@@ -3,7 +3,7 @@
 A default, optional single-actor journey surface — server-rendered GOV.UK markup for "get my
 current stage, advance it" against one blueprint. The applicant/citizen counterpart to
 [`Wayfinder.Engine.Worklist`](../Wayfinder.Engine.Worklist)'s multi-item caseworker queue: one
-actor, one instance, one page — no list, no claim/release, no separate advance sub-route.
+actor, one instance, one page — no list, no pickup/putback, no separate advance sub-route.
 
 ## Usage
 

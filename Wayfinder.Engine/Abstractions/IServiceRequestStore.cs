@@ -40,7 +40,7 @@ public interface IServiceRequestStore
     /// The default implementation here is a plain check-then-<see cref="Save"/> — provided purely
     /// so an existing host-authored <see cref="IServiceRequestStore"/> keeps compiling after this
     /// method was added, NOT because it is safe to rely on. It is not atomic. Any store backing
-    /// real concurrent claiming (including <c>InMemoryServiceRequestStore</c>, which overrides this
+    /// real concurrent pickup (including <c>InMemoryServiceRequestStore</c>, which overrides this
     /// with a genuine compare-and-swap) must provide a real atomic implementation — a persistent
     /// store typically does this with a conditional update (e.g. <c>UPDATE ... WHERE StateVersion =
     /// @expected</c>).

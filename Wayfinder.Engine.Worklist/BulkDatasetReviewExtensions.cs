@@ -12,7 +12,7 @@ namespace Wayfinder.Engine.Worklist;
 /// — paging/filtering, correcting a row, downloading the full reconstructed file. A separate call
 /// from <see cref="WorklistExtensions.MapWorklist"/> rather than folded into it: <see cref="IBulkDatasetStore"/>
 /// is a real DI dependency <c>MapWorklist</c>'s other routes don't need, and forcing every worklist
-/// consumer to register a dataset store just to get list/item/advance/claim/release would be the
+/// consumer to register a dataset store just to get list/item/advance/pickup/putback would be the
 /// wrong coupling. A host that wants bulk-data-review support calls both, with the same prefix:
 /// <code>
 /// app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");

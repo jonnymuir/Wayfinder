@@ -29,13 +29,14 @@ public record RequestCursor
     public string? ArrivedViaAction { get; init; }
 
     /// <summary>
-    /// The userId currently holding this cursor's work, or null if unclaimed (or not a claimable
-    /// row at all — see docs/guides/work-allocation.md). A claim is scoped to this cursor's dwell
-    /// at its current node: cleared automatically the instant this cursor is consumed by a Split or
-    /// Join gateway crossing, since both mint a brand-new <see cref="RequestCursor"/> rather than
-    /// carrying this field forward — deliberate, not an oversight. Only <c>ClaimWorkItem</c>/
-    /// <c>ClaimNextAvailableWorkItem</c> ever set this; only <c>ReleaseWorkItem</c> (or a future
-    /// reassignment operation) ever clears/changes it. Never touched by <c>Advance</c> itself.
+    /// The userId currently holding this cursor's work, or null if not picked up (or not a row
+    /// available to pick up at all — see docs/guides/work-allocation.md). A pickup is scoped to
+    /// this cursor's dwell at its current node: cleared automatically the instant this cursor is
+    /// consumed by a Split or Join gateway crossing, since both mint a brand-new
+    /// <see cref="RequestCursor"/> rather than carrying this field forward — deliberate, not an
+    /// oversight. Only <c>PickupWorkItem</c>/<c>PickupNextAvailableWorkItem</c> ever set this; only
+    /// <c>PutbackWorkItem</c> (or a future reassignment operation) ever clears/changes it. Never
+    /// touched by <c>Advance</c> itself.
     /// </summary>
     public string? AssignedTo { get; init; }
 
@@ -43,9 +44,9 @@ public record RequestCursor
     public DateTimeOffset? AssignedAt { get; init; }
 
     /// <summary>
-    /// Well-known cursor id for claiming an instance before it has crossed its first gateway — its
+    /// Well-known cursor id for picking up an instance before it has crossed its first gateway — its
     /// own <c>Cursors</c> list is still empty at that point (<c>CreateNewInstance</c> only populates
-    /// it the first time a gateway is crossed), yet a freshly created, unclaimed instance whose
+    /// it the first time a gateway is crossed), yet a freshly created, not-picked-up instance whose
     /// initial stage already sits in a shared queue is a real, durable state (njf-contributions'
     /// own "upload" stage, for instance), not a transient edge case. Never collides with a real
     /// cursor id, which is always a freshly minted <see cref="Guid"/>.

@@ -12,7 +12,7 @@ namespace Wayfinder.Tests.Engine;
 /// <summary>
 /// Mandatory team-based work assignment (see docs/guides/team-assignment.md) — a queue declaring
 /// <c>QueueDefinition.AssignmentPolicy</c> requires individual assignment before a row is
-/// actionable, unlike a legacy queue's optional claim (see <c>WorkAllocationClaimTests</c>, which
+/// actionable, unlike a legacy queue's optional pickup (see <c>WorkAllocationPickupTests</c>, which
 /// this suite is a sibling of, not a replacement for). Two policies exercised here:
 /// "assign-to-initiator" (whoever starts it owns it immediately, no pick-up) and "team-tray"
 /// (arrives owned by the team, visible to every member, actionable only once picked up).
@@ -172,7 +172,7 @@ public class TeamAssignmentTests
         automationStart.Render!.StateDisplayName.Should().Be("Processing");
 
         // AutomationProfile has nothing left to see once the join releases into ops-team — same
-        // ACCESS_DENIED-on-the-releasing-call shape WorkAllocationClaimTests already established.
+        // ACCESS_DENIED-on-the-releasing-call shape WorkAllocationPickupTests already established.
         engine.Advance(instanceId, TenantId, "system", AutomationProfile, "processed", automationStart.StateVersion, null);
 
         return engine.GetCurrent(DefinitionKey, TenantId, "priya", OpsProfile, instanceId);
@@ -184,7 +184,7 @@ public class TeamAssignmentTests
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "priya", OpsProfile);
 
-        // Zero-cursor, pre-first-gateway state — established immediately, not deferred to claiming.
+        // Zero-cursor, pre-first-gateway state — established immediately, not deferred to pickup.
         started.ResponseState.Should().Be("render");
 
         engine.GetQueueWorkItems("sam", OpsProfile).Items.Should()
@@ -203,17 +203,17 @@ public class TeamAssignmentTests
     }
 
     [Fact]
-    public void AssignToInitiator_HasNothingToClaimOrRelease()
+    public void AssignToInitiator_HasNothingToPickUpOrPutBack()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "priya", OpsProfile);
 
-        var claimAttempt = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "priya", OpsProfile);
-        claimAttempt.ResponseState.Should().Be("error");
-        claimAttempt.Problems.Should().Contain(p => p.Code == "NOT_CLAIMABLE");
+        var pickupAttempt = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "priya", OpsProfile);
+        pickupAttempt.ResponseState.Should().Be("error");
+        pickupAttempt.Problems.Should().Contain(p => p.Code == "PICKUP_NOT_AVAILABLE");
 
         var priyaView = engine.GetQueueWorkItems("priya", OpsProfile).Items.Single(i => i.InstanceId == started.InstanceId);
-        priyaView.ClaimState.Should().BeNull("already owned the moment it exists — nothing to claim or release");
+        priyaView.PickupState.Should().BeNull("already owned the moment it exists — nothing to pick up or put back");
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public class TeamAssignmentTests
         var atReview = ReachReview(engine, started.InstanceId, started.StateVersion, "submit");
         // OpsProfile can't view review-team at all — priya's own render of her escalate call
         // correctly comes back ACCESS_DENIED, the same "nothing left to see" shape
-        // WorkAllocationClaimTests' own join-release test already established; check the landing
+        // WorkAllocationPickupTests' own join-release test already established; check the landing
         // via a reviewers-team view instead.
         var escalated = engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
         escalated.ResponseState.Should().Be("error");
@@ -261,7 +261,7 @@ public class TeamAssignmentTests
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         chrisView.Status.Should().Be(QueueWorkItemStatus.Unassigned, "a team-tray row nobody has picked up yet");
         chrisView.AvailableActions.Should().BeEmpty();
-        chrisView.ClaimState.Should().Be(QueueWorkItemClaimState.Unclaimed);
+        chrisView.PickupState.Should().Be(QueueWorkItemPickupState.NotPickedUp);
 
         engine.GetQueueWorkItems("someone-else", ReviewQueueViewerNotOnTeamProfile).Items.Should()
             .NotContain(i => i.InstanceId == started.InstanceId, "can view/act in the queue but isn't on the owning team — a genuinely different gate from queue eligibility");
@@ -276,8 +276,8 @@ public class TeamAssignmentTests
         engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
 
         var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
-        var claimed = engine.ClaimWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
-        claimed.ResponseState.Should().Be("render");
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
+        pickedUp.ResponseState.Should().Be("render");
 
         engine.GetQueueWorkItems("jordan", ReviewersProfile).Items.Should()
             .NotContain(i => i.InstanceId == started.InstanceId, "picked up by chris — hidden entirely from every other team member");
@@ -285,11 +285,11 @@ public class TeamAssignmentTests
         var chrisView = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         chrisView.Status.Should().Be(QueueWorkItemStatus.Actionable);
-        chrisView.ClaimState.Should().Be(QueueWorkItemClaimState.ClaimedByMe);
+        chrisView.PickupState.Should().Be(QueueWorkItemPickupState.PickedUpByMe);
     }
 
     [Fact]
-    public void TeamTray_SecondClaimAttempt_ByADifferentTeamMember_ReturnsAlreadyClaimed()
+    public void TeamTray_SecondPickupAttempt_ByADifferentTeamMember_ReturnsAlreadyPickedUp()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "priya", OpsProfile);
@@ -297,15 +297,15 @@ public class TeamAssignmentTests
         engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
 
         var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
-        engine.ClaimWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
+        engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
 
-        var jordanClaim = engine.ClaimWorkItem(started.InstanceId, item.CursorId, TenantId, "jordan", ReviewersProfile);
-        jordanClaim.ResponseState.Should().Be("error");
-        jordanClaim.Problems.Should().Contain(p => p.Code == "ALREADY_CLAIMED");
+        var jordanPickup = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "jordan", ReviewersProfile);
+        jordanPickup.ResponseState.Should().Be("error");
+        jordanPickup.Problems.Should().Contain(p => p.Code == "ALREADY_PICKED_UP");
     }
 
     [Fact]
-    public void TeamTray_ClaimAttempt_ByANonTeamMember_ReturnsTeamMembershipRequired()
+    public void TeamTray_PickupAttempt_ByANonTeamMember_ReturnsTeamMembershipRequired()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "priya", OpsProfile);
@@ -317,13 +317,13 @@ public class TeamAssignmentTests
         // cursor id would have to, to prove even a *known* cursor id is still rejected.
         var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
 
-        var claimAttempt = engine.ClaimWorkItem(started.InstanceId, item.CursorId, TenantId, "someone-else", ReviewQueueViewerNotOnTeamProfile);
-        claimAttempt.ResponseState.Should().Be("error");
-        claimAttempt.Problems.Should().Contain(p => p.Code == "TEAM_MEMBERSHIP_REQUIRED");
+        var pickupAttempt = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "someone-else", ReviewQueueViewerNotOnTeamProfile);
+        pickupAttempt.ResponseState.Should().Be("error");
+        pickupAttempt.Problems.Should().Contain(p => p.Code == "TEAM_MEMBERSHIP_REQUIRED");
     }
 
     [Fact]
-    public void TeamTray_Release_ReturnsItToTheTray_VisibleToTeammatesAgainAsUnassigned()
+    public void TeamTray_Putback_ReturnsItToTheTray_VisibleToTeammatesAgainAsUnassigned()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "priya", OpsProfile);
@@ -331,15 +331,15 @@ public class TeamAssignmentTests
         engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
 
         var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
-        engine.ClaimWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
+        engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
 
-        var released = engine.ReleaseWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
-        released.ResponseState.Should().Be("render");
+        var putBack = engine.PutbackWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
+        putBack.ResponseState.Should().Be("render");
 
         var jordanView = engine.GetQueueWorkItems("jordan", ReviewersProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         jordanView.Status.Should().Be(QueueWorkItemStatus.Unassigned);
-        jordanView.ClaimState.Should().Be(QueueWorkItemClaimState.Unclaimed);
+        jordanView.PickupState.Should().Be(QueueWorkItemPickupState.NotPickedUp);
     }
 
     [Fact]

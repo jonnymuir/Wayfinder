@@ -131,14 +131,14 @@ public static class ServiceBlueprintAuthoringResources
     [McpServerResource(
         Name = "work-allocation",
         UriTemplate = "service-blueprint-docs://work-allocation",
-        Title = "Work Allocation: Queue Eligibility, Claim/Ownership, and Audit",
+        Title = "Work Allocation: Queue Eligibility, Pickup/Ownership, and Audit",
         MimeType = "text/markdown")]
     [System.ComponentModel.Description(
         "How Wayfinder models real work-allocation scenarios: QueueDefinition.RoleGates (declared " +
-        "team eligibility, checked against ActorProfile.Capabilities), per-cursor claim/ownership " +
-        "(ClaimWorkItem/ReleaseWorkItem/ClaimNextAvailableWorkItem — scoped to a cursor's dwell, " +
+        "team eligibility, checked against ActorProfile.Capabilities), per-cursor pickup/ownership " +
+        "(PickupWorkItem/PutbackWorkItem/PickupNextAvailableWorkItem — scoped to a cursor's dwell, " +
         "cleared automatically on a Split/Join crossing), the atomic compare-and-swap primitive " +
-        "backing safe concurrent claiming, the audit log (IAuditLogStore), and why " +
+        "backing safe concurrent pickup, the audit log (IAuditLogStore), and why " +
         "ServiceBlueprintRouteDefinition.RequiresRole is now genuinely enforced. For whoever is " +
         "building a Wayfinder host; a blueprint author only needs RoleGates.")]
     public static string WorkAllocation() => ReadEmbeddedDoc("work-allocation.md");

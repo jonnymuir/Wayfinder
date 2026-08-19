@@ -31,34 +31,35 @@ public enum QueueWorkItemStatus
     /// them yet. Only ever produced for a queue declaring <c>QueueDefinition.AssignmentPolicy</c>
     /// (see docs/guides/team-assignment.md): a "team-tray" row nobody has picked up. Distinct from
     /// today's legacy queues, where "eligible" and "actionable" have always been the same thing.
-    /// <c>AvailableActions</c> is always empty for these — pick it up via <c>ClaimWorkItem</c> (same
-    /// verb as a legacy claim) to move to <see cref="Actionable"/>.
+    /// <c>AvailableActions</c> is always empty for these — pick it up via <c>PickupWorkItem</c> to
+    /// move to <see cref="Actionable"/>.
     /// </summary>
     Unassigned,
 }
 
 /// <summary>
-/// Per-cursor (or, for a team-owned queue, per-<c>QueueAssignment</c>) claim/ownership state — a
+/// Per-cursor (or, for a team-owned queue, per-<c>QueueAssignment</c>) pickup/ownership state — a
 /// genuinely different axis from <see cref="QueueWorkItemStatus"/> (status answers "what can be
-/// done"; claim state answers "who's doing it"). Non-null only for a genuine shared-pool row on a
+/// done"; pickup state answers "who's doing it"). Non-null only for a genuine shared-pool row on a
 /// queue whose actor profile isn't restricted to its own instances: for a legacy queue, that means
-/// <c>Status == Actionable</c> (unclaimed vs. claimed-by-me — claiming is what makes it actionable
-/// in the first place there); for a team-owned queue, both <see cref="QueueWorkItemStatus.Unassigned"/>
-/// (unclaimed, sitting in the team tray) and <c>Actionable</c> (already picked up, by me) apply. Null
-/// everywhere else — a <see cref="QueueWorkItemStatus.Waiting"/>/<see cref="QueueWorkItemStatus.Done"/>
-/// row, an owner-restricted instance, or an "assign-to-initiator" queue (nothing to pick up — it's
-/// always already owned) has nothing to claim. A row held by someone else — an individual on a
-/// legacy queue, or a different team member on a team-owned one — never produces a row at all for
-/// anyone but its holder (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership
-/// filter), so there is no third "claimed by someone else" value here to enumerate. See
+/// <c>Status == Actionable</c> (not picked up vs. picked up by me — picking it up is what makes it
+/// actionable in the first place there); for a team-owned queue, both
+/// <see cref="QueueWorkItemStatus.Unassigned"/> (not picked up, sitting in the team tray) and
+/// <c>Actionable</c> (already picked up, by me) apply. Null everywhere else — a
+/// <see cref="QueueWorkItemStatus.Waiting"/>/<see cref="QueueWorkItemStatus.Done"/> row, an
+/// owner-restricted instance, or an "assign-to-initiator" queue (nothing to pick up — it's always
+/// already owned) has nothing to pick up. A row held by someone else — an individual on a legacy
+/// queue, or a different team member on a team-owned one — never produces a row at all for anyone
+/// but its holder (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership filter), so
+/// there is no third "picked up by someone else" value here to enumerate. See
 /// docs/guides/work-allocation.md and docs/guides/team-assignment.md — and note this is unrelated
 /// to <c>IQueueCapabilitiesProvider</c>'s own pre-existing, differently-scoped use of the word
 /// "capability".
 /// </summary>
-public enum QueueWorkItemClaimState
+public enum QueueWorkItemPickupState
 {
-    Unclaimed,
-    ClaimedByMe,
+    NotPickedUp,
+    PickedUpByMe,
 }
 
 /// <summary>Ordering for <see cref="Services.ProcessManagerEngine.GetQueueWorkItems"/> — every
@@ -109,12 +110,12 @@ public record QueueWorkItem
     public string? QueueName { get; init; }
 
     /// <summary>The cursor this row was built from — <see cref="RequestCursor.PrimaryCursorId"/>
-    /// for an instance that hasn't crossed its first gateway yet. What <c>ClaimWorkItem</c>/
-    /// <c>ReleaseWorkItem</c> take as their own <c>cursorId</c> argument.</summary>
+    /// for an instance that hasn't crossed its first gateway yet. What <c>PickupWorkItem</c>/
+    /// <c>PutbackWorkItem</c> take as their own <c>cursorId</c> argument.</summary>
     public string CursorId { get; init; } = "";
 
-    /// <summary>See <see cref="QueueWorkItemClaimState"/>. Null for a row with nothing to claim.</summary>
-    public QueueWorkItemClaimState? ClaimState { get; init; }
+    /// <summary>See <see cref="QueueWorkItemPickupState"/>. Null for a row with nothing to pick up.</summary>
+    public QueueWorkItemPickupState? PickupState { get; init; }
 
     public string TenantId { get; init; } = "";
 

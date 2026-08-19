@@ -138,7 +138,7 @@ public static class ReferenceActors
     };
 
     /// <summary>
-    /// Every generic backstage route (the worklist, an item's own page, advance, claim/release)
+    /// Every generic backstage route (the worklist, an item's own page, advance, pickup/putback)
     /// is shared across every "caseworker"-role persona — it has no per-blueprint knowledge of its
     /// own, so it can't just call <see cref="CaseworkerProfile"/> or <see cref="NjfOperationsProfile"/>
     /// directly without silently locking one persona out of the other's now-capability-gated queue

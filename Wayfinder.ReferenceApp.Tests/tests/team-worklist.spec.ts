@@ -67,7 +67,7 @@ test.describe('Team worklist: shared tray, personal vs team view', () => {
       await expect(caseyPage.getByText('Review application')).toBeVisible();
     });
 
-    await test.step('Jordan releases it back to the tray', async () => {
+    await test.step('Jordan puts it back in the tray', async () => {
       await jordanPage.getByRole('button', { name: 'Put back' }).click();
       await expect(jordanPage.getByRole('button', { name: 'Pick up' })).toBeVisible();
     });

@@ -659,16 +659,16 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     /// <summary>
-    /// Claims one specific work item for <paramref name="userId"/> — see <see cref="IProcessManager.ClaimWorkItem"/>'s
+    /// Picks up one specific work item for <paramref name="userId"/> — see <see cref="IProcessManager.PickupWorkItem"/>'s
     /// own remarks for the full error-code contract. Reads fresh and retries its own internal CAS
     /// (<see cref="IServiceRequestStore.TrySaveIfVersionMatches"/>) a bounded number of times rather
-    /// than asking the caller for an expected version — claiming carries no field edits to lose.
+    /// than asking the caller for an expected version — picking up carries no field edits to lose.
     /// Materializes a real cursor the first time an instance that hasn't yet crossed a gateway
-    /// (<c>Cursors.Count == 0</c>) is claimed — see <see cref="RequestCursor.PrimaryCursorId"/>'s
+    /// (<c>Cursors.Count == 0</c>) is picked up — see <see cref="RequestCursor.PrimaryCursorId"/>'s
     /// own remarks; this permanently switches the instance onto the multi-cursor bookkeeping path
     /// for the rest of its life, the same as crossing a real gateway would.
     /// </summary>
-    public ServiceRequestResponseEnvelope ClaimWorkItem(
+    public ServiceRequestResponseEnvelope PickupWorkItem(
         string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile)
     {
         const int maxAttempts = 5;
@@ -690,8 +690,8 @@ public class ProcessManagerEngine : IProcessManager
             }
 
             // Resolved WITHOUT the ownership filter (no userId) — unlike every other caller of
-            // FindAccessibleWorkItems, claiming needs to see a cursor that's genuinely eligible but
-            // already held by someone else, in order to report ALREADY_CLAIMED rather than
+            // FindAccessibleWorkItems, picking up needs to see a cursor that's genuinely eligible but
+            // already held by someone else, in order to report ALREADY_PICKED_UP rather than
             // INVALID_TRANSITION. Queue visibility/capability eligibility is still fully enforced
             // (CanViewQueue/HasQueueEligibility never depend on userId), so this can't be used to
             // discover anything about a queue this actor genuinely isn't eligible for.
@@ -704,7 +704,7 @@ public class ProcessManagerEngine : IProcessManager
 
             if (accessProfile.RestrictToInstanceOwner)
             {
-                return ErrorEnvelope("This item cannot be claimed.", "NOT_CLAIMABLE");
+                return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
             }
 
             ServiceRequest updatedInstance;
@@ -713,44 +713,44 @@ public class ProcessManagerEngine : IProcessManager
                 // Always already owned by whoever started it — see docs/guides/team-assignment.md's
                 // reassignment scope note.
                 return ErrorEnvelope(
-                    "This item is always assigned to whoever started it — there's nothing to claim.", "NOT_CLAIMABLE");
+                    "This item is always assigned to whoever started it — there's nothing to pick up.", "PICKUP_NOT_AVAILABLE");
             }
 
             if (item.AssignmentPolicy == TeamTrayPolicy)
             {
                 if (!accessProfile.IsTeamMember(item.AssignedTeamId))
                 {
-                    return ErrorEnvelope("You must be a member of the owning team to claim this item.", "TEAM_MEMBERSHIP_REQUIRED");
+                    return ErrorEnvelope("You must be a member of the owning team to pick up this item.", "TEAM_MEMBERSHIP_REQUIRED");
                 }
 
                 if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
                 {
-                    return ErrorEnvelope("This item is already claimed by someone else.", "ALREADY_CLAIMED");
+                    return ErrorEnvelope("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
                 }
 
                 // Not ClassifyStatus(item, definition) != Unassigned here: item was resolved via
                 // the userId-less internal peek above, so IsEntitledToActNow's "no specific actor"
                 // shortcut always reports entitled, which would make ClassifyStatus report
-                // Actionable even for a genuinely unclaimed row — EligibleActions (assignment-
-                // agnostic) is the right check for "is there really something to claim here at all".
+                // Actionable even for a genuinely not-picked-up row — EligibleActions (assignment-
+                // agnostic) is the right check for "is there really something to pick up here at all".
                 if (item.EligibleActions.Count == 0)
                 {
-                    return ErrorEnvelope("This item cannot be claimed.", "NOT_CLAIMABLE");
+                    return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
                 }
 
-                var teamClaimedAt = DateTimeOffset.UtcNow;
+                var teamPickedUpAt = DateTimeOffset.UtcNow;
                 var queueKey = item.QueueKey ?? "";
                 var existingAssignment = instance.QueueAssignments.GetValueOrDefault(queueKey);
                 var assignment = (existingAssignment
-                        ?? new QueueAssignment { QueueKey = queueKey, TeamId = item.AssignedTeamId, EstablishedAt = teamClaimedAt })
+                        ?? new QueueAssignment { QueueKey = queueKey, TeamId = item.AssignedTeamId, EstablishedAt = teamPickedUpAt })
                     with
-                { AssignedUserId = userId, AssignedAt = teamClaimedAt };
+                { AssignedUserId = userId, AssignedAt = teamPickedUpAt };
 
                 updatedInstance = instance with
                 {
                     QueueAssignments = new Dictionary<string, QueueAssignment>(instance.QueueAssignments) { [queueKey] = assignment },
                     StateVersion = instance.StateVersion + 1,
-                    UpdatedAt = teamClaimedAt
+                    UpdatedAt = teamPickedUpAt
                 };
             }
             else
@@ -758,15 +758,15 @@ public class ProcessManagerEngine : IProcessManager
                 // Legacy queue — byte-for-byte the pre-team-assignment behavior.
                 if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
                 {
-                    return ErrorEnvelope("This item is already claimed by someone else.", "ALREADY_CLAIMED");
+                    return ErrorEnvelope("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
                 }
 
                 if (ClassifyStatus(item, definition) != QueueWorkItemStatus.Actionable)
                 {
-                    return ErrorEnvelope("This item cannot be claimed.", "NOT_CLAIMABLE");
+                    return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
                 }
 
-                var claimedAt = DateTimeOffset.UtcNow;
+                var pickedUpAt = DateTimeOffset.UtcNow;
                 updatedInstance = instance.Cursors.Count == 0
                     ? instance with
                     {
@@ -780,43 +780,43 @@ public class ProcessManagerEngine : IProcessManager
                                 CurrentNodeKey = instance.CurrentStage,
                                 IsAtGateway = false,
                                 AssignedTo = userId,
-                                AssignedAt = claimedAt
+                                AssignedAt = pickedUpAt
                             }
                         ],
                         StateVersion = instance.StateVersion + 1,
-                        UpdatedAt = claimedAt
+                        UpdatedAt = pickedUpAt
                     }
                     : instance with
                     {
                         Cursors = instance.Cursors
                             .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
-                                ? c with { AssignedTo = userId, AssignedAt = claimedAt }
+                                ? c with { AssignedTo = userId, AssignedAt = pickedUpAt }
                                 : c)
                             .ToArray(),
                         StateVersion = instance.StateVersion + 1,
-                        UpdatedAt = claimedAt
+                        UpdatedAt = pickedUpAt
                     };
             }
 
             if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
-                    ClaimAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.Claimed, "claimed")))
+                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PickedUp, "picked up")))
             {
                 return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
             }
         }
 
         return ErrorEnvelope(
-            $"Could not claim '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
-            "CLAIM_CONFLICT");
+            $"Could not pick up '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
+            "PICKUP_CONFLICT");
     }
 
     /// <summary>
-    /// Releases a claim <paramref name="userId"/> currently holds, back to the shared pool — see
-    /// <see cref="IProcessManager.ReleaseWorkItem"/>'s own remarks. Self-service only: someone
-    /// else's claim can't be released this way (see docs/guides/work-allocation.md's reassignment
+    /// Puts back a pickup <paramref name="userId"/> currently holds, to the shared pool — see
+    /// <see cref="IProcessManager.PutbackWorkItem"/>'s own remarks. Self-service only: someone
+    /// else's pickup can't be put back this way (see docs/guides/work-allocation.md's reassignment
     /// seam for the future manager-initiated case).
     /// </summary>
-    public ServiceRequestResponseEnvelope ReleaseWorkItem(
+    public ServiceRequestResponseEnvelope PutbackWorkItem(
         string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile)
     {
         const int maxAttempts = 5;
@@ -858,14 +858,14 @@ public class ProcessManagerEngine : IProcessManager
 
                 if (!string.Equals(existingAssignment.AssignedUserId, userId, StringComparison.Ordinal))
                 {
-                    return ErrorEnvelope("This item is claimed by someone else.", "ALREADY_CLAIMED_BY_OTHER");
+                    return ErrorEnvelope("This item has been picked up by someone else.", "ALREADY_PICKED_UP_BY_OTHER");
                 }
 
                 // Back to the team tray — still team-owned, just not by a specific individual.
-                var released = existingAssignment with { AssignedUserId = null, AssignedAt = null };
+                var putBack = existingAssignment with { AssignedUserId = null, AssignedAt = null };
                 updatedInstance = instance with
                 {
-                    QueueAssignments = new Dictionary<string, QueueAssignment>(instance.QueueAssignments) { [queueKey] = released },
+                    QueueAssignments = new Dictionary<string, QueueAssignment>(instance.QueueAssignments) { [queueKey] = putBack },
                     StateVersion = instance.StateVersion + 1,
                     UpdatedAt = DateTimeOffset.UtcNow
                 };
@@ -873,7 +873,7 @@ public class ProcessManagerEngine : IProcessManager
             else if (queueDef?.AssignmentPolicy == AssignToInitiatorPolicy)
             {
                 return ErrorEnvelope(
-                    "This item is always assigned to whoever started it and can't be released.", "NOT_CLAIMABLE");
+                    "This item is always assigned to whoever started it and can't be put back.", "PICKUP_NOT_AVAILABLE");
             }
             else
             {
@@ -885,7 +885,7 @@ public class ProcessManagerEngine : IProcessManager
 
                 if (!string.Equals(cursor.AssignedTo, userId, StringComparison.Ordinal))
                 {
-                    return ErrorEnvelope("This item is claimed by someone else.", "ALREADY_CLAIMED_BY_OTHER");
+                    return ErrorEnvelope("This item has been picked up by someone else.", "ALREADY_PICKED_UP_BY_OTHER");
                 }
 
                 updatedInstance = instance with
@@ -901,18 +901,18 @@ public class ProcessManagerEngine : IProcessManager
             }
 
             if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
-                    ClaimAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.Released, "released back to pool")))
+                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PutBack, "put back in the pool")))
             {
                 return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
             }
         }
 
         return ErrorEnvelope(
-            $"Could not release '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
-            "CLAIM_CONFLICT");
+            $"Could not put back '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
+            "PICKUP_CONFLICT");
     }
 
-    private static AuditEvent ClaimAuditEvent(string instanceId, string actor, string cursorId, AuditEventType eventType, string detail) => new()
+    private static AuditEvent WorkItemAuditEvent(string instanceId, string actor, string cursorId, AuditEventType eventType, string detail) => new()
     {
         EventId = Guid.NewGuid().ToString("N"),
         InstanceId = instanceId,
@@ -925,16 +925,16 @@ public class ProcessManagerEngine : IProcessManager
     };
 
     /// <summary>
-    /// See <see cref="IProcessManager.ClaimNextAvailableWorkItem"/>. Scans for the oldest eligible,
-    /// unclaimed, Actionable row (by <see cref="ServiceRequest.CreatedAt"/>, tiebroken by
+    /// See <see cref="IProcessManager.PickupNextAvailableWorkItem"/>. Scans for the oldest eligible,
+    /// not-picked-up, Actionable row (by <see cref="ServiceRequest.CreatedAt"/>, tiebroken by
     /// <see cref="ServiceRequest.InstanceId"/> for determinism — the same ordering
-    /// <c>GetQueueWorkItems</c>'s own sort uses) and attempts <see cref="ClaimWorkItem"/> on it;
+    /// <c>GetQueueWorkItems</c>'s own sort uses) and attempts <see cref="PickupWorkItem"/> on it;
     /// if that loses the race to a concurrent caller, moves on to the next candidate rather than
-    /// giving up — <see cref="ClaimWorkItem"/>'s own internal CAS retry only covers contention on
+    /// giving up — <see cref="PickupWorkItem"/>'s own internal CAS retry only covers contention on
     /// the *same* row, not two different automated callers converging on different rows that both
     /// turn out already spoken for by the time each is attempted.
     /// </summary>
-    public QueueWorkItem? ClaimNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile)
+    public QueueWorkItem? PickupNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile)
     {
         var candidates = _instanceStore.GetAll()
             .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
@@ -964,11 +964,11 @@ public class ProcessManagerEngine : IProcessManager
 
         foreach (var (instance, definition, item) in candidates)
         {
-            var claimed = ClaimWorkItem(instance.InstanceId, item.CursorId, tenantId, userId, accessProfile);
-            if (claimed.ResponseState != "error" && TryGetInstance(instance.InstanceId, out var refreshedInstance))
+            var pickedUp = PickupWorkItem(instance.InstanceId, item.CursorId, tenantId, userId, accessProfile);
+            if (pickedUp.ResponseState != "error" && TryGetInstance(instance.InstanceId, out var refreshedInstance))
             {
-                // Resolved from refreshedInstance, not the pre-claim `instance` this loop iterates
-                // over — AssignedTo only reflects the claim just performed once read fresh.
+                // Resolved from refreshedInstance, not the pre-pickup `instance` this loop iterates
+                // over — AssignedTo only reflects the pickup just performed once read fresh.
                 var refreshedItem = FindAccessibleWorkItems(refreshedInstance, definition, accessProfile, userId)
                     .FirstOrDefault(candidate => string.Equals(candidate.CursorId, item.CursorId, StringComparison.Ordinal));
                 if (refreshedItem is not null)
@@ -977,7 +977,7 @@ public class ProcessManagerEngine : IProcessManager
                         refreshedInstance, definition, QueueWorkItemStatus.Actionable, accessProfile, userId);
                 }
             }
-            // Someone else claimed this exact row between the scan and this attempt — try the
+            // Someone else picked up this exact row between the scan and this attempt — try the
             // next-oldest candidate rather than giving up.
         }
 
@@ -2103,7 +2103,7 @@ public class ProcessManagerEngine : IProcessManager
     /// rendering (<see cref="BuildEnvelope"/>'s <c>StepContent.AvailableActions</c>) and what
     /// <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>
     /// will accept. Splitting these two is what lets an unassigned team-tray row stay visible and
-    /// claimable (eligible) while still rendering zero action buttons (not yet available) — see
+    /// available to pick up (eligible) while still rendering zero action buttons (not yet available) — see
     /// docs/guides/team-assignment.md. <paramref name="AssignmentPolicy"/>/<paramref name="AssignedTeamId"/>
     /// are null for a legacy queue.
     /// </summary>
@@ -2142,18 +2142,18 @@ public class ProcessManagerEngine : IProcessManager
                 CreatedAt = instance.CreatedAt,
                 UpdatedAt = instance.UpdatedAt,
                 Status = status,
-                ClaimState = ResolveClaimState(status, accessProfile)
+                PickupState = ResolvePickupState(status, accessProfile)
             };
 
         /// <summary>
         /// See docs/guides/work-allocation.md and docs/guides/team-assignment.md. A legacy queue's
-        /// claim state is unchanged from before this feature (Actionable + unclaimed/claimed-by-me).
-        /// A team-tray queue's Unassigned status is itself the "unclaimed, pick me up" affordance;
+        /// pickup state is unchanged from before this feature (Actionable + not-picked-up/picked-up-by-me).
+        /// A team-tray queue's Unassigned status is itself the "not picked up, pick me up" affordance;
         /// its Actionable status means already picked up by this caller. An assign-to-initiator
-        /// queue always has nothing to claim/release in v1 — it's already owned the moment it
+        /// queue always has nothing to pick up/put back in v1 — it's already owned the moment it
         /// exists (see docs/guides/team-assignment.md's reassignment scope note).
         /// </summary>
-        private QueueWorkItemClaimState? ResolveClaimState(QueueWorkItemStatus status, ActorProfile accessProfile)
+        private QueueWorkItemPickupState? ResolvePickupState(QueueWorkItemStatus status, ActorProfile accessProfile)
         {
             if (accessProfile.RestrictToInstanceOwner)
             {
@@ -2163,12 +2163,12 @@ public class ProcessManagerEngine : IProcessManager
             return AssignmentPolicy switch
             {
                 null => status == QueueWorkItemStatus.Actionable
-                    ? (AssignedTo is null ? QueueWorkItemClaimState.Unclaimed : QueueWorkItemClaimState.ClaimedByMe)
+                    ? (AssignedTo is null ? QueueWorkItemPickupState.NotPickedUp : QueueWorkItemPickupState.PickedUpByMe)
                     : null,
                 TeamTrayPolicy => status switch
                 {
-                    QueueWorkItemStatus.Unassigned => QueueWorkItemClaimState.Unclaimed,
-                    QueueWorkItemStatus.Actionable => QueueWorkItemClaimState.ClaimedByMe,
+                    QueueWorkItemStatus.Unassigned => QueueWorkItemPickupState.NotPickedUp,
+                    QueueWorkItemStatus.Actionable => QueueWorkItemPickupState.PickedUpByMe,
                     _ => null
                 },
                 _ => null

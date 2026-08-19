@@ -13,7 +13,7 @@ namespace Wayfinder.Tests.Engine;
 /// <see cref="ActorProfile.Capabilities"/> via <c>ProcessManagerEngine.HasQueueEligibility</c> —
 /// unlike the pre-existing, never-actually-checked <c>ServiceBlueprintRouteDefinition.RequiresRole</c>
 /// (see docs/guides/work-allocation.md). This is queue *eligibility*, a distinct concept from
-/// per-item claim/ownership — see <c>QueueEligibilityTests</c>'s own name vs. a future claim test.
+/// per-item pickup/ownership — see <c>QueueEligibilityTests</c>'s own name vs. a future pickup test.
 /// </summary>
 public class QueueEligibilityTests
 {

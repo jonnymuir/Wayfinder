@@ -1308,7 +1308,7 @@ public record QueueDefinition
     }
 
     /// <summary>
-    /// Which team/skill capabilities may claim from or start work in this queue — an any-of list
+    /// Which team/skill capabilities may pick up from or start work in this queue — an any-of list
     /// checked against <c>ActorProfile.Capabilities</c> (see <c>ProcessManagerEngine.HasQueueEligibility</c>).
     /// Null/empty (the default) means unrestricted, exactly matching every blueprint that predates
     /// this — the same convention <c>ActorProfile</c>'s own allow-lists already use. Distinct from
@@ -1320,7 +1320,7 @@ public record QueueDefinition
 
     /// <summary>
     /// Null (the default) means legacy: no mandatory-assignment enforcement for this queue —
-    /// <c>RequestCursor.AssignedTo</c> governs any optional claim exactly as it did before this
+    /// <c>RequestCursor.AssignedTo</c> governs any optional pickup exactly as it did before this
     /// field existed. <c>"assign-to-initiator"</c>: whoever's action lands work here becomes its
     /// individual owner immediately. <c>"team-tray"</c>: work lands owned by <see cref="OwningTeamId"/>
     /// as a whole, pickable by any member, actionable only once picked up. Orthogonal to

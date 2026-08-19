@@ -86,30 +86,30 @@ public static class WorklistExtensions
             return Results.Content(options.RenderPage!(options.TeamWorklistPageTitle, body, ctx), "text/html");
         });
 
-        // Claim/release — see docs/guides/work-allocation.md. PRG back to wherever the claim was
-        // initiated from (the personal worklist, or a team view — see ClaimReleaseControl's own
+        // Pickup/putback — see docs/guides/work-allocation.md. PRG back to wherever the pickup was
+        // initiated from (the personal worklist, or a team view — see PickupPutbackControl's own
         // hidden "returnTo" field), defaulting to the personal worklist if that's missing or looks
         // unsafe. The query-string cursorId (not a route segment) matches how QueueWorkItem.CursorId
-        // is already surfaced to the worklist's own Claim/Release form actions above.
-        group.MapPost("/{blueprintKey}/{instanceId}/claim", async (
+        // is already surfaced to the worklist's own Pickup/Putback form actions above.
+        group.MapPost("/{blueprintKey}/{instanceId}/pickup", async (
             string blueprintKey, string instanceId, string cursorId, HttpContext ctx,
             IProcessManager engine, IOptions<WorklistOptions> optionsAccessor) =>
         {
             var options = optionsAccessor.Value;
             var userId = options.ResolveUserId(ctx);
             var tenantId = options.ResolveTenantId!(ctx);
-            engine.ClaimWorkItem(instanceId, cursorId, tenantId, userId, options.ResolveAccessProfile!(ctx));
+            engine.PickupWorkItem(instanceId, cursorId, tenantId, userId, options.ResolveAccessProfile!(ctx));
             return Results.Redirect(await ResolveReturnTo(ctx, prefix));
         });
 
-        group.MapPost("/{blueprintKey}/{instanceId}/release", async (
+        group.MapPost("/{blueprintKey}/{instanceId}/putback", async (
             string blueprintKey, string instanceId, string cursorId, HttpContext ctx,
             IProcessManager engine, IOptions<WorklistOptions> optionsAccessor) =>
         {
             var options = optionsAccessor.Value;
             var userId = options.ResolveUserId(ctx);
             var tenantId = options.ResolveTenantId!(ctx);
-            engine.ReleaseWorkItem(instanceId, cursorId, tenantId, userId, options.ResolveAccessProfile!(ctx));
+            engine.PutbackWorkItem(instanceId, cursorId, tenantId, userId, options.ResolveAccessProfile!(ctx));
             return Results.Redirect(await ResolveReturnTo(ctx, prefix));
         });
 
@@ -227,8 +227,8 @@ public static class WorklistExtensions
     }
 
     /// <summary>
-    /// Reads the "returnTo" hidden field a claim/release form posted (see
-    /// <see cref="RenderClaimReleaseControl"/>) — only trusted when it's a genuinely local,
+    /// Reads the "returnTo" hidden field a pickup/putback form posted (see
+    /// <see cref="RenderPickupPutbackControl"/>) — only trusted when it's a genuinely local,
     /// relative path (starts with "/", never "//" — the same open-redirect guard
     /// Program.cs's own login flow already uses), falling back to <paramref name="fallback"/>
     /// (the personal worklist) otherwise.
@@ -289,7 +289,7 @@ public static class WorklistExtensions
     /// team view — see docs/guides/queue-worklist-filtering.md / docs/guides/team-assignment.md.
     /// <paramref name="listUrl"/> is this page's own URL (the GET filter form self-submits here
     /// with no explicit "action", but <c>PageLink</c>'s own href needs it); <paramref name="itemUrlPrefix"/>
-    /// is always the worklist's own <c>prefix</c> — item review/claim/release links always point
+    /// is always the worklist's own <c>prefix</c> — item review/pickup/putback links always point
     /// there regardless of which list view rendered them.
     /// </summary>
     private static string RenderWorklistBody(
@@ -396,7 +396,7 @@ public static class WorklistExtensions
                   </td>
                   <td class="govuk-table__cell">{esc(item.InstanceId[..Math.Min(8, item.InstanceId.Length)])}…</td>
                   <td class="govuk-table__cell"><a class="govuk-link" href="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">{(item.Status == QueueWorkItemStatus.Actionable ? "Review" : "View")}</a></td>
-                  <td class="govuk-table__cell">{RenderClaimReleaseControl(item, itemUrlPrefix, listUrl)}</td>
+                  <td class="govuk-table__cell">{RenderPickupPutbackControl(item, itemUrlPrefix, listUrl)}</td>
                 </tr>
                 """));
 
@@ -422,7 +422,7 @@ public static class WorklistExtensions
                   <th class="govuk-table__header" scope="col">Stage</th>
                   <th class="govuk-table__header" scope="col">Instance</th>
                   <th class="govuk-table__header" scope="col"><span class="govuk-visually-hidden">Actions</span></th>
-                  <th class="govuk-table__header" scope="col"><span class="govuk-visually-hidden">Claim</span></th>
+                  <th class="govuk-table__header" scope="col"><span class="govuk-visually-hidden">Pick up</span></th>
                 </tr>
               </thead>
               <tbody class="govuk-table__body">{rows}</tbody>
@@ -432,16 +432,17 @@ public static class WorklistExtensions
     }
 
     /// <summary>
-    /// See docs/guides/work-allocation.md — claim/ownership is per-cursor (or, for a team-owned
+    /// See docs/guides/work-allocation.md — pickup/ownership is per-cursor (or, for a team-owned
     /// queue, per-<c>QueueAssignment</c>), orthogonal to <see cref="QueueWorkItemStatus"/>. Rendered
-    /// as "pick up"/"put back" — plain-English labels for what the engine's own API still calls
-    /// claim/release internally (see docs/guides/work-allocation.md's own "claim" vocabulary,
-    /// deliberately unchanged — it matches the wider workflow-engine convention this feature's own
-    /// design follows, e.g. Camunda's "claim"/"unclaim" task lifecycle; nothing here says a host's
-    /// own rendered copy has to match its engine's internal verb). No NN/g guidance was found for
-    /// this specific term (checked); "assign to me" is the closer real-world UK-government-service
-    /// convention (e.g. MyHMCTS), but "pick up"/"put back" reads more naturally in plain English and
-    /// pairs as an obvious verb/its-opposite, which "assign"/"unassign" doesn't as cleanly.
+    /// as "pick up"/"put back" — plain English, matching what the engine's own API calls it too
+    /// (<see cref="IProcessManager.PickupWorkItem"/>/<see cref="IProcessManager.PutbackWorkItem"/>),
+    /// so there's one vocabulary from the button a caseworker clicks through to the audit log. No
+    /// NN/g guidance was found for this specific term (checked); "assign to me" is the closer
+    /// real-world UK-government-service convention (e.g. MyHMCTS), but "pick up"/"put back" reads
+    /// more naturally in plain English and pairs as an obvious verb/its-opposite, which
+    /// "assign"/"unassign" doesn't as cleanly. It also avoids "claim", which OAuth/identity already
+    /// uses for something else entirely (a token's own claims) — a genuinely different concept this
+    /// worklist has nothing to do with.
     ///
     /// A pick-up/put-back button posts back to this same page (PRG, via the hidden "returnTo" field
     /// — see <see cref="ResolveReturnTo"/>), so acting never leaves a caseworker mid-way through a
@@ -451,17 +452,17 @@ public static class WorklistExtensions
     /// zero-margin button that reads as visually cramped/overlapping, not two distinct controls; the
     /// button gets its own top margin back to compensate, found live.
     /// </summary>
-    private static string RenderClaimReleaseControl(QueueWorkItem item, string itemUrlPrefix, string returnTo) => item.ClaimState switch
+    private static string RenderPickupPutbackControl(QueueWorkItem item, string itemUrlPrefix, string returnTo) => item.PickupState switch
     {
-        QueueWorkItemClaimState.Unclaimed => $"""
-            <form method="post" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/claim?cursorId={Uri.EscapeDataString(item.CursorId)}">
+        QueueWorkItemPickupState.NotPickedUp => $"""
+            <form method="post" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/pickup?cursorId={Uri.EscapeDataString(item.CursorId)}">
               <input type="hidden" name="returnTo" value="{GovUk.Esc(returnTo)}">
               <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Pick up</button>
             </form>
             """,
-        QueueWorkItemClaimState.ClaimedByMe => $"""
+        QueueWorkItemPickupState.PickedUpByMe => $"""
             <strong class="govuk-tag">With you</strong>
-            <form method="post" class="govuk-!-margin-top-2" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/release?cursorId={Uri.EscapeDataString(item.CursorId)}">
+            <form method="post" class="govuk-!-margin-top-2" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/putback?cursorId={Uri.EscapeDataString(item.CursorId)}">
               <input type="hidden" name="returnTo" value="{GovUk.Esc(returnTo)}">
               <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Put back</button>
             </form>

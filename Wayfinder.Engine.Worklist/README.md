@@ -2,7 +2,7 @@
 
 A default, optional caseworker worklist surface — server-rendered GOV.UK markup for the
 filter/sort/search/paginated queue list (see docs/guides/queue-worklist-filtering.md), an item
-review page, advance, and per-cursor claim/release (see docs/guides/work-allocation.md). A host
+review page, advance, and per-cursor pickup/putback (see docs/guides/work-allocation.md). A host
 wires it up once, or ignores this package entirely and hand-writes the same routes itself, as
 `Wayfinder.ReferenceApp` originally did.
 
@@ -27,12 +27,12 @@ app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
 action, and redirect inside the package is built from the `prefix` a host passes in, never
 hardcoded — so a host can mount this at any path it likes:
 
-- `GET  {prefix}` — the list: status/sort/search filters, a paginated table, and a Claim/Release
+- `GET  {prefix}` — the list: status/sort/search filters, a paginated table, and a Pick up/Put back
   control per row.
 - `GET  {prefix}/{blueprintKey}/{instanceId}` — the item review page.
 - `POST {prefix}/{blueprintKey}/{instanceId}/advance`
-- `POST {prefix}/{blueprintKey}/{instanceId}/claim?cursorId=...`
-- `POST {prefix}/{blueprintKey}/{instanceId}/release?cursorId=...`
+- `POST {prefix}/{blueprintKey}/{instanceId}/pickup?cursorId=...`
+- `POST {prefix}/{blueprintKey}/{instanceId}/putback?cursorId=...`
 
 ## What's deliberately left out
 
