@@ -10,16 +10,16 @@ using Wayfinder.Services.Sanitization;
 namespace Wayfinder.Tests.Engine;
 
 /// <summary>
-/// <c>ProcessManagerEngine.ClaimWorkItem</c>/<c>ReleaseWorkItem</c> — per-cursor claim/ownership,
-/// scoped to a cursor's dwell at its current node (see docs/guides/work-allocation.md). A claim
+/// <c>ProcessManagerEngine.PickupWorkItem</c>/<c>PutbackWorkItem</c> — per-cursor pickup/ownership,
+/// scoped to a cursor's dwell at its current node (see docs/guides/work-allocation.md). A pickup
 /// hides the row entirely from every other actor sharing the queue, survives an in-place cursor
 /// move (a "change:" jump or a plain stage-to-stage hop), and clears automatically the instant the
 /// cursor is consumed by a Split or Join gateway crossing — deliberate, not a bug.
 /// </summary>
-public class WorkAllocationClaimTests
+public class WorkAllocationPickupTests
 {
     private const string TenantId = "tenant";
-    private const string DefinitionKey = "claim-test";
+    private const string DefinitionKey = "pickup-test";
 
     private static readonly ActorProfile SharedQueueProfile = new()
     {
@@ -47,8 +47,8 @@ public class WorkAllocationClaimTests
 
     private const string BlueprintJson = """
         {
-          "definitionKey": "claim-test",
-          "displayName": "Claim Test",
+          "definitionKey": "pickup-test",
+          "displayName": "Pickup Test",
           "version": 1,
           "initialStage": "start",
           "requestPolicy": "multiple",
@@ -128,146 +128,146 @@ public class WorkAllocationClaimTests
     }
 
     [Fact]
-    public void ClaimingAZeroCursorInstance_MaterializesThePrimaryCursor_AndHidesItFromOtherActors()
+    public void PickingUpAZeroCursorInstance_MaterializesThePrimaryCursor_AndHidesItFromOtherActors()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
         started.Render!.Should().NotBeNull("sanity check: a fresh instance has no cursors yet");
 
-        var claimed = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
-        claimed.ResponseState.Should().Be("render");
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        pickedUp.ResponseState.Should().Be("render");
 
         var aliceView = engine.GetQueueWorkItems("alice", SharedQueueProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
-        aliceView.ClaimState.Should().Be(QueueWorkItemClaimState.ClaimedByMe);
+        aliceView.PickupState.Should().Be(QueueWorkItemPickupState.PickedUpByMe);
 
         engine.GetQueueWorkItems("bob", SharedQueueProfile).Items.Should()
-            .NotContain(i => i.InstanceId == started.InstanceId, "claimed by alice — hidden entirely from bob, not just non-actionable");
+            .NotContain(i => i.InstanceId == started.InstanceId, "picked up by alice — hidden entirely from bob, not just non-actionable");
 
         var bobDirectView = engine.GetCurrent(DefinitionKey, TenantId, "bob", SharedQueueProfile, started.InstanceId);
-        bobDirectView.ResponseState.Should().Be("error", "bob has no accessible work item on this instance at all once alice holds the claim");
+        bobDirectView.ResponseState.Should().Be("error", "bob has no accessible work item on this instance at all once alice holds the pickup");
     }
 
     [Fact]
-    public void ClaimedByOther_DirectAdvanceAttempt_StillFailsWithInvalidTransition()
+    public void PickedUpByOther_DirectAdvanceAttempt_StillFailsWithInvalidTransition()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        var claimed = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
         var bobAdvance = engine.Advance(
-            started.InstanceId, TenantId, "bob", SharedQueueProfile, "continue", claimed.StateVersion, null);
+            started.InstanceId, TenantId, "bob", SharedQueueProfile, "continue", pickedUp.StateVersion, null);
 
         bobAdvance.ResponseState.Should().Be("error");
         bobAdvance.Problems.Should().Contain(p => p.Code == "INVALID_TRANSITION");
     }
 
     [Fact]
-    public void SecondClaimAttempt_ByADifferentActor_ReturnsAlreadyClaimed()
+    public void SecondPickupAttempt_ByADifferentActor_ReturnsAlreadyPickedUp()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
-        var bobClaim = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "bob", SharedQueueProfile);
+        var bobPickup = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "bob", SharedQueueProfile);
 
-        bobClaim.ResponseState.Should().Be("error");
-        bobClaim.Problems.Should().Contain(p => p.Code == "ALREADY_CLAIMED");
+        bobPickup.ResponseState.Should().Be("error");
+        bobPickup.Problems.Should().Contain(p => p.Code == "ALREADY_PICKED_UP");
     }
 
     [Fact]
-    public void ReleaseWorkItem_ReturnsItToThePool_VisibleToEveryoneAgain()
+    public void PutbackWorkItem_ReturnsItToThePool_VisibleToEveryoneAgain()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        var claimed = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
-        var released = engine.ReleaseWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var putBack = engine.PutbackWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
-        released.ResponseState.Should().Be("render");
+        putBack.ResponseState.Should().Be("render");
         var bobView = engine.GetQueueWorkItems("bob", SharedQueueProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
-        bobView.ClaimState.Should().Be(QueueWorkItemClaimState.Unclaimed);
+        bobView.PickupState.Should().Be(QueueWorkItemPickupState.NotPickedUp);
 
-        // Self-service only — bob (who never held it) can't release someone else's claim, but this
-        // one is already unclaimed by the time he'd try, so re-releasing it himself is a no-op.
-        var bobReleaseAlreadyUnclaimed = engine.ReleaseWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "bob", SharedQueueProfile);
-        bobReleaseAlreadyUnclaimed.ResponseState.Should().Be("render");
+        // Self-service only — bob (who never held it) can't put back someone else's pickup, but this
+        // one is already not picked up by the time he'd try, so re-putting-it-back himself is a no-op.
+        var bobPutbackAlreadyNotPickedUp = engine.PutbackWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "bob", SharedQueueProfile);
+        bobPutbackAlreadyNotPickedUp.ResponseState.Should().Be("render");
     }
 
     [Fact]
-    public void ReleaseWorkItem_ByANonOwner_WhileStillClaimed_IsRejected()
+    public void PutbackWorkItem_ByANonOwner_WhileStillPickedUp_IsRejected()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
-        var bobRelease = engine.ReleaseWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "bob", SharedQueueProfile);
+        var bobPutback = engine.PutbackWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "bob", SharedQueueProfile);
 
-        bobRelease.ResponseState.Should().Be("error");
-        bobRelease.Problems.Should().Contain(p => p.Code == "ALREADY_CLAIMED_BY_OTHER");
+        bobPutback.ResponseState.Should().Be("error");
+        bobPutback.Problems.Should().Contain(p => p.Code == "ALREADY_PICKED_UP_BY_OTHER");
     }
 
     [Fact]
-    public void Claim_SurvivesAPlainStageToStageHop()
+    public void Pickup_SurvivesAPlainStageToStageHop()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        var claimed = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
-        // Claiming materialized Cursors.Count > 0, so this now goes through the multi-cursor
+        // Picking up materialized Cursors.Count > 0, so this now goes through the multi-cursor
         // MoveCursor path (a `with` update), not the zero-cursor path — the mechanism wrinkle #2
         // in docs/guides/work-allocation.md depends on.
-        var advanced = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "continue", claimed.StateVersion, null);
+        var advanced = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "continue", pickedUp.StateVersion, null);
         advanced.Render!.StateDisplayName.Should().Be("Middle");
 
         var bobView = engine.GetQueueWorkItems("bob", SharedQueueProfile).Items;
-        bobView.Should().NotContain(i => i.InstanceId == started.InstanceId, "the claim must still be in effect after the plain hop");
+        bobView.Should().NotContain(i => i.InstanceId == started.InstanceId, "the pickup must still be in effect after the plain hop");
 
         var aliceView = engine.GetQueueWorkItems("alice", SharedQueueProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
-        aliceView.ClaimState.Should().Be(QueueWorkItemClaimState.ClaimedByMe);
+        aliceView.PickupState.Should().Be(QueueWorkItemPickupState.PickedUpByMe);
         aliceView.StageKey.Should().Be("middle");
     }
 
     [Fact]
-    public void Claim_SurvivesAChangeLinkJump()
+    public void Pickup_SurvivesAChangeLinkJump()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        var claimed = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
-        var jumped = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "change:middle", claimed.StateVersion, null);
+        var jumped = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "change:middle", pickedUp.StateVersion, null);
         jumped.Render!.StateDisplayName.Should().Be("Middle");
 
         engine.GetQueueWorkItems("bob", SharedQueueProfile).Items
-            .Should().NotContain(i => i.InstanceId == started.InstanceId, "the claim must still be in effect after the change-link jump");
+            .Should().NotContain(i => i.InstanceId == started.InstanceId, "the pickup must still be in effect after the change-link jump");
     }
 
     [Fact]
-    public void Claim_ClearsAutomatically_WhenTheCursorCrossesASplitGateway()
+    public void Pickup_ClearsAutomatically_WhenTheCursorCrossesASplitGateway()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        var claimed = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
-        var afterSplit = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "go-wait", claimed.StateVersion, null);
+        var afterSplit = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "go-wait", pickedUp.StateVersion, null);
         afterSplit.ResponseState.Should().Be("defer", "alice's own cursor now waits at the join");
 
-        // A brand-new RequestCursor was minted for the join wait — the claim doesn't survive the
+        // A brand-new RequestCursor was minted for the join wait — the pickup doesn't survive the
         // Split crossing, so bob can see it again (this is the deliberate design, not a bug).
         var bobView = engine.GetQueueWorkItems("bob", SharedQueueProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
-        bobView.ClaimState.Should().BeNull("a Waiting row has nothing to claim");
+        bobView.PickupState.Should().BeNull("a Waiting row has nothing to pick up");
     }
 
     [Fact]
-    public void Claim_ClearsAutomatically_AfterAJoinReleases()
+    public void Pickup_ClearsAutomatically_AfterAJoinReleases()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
-        var claimed = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
-        var afterSplit = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "go-wait", claimed.StateVersion, null);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var afterSplit = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "go-wait", pickedUp.StateVersion, null);
 
         // Directly advance the automation cursor to complete the join — no support-system-call
         // needed for this test, just a plain single-cursor advance under a different profile.
@@ -292,11 +292,11 @@ public class WorkAllocationClaimTests
         // "Approved" is itself a bare panel (Done, per QueueWorkItemStatus) — request it explicitly.
         var bobView = engine.GetQueueWorkItems("bob", SharedQueueProfile, statuses: [QueueWorkItemStatus.Done]).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
-        bobView.ClaimState.Should().BeNull("a Done row has nothing to claim — no stale claim carried forward either way");
+        bobView.PickupState.Should().BeNull("a Done row has nothing to pick up — no stale pickup carried forward either way");
     }
 
     [Fact]
-    public void NotClaimable_AWaitingRow_ReturnsNotClaimable()
+    public void PickupNotAvailable_AWaitingRow_ReturnsPickupNotAvailable()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
@@ -304,14 +304,14 @@ public class WorkAllocationClaimTests
 
         // The join gateway's own cursor id — fetch it from the queue list first.
         var waitingItem = engine.GetQueueWorkItems("alice", SharedQueueProfile).Items.Single(i => i.InstanceId == afterSplit.InstanceId);
-        var realAttempt = engine.ClaimWorkItem(afterSplit.InstanceId, waitingItem.CursorId, TenantId, "alice", SharedQueueProfile);
+        var realAttempt = engine.PickupWorkItem(afterSplit.InstanceId, waitingItem.CursorId, TenantId, "alice", SharedQueueProfile);
 
         realAttempt.ResponseState.Should().Be("error");
-        realAttempt.Problems.Should().Contain(p => p.Code == "NOT_CLAIMABLE");
+        realAttempt.Problems.Should().Contain(p => p.Code == "PICKUP_NOT_AVAILABLE");
     }
 
     [Fact]
-    public void NotClaimable_ADoneRow_ReturnsNotClaimable()
+    public void PickupNotAvailable_ADoneRow_ReturnsPickupNotAvailable()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", SharedQueueProfile);
@@ -322,30 +322,30 @@ public class WorkAllocationClaimTests
         var doneItem = engine.GetQueueWorkItems("alice", SharedQueueProfile, statuses: [QueueWorkItemStatus.Done]).Items
             .Single(i => i.InstanceId == started.InstanceId);
 
-        var claimAttempt = engine.ClaimWorkItem(started.InstanceId, doneItem.CursorId, TenantId, "alice", SharedQueueProfile);
+        var pickupAttempt = engine.PickupWorkItem(started.InstanceId, doneItem.CursorId, TenantId, "alice", SharedQueueProfile);
 
-        claimAttempt.ResponseState.Should().Be("error");
-        claimAttempt.Problems.Should().Contain(p => p.Code == "NOT_CLAIMABLE");
+        pickupAttempt.ResponseState.Should().Be("error");
+        pickupAttempt.Problems.Should().Contain(p => p.Code == "PICKUP_NOT_AVAILABLE");
     }
 
     [Fact]
-    public void NotClaimable_AnOwnerRestrictedProfile_ReturnsNotClaimable()
+    public void PickupNotAvailable_AnOwnerRestrictedProfile_ReturnsPickupNotAvailable()
     {
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "alice", OwnerRestrictedProfile);
 
-        var claimAttempt = engine.ClaimWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", OwnerRestrictedProfile);
+        var pickupAttempt = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", OwnerRestrictedProfile);
 
-        claimAttempt.ResponseState.Should().Be("error");
-        claimAttempt.Problems.Should().Contain(p => p.Code == "NOT_CLAIMABLE", "an owner-restricted instance already has exactly one possible actor — nothing to claim");
+        pickupAttempt.ResponseState.Should().Be("error");
+        pickupAttempt.Problems.Should().Contain(p => p.Code == "PICKUP_NOT_AVAILABLE", "an owner-restricted instance already has exactly one possible actor — nothing to pick up");
     }
 
     [Fact]
-    public void ClaimWorkItem_OnAnUnknownInstance_ReturnsInstanceNotFound()
+    public void PickupWorkItem_OnAnUnknownInstance_ReturnsInstanceNotFound()
     {
         var engine = BuildEngine();
 
-        var result = engine.ClaimWorkItem("does-not-exist", RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
+        var result = engine.PickupWorkItem("does-not-exist", RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
         result.ResponseState.Should().Be("error");
         result.Problems.Should().Contain(p => p.Code == "INSTANCE_NOT_FOUND");

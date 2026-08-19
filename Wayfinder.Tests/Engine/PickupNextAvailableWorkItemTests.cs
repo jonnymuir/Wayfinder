@@ -10,14 +10,14 @@ using Wayfinder.Services.Sanitization;
 namespace Wayfinder.Tests.Engine;
 
 /// <summary>
-/// <c>ProcessManagerEngine.ClaimNextAvailableWorkItem</c> — the automated/scaled-out "give me the
+/// <c>ProcessManagerEngine.PickupNextAvailableWorkItem</c> — the automated/scaled-out "give me the
 /// next thing" primitive (see docs/guides/work-allocation.md). Deliberately simple for v1: one
-/// atomic claim, no lease/heartbeat/expiry.
+/// atomic pickup, no lease/heartbeat/expiry.
 /// </summary>
-public class ClaimNextAvailableWorkItemTests
+public class PickupNextAvailableWorkItemTests
 {
     private const string TenantId = "tenant";
-    private const string DefinitionKey = "claim-next-test";
+    private const string DefinitionKey = "pickup-next-test";
 
     private static readonly ActorProfile SharedQueueProfile = new()
     {
@@ -44,8 +44,8 @@ public class ClaimNextAvailableWorkItemTests
 
     private const string BlueprintJson = """
         {
-          "definitionKey": "claim-next-test",
-          "displayName": "Claim Next Test",
+          "definitionKey": "pickup-next-test",
+          "displayName": "Pickup Next Test",
           "version": 1,
           "initialStage": "start",
           "requestPolicy": "multiple",
@@ -85,79 +85,79 @@ public class ClaimNextAvailableWorkItemTests
     };
 
     [Fact]
-    public void ReturnsTheOldestEligibleUnclaimedRow()
+    public void ReturnsTheOldestEligibleNotPickedUpRow()
     {
         var engine = BuildEngine();
         var first = engine.GetCurrent(DefinitionKey, TenantId, "creator", EligibleProfile);
         Thread.Sleep(15);
         var second = engine.GetCurrent(DefinitionKey, TenantId, "creator", EligibleProfile);
 
-        var claimed = engine.ClaimNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile);
+        var pickedUp = engine.PickupNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile);
 
-        claimed.Should().NotBeNull();
-        claimed!.InstanceId.Should().Be(first.InstanceId, "the older of the two instances must be claimed first");
-        claimed.ClaimState.Should().Be(QueueWorkItemClaimState.ClaimedByMe);
+        pickedUp.Should().NotBeNull();
+        pickedUp!.InstanceId.Should().Be(first.InstanceId, "the older of the two instances must be picked up first");
+        pickedUp.PickupState.Should().Be(QueueWorkItemPickupState.PickedUpByMe);
         second.InstanceId.Should().NotBe(first.InstanceId, "sanity check: these really are two distinct instances");
     }
 
     [Fact]
-    public void TwoRacingCallers_NeverClaimTheSameRow()
+    public void TwoRacingCallers_NeverPickUpTheSameRow()
     {
         var engine = BuildEngine();
         var first = engine.GetCurrent(DefinitionKey, TenantId, "creator", EligibleProfile);
         var second = engine.GetCurrent(DefinitionKey, TenantId, "creator", EligibleProfile);
 
-        var claimedByWorker1 = engine.ClaimNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile);
-        var claimedByWorker2 = engine.ClaimNextAvailableWorkItem(TenantId, "worker-2", EligibleProfile);
+        var pickedUpByWorker1 = engine.PickupNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile);
+        var pickedUpByWorker2 = engine.PickupNextAvailableWorkItem(TenantId, "worker-2", EligibleProfile);
 
-        claimedByWorker1.Should().NotBeNull();
-        claimedByWorker2.Should().NotBeNull();
-        claimedByWorker1!.InstanceId.Should().NotBe(claimedByWorker2!.InstanceId);
-        new[] { claimedByWorker1.InstanceId, claimedByWorker2.InstanceId }
+        pickedUpByWorker1.Should().NotBeNull();
+        pickedUpByWorker2.Should().NotBeNull();
+        pickedUpByWorker1!.InstanceId.Should().NotBe(pickedUpByWorker2!.InstanceId);
+        new[] { pickedUpByWorker1.InstanceId, pickedUpByWorker2.InstanceId }
             .Should().BeEquivalentTo([first.InstanceId, second.InstanceId]);
     }
 
     [Fact]
-    public void ReturnsNull_WhenNothingIsClaimable()
+    public void ReturnsNull_WhenNothingIsAvailableToPickUp()
     {
         var engine = BuildEngine();
 
-        engine.ClaimNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile).Should().BeNull();
+        engine.PickupNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile).Should().BeNull();
     }
 
     [Fact]
-    public void ReturnsNull_OnceEverythingIsAlreadyClaimed()
+    public void ReturnsNull_OnceEverythingIsAlreadyPickedUp()
     {
         var engine = BuildEngine();
         engine.GetCurrent(DefinitionKey, TenantId, "creator", EligibleProfile);
-        engine.ClaimNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile);
+        engine.PickupNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile);
 
-        engine.ClaimNextAvailableWorkItem(TenantId, "worker-2", EligibleProfile).Should().BeNull();
+        engine.PickupNextAvailableWorkItem(TenantId, "worker-2", EligibleProfile).Should().BeNull();
     }
 
     [Fact]
-    public void RespectsQueueEligibility_AnIneligibleProfileNeverClaimsAGatedQueuesRow()
+    public void RespectsQueueEligibility_AnIneligibleProfileNeverPicksUpAGatedQueuesRow()
     {
         var engine = BuildEngine();
         engine.GetCurrent(DefinitionKey, TenantId, "creator", EligibleProfile);
 
-        engine.ClaimNextAvailableWorkItem(TenantId, "worker-1", IneligibleProfile).Should().BeNull(
+        engine.PickupNextAvailableWorkItem(TenantId, "worker-1", IneligibleProfile).Should().BeNull(
             "the queue declares roleGates: ['worker'], which IneligibleProfile doesn't hold");
     }
 
     [Fact]
-    public void SkipsAnAlreadyClaimedRow_AndClaimsTheNextOldestInstead()
+    public void SkipsAnAlreadyPickedUpRow_AndPicksUpTheNextOldestInstead()
     {
         var engine = BuildEngine();
         var first = engine.GetCurrent(DefinitionKey, TenantId, "creator", EligibleProfile);
         Thread.Sleep(15);
         var second = engine.GetCurrent(DefinitionKey, TenantId, "creator", EligibleProfile);
 
-        engine.ClaimWorkItem(first.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "already-claimed-by-someone", EligibleProfile);
+        engine.PickupWorkItem(first.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "already-picked-up-by-someone", EligibleProfile);
 
-        var claimed = engine.ClaimNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile);
+        var pickedUp = engine.PickupNextAvailableWorkItem(TenantId, "worker-1", EligibleProfile);
 
-        claimed.Should().NotBeNull();
-        claimed!.InstanceId.Should().Be(second.InstanceId, "the oldest one is already claimed, so the next-oldest must be picked instead");
+        pickedUp.Should().NotBeNull();
+        pickedUp!.InstanceId.Should().Be(second.InstanceId, "the oldest one is already picked up, so the next-oldest must be picked instead");
     }
 }
