@@ -72,6 +72,17 @@ public record ServiceRequest
     public IReadOnlyList<SupportSystemInvocation> SupportSystemInvocations { get; init; } = [];
 
     /// <summary>
+    /// Durable per-queue-key ownership records for team-owned queues — key is the queue key. See
+    /// <see cref="QueueAssignment"/> and docs/guides/team-assignment.md. Established once per
+    /// queue key an instance's cursor ever lands in (for a queue declaring
+    /// <c>QueueDefinition.AssignmentPolicy</c>), never removed — so a later re-entry into the same
+    /// queue key reuses the same record rather than re-running that queue's assignment policy.
+    /// Empty/unused for any instance whose blueprint declares no team-owned queues.
+    /// </summary>
+    public IReadOnlyDictionary<string, QueueAssignment> QueueAssignments { get; init; } =
+        new Dictionary<string, QueueAssignment>();
+
+    /// <summary>
     /// The most recently computed calculation result for this instance's current stage, if
     /// its definition has a calculations block and it last evaluated cleanly. Not part of the
     /// public runtime contract — internal bookkeeping so a composed caller (e.g. the

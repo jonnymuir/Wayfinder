@@ -79,6 +79,10 @@ const BULK_DATASET_INGEST_SCHEMA: ComponentPropertyDescriptor[] = [
   { key: 'warningCountField', title: 'Warning count field', valueKind: 'String', required: false, description: 'Optional new field name the warning row count is written into.' },
   { key: 'acceptedCountField', title: 'Accepted count field', valueKind: 'String', required: false, description: 'Optional new field name the accepted row count is written into.' },
   {
+    key: 'dirtyCountField', title: 'Dirty count field', valueKind: 'String', required: false,
+    description: 'Optional new field name the number of rows currently edited-since-last-check is written into — 0 right after ingest, kept live as corrections/reverts happen while sitting on this stage. Reference it in a showWhen condition (declared under calculations.fields with source: "service") to block finishing until the file is resubmitted or those edits are discarded — see docs/guides/bulk-data-review.md’s sync-state section.',
+  },
+  {
     key: 'columns', title: 'Columns', valueKind: 'Array', required: true, items: BULK_DATASET_COLUMN_SCHEMA,
     description: 'One entry per CSV column — the only place this dataset’s shape is authored. Exactly one column must have role RowKey.',
   },

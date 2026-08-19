@@ -338,9 +338,17 @@ public static class GovUkComponents
         var apiUrl = GovUk.Esc(component.BulkDatasetApiUrl);
         var pageSize = component.PageSize ?? 20;
 
+        // Every one of these three is genuinely per-service vocabulary (see
+        // BulkDataReviewComponent's own remarks) — resolved to a concrete default exactly once,
+        // here, so neither this markup nor the client JS that reads it back off these data
+        // attributes needs its own separate fallback logic.
+        var syncedLabel = string.IsNullOrEmpty(component.SyncedLabel) ? "Synced" : component.SyncedLabel;
+        var pendingLabel = string.IsNullOrEmpty(component.PendingLabel) ? "Needs resubmission" : component.PendingLabel;
+        var sinceLabel = string.IsNullOrEmpty(component.SinceLabel) ? "since the file was last checked" : component.SinceLabel;
+
         return $"""
             {heading}
-            <div class="wayfinder-bulk-review" data-wayfinder-bulk-review data-wayfinder-bulk-review-api="{apiUrl}" data-wayfinder-bulk-review-page-size="{pageSize}">
+            <div class="wayfinder-bulk-review" data-wayfinder-bulk-review data-wayfinder-bulk-review-api="{apiUrl}" data-wayfinder-bulk-review-page-size="{pageSize}" data-wayfinder-bulk-review-synced-label="{GovUk.Esc(syncedLabel)}" data-wayfinder-bulk-review-pending-label="{GovUk.Esc(pendingLabel)}" data-wayfinder-bulk-review-since-label="{GovUk.Esc(sinceLabel)}">
               <noscript>
                 <p class="govuk-body">Turn on JavaScript to review rows individually, or <a class="govuk-link" href="{apiUrl}/download">download the full file</a> to review it another way.</p>
               </noscript>
@@ -353,6 +361,19 @@ public static class GovUkComponents
                   <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-filter="All" aria-pressed="false">All rows</button>
                 </div>
                 <a class="govuk-link" href="{apiUrl}/download">Download full file</a>
+              </div>
+              <div class="wayfinder-bulk-review__revert" data-wayfinder-bulk-review-revert hidden>
+                <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-revert-trigger aria-expanded="false" aria-controls="wayfinder-bulk-review-revert-panel">Discard all pending changes</button>
+                <div id="wayfinder-bulk-review-revert-panel" data-wayfinder-bulk-review-revert-panel hidden tabindex="-1" class="wayfinder-bulk-review__revert-panel">
+                  <div class="govuk-warning-text">
+                    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                    <strong class="govuk-warning-text__text"><span class="govuk-visually-hidden">Warning</span> This will discard every change made {GovUk.Esc(sinceLabel)}. This cannot be undone.</strong>
+                  </div>
+                  <div class="govuk-button-group">
+                    <button type="button" class="govuk-button govuk-button--warning" data-wayfinder-bulk-review-revert-confirm>Yes, discard changes</button>
+                    <button type="button" class="govuk-button govuk-button--secondary" data-wayfinder-bulk-review-revert-cancel>Cancel</button>
+                  </div>
+                </div>
               </div>
               <div class="wayfinder-bulk-review__rows" data-wayfinder-bulk-review-rows></div>
               <div data-wayfinder-bulk-review-pagination hidden>

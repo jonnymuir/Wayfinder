@@ -42,6 +42,13 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     await test.step('Caseworker sees it in the shared queue alongside the licence demo', async () => {
       await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
       await expect(caseworkerPage.getByText('Model your performance insurance premium')).toBeVisible();
+
+      // This queue declares no AssignmentPolicy — pickup is still mandatory (see
+      // docs/guides/work-allocation.md), same as work-allocation.spec.ts's own juggling-licence
+      // row: nobody can review a shared-queue item they haven't picked up.
+      await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
+      await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
+
       await caseworkerPage.getByRole('link', { name: 'Review' }).click();
     });
 
@@ -56,6 +63,22 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     await test.step('Applicant sees the confirmed premium', async () => {
       await applicantPage.reload();
       await expect(applicantPage.getByRole('heading', { name: 'Your premium has been confirmed' })).toBeVisible();
+    });
+
+    await test.step('A reload keeps showing the same confirmation — an ordinary visit must not silently reset it', async () => {
+      // requestPolicy "single" is deliberately sticky on ambient GetCurrent — a returning
+      // applicant sees "confirmed", not a blank form (see JourneyExtensions.MapJourney's own
+      // remarks). Only the distinct "Model another premium" link (below) starts fresh.
+      await applicantPage.reload();
+      await expect(applicantPage.getByRole('heading', { name: 'Your premium has been confirmed' })).toBeVisible();
+    });
+
+    await test.step('"Model another premium" is the explicit, distinct way to start fresh', async () => {
+      await applicantPage.getByRole('link', { name: 'Model another premium' }).click();
+      await expect(applicantPage.getByRole('heading', { name: 'Model your performance insurance premium' })).toBeVisible();
+      // A genuinely fresh instance, not the same confirmed one re-rendered — no stale total left
+      // over from the first modelling round.
+      await expect(applicantPage.locator('.wayfinder-stat-card--emphasis .wayfinder-stat-card__value')).toHaveText('£64');
     });
 
     await applicantContext.close();
@@ -120,6 +143,12 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     const caseworkerContext = await browser.newContext();
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
+
+    // This queue declares no AssignmentPolicy — pickup is still mandatory (see
+    // docs/guides/work-allocation.md).
+    await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
+    await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
+
     await caseworkerPage.getByRole('link', { name: 'Review' }).click();
     await caseworkerPage.getByRole('button', { name: 'Refer to a broker' }).click();
 

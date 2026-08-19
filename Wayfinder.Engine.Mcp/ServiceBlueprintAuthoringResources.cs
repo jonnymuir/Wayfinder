@@ -97,8 +97,10 @@ public static class ServiceBlueprintAuthoringResources
         "review experience layered on top of Support Systems, for an external system that only ever " +
         "speaks whole-file-in/whole-file-out. The bulk-dataset-ingest/bulk-dataset-materialize action " +
         "convention, column role vocabulary (RowKey/Data/ResponseMatchedId/ResponseError/ResponseWarning), " +
-        "and how a BulkDataReviewComponent binds to the resulting dataset. For whoever is authoring a " +
-        "blueprint against a host with IBulkDatasetStore registered.")]
+        "how a BulkDataReviewComponent binds to the resulting dataset, and its sync-state gating " +
+        "(dirtyCountField, IProcessManager.SyncServiceFields) for catching a correction made after a " +
+        "clean revalidation before it can be finished unchecked. For whoever is authoring a blueprint " +
+        "against a host with IBulkDatasetStore registered.")]
     public static string BulkDataReview() => ReadEmbeddedDoc("bulk-data-review.md");
 
     [McpServerResource(
@@ -127,6 +129,36 @@ public static class ServiceBlueprintAuthoringResources
         "options, free-text search semantics, and pagination. For whoever is building a Wayfinder " +
         "host, not whoever is authoring a blueprint against one.")]
     public static string QueueWorklistFiltering() => ReadEmbeddedDoc("queue-worklist-filtering.md");
+
+    [McpServerResource(
+        Name = "work-allocation",
+        UriTemplate = "service-blueprint-docs://work-allocation",
+        Title = "Work Allocation: Queue Eligibility, Pickup/Ownership, and Audit",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "How Wayfinder models real work-allocation scenarios: QueueDefinition.RoleGates (declared " +
+        "team eligibility, checked against ActorProfile.Capabilities), per-cursor pickup/ownership " +
+        "(PickupWorkItem/PutbackWorkItem/PickupNextAvailableWorkItem — scoped to a cursor's dwell, " +
+        "cleared automatically on a Split/Join crossing), the atomic compare-and-swap primitive " +
+        "backing safe concurrent pickup, the audit log (IAuditLogStore), and why " +
+        "ServiceBlueprintRouteDefinition.RequiresRole is now genuinely enforced. For whoever is " +
+        "building a Wayfinder host; a blueprint author only needs RoleGates.")]
+    public static string WorkAllocation() => ReadEmbeddedDoc("work-allocation.md");
+
+    [McpServerResource(
+        Name = "team-assignment",
+        UriTemplate = "service-blueprint-docs://team-assignment",
+        Title = "Team-Based Work Assignment: AssignmentPolicy, Team Trays, and Initiator Ownership",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "How Wayfinder scopes pickup to a specific team (QueueDefinition.AssignmentPolicy: " +
+        "'team-tray', OwningTeamId, ActorProfile.TeamIds) or skips it entirely because a row is " +
+        "already owned the instant it exists ('assign-to-initiator'). Covers where ownership " +
+        "actually lives (ServiceRequest.QueueAssignments, not RequestCursor.AssignedTo, once a " +
+        "policy is declared) and the queue-boundary reset when an instance crosses into a " +
+        "genuinely different team-owned queue. Builds on the mandatory-pickup rule in " +
+        "work-allocation.md, which applies regardless of whether a queue declares anything here.")]
+    public static string TeamAssignment() => ReadEmbeddedDoc("team-assignment.md");
 
     private static string ReadEmbeddedDoc(string fileName)
     {

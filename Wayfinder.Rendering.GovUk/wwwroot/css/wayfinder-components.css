@@ -176,6 +176,15 @@
   margin-bottom: 1rem;
 }
 
+.wayfinder-bulk-review__sync-status {
+  font-weight: 700;
+  color: #00703c;
+}
+
+.wayfinder-bulk-review__sync-status--dirty {
+  color: #d4351c;
+}
+
 .wayfinder-bulk-review__controls {
   display: flex;
   flex-wrap: wrap;
@@ -183,6 +192,14 @@
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.wayfinder-bulk-review__revert {
+  margin-bottom: 1rem;
+}
+
+.wayfinder-bulk-review__revert [data-wayfinder-bulk-review-revert-panel] {
+  margin-top: 1rem;
 }
 
 .wayfinder-bulk-review__rows {

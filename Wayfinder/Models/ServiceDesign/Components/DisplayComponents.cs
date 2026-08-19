@@ -95,4 +95,29 @@ public sealed record BulkDataReviewComponent : Component
 
     /// <summary>How many attention-rows to show per page. Default 20.</summary>
     public int PageSize { get; init; } = 20;
+
+    /// <summary>
+    /// Label shown when a row/the whole dataset matches what was last checked — null/empty falls
+    /// back to "Synced". Deliberately generic wording by default: "checked" fits any revalidation
+    /// scheme, not just a resubmit-a-file one (see <see cref="PendingLabel"/>).
+    /// </summary>
+    public string? SyncedLabel { get; init; }
+
+    /// <summary>
+    /// Label shown when a row/the whole dataset has changed since the last check — null/empty
+    /// falls back to "Needs resubmission". This is genuinely per-service vocabulary: a file
+    /// resubmission flow (njf-contributions.json sets this to "Pending resubmission") reads very
+    /// differently from, say, a service that revalidates by re-running an internal check with no
+    /// external file at all. See docs/guides/bulk-data-review.md's sync-state section.
+    /// </summary>
+    public string? PendingLabel { get; init; }
+
+    /// <summary>
+    /// The reference-point phrase composed into both the sync-status line and the "discard all
+    /// pending changes" confirmation warning, e.g. "since the file was last checked" (the default)
+    /// or "since the file was last submitted". Kept as one shared property, not two separate
+    /// strings, so the two surfaces can never say something different from each other for the
+    /// same blueprint.
+    /// </summary>
+    public string? SinceLabel { get; init; }
 }

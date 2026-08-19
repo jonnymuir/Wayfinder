@@ -23,9 +23,100 @@ function escapeHtml(value) {
   return div.innerHTML;
 }
 
+// Every button's own name="action" value="..." — the same identifier Advance()'s own trigger
+// resolution reads — sorted so two sets with the same members compare equal regardless of render
+// order.
+function actionKeys(actionBarEl) {
+  return Array.from(actionBarEl.querySelectorAll('button[name="action"]'))
+    .map((button) => button.value)
+    .sort();
+}
+
+function sameActionSet(a, b) {
+  return a.length === b.length && a.every((key, i) => key === b[i]);
+}
+
+// The page's one hidden stateVersion input (GovUkComponentRenderer.RenderForm's own optimistic-
+// concurrency token) MUST be kept current after anything that mutates FieldValues outside a normal
+// page render — a bulk-dataset correction/revert genuinely bumps the persisted state version via
+// IProcessManager.SyncBulkDatasetSyncState, exactly like a real Advance() would. Skipping this
+// isn't an option: the very next real submit on the page (Resubmit, Accept and finish, ...) would
+// post the now-stale version and get rejected with VERSION_MISMATCH — found live, a resubmit click
+// immediately after an unrelated correction failed this way before this existed. Runs on every
+// sync, independent of whether the visible button set below actually changes.
+function syncStateVersion(actionBarFragmentEl) {
+  const version = actionBarFragmentEl?.getAttribute('data-wayfinder-state-version');
+  if (version === null || version === undefined) {
+    return;
+  }
+
+  const stateVersionInput = document.querySelector('form input[name="stateVersion"]');
+  if (stateVersionInput) {
+    stateVersionInput.value = version;
+  }
+}
+
+// Applies the page's own action-bar fragment (see GovUkComponentRenderer.RenderActionButtons) just
+// returned by a correct/revert POST. The visible button group is only actually swapped when the
+// *set* of available route triggers differs from what's already rendered — most corrections don't
+// change route availability at all (e.g. correcting one field on an already-erroring row that
+// still has other errors) — for those, the DOM is left completely untouched, not just silently
+// re-rendered to the same thing. That matters for more than tidiness: replacing a button element
+// out from under a real click in flight is a genuine race (found live — a resubmit click landing
+// in the split second after an unrelated correction's own swap fired lost its click entirely).
+// Skipping the swap whenever nothing changed removes that race for the overwhelming majority of
+// corrections; the residual window on a *genuine* availability change (rare, and only ever
+// immediately after the caseworker's own action) is caught server-side regardless — see
+// ProcessManagerEngine.Advance's own fail-closed trigger resolution.
+//
+// When something does change, no aria-live on the button group itself (that would announce on
+// every swap that reaches this point) — only the fragment's own role="status" paragraph gets a
+// message, so a screen-reader user hears "an option is no longer available" exactly when that's
+// true. Never moves focus — whatever the caseworker was doing elsewhere on the page is left alone.
+function applyActionBarUpdate(html) {
+  if (typeof html !== 'string') {
+    return;
+  }
+
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  const next = temp.firstElementChild;
+  if (!next) {
+    return;
+  }
+
+  syncStateVersion(next);
+
+  const current = document.querySelector('[data-wayfinder-action-bar]');
+  if (!current) {
+    return;
+  }
+
+  const before = actionKeys(current);
+  const after = actionKeys(next);
+  if (sameActionSet(before, after)) {
+    return;
+  }
+
+  current.replaceWith(next);
+
+  const status = next.querySelector('[data-wayfinder-action-bar-status]');
+  if (status) {
+    status.textContent = after.length < before.length
+      ? 'An option is no longer available until you resubmit or discard your changes.'
+      : 'An option is now available.';
+  }
+}
+
 function initBulkReview(root) {
   const apiBase = root.getAttribute('data-wayfinder-bulk-review-api');
   const pageSize = Number(root.getAttribute('data-wayfinder-bulk-review-page-size')) || 20;
+  // Per-service vocabulary (see BulkDataReviewComponent's own remarks) — GovUkComponents.RenderBulkDataReview
+  // has already resolved these to concrete strings (never blank), so no fallback logic is needed
+  // here too.
+  const syncedLabel = root.getAttribute('data-wayfinder-bulk-review-synced-label');
+  const pendingLabel = root.getAttribute('data-wayfinder-bulk-review-pending-label');
+  const sinceLabel = root.getAttribute('data-wayfinder-bulk-review-since-label');
   const summaryEl = root.querySelector('[data-wayfinder-bulk-review-summary]');
   const controlsEl = root.querySelector('[data-wayfinder-bulk-review-controls]');
   const rowsEl = root.querySelector('[data-wayfinder-bulk-review-rows]');
@@ -36,6 +127,11 @@ function initBulkReview(root) {
   const prevButton = root.querySelector('[data-wayfinder-bulk-review-prev]');
   const nextButton = root.querySelector('[data-wayfinder-bulk-review-next]');
   const filterButtons = root.querySelectorAll('[data-wayfinder-bulk-review-filter]');
+  const revertContainer = root.querySelector('[data-wayfinder-bulk-review-revert]');
+  const revertTrigger = root.querySelector('[data-wayfinder-bulk-review-revert-trigger]');
+  const revertPanel = root.querySelector('[data-wayfinder-bulk-review-revert-panel]');
+  const revertConfirm = root.querySelector('[data-wayfinder-bulk-review-revert-confirm]');
+  const revertCancel = root.querySelector('[data-wayfinder-bulk-review-revert-cancel]');
   const form = root.closest('form');
 
   const state = { filter: 'NeedsAttention', page: 0, columns: [] };
@@ -93,10 +189,29 @@ function initBulkReview(root) {
       }
 
       state.columns = summary.columns ?? [];
+      const dirtyCount = summary.dirtyRowCount ?? 0;
+      // syncedLabel/pendingLabel/sinceLabel, not hardcoded "saved"/"unsaved" wording — a correction
+      // is never validated by this system itself, only by resubmitting through whatever external
+      // system owns the real verdict (see docs/guides/bulk-data-review.md's sync-state section, and
+      // BulkDataReviewComponent's own remarks on why this is per-service vocabulary). Deliberately
+      // its own line, distinct from the per-row status below: that describes whether one field
+      // reached the server; this describes whether the *file as a whole* still matches what was
+      // last actually checked.
+      const syncStatus = dirtyCount > 0
+        ? `<p class="govuk-body wayfinder-bulk-review__sync-status wayfinder-bulk-review__sync-status--dirty">${escapeHtml(pendingLabel)} — ${escapeHtml(dirtyCount)} row${dirtyCount === 1 ? '' : 's'} changed ${escapeHtml(sinceLabel)}.</p>`
+        : `<p class="govuk-body wayfinder-bulk-review__sync-status">${escapeHtml(syncedLabel)} ${escapeHtml(sinceLabel)}.</p>`;
+
       summaryEl.innerHTML = `<p class="govuk-body">${escapeHtml(summary.totalRowCount)} rows in total &mdash; ` +
         `${escapeHtml(summary.errorRowCount)} with errors, ${escapeHtml(summary.warningRowCount)} with warnings, ` +
-        `${escapeHtml(summary.acceptedRowCount)} accepted.</p>`;
+        `${escapeHtml(summary.acceptedRowCount)} accepted.</p>${syncStatus}`;
       controlsEl.hidden = false;
+
+      if (revertContainer) {
+        revertContainer.hidden = dirtyCount === 0;
+        if (dirtyCount === 0 && revertPanel && !revertPanel.hidden) {
+          closeRevertPanel();
+        }
+      }
     });
   }
 
@@ -213,14 +328,23 @@ function initBulkReview(root) {
         }))
         .then((response) => {
           if (response.ok) {
-            setSaveStatus('Saved', 'saved');
+            // Not "Saved" — this system never validates a correction itself, only whatever
+            // external system a resubmit sends it to does (see loadSummary's own sync-status line
+            // above, and docs/guides/bulk-data-review.md's sync-state section for why "saved"
+            // alone was the misleading word here). pendingLabel, the same word the dataset-level
+            // line uses when dirty — consistent vocabulary, one property controls both.
+            setSaveStatus(pendingLabel, 'saved');
             if (!dirty) {
               pendingSaves.delete(row.rowKey);
             }
-          } else {
-            dirty = true;
-            setSaveStatus('Could not save — try again.', 'error');
+            return response.text().then((html) => {
+              applyActionBarUpdate(html);
+              return loadSummary();
+            });
           }
+
+          dirty = true;
+          setSaveStatus('Could not save — try again.', 'error');
         })
         .catch(() => {
           dirty = true;
@@ -284,6 +408,53 @@ function initBulkReview(root) {
       loadRows();
     });
   });
+
+  // Discard-all: a GOV.UK-style inline confirmation, not a native confirm() dialog (inconsistent
+  // styling, and unreachable in the same accessible way across browsers/screen readers). Revealing
+  // the panel moves focus deliberately onto it (tabindex="-1" on the warning-text container itself,
+  // not straight onto the destructive "Yes, discard changes" button, so an accidental key repeat
+  // can't land on it) — the one place in this whole component where moving focus is correct,
+  // since the caseworker just explicitly asked for this panel. Every other DOM update in this file
+  // (row cards saving, the action bar swapping) deliberately never moves focus at all.
+  function openRevertPanel() {
+    revertPanel.hidden = false;
+    revertTrigger.setAttribute('aria-expanded', 'true');
+    revertPanel.focus();
+  }
+
+  function closeRevertPanel() {
+    revertPanel.hidden = true;
+    revertTrigger.setAttribute('aria-expanded', 'false');
+  }
+
+  if (revertTrigger && revertPanel && revertConfirm && revertCancel) {
+    revertTrigger.addEventListener('click', openRevertPanel);
+
+    revertCancel.addEventListener('click', () => {
+      closeRevertPanel();
+      revertTrigger.focus();
+    });
+
+    revertConfirm.addEventListener('click', () => {
+      revertConfirm.disabled = true;
+      // Flush first, not discard-then-revert: a still-pending edit is included in the same audit
+      // trail as everything else (see IBulkDatasetStore's own "audit trail is data" principle) —
+      // it's then immediately reverted along with every other pending change, rather than being
+      // silently dropped un-recorded.
+      flushAll()
+        .then(() => fetch(`${apiBase}/revert`, { method: 'POST', credentials: 'same-origin' }))
+        .then((response) => (response.ok ? response.text() : null))
+        .then((html) => {
+          closeRevertPanel();
+          revertTrigger.focus();
+          applyActionBarUpdate(html);
+          return Promise.all([loadSummary(), loadRows()]);
+        })
+        .finally(() => {
+          revertConfirm.disabled = false;
+        });
+    });
+  }
 
   loadSummary().then(loadRows);
 }

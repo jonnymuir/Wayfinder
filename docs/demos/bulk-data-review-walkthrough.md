@@ -72,8 +72,10 @@ exist yet, the same way a route can be withheld anywhere else in Wayfinder.
 
 Priya fixes the tier on Cara Delgado's card directly — types "Recreational" over "Bogus". There's
 no "Save" button to click: the correction **autosaves**, shortly after she stops typing, and the
-card's own status line tells her so ("Saved"). That's a small request scoped to this one row; the
-other four rows, and the file sitting behind them, are untouched.
+card's own status line tells her so ("Saved for resubmission" — not just "Saved": nothing here
+validates the correction itself, only resubmitting through SafetyNet Underwriting does, and the
+wording says so). That's a small request scoped to this one row; the other four rows, and the file
+sitting behind them, are untouched.
 
 This matters more than it looks: an earlier version of this screen needed an explicit save click,
 which meant a second edit made right after saving once could be silently left out of the file that

@@ -2,24 +2,25 @@
   "definitionKey": "njf-contributions",
   "displayName": "Submit an NJF contributions file",
   "version": 1,
-  "description": "The National Juggling Federation's own worked example of Wayfinder's bulk data review capability (see docs/guides/bulk-data-review.md): the caseworker queue uploads a monthly contributions CSV, SafetyNet Underwriting validates it row by row, and the caseworker corrects only the rows that need attention before resubmitting.",
+  "description": "The National Juggling Federation's own worked example of Wayfinder's bulk data review capability (see docs/guides/bulk-data-review.md) and of assign-to-initiator team assignment (see docs/guides/team-assignment.md): the NJF operations team member who uploads a monthly contributions CSV owns it from that moment on, SafetyNet Underwriting validates it row by row, and that same person corrects only the rows that need attention before resubmitting.",
   "initialStage": "upload",
   "requestPolicy": "single",
   "calculations": {
     "fields": {
       "contributionsErrorCount": { "source": "service" },
-      "contributionsWarningCount": { "source": "service" }
+      "contributionsWarningCount": { "source": "service" },
+      "contributionsDirtyCount": { "source": "service" }
     }
   },
   "queues": [
-    { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
+    { "key": "njf-team", "displayName": "NJF Contributions Team", "actor": "caseworker", "roleGates": ["njf-contributions-review"], "assignmentPolicy": "assign-to-initiator", "owningTeamId": "njf-contributions-team" },
     { "key": "automation", "displayName": "SafetyNet Underwriting", "actor": "system" }
   ],
   "stages": [
     {
       "stageKey": "upload",
       "displayName": "Submit contributions file",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "components": [
         { "type": "panel", "heading": "Submit contributions file" },
         {
@@ -65,7 +66,7 @@
     {
       "stageKey": "review",
       "displayName": "Review contributions file",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "components": [
         { "type": "panel", "heading": "Review contributions file" },
         {
@@ -78,14 +79,17 @@
           "items": [
             { "label": "Rows with errors", "fieldKey": "contributionsErrorCount" },
             { "label": "Rows with warnings", "fieldKey": "contributionsWarningCount" },
-            { "label": "Accepted rows", "fieldKey": "contributionsAcceptedCount" }
+            { "label": "Accepted rows", "fieldKey": "contributionsAcceptedCount" },
+            { "label": "Rows changed since last check", "fieldKey": "contributionsDirtyCount" }
           ]
         },
         {
           "type": "bulk-data-review",
           "title": "Rows needing attention",
           "datasetIdField": "contributionsDatasetId",
-          "pageSize": 20
+          "pageSize": 20,
+          "pendingLabel": "Pending resubmission",
+          "sinceLabel": "since the file was last submitted"
         }
       ],
       "actions": [
@@ -98,6 +102,7 @@
             "errorCountField": "contributionsErrorCount",
             "warningCountField": "contributionsWarningCount",
             "acceptedCountField": "contributionsAcceptedCount",
+            "dirtyCountField": "contributionsDirtyCount",
             "columns": [
               { "key": "memberRef", "title": "Member reference", "valueKind": "String", "role": "RowKey" },
               { "key": "memberName", "title": "Name", "valueKind": "String", "role": "Data", "editable": true },
@@ -115,14 +120,14 @@
       ],
       "routes": [
         { "id": "review--resubmit--split", "target": "to-support-system", "trigger": "resubmit", "label": "Resubmit corrected file" },
-        { "id": "review--accept--split", "target": "to-done", "trigger": "accept", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0" },
-        { "id": "review--accept-with-warnings--split", "target": "to-confirm-warnings", "trigger": "accept-with-warnings", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount > 0" }
+        { "id": "review--accept--split", "target": "to-done", "trigger": "accept", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0 and contributionsDirtyCount = 0" },
+        { "id": "review--accept-with-warnings--split", "target": "to-confirm-warnings", "trigger": "accept-with-warnings", "label": "Accept and finish", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount > 0 and contributionsDirtyCount = 0" }
       ]
     },
     {
       "stageKey": "confirm-warnings",
       "displayName": "Confirm before finishing",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "components": [
         { "type": "panel", "heading": "Confirm before finishing" },
         {
@@ -140,13 +145,13 @@
       ],
       "routes": [
         { "id": "confirm-warnings--back--split", "target": "to-review-from-warnings", "trigger": "back-to-review", "label": "Back to review", "style": "secondary" },
-        { "id": "confirm-warnings--confirm--split", "target": "to-done", "trigger": "accept", "label": "Yes, accept with warnings" }
+        { "id": "confirm-warnings--confirm--split", "target": "to-done", "trigger": "accept", "label": "Yes, accept with warnings", "showWhen": "contributionsDirtyCount = 0" }
       ]
     },
     {
       "stageKey": "done",
       "displayName": "Contributions file accepted",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "stageType": "Confirmation",
       "components": [
         { "type": "panel", "heading": "Contributions file accepted" },
@@ -159,7 +164,7 @@
       "key": "to-support-system",
       "displayName": "Send to SafetyNet Underwriting",
       "gatewayType": "Split",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "routes": [
         { "id": "to-support-system--submit--join", "target": "check-complete", "trigger": "submit" },
         { "id": "to-support-system--submit--automation", "target": "automation", "trigger": "submit" },
@@ -171,20 +176,20 @@
       "key": "check-complete",
       "displayName": "Awaiting SafetyNet Underwriting",
       "gatewayType": "Join",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "waitingContent": "SafetyNet Underwriting is processing the contributions file. We'll update this page once it's done.",
       "waitingExpectedSeconds": 15,
       "waitingPollIntervalMs": 3000,
       "routes": [
         { "id": "check-complete--processed--review", "target": "review", "trigger": "processed" }
       ],
-      "requiredIncomingQueues": ["caseworker", "automation"]
+      "requiredIncomingQueues": ["njf-team", "automation"]
     },
     {
       "key": "to-done",
       "displayName": "Finish",
       "gatewayType": "Split",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "routes": [
         { "id": "to-done--accept--done", "target": "done", "trigger": "accept" }
       ]
@@ -193,7 +198,7 @@
       "key": "to-confirm-warnings",
       "displayName": "Continue to confirm before finishing",
       "gatewayType": "Split",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "routes": [
         { "id": "to-confirm-warnings--accept-with-warnings--confirm-warnings", "target": "confirm-warnings", "trigger": "accept-with-warnings" }
       ]
@@ -202,7 +207,7 @@
       "key": "to-review-from-warnings",
       "displayName": "Back to review",
       "gatewayType": "Split",
-      "queueKey": "caseworker",
+      "queueKey": "njf-team",
       "routes": [
         { "id": "to-review-from-warnings--back-to-review--review", "target": "review", "trigger": "back-to-review" }
       ]

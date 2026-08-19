@@ -247,6 +247,102 @@ public class InMemoryBulkDatasetStoreTests
     }
 
     [Fact]
+    public async Task ApplyCorrection_MakesTheRowDirtyInTheSummary()
+    {
+        var (store, fileStorage) = MakeStore();
+        var file = await SaveCsvAsync(fileStorage, string.Join('\n', Header, "NJF-001,Alice,25.00,SN-1,,"));
+        var result = await store.IngestAsync(InstanceId, file, Columns);
+        result.Summary!.DirtyRowCount.Should().Be(0, "a fresh ingest has no corrections yet");
+
+        await store.ApplyCorrectionAsync(
+            InstanceId, result.DatasetId!, "NJF-001",
+            new Dictionary<string, string?> { ["memberName"] = "Alice Corrected" }, "test-user");
+
+        var summary = await store.GetSummaryAsync(InstanceId, result.DatasetId!);
+        summary!.DirtyRowCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ApplyCorrection_BackToTheOriginalValue_ClearsDirty_WithNoExplicitRevert()
+    {
+        var (store, fileStorage) = MakeStore();
+        var file = await SaveCsvAsync(fileStorage, string.Join('\n', Header, "NJF-001,Alice,25.00,SN-1,,"));
+        var result = await store.IngestAsync(InstanceId, file, Columns);
+        await store.ApplyCorrectionAsync(
+            InstanceId, result.DatasetId!, "NJF-001",
+            new Dictionary<string, string?> { ["memberName"] = "Alice Corrected" }, "test-user");
+
+        // Typed it back by hand — dirty is a value-diff, not a Corrections.Count check, so this
+        // must clear it even though the row's own audit history is non-empty.
+        await store.ApplyCorrectionAsync(
+            InstanceId, result.DatasetId!, "NJF-001",
+            new Dictionary<string, string?> { ["memberName"] = "Alice" }, "test-user");
+
+        var summary = await store.GetSummaryAsync(InstanceId, result.DatasetId!);
+        summary!.DirtyRowCount.Should().Be(0);
+        var page = await store.GetRowsAsync(InstanceId, result.DatasetId!, BulkDatasetRowFilter.All, 0, 10);
+        page!.Rows.Single().Corrections.Should().HaveCount(2, "the audit trail keeps both edits — clearing dirty doesn't erase history");
+    }
+
+    [Fact]
+    public async Task RevertCorrections_RestoresOriginalValues_ClearsDirty_AndRecordsAnAttributableCorrection()
+    {
+        var (store, fileStorage) = MakeStore();
+        var file = await SaveCsvAsync(fileStorage, string.Join('\n', Header, "NJF-001,Alice,25.00,SN-1,,"));
+        var result = await store.IngestAsync(InstanceId, file, Columns);
+        await store.ApplyCorrectionAsync(
+            InstanceId, result.DatasetId!, "NJF-001",
+            new Dictionary<string, string?> { ["memberName"] = "Wrong Edit", ["monthlyContribution"] = "999" }, "caseworker-1");
+
+        var revertedCount = await store.RevertCorrectionsAsync(InstanceId, result.DatasetId!, "caseworker-2");
+
+        revertedCount.Should().Be(1);
+        var summary = await store.GetSummaryAsync(InstanceId, result.DatasetId!);
+        summary!.DirtyRowCount.Should().Be(0);
+
+        var row = (await store.GetRowsAsync(InstanceId, result.DatasetId!, BulkDatasetRowFilter.All, 0, 10))!.Rows.Single();
+        row.CurrentValues["memberName"].Should().Be("Alice");
+        row.CurrentValues["monthlyContribution"].Should().Be("25.00");
+        // Never destroyed — the original (wrong) edits stay in history alongside the revert.
+        row.Corrections.Should().Contain(c => c.NewValue == "Wrong Edit" && c.CorrectedBy == "caseworker-1");
+        row.Corrections.Should().Contain(c =>
+            c.ColumnKey == "memberName" && c.NewValue == "Alice" && c.CorrectedBy == "caseworker-2");
+        row.Corrections.Should().Contain(c =>
+            c.ColumnKey == "monthlyContribution" && c.NewValue == "25.00" && c.CorrectedBy == "caseworker-2");
+    }
+
+    [Fact]
+    public async Task RevertCorrections_OnlyTouchesDirtyRows_LeavesCleanRowsAndTheirHistoryAlone()
+    {
+        var (store, fileStorage) = MakeStore();
+        var file = await SaveCsvAsync(fileStorage, string.Join('\n',
+            Header,
+            "NJF-001,Alice,25.00,SN-1,,",
+            "NJF-002,Bob,30.00,SN-2,,"));
+        var result = await store.IngestAsync(InstanceId, file, Columns);
+        await store.ApplyCorrectionAsync(
+            InstanceId, result.DatasetId!, "NJF-001",
+            new Dictionary<string, string?> { ["memberName"] = "Alice Corrected" }, "test-user");
+
+        var revertedCount = await store.RevertCorrectionsAsync(InstanceId, result.DatasetId!, "test-user");
+
+        revertedCount.Should().Be(1, "only NJF-001 was ever dirty");
+        var page = await store.GetRowsAsync(InstanceId, result.DatasetId!, BulkDatasetRowFilter.All, 0, 10);
+        var bobRow = page!.Rows.Single(r => r.RowKey == "NJF-002");
+        bobRow.Corrections.Should().BeEmpty("a clean row must not get a phantom revert correction recorded against it");
+    }
+
+    [Fact]
+    public async Task RevertCorrections_UnknownDataset_Throws()
+    {
+        var (store, _) = MakeStore();
+
+        var act = () => store.RevertCorrectionsAsync(InstanceId, "not-a-real-id", "test-user");
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
     public async Task Materialize_RoundTrips_OriginalAndCorrectedValues_InIngestedColumnOrder()
     {
         var (store, fileStorage) = MakeStore();

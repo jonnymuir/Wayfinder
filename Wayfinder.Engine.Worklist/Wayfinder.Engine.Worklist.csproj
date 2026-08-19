@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageId>Wayfinder.Engine.Worklist</PackageId>
+    <Title>Wayfinder Engine Worklist</Title>
+    <Version>0.6.0</Version>
+    <Authors>Jonny Muir</Authors>
+    <Company>Wayfinder</Company>
+    <Description>A default, optional caseworker worklist surface — server-rendered GOV.UK markup for the filter/sort/search/paginated list (see docs/guides/queue-worklist-filtering.md), an item review page, advance, and per-cursor claim/release (see docs/guides/work-allocation.md). A host wires it up with AddWorklist()/MapWorklist(prefix), supplying only tenant/actor resolution and its own page chrome — or ignores this package entirely and hand-writes the same routes itself, as Wayfinder.ReferenceApp originally did.</Description>
+    <PackageTags>Blueprint;Wayfinder</PackageTags>
+    <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIcon>assets/icon-wayfinder-engine-worklist.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Wayfinder.Engine/Wayfinder.Engine.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine.Http/Wayfinder.Engine.Http.csproj" />
+    <ProjectReference Include="../Wayfinder.Rendering.GovUk/Wayfinder.Rendering.GovUk.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../assets/icon-wayfinder-engine-worklist.png" Pack="true" PackagePath="assets/" />
+    <None Include="../LICENSE" Pack="true" PackagePath="/" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

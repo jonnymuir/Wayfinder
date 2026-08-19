@@ -25,4 +25,23 @@ public sealed class InMemoryServiceRequestStore : IServiceRequestStore
     public void Clear() => _instancesById.Clear();
 
     public IEnumerable<ServiceRequest> GetAll() => _instancesById.Values;
+
+    /// <summary>
+    /// A genuine compare-and-swap, unlike <see cref="IServiceRequestStore"/>'s own default
+    /// implementation — <see cref="ConcurrentDictionary{TKey,TValue}.TryUpdate"/> only swaps if the
+    /// currently-stored reference still equals <c>current</c>, and <see cref="ConcurrentDictionary{TKey,TValue}.TryAdd"/>
+    /// only inserts if no entry exists yet — both hardware-CAS-backed, safe against real concurrent
+    /// callers, not merely "works because nothing else happens to run between the check and the
+    /// write" the way a plain indexer read-then-write would be.
+    /// </summary>
+    public bool TrySaveIfVersionMatches(ServiceRequest instance, int expectedStateVersion)
+    {
+        if (!_instancesById.TryGetValue(instance.InstanceId, out var current))
+        {
+            return expectedStateVersion == 0 && _instancesById.TryAdd(instance.InstanceId, instance);
+        }
+
+        return current.StateVersion == expectedStateVersion
+            && _instancesById.TryUpdate(instance.InstanceId, instance, current);
+    }
 }

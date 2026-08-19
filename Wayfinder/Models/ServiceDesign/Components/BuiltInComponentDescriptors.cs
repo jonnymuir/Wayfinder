@@ -427,6 +427,12 @@ public static class BuiltInComponentDescriptors
                 Prop(nameof(BulkDataReviewComponent.DatasetIdField), "Dataset id field", ComponentPropertyValueKind.String,
                     "Must match a bulk-dataset-ingest action's own datasetIdField param.", format: "field-ref", required: true),
                 Prop(nameof(BulkDataReviewComponent.PageSize), "Rows per page", ComponentPropertyValueKind.Integer, defaultValue: 20),
+                Prop(nameof(BulkDataReviewComponent.SyncedLabel), "Synced label", ComponentPropertyValueKind.String,
+                    "Shown when nothing has changed since the last check. Defaults to \"Synced\"."),
+                Prop(nameof(BulkDataReviewComponent.PendingLabel), "Pending label", ComponentPropertyValueKind.String,
+                    "Shown when something has changed since the last check — service-specific wording (e.g. \"Pending resubmission\"). Defaults to \"Needs resubmission\"."),
+                Prop(nameof(BulkDataReviewComponent.SinceLabel), "Since label", ComponentPropertyValueKind.String,
+                    "The reference-point phrase used in both the sync-status line and the discard-changes warning, e.g. \"since the file was last submitted\". Defaults to \"since the file was last checked\"."),
             ],
         });
 

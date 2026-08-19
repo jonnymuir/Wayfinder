@@ -71,6 +71,8 @@ test.describe('Support systems: real cross-process round trip', () => {
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
     const queueRow = caseworkerPage.locator('tr', { hasText: 'Apply for a licence to hold a juggling event' });
+    await queueRow.getByRole('button', { name: 'Pick up' }).click();
+    await expect(queueRow.getByText('With you')).toBeVisible();
     await queueRow.getByRole('link', { name: 'Review' }).click();
 
     await expect(caseworkerPage.getByRole('heading', { name: 'Review application' })).toBeVisible();

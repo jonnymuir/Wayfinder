@@ -3,14 +3,14 @@ namespace Wayfinder.Models.ServiceDesign;
 /// <summary>
 /// A queue work item's status, derived by <see cref="Services.ProcessManagerEngine.GetQueueWorkItems"/>
 /// from the actor-relative <c>AccessibleWorkItem</c> it was built from — never independently set.
-/// A row that is none of these (no available actions, not waiting at a join gateway, and not
-/// genuinely terminal — e.g. the actor lacks permission to act in that queue, or every outgoing
-/// route is <c>showWhen</c>-hidden) has no <see cref="QueueWorkItemStatus"/> at all and stays
-/// invisible under every filter, exactly as it always has — deliberately not a fourth bucket.
+/// A row that is none of these (the actor lacks permission to act in that queue at all, or every
+/// outgoing route is <c>showWhen</c>-hidden — genuinely zero eligible routes, not merely zero
+/// available ones) has no <see cref="QueueWorkItemStatus"/> at all and stays invisible under every
+/// filter, exactly as it always has.
 /// </summary>
 public enum QueueWorkItemStatus
 {
-    /// <summary>Has at least one available action — today's plain, undecorated row.</summary>
+    /// <summary>Has at least one available action the caller may submit right now.</summary>
     Actionable,
 
     /// <summary>Nothing to do *yet* — the actor's own cursor is parked at a join gateway, waiting
@@ -24,6 +24,43 @@ public enum QueueWorkItemStatus
     /// also true for a permission gap or a hidden route — neither is completion).
     /// </summary>
     Done,
+
+    /// <summary>
+    /// Eligible routes exist here — the actor has permission to act in this queue and at least one
+    /// route isn't <c>showWhen</c>-hidden — but this specific row isn't individually assigned to
+    /// them yet. Produced for any genuine shared-pool queue whose accessing profile isn't
+    /// owner-restricted, whether or not that queue declares a <c>QueueDefinition.AssignmentPolicy</c>
+    /// (see docs/guides/work-allocation.md and docs/guides/team-assignment.md) — pickup is
+    /// mandatory everywhere, no per-queue opt-out; a queue declaring nothing just means any actor
+    /// already eligible to see it may pick a row up, rather than a specific team's own members
+    /// only. <c>AvailableActions</c> is always empty for these — pick it up via
+    /// <c>PickupWorkItem</c> to move to <see cref="Actionable"/>.
+    /// </summary>
+    Unassigned,
+}
+
+/// <summary>
+/// Per-cursor (or, for a team-owned queue, per-<c>QueueAssignment</c>) pickup/ownership state — a
+/// genuinely different axis from <see cref="QueueWorkItemStatus"/> (status answers "what can be
+/// done"; pickup state answers "who's doing it"). Non-null only for a genuine shared-pool row on a
+/// queue whose actor profile isn't restricted to its own instances: both
+/// <see cref="QueueWorkItemStatus.Unassigned"/> (not picked up yet) and <c>Actionable</c> (already
+/// picked up, by me) apply, whether or not the queue declares an <c>AssignmentPolicy</c> — pickup
+/// is mandatory everywhere. Null everywhere else — a <see cref="QueueWorkItemStatus.Waiting"/>/
+/// <see cref="QueueWorkItemStatus.Done"/> row, an owner-restricted instance, or an
+/// "assign-to-initiator" queue (nothing to pick up — it's always already owned) has nothing to
+/// pick up. A row held by someone else — an individual on a queue with no declared team, or a
+/// different team member on a team-owned one — never produces a row at all for anyone but its
+/// holder (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership filter), so there is
+/// no third "picked up by someone else" value here to enumerate. See docs/guides/work-allocation.md
+/// and docs/guides/team-assignment.md — and note this is unrelated to
+/// <c>IQueueCapabilitiesProvider</c>'s own pre-existing, differently-scoped use of the word
+/// "capability".
+/// </summary>
+public enum QueueWorkItemPickupState
+{
+    NotPickedUp,
+    PickedUpByMe,
 }
 
 /// <summary>Ordering for <see cref="Services.ProcessManagerEngine.GetQueueWorkItems"/> — every
@@ -72,6 +109,14 @@ public record QueueWorkItem
     public string StateDisplayName { get; init; } = "";
 
     public string? QueueName { get; init; }
+
+    /// <summary>The cursor this row was built from — <see cref="RequestCursor.PrimaryCursorId"/>
+    /// for an instance that hasn't crossed its first gateway yet. What <c>PickupWorkItem</c>/
+    /// <c>PutbackWorkItem</c> take as their own <c>cursorId</c> argument.</summary>
+    public string CursorId { get; init; } = "";
+
+    /// <summary>See <see cref="QueueWorkItemPickupState"/>. Null for a row with nothing to pick up.</summary>
+    public QueueWorkItemPickupState? PickupState { get; init; }
 
     public string TenantId { get; init; } = "";
 

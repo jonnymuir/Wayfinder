@@ -177,6 +177,15 @@ public record ComponentRenderPayload
     /// post-processing step fills it in.
     /// </summary>
     public string? BulkDatasetApiUrl { get; init; }
+    /// <summary>Raw passthrough of <c>BulkDataReviewComponent.SyncedLabel</c> — null/empty means
+    /// the renderer applies its own default ("Synced"). See docs/guides/bulk-data-review.md.</summary>
+    public string? SyncedLabel { get; init; }
+    /// <summary>Raw passthrough of <c>BulkDataReviewComponent.PendingLabel</c> — null/empty means
+    /// the renderer applies its own default ("Needs resubmission").</summary>
+    public string? PendingLabel { get; init; }
+    /// <summary>Raw passthrough of <c>BulkDataReviewComponent.SinceLabel</c> — null/empty means
+    /// the renderer applies its own default ("since the file was last checked").</summary>
+    public string? SinceLabel { get; init; }
 
     /// <summary>
     /// Computed display name for this component — returns the most semantically appropriate heading property

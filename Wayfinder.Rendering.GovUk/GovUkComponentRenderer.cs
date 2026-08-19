@@ -143,10 +143,56 @@ public sealed class GovUkComponentRenderer
             sb.Append($"""<script type="application/json" data-wayfinder-live-model>{live.ToJsonString().Replace("</", "<\\/")}</script>""");
         }
 
-        if (render.AvailableActions.Count > 0)
+        sb.Append(RenderActionButtons(render.AvailableActions, stateVersion));
+
+        sb.Append("</form>");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The route-trigger button group — extracted out of <see cref="RenderForm"/> so a host can
+    /// re-render just this fragment after something changes <c>AvailableActions</c> outside of a
+    /// normal page render (e.g. <c>Wayfinder.Engine.Worklist</c>'s bulk-dataset correction/revert
+    /// endpoints, which call <c>IProcessManager.SyncBulkDatasetSyncState</c> and need the caller to
+    /// see the result immediately — see docs/guides/bulk-data-review.md's sync-state section)
+    /// without duplicating this markup in JavaScript. Wrapped in a stable
+    /// <c>data-wayfinder-action-bar</c> container so client JS can find-and-replace it in place;
+    /// must stay nested inside the same <c>&lt;form&gt;</c> the rest of the stage renders into for
+    /// its <c>type="submit"</c> buttons to keep working.
+    ///
+    /// Carries its own <c>role="status"</c> paragraph (visually hidden, empty by default) so a
+    /// caller that swaps this fragment in place can announce a genuine availability change (e.g.
+    /// "Accept and finish" disappearing) without a whole-page reload — deliberately not
+    /// <c>aria-live</c> on the button group itself, which would announce on every routine swap
+    /// whether or not anything actually changed. Left for the swapping JS to populate; this method
+    /// only ever renders it empty. The outer wrapper (not just the button group) is what's swapped,
+    /// so this status paragraph always travels with the buttons it describes.
+    ///
+    /// Also carries <paramref name="stateVersion"/> as <c>data-wayfinder-state-version</c> — the
+    /// same optimistic-concurrency token <see cref="RenderForm"/>'s own hidden <c>stateVersion</c>
+    /// input holds. Essential, not decorative: anything that mutates <c>FieldValues</c> outside a
+    /// normal page render (a bulk-dataset correction/revert calling
+    /// <c>IProcessManager.SyncBulkDatasetSyncState</c>) genuinely bumps the persisted state
+    /// version, exactly like a real <c>Advance</c> would — a page that never learns the new value
+    /// keeps posting the stale one on its very next real submit and gets rejected with
+    /// <c>VERSION_MISMATCH</c> (found live: a resubmit immediately following an unrelated
+    /// correction failed this way before this attribute existed). The swapping JS reads this and
+    /// updates the form's own hidden input on every sync, independently of whether the visible
+    /// button set changed at all.
+    /// </summary>
+    public static string RenderActionButtons(IReadOnlyList<ServiceRequestAction> actions, int stateVersion)
+    {
+        var sb = new StringBuilder(
+            $"""<div data-wayfinder-action-bar data-wayfinder-state-version="{stateVersion}"><p class="govuk-visually-hidden" role="status" data-wayfinder-action-bar-status></p>""");
+
+        if (actions.Count == 0)
+        {
+            sb.Append("""<div class="govuk-button-group"></div>""");
+        }
+        else
         {
             sb.Append("""<div class="govuk-button-group">""");
-            foreach (var action in render.AvailableActions)
+            foreach (var action in actions)
             {
                 var styleClass = action.Style switch
                 {
@@ -160,7 +206,7 @@ public sealed class GovUkComponentRenderer
             sb.Append("</div>");
         }
 
-        sb.Append("</form>");
+        sb.Append("</div>");
         return sb.ToString();
     }
 }

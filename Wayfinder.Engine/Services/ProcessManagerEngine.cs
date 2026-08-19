@@ -28,6 +28,7 @@ public class ProcessManagerEngine : IProcessManager
     private readonly IReadOnlyDictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
     private readonly IReadOnlyDictionary<string, IRequestConcurrencyPolicy> _requestConcurrencyPolicies;
+    private readonly IAuditLogStore _auditLogStore;
 
     public ProcessManagerEngine(
         ILogger logger,
@@ -37,7 +38,8 @@ public class ProcessManagerEngine : IProcessManager
         IServiceRequestStore? instanceStore = null,
         IEnumerable<ISupportSystemClient>? supportSystemClients = null,
         IBulkDatasetStore? bulkDatasetStore = null,
-        IEnumerable<IRequestConcurrencyPolicy>? requestConcurrencyPolicies = null)
+        IEnumerable<IRequestConcurrencyPolicy>? requestConcurrencyPolicies = null,
+        IAuditLogStore? auditLogStore = null)
     {
         Logger = logger;
         _sanitizer = sanitizer;
@@ -49,6 +51,7 @@ public class ProcessManagerEngine : IProcessManager
         _requestConcurrencyPolicies = (requestConcurrencyPolicies ?? [])
             .SelectMany(policy => policy.DefinitionKeys.Select(key => (key, policy)))
             .ToDictionary(pair => pair.key, pair => pair.policy, StringComparer.OrdinalIgnoreCase);
+        _auditLogStore = auditLogStore ?? new InMemoryAuditLogStore();
 
         foreach (var (lookupKey, definition) in definitionStore.LoadDefinitions(logger))
         {
@@ -110,7 +113,7 @@ public class ProcessManagerEngine : IProcessManager
             }
 
             Logger.LogInformation("Resuming specific instance {Id}", instanceId);
-            return BuildEnvelope(specificInstance, definition, accessProfile);
+            return BuildEnvelope(specificInstance, definition, accessProfile, userId);
         }
 
         var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey, accessProfile);
@@ -138,7 +141,7 @@ public class ProcessManagerEngine : IProcessManager
             if (existingInstance is not null)
             {
                 Logger.LogInformation("Resuming existing instance {Id} (action=resume)", existingInstance.InstanceId);
-                return BuildEnvelope(existingInstance, definition, accessProfile);
+                return BuildEnvelope(existingInstance, definition, accessProfile, userId);
             }
 
             return CreateAndRegisterNewInstance(
@@ -175,7 +178,7 @@ public class ProcessManagerEngine : IProcessManager
                     return BuildEnvelope(
                         decision.ExistingInstance ?? throw new InvalidOperationException(
                             $"{customPolicy.GetType().Name} returned ReuseExisting with no ExistingInstance."),
-                        definition, accessProfile);
+                        definition, accessProfile, userId);
                 case RequestConcurrencyOutcome.Deny:
                     return ErrorEnvelope(
                         decision.DenyReason ?? "This request was denied by a registered concurrency policy.",
@@ -272,7 +275,7 @@ public class ProcessManagerEngine : IProcessManager
         // silently-reset blank form). ServiceRequestPageController's PRG redirect after a POST
         // relies on this same fallthrough to show the confirmation page for the visit that just
         // submitted it.
-        return BuildEnvelope(existingInstance, definition, accessProfile);
+        return BuildEnvelope(existingInstance, definition, accessProfile, userId);
     }
 
     /// <summary>
@@ -382,15 +385,27 @@ public class ProcessManagerEngine : IProcessManager
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            SaveInstance(jumped);
+            // Atomic against a concurrent writer between the version check above and this save —
+            // unlike a plain SaveInstance, which would silently overwrite whatever another caller
+            // just wrote in that window. See IServiceRequestStore.TrySaveIfVersionMatches.
+            var jumpAuditEvent = TransitionAuditEvent(
+                instance.InstanceId, userId, cursorId: null,
+                fromStageKey: instance.CurrentStage, toStageKey: targetStageKey, action: action, detail: "admin change-link jump");
+            if (!TrySaveInstanceIfVersionMatches(jumped, userId, instance.StateVersion, jumpAuditEvent))
+            {
+                return ErrorEnvelope(
+                    $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
+                    "VERSION_MISMATCH");
+            }
+
             Logger.LogInformation(
                 "Change-link: jumped instance {Id} to stage '{State}'",
                 instanceId,
                 targetStageKey);
-            return BuildEnvelope(jumped, definition, accessProfile);
+            return BuildEnvelope(jumped, definition, accessProfile, userId);
         }
 
-        var visibleWorkItem = FindAccessibleWorkItems(instance, definition, accessProfile)
+        var visibleWorkItem = FindAccessibleWorkItems(instance, definition, accessProfile, userId)
             .FirstOrDefault(item => item.AvailableActions.Any(candidate =>
                 string.Equals(candidate.ActionKey, action, StringComparison.Ordinal)));
 
@@ -458,7 +473,7 @@ public class ProcessManagerEngine : IProcessManager
                 // unmodified instance would blank every field on this stage back to whatever was
                 // there before the user started typing — not just the one that failed validation.
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
-                return BuildEnvelope(previewInstance, definition, accessProfile) with { Problems = problems };
+                return BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = problems };
             }
 
             // Declarative cross-field business rules (StageDefinition.Validations) — the
@@ -470,7 +485,7 @@ public class ProcessManagerEngine : IProcessManager
             if (stageValidationProblems.Count > 0)
             {
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
-                return BuildEnvelope(previewInstance, definition, accessProfile) with { Problems = stageValidationProblems };
+                return BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = stageValidationProblems };
             }
         }
 
@@ -484,17 +499,28 @@ public class ProcessManagerEngine : IProcessManager
         if (nextGateway != null)
         {
             return string.Equals(nextGateway.GatewayType, "Split", StringComparison.Ordinal)
-                ? HandleSplitGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile)
-                : HandleJoinGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile);
+                ? HandleSplitGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile, userId)
+                : HandleJoinGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile, userId);
         }
 
         // Regular stage transition (single- or multi-cursor).
         if (instance.Cursors.Count > 0)
         {
-            // Multi-cursor: advance only the cursor currently at this stage.
+            // Multi-cursor: advance only the cursor currently at this stage. A plain (non-gateway)
+            // hop can still cross into a differently-queued stage with no gateway in between — the
+            // cursor's own QueueKey must follow it there, or FindAccessibleWorkItems (which resolves
+            // ownership/eligibility from cursor.QueueKey directly for a non-gateway cursor) keeps
+            // checking the stage the cursor just left. Found live: PickupWorkItem mints a real
+            // cursor the first time an instance without one is picked up, which permanently switches
+            // it onto this multi-cursor path even for a blueprint with no gateways at all — before
+            // mandatory pickup, such an instance always stayed on the Cursors.Count == 0 path, which
+            // re-derives queueKey fresh from the stage on every call and never went stale.
             var sourceCursor = instance.Cursors.FirstOrDefault(c =>
                 c.CurrentNodeKey == visibleWorkItem.StageKey && !c.IsAtGateway);
-            var updatedCursors = MoveCursor(instance.Cursors, sourceCursor?.CursorId, transition.ToState, isAtGateway: false);
+            var targetStage = definition.Stages.FirstOrDefault(s => s.StageKey == transition.ToState);
+            var updatedCursors = MoveCursor(
+                instance.Cursors, sourceCursor?.CursorId, transition.ToState, isAtGateway: false,
+                newQueueKey: GetQueueKey(targetStage));
             var primaryStage = FirstActiveStageCursorKey(updatedCursors) ?? transition.ToState;
             var mergedMultiFieldValues = Merge(instance.FieldValues, fieldValues);
             var movedCursor = updatedCursors.FirstOrDefault(c => c.CursorId == sourceCursor?.CursorId);
@@ -510,11 +536,20 @@ public class ProcessManagerEngine : IProcessManager
                 FieldValues = mergedMultiFieldValues,
                 SupportSystemInvocations = instance.SupportSystemInvocations.Concat(newInvocations).ToArray()
             };
-            SaveInstance(updatedMulti);
+            var multiAuditEvent = TransitionAuditEvent(
+                instance.InstanceId, userId, cursorId: sourceCursor?.CursorId,
+                fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
+            if (!TrySaveInstanceIfVersionMatches(updatedMulti, userId, instance.StateVersion, multiAuditEvent))
+            {
+                return ErrorEnvelope(
+                    $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
+                    "VERSION_MISMATCH");
+            }
+
             Logger.LogInformation(
                 "Multi-cursor advance instance {Id}: cursor {CursorId} → {To}",
                 instanceId, sourceCursor?.CursorId ?? "(none)", transition.ToState);
-            return BuildEnvelope(updatedMulti, definition, accessProfile);
+            return BuildEnvelope(updatedMulti, definition, accessProfile, userId);
         }
 
         var updated = instance with
@@ -525,14 +560,23 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = Merge(instance.FieldValues, fieldValues)
         };
 
-        SaveInstance(updated);
+        var advanceAuditEvent = TransitionAuditEvent(
+            instance.InstanceId, userId, cursorId: null,
+            fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
+        if (!TrySaveInstanceIfVersionMatches(updated, userId, instance.StateVersion, advanceAuditEvent))
+        {
+            return ErrorEnvelope(
+                $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
+                "VERSION_MISMATCH");
+        }
+
         Logger.LogInformation(
             "Advanced instance {Id}: {From} → {To}",
             instanceId,
             visibleWorkItem.StageKey,
             transition.ToState);
 
-        return BuildEnvelope(updated, definition, accessProfile);
+        return BuildEnvelope(updated, definition, accessProfile, userId);
     }
 
     public IEnumerable<ServiceRequest> GetAllInstances() => _instanceStore.GetAll();
@@ -612,35 +656,486 @@ public class ProcessManagerEngine : IProcessManager
                 ? toUserId
                 : instance.ConcurrencyScopeKey;
 
-            _instanceStore.Save(instance with
+            SaveInstance(instance with
             {
                 UserId = toUserId,
                 ConcurrencyScopeKey = concurrencyScopeKey,
                 IsAuthenticated = true,
                 UpdatedAt = DateTimeOffset.UtcNow
-            });
+            }, toUserId);
             claimed.Add(instance.InstanceId);
         }
 
         return claimed;
     }
 
+    /// <summary>
+    /// Picks up one specific work item for <paramref name="userId"/> — see <see cref="IProcessManager.PickupWorkItem"/>'s
+    /// own remarks for the full error-code contract. Reads fresh and retries its own internal CAS
+    /// (<see cref="IServiceRequestStore.TrySaveIfVersionMatches"/>) a bounded number of times rather
+    /// than asking the caller for an expected version — picking up carries no field edits to lose.
+    /// Materializes a real cursor the first time an instance that hasn't yet crossed a gateway
+    /// (<c>Cursors.Count == 0</c>) is picked up — see <see cref="RequestCursor.PrimaryCursorId"/>'s
+    /// own remarks; this permanently switches the instance onto the multi-cursor bookkeeping path
+    /// for the rest of its life, the same as crossing a real gateway would.
+    /// </summary>
+    public ServiceRequestResponseEnvelope PickupWorkItem(
+        string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!_instanceStore.TryGet(instanceId, out var instance))
+            {
+                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+            }
+
+            if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
+            {
+                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+            }
+
+            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            {
+                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+            }
+
+            // Resolved WITHOUT the ownership filter (no userId) — unlike every other caller of
+            // FindAccessibleWorkItems, picking up needs to see a cursor that's genuinely eligible but
+            // already held by someone else, in order to report ALREADY_PICKED_UP rather than
+            // INVALID_TRANSITION. Queue visibility/capability eligibility is still fully enforced
+            // (CanViewQueue/HasQueueEligibility never depend on userId), so this can't be used to
+            // discover anything about a queue this actor genuinely isn't eligible for.
+            var item = FindAccessibleWorkItems(instance, definition, accessProfile)
+                .FirstOrDefault(candidate => string.Equals(candidate.CursorId, cursorId, StringComparison.Ordinal));
+            if (item is null)
+            {
+                return ErrorEnvelope($"Cursor '{cursorId}' is not accessible on this instance.", "INVALID_TRANSITION");
+            }
+
+            if (accessProfile.RestrictToInstanceOwner)
+            {
+                return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
+            }
+
+            ServiceRequest updatedInstance;
+            if (item.AssignmentPolicy == AssignToInitiatorPolicy)
+            {
+                // Always already owned by whoever started it — see docs/guides/team-assignment.md's
+                // reassignment scope note.
+                return ErrorEnvelope(
+                    "This item is always assigned to whoever started it — there's nothing to pick up.", "PICKUP_NOT_AVAILABLE");
+            }
+
+            if (item.AssignmentPolicy == TeamTrayPolicy)
+            {
+                if (!accessProfile.IsTeamMember(item.AssignedTeamId))
+                {
+                    return ErrorEnvelope("You must be a member of the owning team to pick up this item.", "TEAM_MEMBERSHIP_REQUIRED");
+                }
+
+                if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
+                {
+                    return ErrorEnvelope("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
+                }
+
+                // Not ClassifyStatus(item, definition) != Unassigned here: item was resolved via
+                // the userId-less internal peek above, so IsEntitledToActNow's "no specific actor"
+                // shortcut always reports entitled, which would make ClassifyStatus report
+                // Actionable even for a genuinely not-picked-up row — EligibleActions (assignment-
+                // agnostic) is the right check for "is there really something to pick up here at all".
+                if (item.EligibleActions.Count == 0)
+                {
+                    return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
+                }
+
+                var teamPickedUpAt = DateTimeOffset.UtcNow;
+                var queueKey = item.QueueKey ?? "";
+                var existingAssignment = instance.QueueAssignments.GetValueOrDefault(queueKey);
+                var assignment = (existingAssignment
+                        ?? new QueueAssignment { QueueKey = queueKey, TeamId = item.AssignedTeamId, EstablishedAt = teamPickedUpAt })
+                    with
+                { AssignedUserId = userId, AssignedAt = teamPickedUpAt };
+
+                updatedInstance = instance with
+                {
+                    QueueAssignments = new Dictionary<string, QueueAssignment>(instance.QueueAssignments) { [queueKey] = assignment },
+                    StateVersion = instance.StateVersion + 1,
+                    UpdatedAt = teamPickedUpAt
+                };
+            }
+            else
+            {
+                // No AssignmentPolicy declared — pickup is still mandatory (see
+                // docs/guides/work-allocation.md), just not scoped to any particular team: any
+                // actor already eligible to see this queue at all may pick it up. Same
+                // EligibleActions check as the team-tray branch above, for the identical reason —
+                // ClassifyStatus would report Actionable here even for a genuinely not-picked-up
+                // row, since this call resolved the item via the userId-less internal peek.
+                if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
+                {
+                    return ErrorEnvelope("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
+                }
+
+                if (item.EligibleActions.Count == 0)
+                {
+                    return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
+                }
+
+                var pickedUpAt = DateTimeOffset.UtcNow;
+                updatedInstance = instance.Cursors.Count == 0
+                    ? instance with
+                    {
+                        Cursors =
+                        [
+                            new RequestCursor
+                            {
+                                CursorId = RequestCursor.PrimaryCursorId,
+                                QueueKey = GetQueueKey(definition.Stages.FirstOrDefault(s =>
+                                    string.Equals(s.StageKey, instance.CurrentStage, StringComparison.Ordinal))) ?? "",
+                                CurrentNodeKey = instance.CurrentStage,
+                                IsAtGateway = false,
+                                AssignedTo = userId,
+                                AssignedAt = pickedUpAt
+                            }
+                        ],
+                        StateVersion = instance.StateVersion + 1,
+                        UpdatedAt = pickedUpAt
+                    }
+                    : instance with
+                    {
+                        Cursors = instance.Cursors
+                            .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
+                                ? c with { AssignedTo = userId, AssignedAt = pickedUpAt }
+                                : c)
+                            .ToArray(),
+                        StateVersion = instance.StateVersion + 1,
+                        UpdatedAt = pickedUpAt
+                    };
+            }
+
+            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
+                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PickedUp, "picked up")))
+            {
+                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+            }
+        }
+
+        return ErrorEnvelope(
+            $"Could not pick up '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
+            "PICKUP_CONFLICT");
+    }
+
+    /// <summary>
+    /// Puts back a pickup <paramref name="userId"/> currently holds, to the shared pool — see
+    /// <see cref="IProcessManager.PutbackWorkItem"/>'s own remarks. Self-service only: someone
+    /// else's pickup can't be put back this way (see docs/guides/work-allocation.md's reassignment
+    /// seam for the future manager-initiated case).
+    /// </summary>
+    public ServiceRequestResponseEnvelope PutbackWorkItem(
+        string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!_instanceStore.TryGet(instanceId, out var instance))
+            {
+                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+            }
+
+            if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
+            {
+                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+            }
+
+            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            {
+                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+            }
+
+            var cursor = instance.Cursors.FirstOrDefault(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal));
+            if (cursor is null)
+            {
+                return ErrorEnvelope($"Cursor '{cursorId}' not found.", "INVALID_TRANSITION");
+            }
+
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
+
+            ServiceRequest updatedInstance;
+            if (queueDef?.AssignmentPolicy == TeamTrayPolicy)
+            {
+                var queueKey = cursor.QueueKey;
+                var existingAssignment = instance.QueueAssignments.GetValueOrDefault(queueKey);
+
+                if (existingAssignment?.AssignedUserId is null)
+                {
+                    return BuildEnvelope(instance, definition, accessProfile, userId);
+                }
+
+                if (!string.Equals(existingAssignment.AssignedUserId, userId, StringComparison.Ordinal))
+                {
+                    return ErrorEnvelope("This item has been picked up by someone else.", "ALREADY_PICKED_UP_BY_OTHER");
+                }
+
+                // Back to the team tray — still team-owned, just not by a specific individual.
+                var putBack = existingAssignment with { AssignedUserId = null, AssignedAt = null };
+                updatedInstance = instance with
+                {
+                    QueueAssignments = new Dictionary<string, QueueAssignment>(instance.QueueAssignments) { [queueKey] = putBack },
+                    StateVersion = instance.StateVersion + 1,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+            }
+            else if (queueDef?.AssignmentPolicy == AssignToInitiatorPolicy)
+            {
+                return ErrorEnvelope(
+                    "This item is always assigned to whoever started it and can't be put back.", "PICKUP_NOT_AVAILABLE");
+            }
+            else
+            {
+                // No AssignmentPolicy declared — ownership tracked on RequestCursor.AssignedTo
+                // directly rather than ServiceRequest.QueueAssignments (see ResolveQueueOwnership).
+                if (cursor.AssignedTo is null)
+                {
+                    return BuildEnvelope(instance, definition, accessProfile, userId);
+                }
+
+                if (!string.Equals(cursor.AssignedTo, userId, StringComparison.Ordinal))
+                {
+                    return ErrorEnvelope("This item has been picked up by someone else.", "ALREADY_PICKED_UP_BY_OTHER");
+                }
+
+                updatedInstance = instance with
+                {
+                    Cursors = instance.Cursors
+                        .Select(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal)
+                            ? c with { AssignedTo = null, AssignedAt = null }
+                            : c)
+                        .ToArray(),
+                    StateVersion = instance.StateVersion + 1,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+            }
+
+            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
+                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PutBack, "put back in the pool")))
+            {
+                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+            }
+        }
+
+        return ErrorEnvelope(
+            $"Could not put back '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
+            "PICKUP_CONFLICT");
+    }
+
+    private static AuditEvent WorkItemAuditEvent(string instanceId, string actor, string cursorId, AuditEventType eventType, string detail) => new()
+    {
+        EventId = Guid.NewGuid().ToString("N"),
+        InstanceId = instanceId,
+        CursorId = cursorId,
+        EventType = eventType,
+        Actor = actor,
+        Detail = detail,
+        Severity = AuditEventSeverity.Info,
+        OccurredAt = DateTimeOffset.UtcNow
+    };
+
+    /// <summary>
+    /// See <see cref="IProcessManager.SyncServiceFields"/>. Every key in <paramref name="updates"/>
+    /// is checked against <c>definition.Calculations.Fields</c> before anything is written — the
+    /// sole authorization boundary this method has — so a caller can never use this to smuggle a
+    /// write into a captured-input or formula-computed field.
+    /// </summary>
+    public ServiceRequestResponseEnvelope SyncServiceFields(
+        string instanceId, string tenantId, string userId, ActorProfile accessProfile,
+        Dictionary<string, object?> updates)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!_instanceStore.TryGet(instanceId, out var instance))
+            {
+                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+            }
+
+            if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
+            {
+                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+            }
+
+            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            {
+                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+            }
+
+            var serviceFields = definition.Calculations?.Fields;
+            foreach (var key in updates.Keys)
+            {
+                if (serviceFields is null
+                    || !serviceFields.TryGetValue(key, out var field)
+                    || !string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase))
+                {
+                    return ErrorEnvelope(
+                        $"Field '{key}' is not declared with source: \"service\" on this blueprint and cannot be synced.",
+                        "NOT_SERVICE_FIELD");
+                }
+            }
+
+            var updatedInstance = instance with
+            {
+                FieldValues = Merge(instance.FieldValues, updates),
+                StateVersion = instance.StateVersion + 1,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+
+            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion, auditEvent: null))
+            {
+                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+            }
+        }
+
+        return ErrorEnvelope(
+            $"Could not sync fields on '{instanceId}' after {maxAttempts} attempts due to concurrent updates.",
+            "SYNC_CONFLICT");
+    }
+
+    /// <summary>See <see cref="IProcessManager.SyncBulkDatasetSyncState"/>.</summary>
+    public ServiceRequestResponseEnvelope SyncBulkDatasetSyncState(
+        string instanceId, string tenantId, string userId, ActorProfile accessProfile, string datasetId)
+    {
+        if (!_instanceStore.TryGet(instanceId, out var instance))
+        {
+            return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+        }
+
+        if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+        {
+            return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+        }
+
+        var dirtyCountField = FindDeclaringBulkDatasetIngestAction(definition, instance.FieldValues, datasetId)
+            ?.Parameters["dirtyCountField"]?.GetValue<string>();
+
+        if (_bulkDatasetStore is null || string.IsNullOrWhiteSpace(dirtyCountField))
+        {
+            // Not opted in for this blueprint/dataset — same "declared-but-unused count field is a
+            // no-op" convention errorCountField/warningCountField/acceptedCountField already follow.
+            return GetCurrent(instance.BlueprintKey, tenantId, userId, accessProfile, instanceId);
+        }
+
+        var summary = _bulkDatasetStore.GetSummaryAsync(instanceId, datasetId).GetAwaiter().GetResult();
+        if (summary is null)
+        {
+            return GetCurrent(instance.BlueprintKey, tenantId, userId, accessProfile, instanceId);
+        }
+
+        return SyncServiceFields(
+            instanceId, tenantId, userId, accessProfile,
+            new Dictionary<string, object?> { [dirtyCountField] = (decimal)summary.DirtyRowCount });
+    }
+
+    /// <summary>
+    /// Finds the <c>bulk-dataset-ingest</c> action (anywhere in the blueprint) whose own
+    /// <c>datasetIdField</c>, read back off this instance's current <paramref name="fieldValues"/>,
+    /// equals <paramref name="datasetId"/> — the same cross-reference
+    /// <c>bulk-dataset-materialize</c>'s own <c>datasetIdField</c> match already relies on.
+    /// </summary>
+    private static ActionDefinition? FindDeclaringBulkDatasetIngestAction(
+        ServiceBlueprint definition, IReadOnlyDictionary<string, object?> fieldValues, string datasetId) =>
+        definition.Stages
+            .SelectMany(stage => stage.Actions ?? [])
+            .FirstOrDefault(action =>
+                string.Equals(action.Type, BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal)
+                && action.Parameters["datasetIdField"]?.GetValue<string>() is { Length: > 0 } datasetIdField
+                && string.Equals(fieldValues.GetValueOrDefault(datasetIdField) as string, datasetId, StringComparison.Ordinal));
+
+    /// <summary>
+    /// See <see cref="IProcessManager.PickupNextAvailableWorkItem"/>. Scans for the oldest eligible,
+    /// not-picked-up, Actionable row (by <see cref="ServiceRequest.CreatedAt"/>, tiebroken by
+    /// <see cref="ServiceRequest.InstanceId"/> for determinism — the same ordering
+    /// <c>GetQueueWorkItems</c>'s own sort uses) and attempts <see cref="PickupWorkItem"/> on it;
+    /// if that loses the race to a concurrent caller, moves on to the next candidate rather than
+    /// giving up — <see cref="PickupWorkItem"/>'s own internal CAS retry only covers contention on
+    /// the *same* row, not two different automated callers converging on different rows that both
+    /// turn out already spoken for by the time each is attempted.
+    /// </summary>
+    public QueueWorkItem? PickupNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile)
+    {
+        var candidates = _instanceStore.GetAll()
+            .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
+            .SelectMany(instance =>
+            {
+                if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+                {
+                    return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
+                }
+
+                if (accessProfile.RestrictToInstanceOwner)
+                {
+                    return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
+                }
+
+                // EligibleActions.Count > 0, not ClassifyStatus — this resolves items via the
+                // userId-less internal peek (no userId passed to FindAccessibleWorkItems below), so
+                // IsEntitledToActNow's own "no specific actor" shortcut always reports entitled,
+                // which would make ClassifyStatus report Actionable even for a genuinely
+                // not-picked-up row (the same reason PickupWorkItem's own two branches check
+                // EligibleActions rather than ClassifyStatus). Found live as a pre-existing gap:
+                // the team-tray clause here never correctly matched an unpicked row before this
+                // fix, since ClassifyStatus == Unassigned could never be true at this call site.
+                return FindAccessibleWorkItems(instance, definition, accessProfile)
+                    .Where(item => item.AssignedTo is null
+                        && item.EligibleActions.Count > 0
+                        && (item.AssignmentPolicy is null
+                            || item.AssignmentPolicy == TeamTrayPolicy && accessProfile.IsTeamMember(item.AssignedTeamId)))
+                    .Select(item => (Instance: instance, Definition: definition, Item: item))
+                    .ToArray();
+            })
+            .OrderBy(candidate => candidate.Instance.CreatedAt)
+            .ThenBy(candidate => candidate.Instance.InstanceId, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var (instance, definition, item) in candidates)
+        {
+            var pickedUp = PickupWorkItem(instance.InstanceId, item.CursorId, tenantId, userId, accessProfile);
+            if (pickedUp.ResponseState != "error" && TryGetInstance(instance.InstanceId, out var refreshedInstance))
+            {
+                // Resolved from refreshedInstance, not the pre-pickup `instance` this loop iterates
+                // over — AssignedTo only reflects the pickup just performed once read fresh.
+                var refreshedItem = FindAccessibleWorkItems(refreshedInstance, definition, accessProfile, userId)
+                    .FirstOrDefault(candidate => string.Equals(candidate.CursorId, item.CursorId, StringComparison.Ordinal));
+                if (refreshedItem is not null)
+                {
+                    return refreshedItem.ToEnvelopeItem(
+                        refreshedInstance, definition, QueueWorkItemStatus.Actionable, accessProfile, userId);
+                }
+            }
+            // Someone else picked up this exact row between the scan and this attempt — try the
+            // next-oldest candidate rather than giving up.
+        }
+
+        return null;
+    }
+
     private static readonly IReadOnlyCollection<QueueWorkItemStatus> DefaultQueueWorkItemStatuses =
-        [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting];
+        [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting, QueueWorkItemStatus.Unassigned];
 
     /// <summary>
     /// Which bucket a work item falls into — <see langword="null"/> for a row that is none of the
-    /// three: no available actions, not waiting at a join gateway (the actor may simply lack
-    /// permission to act in that queue, or every outgoing route may be <c>showWhen</c>-hidden),
-    /// and not genuinely terminal either. Those rows stay invisible under every status filter,
-    /// including all three selected at once — the same as they always have been, deliberately not
-    /// promoted to a fourth bucket nobody asked for.
+    /// four: no eligible routes at all (the actor may simply lack permission to act in that queue,
+    /// or every outgoing route may be <c>showWhen</c>-hidden), not waiting at a join gateway, and
+    /// not genuinely terminal either. Those rows stay invisible under every status filter,
+    /// including all four selected at once — the same as they always have been. Eligible routes
+    /// exist but aren't individually available right now → <see cref="QueueWorkItemStatus.Unassigned"/>
+    /// (a team-tray row nobody has picked up — see docs/guides/team-assignment.md); eligible AND
+    /// available → <see cref="QueueWorkItemStatus.Actionable"/>.
     /// </summary>
     private static QueueWorkItemStatus? ClassifyStatus(AccessibleWorkItem item, ServiceBlueprint definition)
     {
-        if (item.AvailableActions.Count > 0)
+        if (item.EligibleActions.Count > 0)
         {
-            return QueueWorkItemStatus.Actionable;
+            return item.AvailableActions.Count > 0 ? QueueWorkItemStatus.Actionable : QueueWorkItemStatus.Unassigned;
         }
 
         if (item.IsJoinGateway)
@@ -710,6 +1205,7 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     public QueueWorkListEnvelope GetQueueWorkItems(
+        string userId,
         ActorProfile accessProfile,
         IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
         QueueWorkListSort sort = QueueWorkListSort.Default,
@@ -743,10 +1239,10 @@ public class ProcessManagerEngine : IProcessManager
                 // everywhere else this hook is used.
                 instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
 
-                return FindAccessibleWorkItems(instance, definition, accessProfile)
+                return FindAccessibleWorkItems(instance, definition, accessProfile, userId)
                     .Select(item => (item, status: ClassifyStatus(item, definition)))
                     .Where(pair => pair.status is not null && effectiveStatuses.Contains(pair.status.Value))
-                    .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value))
+                    .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value, accessProfile, userId))
                     .Where(projected => MatchesQueueSearch(instance, projected, searchText))
                     .ToArray();
             })
@@ -762,6 +1258,174 @@ public class ProcessManagerEngine : IProcessManager
             PageSize = effectivePageSize,
             TotalMatchingCount = ordered.Count
         };
+    }
+
+    /// <inheritdoc cref="IProcessManager.GetTeamWorkItems"/>
+    public QueueWorkListEnvelope GetTeamWorkItems(
+        string tenantId,
+        string teamId,
+        ActorProfile accessProfile,
+        IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
+        QueueWorkListSort sort = QueueWorkListSort.Default,
+        string? searchText = null,
+        int pageIndex = 0,
+        int pageSize = 20)
+    {
+        var effectiveStatuses = statuses ?? DefaultQueueWorkItemStatuses;
+        var effectivePageIndex = Math.Max(pageIndex, 0);
+        var effectivePageSize = Math.Clamp(pageSize, 1, 100);
+
+        if (!accessProfile.IsTeamMember(teamId))
+        {
+            return new QueueWorkListEnvelope { PageIndex = effectivePageIndex, PageSize = effectivePageSize };
+        }
+
+        var matched = _instanceStore.GetAll()
+            .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
+            .SelectMany(instance =>
+            {
+                if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+                {
+                    return Array.Empty<QueueWorkItem>();
+                }
+
+                instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
+
+                return FindTeamWorkItems(instance, definition, accessProfile, teamId)
+                    .Select(item => (item, status: ClassifyStatus(item, definition)))
+                    .Where(pair => pair.status is not null && effectiveStatuses.Contains(pair.status.Value))
+                    .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value, accessProfile, teamId))
+                    .Where(projected => MatchesQueueSearch(instance, projected, searchText))
+                    .ToArray();
+            })
+            .ToArray();
+
+        var orderedTeamItems = ApplyQueueWorkListSort(matched, sort);
+        var teamPage = orderedTeamItems.Skip(effectivePageIndex * effectivePageSize).Take(effectivePageSize).ToArray();
+
+        return new QueueWorkListEnvelope
+        {
+            Items = teamPage,
+            PageIndex = effectivePageIndex,
+            PageSize = effectivePageSize,
+            TotalMatchingCount = orderedTeamItems.Count
+        };
+    }
+
+    /// <summary>
+    /// Team-scoped counterpart to <see cref="FindAccessibleWorkItems"/> — every row whose queue is
+    /// owned by <paramref name="teamId"/>, regardless of which individual (if any) currently holds
+    /// it, for a team's own aggregate dashboard rather than one caller's personal actionability.
+    /// <c>AvailableActions</c> reflects whether *anyone* has picked the row up (not whether the
+    /// specific caller has) — "Actionable" here means "a teammate is already on this", not "I can
+    /// act on this". See docs/guides/team-assignment.md. Never returns a legacy-queue row (no
+    /// <c>OwningTeamId</c> to match against).
+    /// </summary>
+    private IReadOnlyList<AccessibleWorkItem> FindTeamWorkItems(
+        ServiceRequest instance, ServiceBlueprint definition, ActorProfile accessProfile, string teamId)
+    {
+        var items = new List<AccessibleWorkItem>();
+
+        if (instance.Cursors.Count == 0)
+        {
+            var stage = definition.Stages.FirstOrDefault(candidate =>
+                string.Equals(candidate.StageKey, instance.CurrentStage, StringComparison.Ordinal));
+
+            if (stage is not null)
+            {
+                var queueKey = GetQueueKey(stage);
+                var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
+                if (string.Equals(queueDef?.OwningTeamId, teamId, StringComparison.Ordinal))
+                {
+                    var queueName = ResolveQueueName(definition, stage);
+                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, cursorAssignedTo: null);
+                    var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+
+                    items.Add(new AccessibleWorkItem(
+                        stage.StageKey,
+                        stage.DisplayName,
+                        queueName,
+                        queueKey,
+                        IsJoinGateway: false,
+                        eligibleActions,
+                        assignedTo is not null ? eligibleActions : [],
+                        queueDef?.AssignmentPolicy,
+                        CursorId: RequestCursor.PrimaryCursorId,
+                        AssignedTo: assignedTo,
+                        AssignedTeamId: assignedTeamId));
+                }
+            }
+
+            return items;
+        }
+
+        foreach (var cursor in instance.Cursors.Where(candidate => !candidate.IsAtGateway))
+        {
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
+            if (!string.Equals(queueDef?.OwningTeamId, teamId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var stage = definition.Stages.FirstOrDefault(candidate =>
+                string.Equals(candidate.StageKey, cursor.CurrentNodeKey, StringComparison.Ordinal));
+            if (stage is null)
+            {
+                continue;
+            }
+
+            var queueName = ResolveQueueName(definition, cursor.QueueKey);
+            var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, cursor.QueueKey, cursor.AssignedTo);
+            var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+
+            items.Add(new AccessibleWorkItem(
+                stage.StageKey,
+                stage.DisplayName,
+                queueName,
+                cursor.QueueKey,
+                IsJoinGateway: false,
+                eligibleActions,
+                assignedTo is not null ? eligibleActions : [],
+                queueDef?.AssignmentPolicy,
+                CursorId: cursor.CursorId,
+                AssignedTo: assignedTo,
+                AssignedTeamId: assignedTeamId));
+        }
+
+        foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
+        {
+            var gateway = FindGateway(definition, cursor.CurrentNodeKey);
+            if (gateway is null || !string.Equals(gateway.GatewayType, "Join", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, gateway.QueueKey, StringComparison.Ordinal));
+            if (!string.Equals(queueDef?.OwningTeamId, teamId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var queueName = ResolveQueueName(definition, gateway);
+            items.Add(new AccessibleWorkItem(
+                gateway.Key,
+                gateway.DisplayName,
+                queueName,
+                gateway.QueueKey,
+                IsJoinGateway: true,
+                [],
+                [],
+                queueDef!.AssignmentPolicy,
+                CursorId: cursor.CursorId,
+                AssignedTo: null,
+                AssignedTeamId: teamId));
+        }
+
+        return items
+            .OrderByDescending(item => string.Equals(item.StageKey, instance.CurrentStage, StringComparison.Ordinal))
+            .ThenBy(item => item.IsJoinGateway)
+            .ThenBy(item => item.StageKey, StringComparer.Ordinal)
+            .ToArray();
     }
 
     /// <summary>
@@ -882,8 +1546,137 @@ public class ProcessManagerEngine : IProcessManager
     protected bool TryGetInstance(string instanceId, out ServiceRequest instance) =>
         _instanceStore.TryGet(instanceId, out instance!);
 
-    protected void SaveInstance(ServiceRequest instance) =>
-        _instanceStore.Save(instance);
+    /// <summary>Queue-level assignment policy: whoever's action lands work here becomes its
+    /// individual owner immediately. See docs/guides/team-assignment.md.</summary>
+    private const string AssignToInitiatorPolicy = "assign-to-initiator";
+
+    /// <summary>Queue-level assignment policy: work lands owned by the team as a whole, pickable
+    /// by any member, actionable only once picked up. See docs/guides/team-assignment.md.</summary>
+    private const string TeamTrayPolicy = "team-tray";
+
+    protected void SaveInstance(ServiceRequest instance, string actingUserId, AuditEvent? auditEvent = null)
+    {
+        _instanceStore.Save(EstablishQueueAssignmentsIfNeeded(instance, actingUserId));
+        if (auditEvent is not null)
+        {
+            _auditLogStore.Record(auditEvent);
+        }
+    }
+
+    /// <summary>
+    /// The audited counterpart to <see cref="IServiceRequestStore.TrySaveIfVersionMatches"/> — used
+    /// by <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>'s
+    /// own plain (non-gateway) mutation paths, where two callers racing against the same unclaimed
+    /// item is a real, user-facing concern (see docs/guides/work-allocation.md). Records
+    /// <paramref name="auditEvent"/> only when the save actually lands.
+    /// </summary>
+    private bool TrySaveInstanceIfVersionMatches(ServiceRequest instance, string actingUserId, int expectedStateVersion, AuditEvent? auditEvent)
+    {
+        if (!_instanceStore.TrySaveIfVersionMatches(EstablishQueueAssignmentsIfNeeded(instance, actingUserId), expectedStateVersion))
+        {
+            return false;
+        }
+
+        if (auditEvent is not null)
+        {
+            _auditLogStore.Record(auditEvent);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Establishes a durable <see cref="QueueAssignment"/> the first time any of this instance's
+    /// current cursors (or, pre-first-gateway, its own <see cref="ServiceRequest.CurrentStage"/>)
+    /// lands in a team-owned queue (<see cref="QueueDefinition.AssignmentPolicy"/> declared) it has
+    /// no existing record for — add-if-absent, never overwritten, so a later re-entry into the same
+    /// queue key reuses the same record rather than re-running that queue's policy. This is the one
+    /// hook every <see cref="SaveInstance"/>/<see cref="TrySaveInstanceIfVersionMatches"/> call goes
+    /// through — deliberately not threaded into each individual cursor-minting call site (Split
+    /// fan-out, Join arrival/release) so a future new mint site can't silently skip establishment.
+    /// A legacy queue (no <see cref="QueueDefinition.AssignmentPolicy"/>) is never touched here —
+    /// see <see cref="RequestCursor.AssignedTo"/> for that case. See docs/guides/team-assignment.md.
+    /// </summary>
+    private ServiceRequest EstablishQueueAssignmentsIfNeeded(ServiceRequest instance, string actingUserId)
+    {
+        if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+        {
+            return instance;
+        }
+
+        Dictionary<string, QueueAssignment>? additions = null;
+
+        void TryAddAssignment(string? queueKey)
+        {
+            if (string.IsNullOrWhiteSpace(queueKey)
+                || instance.QueueAssignments.ContainsKey(queueKey)
+                || additions?.ContainsKey(queueKey) == true)
+            {
+                return;
+            }
+
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
+            if (queueDef?.AssignmentPolicy is null)
+            {
+                return;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            additions ??= new Dictionary<string, QueueAssignment>();
+            additions[queueKey] = queueDef.AssignmentPolicy == AssignToInitiatorPolicy
+                ? new QueueAssignment
+                {
+                    QueueKey = queueKey,
+                    TeamId = queueDef.OwningTeamId,
+                    AssignedUserId = actingUserId,
+                    AssignedAt = now,
+                    EstablishedAt = now
+                }
+                : new QueueAssignment { QueueKey = queueKey, TeamId = queueDef.OwningTeamId, EstablishedAt = now };
+        }
+
+        if (instance.Cursors.Count == 0)
+        {
+            var stage = definition.Stages.FirstOrDefault(s => string.Equals(s.StageKey, instance.CurrentStage, StringComparison.Ordinal));
+            TryAddAssignment(GetQueueKey(stage));
+        }
+        else
+        {
+            foreach (var cursor in instance.Cursors.Where(c => !c.IsAtGateway))
+            {
+                TryAddAssignment(cursor.QueueKey);
+            }
+        }
+
+        if (additions is null)
+        {
+            return instance;
+        }
+
+        var merged = new Dictionary<string, QueueAssignment>(instance.QueueAssignments);
+        foreach (var (key, value) in additions)
+        {
+            merged[key] = value;
+        }
+
+        return instance with { QueueAssignments = merged };
+    }
+
+    private static AuditEvent TransitionAuditEvent(
+        string instanceId, string actor, string? cursorId, string? fromStageKey, string? toStageKey, string? action, string? detail = null) => new()
+    {
+        EventId = Guid.NewGuid().ToString("N"),
+        InstanceId = instanceId,
+        CursorId = cursorId,
+        EventType = AuditEventType.Transition,
+        Actor = actor,
+        FromStageKey = fromStageKey,
+        ToStageKey = toStageKey,
+        Action = action,
+        Detail = detail,
+        Severity = AuditEventSeverity.Info,
+        OccurredAt = DateTimeOffset.UtcNow
+    };
 
     /// <summary>
     /// The most recently computed <see cref="CalculationResult"/> for an instance, if its
@@ -898,9 +1691,10 @@ public class ProcessManagerEngine : IProcessManager
     protected ServiceRequestResponseEnvelope BuildEnvelope(
         ServiceRequest instance,
         ServiceBlueprint definition,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string userId)
     {
-        var workItems = FindAccessibleWorkItems(instance, definition, accessProfile);
+        var workItems = FindAccessibleWorkItems(instance, definition, accessProfile, userId);
         var visibleItem = workItems.FirstOrDefault();
 
         if (visibleItem is null)
@@ -928,7 +1722,7 @@ public class ProcessManagerEngine : IProcessManager
                 if (TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
                     && TryGetInstance(instance.InstanceId, out var refreshed))
                 {
-                    return BuildEnvelope(refreshed, definition, accessProfile);
+                    return BuildEnvelope(refreshed, definition, accessProfile, userId);
                 }
 
                 return BuildJoinWaitingEnvelope(instance, definition, joinGateway);
@@ -1005,13 +1799,36 @@ public class ProcessManagerEngine : IProcessManager
             string.Equals(stage.StageKey, definition.InitialStage, StringComparison.Ordinal));
 
         var queueName = initialStage is null ? null : ResolveQueueName(definition, initialStage);
-        return accessProfile.CanViewQueue(queueName) && accessProfile.CanStartQueue(queueName);
+        var queueKey = initialStage is null ? null : GetQueueKey(initialStage);
+        return accessProfile.CanViewQueue(queueName)
+            && accessProfile.CanStartQueue(queueName)
+            && HasQueueEligibility(definition, queueKey, queueName, accessProfile);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="accessProfile"/> holds a capability <see cref="QueueDefinition.RoleGates"/>
+    /// requires for this queue — a genuine, enforced check, unlike the pre-existing
+    /// <c>ServiceBlueprintRouteDefinition.RequiresRole</c> (declared on routes but never actually
+    /// validated against the accessing actor; see docs/guides/work-allocation.md). Null/no matching
+    /// <see cref="QueueDefinition"/>, or one with no declared <c>RoleGates</c>, is unrestricted.
+    /// </summary>
+    private static bool HasQueueEligibility(ServiceBlueprint definition, string? queueKey, string? queueName, ActorProfile accessProfile)
+    {
+        var lookupKey = FirstNonEmpty(queueKey, queueName);
+        if (string.IsNullOrWhiteSpace(lookupKey))
+        {
+            return true;
+        }
+
+        var queue = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, lookupKey, StringComparison.Ordinal));
+        return accessProfile.HasCapability(queue?.RoleGates);
     }
 
     protected IReadOnlyList<AccessibleWorkItem> FindAccessibleWorkItems(
         ServiceRequest instance,
         ServiceBlueprint definition,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string? userId = null)
     {
         var items = new List<AccessibleWorkItem>();
 
@@ -1026,12 +1843,27 @@ public class ProcessManagerEngine : IProcessManager
                 var queueName = ResolveQueueName(definition, stage);
                 if (CanViewQueue(definition, queueKey, queueName, accessProfile))
                 {
-                    items.Add(new AccessibleWorkItem(
-                        stage.StageKey,
-                        stage.DisplayName,
-                        queueName,
-                        IsJoinGateway: false,
-                        BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile)));
+                    var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
+                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, cursorAssignedTo: null);
+
+                    if (IsVisibleToActor(queueDef, assignedTo, accessProfile, userId))
+                    {
+                        var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+                        var availableActions = IsEntitledToActNow(accessProfile, assignedTo, userId) ? eligibleActions : [];
+
+                        items.Add(new AccessibleWorkItem(
+                            stage.StageKey,
+                            stage.DisplayName,
+                            queueName,
+                            queueKey,
+                            IsJoinGateway: false,
+                            eligibleActions,
+                            availableActions,
+                            queueDef?.AssignmentPolicy,
+                            CursorId: RequestCursor.PrimaryCursorId,
+                            AssignedTo: assignedTo,
+                            AssignedTeamId: assignedTeamId));
+                    }
                 }
             }
 
@@ -1040,6 +1872,20 @@ public class ProcessManagerEngine : IProcessManager
 
         foreach (var cursor in instance.Cursors.Where(candidate => !candidate.IsAtGateway))
         {
+            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
+            var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, cursor.QueueKey, cursor.AssignedTo);
+
+            // A row held by someone else — a specific individual on a legacy queue, or a different
+            // team member on a team-owned one — is hidden entirely, not shown-but-disabled — the
+            // same enforcement Advance's own target resolution relies on (see
+            // docs/guides/work-allocation.md and docs/guides/team-assignment.md). No userId (an
+            // internal check that never resolves a specific actor, e.g. RefreshIfWaitingAtJoin
+            // peeking at the primary item) skips this filter rather than hiding everything.
+            if (!IsVisibleToActor(queueDef, assignedTo, accessProfile, userId))
+            {
+                continue;
+            }
+
             var stage = definition.Stages.FirstOrDefault(candidate =>
                 string.Equals(candidate.StageKey, cursor.CurrentNodeKey, StringComparison.Ordinal));
 
@@ -1054,12 +1900,21 @@ public class ProcessManagerEngine : IProcessManager
                 continue;
             }
 
+            var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+            var availableActions = IsEntitledToActNow(accessProfile, assignedTo, userId) ? eligibleActions : [];
+
             items.Add(new AccessibleWorkItem(
                 stage.StageKey,
                 stage.DisplayName,
                 queueName,
+                cursor.QueueKey,
                 IsJoinGateway: false,
-                BuildAvailableActions(instance, definition, stage.StageKey, queueName, accessProfile)));
+                eligibleActions,
+                availableActions,
+                queueDef?.AssignmentPolicy,
+                CursorId: cursor.CursorId,
+                AssignedTo: assignedTo,
+                AssignedTeamId: assignedTeamId));
         }
 
         foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
@@ -1080,8 +1935,14 @@ public class ProcessManagerEngine : IProcessManager
                 gateway.Key,
                 gateway.DisplayName,
                 queueName,
+                gateway.QueueKey,
                 IsJoinGateway: true,
-                []));
+                [],
+                [],
+                AssignmentPolicy: null,
+                CursorId: cursor.CursorId,
+                AssignedTo: null,
+                AssignedTeamId: null));
         }
 
         return items
@@ -1091,16 +1952,91 @@ public class ProcessManagerEngine : IProcessManager
             .ToArray();
     }
 
+    /// <summary>
+    /// Resolves who (if anyone) currently owns a queue's row on this instance — for a queue with no
+    /// declared <see cref="QueueDefinition.AssignmentPolicy"/>, that's just
+    /// <paramref name="cursorAssignedTo"/> (<see cref="RequestCursor.AssignedTo"/>), no team; for a
+    /// team-owned queue, it's <see cref="ServiceRequest.QueueAssignments"/> instead —
+    /// <see cref="RequestCursor.AssignedTo"/> is never touched for those. See
+    /// docs/guides/team-assignment.md.
+    /// </summary>
+    private static (string? AssignedTo, string? AssignedTeamId) ResolveQueueOwnership(
+        QueueDefinition? queueDef, ServiceRequest instance, string? queueKey, string? cursorAssignedTo)
+    {
+        if (queueDef?.AssignmentPolicy is null)
+        {
+            return (cursorAssignedTo, null);
+        }
+
+        var assignment = instance.QueueAssignments.GetValueOrDefault(queueKey ?? "");
+        return (assignment?.AssignedUserId, assignment?.TeamId ?? queueDef.OwningTeamId);
+    }
+
+    /// <summary>
+    /// Whether a row is visible to <paramref name="userId"/> at all. Held by a specific different
+    /// individual → hidden, always (whether or not the queue declares a team). Otherwise not yet
+    /// picked up: a queue with no declared team is visible to any eligible actor (pickup is
+    /// mandatory to *act*, but every eligible actor still needs to be able to see the row exists in
+    /// order to pick it up at all); a team-owned queue's unpicked tray row is visible only to team
+    /// members — except when <paramref name="accessProfile"/> is the synthetic
+    /// <see cref="ActorProfile.UnrestrictedOwner"/>, meaning this is an internal, system-driven call
+    /// recursing with a real <paramref name="userId"/> but no real resolved profile (e.g.
+    /// <see cref="ResolveSupportSystemOutcome"/>'s webhook resolution path) — such a call can never
+    /// carry real team membership and must not be blocked by a check it structurally can't satisfy.
+    /// See docs/guides/team-assignment.md.
+    /// </summary>
+    private static bool IsVisibleToActor(QueueDefinition? queueDef, string? assignedTo, ActorProfile accessProfile, string? userId)
+    {
+        if (userId is null)
+        {
+            return true;
+        }
+
+        if (assignedTo is not null)
+        {
+            return string.Equals(assignedTo, userId, StringComparison.Ordinal);
+        }
+
+        return queueDef?.AssignmentPolicy is null
+            || accessProfile.IsTeamMember(queueDef.OwningTeamId)
+            || ReferenceEquals(accessProfile, ActorProfile.UnrestrictedOwner);
+    }
+
+    /// <summary>
+    /// Whether the caller may actually submit an eligible action right now, as opposed to merely
+    /// being allowed to see the row exists. The rule is universal, no per-queue opt-out: if a row
+    /// isn't assigned to <paramref name="userId"/>, they can't act on it, full stop — whether that
+    /// queue declares a <c>QueueDefinition.AssignmentPolicy</c> or not. A queue declaring nothing
+    /// still requires an explicit <c>PickupWorkItem</c> first (see docs/guides/work-allocation.md);
+    /// it's simply not scoped to any particular team the way <c>"team-tray"</c> is, so any actor
+    /// already eligible to see the queue at all may pick it up. The one genuine exemption is
+    /// <paramref name="accessProfile"/>.<see cref="ActorProfile.RestrictToInstanceOwner"/> — an
+    /// owner-restricted (citizen-style) profile's own instance has exactly one possible actor by
+    /// construction, so "assignment" isn't a concept that applies there at all (the same
+    /// discriminator <see cref="AccessibleWorkItem.ResolvePickupState"/> already uses for the
+    /// identical reason). Internal peeks (no <paramref name="userId"/>) are always entitled too.
+    /// </summary>
+    private static bool IsEntitledToActNow(ActorProfile accessProfile, string? assignedTo, string? userId) =>
+        accessProfile.RestrictToInstanceOwner
+        || userId is null
+        || string.Equals(assignedTo, userId, StringComparison.Ordinal);
+
     protected bool CanViewQueue(
         ServiceBlueprint definition,
         string? queueKey,
         string? queueName,
         ActorProfile accessProfile)
     {
-        return accessProfile.CanViewQueue(queueName);
+        return accessProfile.CanViewQueue(queueName)
+            && HasQueueEligibility(definition, queueKey, queueName, accessProfile);
     }
 
-    protected IReadOnlyList<ServiceRequestAction> BuildAvailableActions(
+    /// <summary>
+    /// Assignment-agnostic — route/role/showWhen-gated only. See
+    /// <see cref="AccessibleWorkItem.EligibleActions"/>'s own remarks for why this is a distinct
+    /// concept from what actually renders/what <c>Advance</c> accepts.
+    /// </summary>
+    protected IReadOnlyList<ServiceRequestAction> BuildEligibleActions(
         ServiceRequest instance,
         ServiceBlueprint definition,
         string stageKey,
@@ -1109,14 +2045,22 @@ public class ProcessManagerEngine : IProcessManager
     {
         var transitions = GetOutgoingTransitions(definition, stageKey);
 
-        if (string.IsNullOrWhiteSpace(queueName))
-        {
-            transitions = transitions.Where(transition => transition.RequiresRole is null).ToArray();
-        }
-        else if (!accessProfile.CanActInQueue(queueName))
+        if (!string.IsNullOrWhiteSpace(queueName) && !accessProfile.CanActInQueue(queueName))
         {
             return [];
         }
+
+        // ServiceBlueprintRouteDefinition.RequiresRole — genuinely enforced against
+        // ActorProfile.Capabilities, unlike the check this replaced (which only ever excluded a
+        // role-gated route when there was no queue context at all, and never validated the actor's
+        // specific role even then). Reuses Capabilities rather than a separate "Roles" set, since
+        // both already express "does this actor hold X" — see docs/guides/work-allocation.md for
+        // why this is a different, pre-existing concept from RequiredCapabilities/RoleGates'
+        // queue-eligibility gate above it.
+        transitions = transitions
+            .Where(transition => string.IsNullOrWhiteSpace(transition.RequiresRole)
+                || accessProfile.Capabilities.Contains(transition.RequiresRole))
+            .ToArray();
 
         // ServiceBlueprintRouteDefinition.ShowWhen excludes a route from AvailableActions
         // entirely (not merely disables it) — the same mechanism a stage's own components use via
@@ -1296,17 +2240,36 @@ public class ProcessManagerEngine : IProcessManager
     }
 
 
+    /// <summary>
+    /// <paramref name="EligibleActions"/> is route/role/showWhen-gated only — assignment-agnostic,
+    /// feeds <see cref="ClassifyStatus"/>. <paramref name="AvailableActions"/> narrows that to
+    /// nothing unless the caller is individually entitled to act on this row *right now* — feeds
+    /// rendering (<see cref="BuildEnvelope"/>'s <c>StepContent.AvailableActions</c>) and what
+    /// <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>
+    /// will accept. Splitting these two is what lets an unassigned team-tray row stay visible and
+    /// available to pick up (eligible) while still rendering zero action buttons (not yet available) — see
+    /// docs/guides/team-assignment.md. <paramref name="AssignmentPolicy"/>/<paramref name="AssignedTeamId"/>
+    /// are null for a legacy queue.
+    /// </summary>
     protected sealed record AccessibleWorkItem(
         string StageKey,
         string DisplayName,
         string? QueueName,
+        string? QueueKey,
         bool IsJoinGateway,
-        IReadOnlyList<ServiceRequestAction> AvailableActions)
+        IReadOnlyList<ServiceRequestAction> EligibleActions,
+        IReadOnlyList<ServiceRequestAction> AvailableActions,
+        string? AssignmentPolicy,
+        string CursorId,
+        string? AssignedTo,
+        string? AssignedTeamId)
     {
         public QueueWorkItem ToEnvelopeItem(
             ServiceRequest instance,
             ServiceBlueprint definition,
-            QueueWorkItemStatus status) =>
+            QueueWorkItemStatus status,
+            ActorProfile accessProfile,
+            string userId) =>
             new()
             {
                 InstanceId = instance.InstanceId,
@@ -1315,14 +2278,44 @@ public class ProcessManagerEngine : IProcessManager
                 StageKey = StageKey,
                 StateDisplayName = DisplayName,
                 QueueName = QueueName,
+                CursorId = CursorId,
                 TenantId = instance.TenantId,
                 UserId = instance.UserId,
                 StateVersion = instance.StateVersion,
                 AvailableActions = AvailableActions,
                 CreatedAt = instance.CreatedAt,
                 UpdatedAt = instance.UpdatedAt,
-                Status = status
+                Status = status,
+                PickupState = ResolvePickupState(status, accessProfile)
             };
+
+        /// <summary>
+        /// See docs/guides/work-allocation.md and docs/guides/team-assignment.md. A queue with no
+        /// declared <c>AssignmentPolicy</c> behaves identically to <c>"team-tray"</c> here — pickup
+        /// is mandatory either way, the only difference is team-tray additionally scopes who may
+        /// pick a row up to a specific team's own members. Unassigned status is itself the "not
+        /// picked up, pick me up" affordance; Actionable means already picked up by this caller. An
+        /// assign-to-initiator queue always has nothing to pick up/put back — it's already owned
+        /// the moment it exists (see docs/guides/team-assignment.md's reassignment scope note).
+        /// </summary>
+        private QueueWorkItemPickupState? ResolvePickupState(QueueWorkItemStatus status, ActorProfile accessProfile)
+        {
+            if (accessProfile.RestrictToInstanceOwner)
+            {
+                return null;
+            }
+
+            return AssignmentPolicy switch
+            {
+                null or TeamTrayPolicy => status switch
+                {
+                    QueueWorkItemStatus.Unassigned => QueueWorkItemPickupState.NotPickedUp,
+                    QueueWorkItemStatus.Actionable => QueueWorkItemPickupState.PickedUpByMe,
+                    _ => null
+                },
+                _ => null
+            };
+        }
     }
 
     protected static ServiceRequestResponseEnvelope ErrorEnvelope(string message, string code) =>
@@ -1354,10 +2347,10 @@ public class ProcessManagerEngine : IProcessManager
             return error;
         }
 
-        _instanceStore.Save(instance);
+        SaveInstance(instance, userId);
 
         Logger.LogInformation(logMessage, [instance.InstanceId, .. additionalLogArgs]);
-        return BuildEnvelope(instance, definition, accessProfile);
+        return BuildEnvelope(instance, definition, accessProfile, userId);
     }
 
     private static ServiceRequest CreateNewInstance(
@@ -1437,7 +2430,7 @@ public class ProcessManagerEngine : IProcessManager
             // Last computed result is kept on the instance so a composed caller (e.g. the
             // simulation runner, which builds this engine rather than subclassing it) can
             // read raw calculated values without duplicating evaluation itself.
-            SaveInstance(instance with { LastCalculationResult = result });
+            SaveInstance(instance with { LastCalculationResult = result }, instance.UserId);
 
             return new CalculationRenderContext(definition.Calculations, fullScope, result, display);
         }
@@ -1863,6 +2856,9 @@ public class ProcessManagerEngine : IProcessManager
                             ? datasetIdValue?.ToString()
                             : null,
                         PageSize = bulkReview.PageSize,
+                        SyncedLabel = bulkReview.SyncedLabel,
+                        PendingLabel = bulkReview.PendingLabel,
+                        SinceLabel = bulkReview.SinceLabel,
                     });
                     break;
 
@@ -2166,7 +3162,8 @@ public class ProcessManagerEngine : IProcessManager
         RouteFile arrivingTransition,
         ServiceBlueprintGatewayDefinition splitGateway,
         Dictionary<string, object?>? fieldValues,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string userId)
     {
         // Find all outgoing branches from the split gateway.
         // Split gateway transitions carry the action "split-auto" by convention or any action
@@ -2289,18 +3286,21 @@ public class ProcessManagerEngine : IProcessManager
                 continue;
             }
 
-            if (TryReleaseJoinIfReady(updated, definition, joinGateway, accessProfile) is { } released)
+            if (TryReleaseJoinIfReady(updated, definition, joinGateway, accessProfile, userId) is { } released)
             {
                 return released;
             }
         }
 
-        SaveInstance(updated);
+        SaveInstance(updated, userId, TransitionAuditEvent(
+            instance.InstanceId, userId, cursorId: null,
+            fromStageKey: arrivingTransition.FromState, toStageKey: splitGateway.Key, action: arrivingTransition.Action,
+            detail: $"split gateway fanned out to {newCursors.Count} cursors"));
         Logger.LogInformation(
             "Split gateway '{Gateway}': instance {Id} fanned out to {Count} cursors.",
             splitGateway.Key, instance.InstanceId, newCursors.Count);
 
-        return BuildEnvelope(updated, definition, accessProfile);
+        return BuildEnvelope(updated, definition, accessProfile, userId);
     }
 
     protected ServiceRequestResponseEnvelope HandleJoinGatewayAdvance(
@@ -2309,7 +3309,8 @@ public class ProcessManagerEngine : IProcessManager
         RouteFile arrivingTransition,
         ServiceBlueprintGatewayDefinition joinGateway,
         Dictionary<string, object?>? fieldValues,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string userId)
     {
         var gatewayKey = joinGateway.Key;
         var requiredQueues = joinGateway.RequiredIncomingQueues ?? [];
@@ -2372,7 +3373,10 @@ public class ProcessManagerEngine : IProcessManager
                 FieldValues = Merge(instance.FieldValues, fieldValues)
             };
 
-            SaveInstance(waitingInstance);
+            SaveInstance(waitingInstance, userId, TransitionAuditEvent(
+                instance.InstanceId, userId, cursorId: arrivingCursorId,
+                fromStageKey: arrivingTransition.FromState, toStageKey: gatewayKey, action: arrivingTransition.Action,
+                detail: $"arrived at join, waiting ({arrivedQueues.Count}/{requiredQueues.Count} queues)"));
             Logger.LogInformation(
                 "Join gateway '{Gateway}': instance {Id} waiting ({Arrived}/{Required} queues).",
                 gatewayKey, instance.InstanceId, arrivedQueues.Count, requiredQueues.Count);
@@ -2390,7 +3394,7 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = Merge(instance.FieldValues, fieldValues)
         };
 
-        return TryReleaseJoinIfReady(arrivedInstance, definition, joinGateway, accessProfile)
+        return TryReleaseJoinIfReady(arrivedInstance, definition, joinGateway, accessProfile, userId)
                ?? BuildJoinWaitingEnvelope(arrivedInstance, definition, joinGateway);
     }
 
@@ -2753,6 +3757,11 @@ public class ProcessManagerEngine : IProcessManager
         AddDeclaredCountUpdate(action, "errorCountField", result.Summary!.ErrorRowCount, updates);
         AddDeclaredCountUpdate(action, "warningCountField", result.Summary.WarningRowCount, updates);
         AddDeclaredCountUpdate(action, "acceptedCountField", result.Summary.AcceptedRowCount, updates);
+        // Always 0 immediately after a fresh ingest (a brand-new dataset starts with every row's
+        // CurrentValues equal to its own OriginalValues) — see docs/guides/bulk-data-review.md's
+        // sync-state section and SyncBulkDatasetSyncState, which is what keeps this field correct
+        // for the rest of the stage's dwell, as corrections land outside of another ingest.
+        AddDeclaredCountUpdate(action, "dirtyCountField", result.Summary.DirtyRowCount, updates);
 
         return updates;
     }
@@ -2957,7 +3966,7 @@ public class ProcessManagerEngine : IProcessManager
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            SaveInstance(withResolvedInvocation);
+            SaveInstance(withResolvedInvocation, withResolvedInvocation.UserId);
 
             var advanced = Advance(
                 withResolvedInvocation.InstanceId,
@@ -3017,7 +4026,8 @@ public class ProcessManagerEngine : IProcessManager
         ServiceRequest instance,
         ServiceBlueprint definition,
         ServiceBlueprintGatewayDefinition joinGateway,
-        ActorProfile accessProfile)
+        ActorProfile accessProfile,
+        string userId)
     {
         var gatewayKey = joinGateway.Key;
         var requiredQueues = joinGateway.RequiredIncomingQueues ?? [];
@@ -3128,8 +4138,11 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = releasedFieldValues
         };
 
-        SaveInstance(releasedInstance);
-        return BuildEnvelope(releasedInstance, definition, accessProfile);
+        SaveInstance(releasedInstance, userId, TransitionAuditEvent(
+            instance.InstanceId, userId, cursorId: null,
+            fromStageKey: gatewayKey, toStageKey: selectedOutgoing[0].ToState, action: selectedOutgoing[0].Action,
+            detail: "join released"));
+        return BuildEnvelope(releasedInstance, definition, accessProfile, userId);
     }
 
     private static IReadOnlyList<RequestCursor> MoveCursor(
@@ -3137,14 +4150,21 @@ public class ProcessManagerEngine : IProcessManager
         string? cursorId,
         string newNodeKey,
         bool isAtGateway,
-        string? arrivedViaAction = null)
+        string? arrivedViaAction = null,
+        string? newQueueKey = null)
     {
         if (cursorId == null)
             return cursors;
 
         return cursors
             .Select(c => c.CursorId == cursorId
-                ? c with { CurrentNodeKey = newNodeKey, IsAtGateway = isAtGateway, ArrivedViaAction = isAtGateway ? arrivedViaAction : null }
+                ? c with
+                {
+                    CurrentNodeKey = newNodeKey,
+                    IsAtGateway = isAtGateway,
+                    ArrivedViaAction = isAtGateway ? arrivedViaAction : null,
+                    QueueKey = newQueueKey ?? c.QueueKey
+                }
                 : c)
             .ToArray();
     }

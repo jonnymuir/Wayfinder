@@ -42,8 +42,13 @@ test.describe('Caseworker queue: review and decide', () => {
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
 
-    await test.step('Caseworker sees it waiting in their queue', async () => {
+    await test.step('Caseworker sees it waiting in their queue and picks it up', async () => {
+      // juggling-licence's own caseworker queue is team-tray (see docs/guides/team-assignment.md)
+      // — a not-picked-up row shows "View" (not "Review") and must be explicitly picked up before
+      // it's actionable at all.
       await expect(caseworkerPage.getByRole('heading', { name: 'Caseworker queue' })).toBeVisible();
+      await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
+      await expect(caseworkerPage.getByText('With you')).toBeVisible();
       await caseworkerPage.getByRole('link', { name: 'Review' }).click();
     });
 
@@ -84,6 +89,8 @@ test.describe('Caseworker queue: review and decide', () => {
     const caseworkerContext = await browser.newContext();
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
+    await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
+    await expect(caseworkerPage.getByText('With you')).toBeVisible();
     await caseworkerPage.getByRole('link', { name: 'Review' }).click();
     await caseworkerPage.getByRole('button', { name: 'Continue to decision' }).click();
     await expect(caseworkerPage.getByRole('heading', { name: 'Record your decision' })).toBeVisible();

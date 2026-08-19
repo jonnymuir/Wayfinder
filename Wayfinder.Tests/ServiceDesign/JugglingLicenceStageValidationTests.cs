@@ -24,6 +24,19 @@ public class JugglingLicenceStageValidationTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
+    // The real juggling-licence.json now declares its "caseworker" queue team-tray (see
+    // docs/guides/team-assignment.md) — a caseworker must be a team member AND have picked the
+    // row up before anything is offered/actionable, unlike the citizen-side ArriveAt* helpers
+    // above, which stay on ActorProfile.UnrestrictedOwner since citizen queues are unaffected.
+    private static readonly ActorProfile CaseworkerProfile = new()
+    {
+        VisibleQueues = ["caseworker"],
+        ActionableQueues = ["caseworker"],
+        RestrictToInstanceOwner = false,
+        Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "juggling-licence-review" },
+        TeamIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "juggling-licence-reviewers" }
+    };
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -232,7 +245,14 @@ public class JugglingLicenceStageValidationTests
             "submit", atDeclaration.StateVersion,
             new Dictionary<string, object?> { ["declarationConfirmed"] = true });
 
-        return (engine, started.InstanceId, afterSubmit.StateVersion);
+        // The caseworker queue is now team-tray (see docs/guides/team-assignment.md) — pick up the
+        // row before returning, the same way a real caseworker would have to before anything is
+        // offered. Not what this test class is actually about (see ShowWhen's own remarks above),
+        // so kept out of the two callers' own assertions.
+        var item = engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items.Single(i => i.InstanceId == started.InstanceId);
+        var pickedUp = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, UserId, CaseworkerProfile);
+
+        return (engine, started.InstanceId, pickedUp.StateVersion);
     }
 
     [Fact]
@@ -240,7 +260,7 @@ public class JugglingLicenceStageValidationTests
     {
         var (engine, instanceId, stateVersion) = ArriveAtCaseworkerReview(withFile: true);
 
-        var current = engine.GetCurrent("juggling-licence", TenantId, UserId, ActorProfile.UnrestrictedOwner, instanceId);
+        var current = engine.GetCurrent("juggling-licence", TenantId, UserId, CaseworkerProfile, instanceId);
 
         var actionKeys = current.Render?.AvailableActions.Select(a => a.ActionKey).ToArray() ?? [];
         Assert.Contains("send-to-insurer", actionKeys);
@@ -250,11 +270,11 @@ public class JugglingLicenceStageValidationTests
         // Advance() already gives a hidden component's field: tampering to submit the trigger of
         // a route that isn't offered is rejected, not silently accepted.
         var tampered = engine.Advance(
-            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "continue", stateVersion, null);
+            instanceId, TenantId, UserId, CaseworkerProfile, "continue", stateVersion, null);
         Assert.Equal("INVALID_TRANSITION", tampered.Problems.Single().Code);
 
         var result = engine.Advance(
-            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "send-to-insurer", stateVersion, null);
+            instanceId, TenantId, UserId, CaseworkerProfile, "send-to-insurer", stateVersion, null);
         Assert.Empty(result.Problems);
     }
 
@@ -263,14 +283,14 @@ public class JugglingLicenceStageValidationTests
     {
         var (engine, instanceId, stateVersion) = ArriveAtCaseworkerReview(withFile: false);
 
-        var current = engine.GetCurrent("juggling-licence", TenantId, UserId, ActorProfile.UnrestrictedOwner, instanceId);
+        var current = engine.GetCurrent("juggling-licence", TenantId, UserId, CaseworkerProfile, instanceId);
 
         var actionKeys = current.Render?.AvailableActions.Select(a => a.ActionKey).ToArray() ?? [];
         Assert.Contains("continue", actionKeys);
         Assert.DoesNotContain("send-to-insurer", actionKeys);
 
         var result = engine.Advance(
-            instanceId, TenantId, UserId, ActorProfile.UnrestrictedOwner, "continue", stateVersion, null);
+            instanceId, TenantId, UserId, CaseworkerProfile, "continue", stateVersion, null);
 
         Assert.Empty(result.Problems);
         Assert.Equal("Record your decision", result.Render?.StateDisplayName);

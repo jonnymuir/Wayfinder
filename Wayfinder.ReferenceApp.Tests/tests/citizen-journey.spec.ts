@@ -234,6 +234,8 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     const caseworkerContext = await browser.newContext();
     const caseworkerPage = await caseworkerContext.newPage();
     await loginAs(caseworkerPage, DEMO_USERS.caseworker);
+    await caseworkerPage.getByRole('button', { name: 'Pick up' }).click();
+    await expect(caseworkerPage.getByText('With you')).toBeVisible();
     await caseworkerPage.getByRole('link', { name: 'Review' }).click();
 
     await expect(

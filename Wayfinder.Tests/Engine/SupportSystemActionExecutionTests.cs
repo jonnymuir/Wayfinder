@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Abstractions;
+using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign;
@@ -215,8 +216,9 @@ public class SupportSystemActionExecutionTests
         try
         {
             var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion,
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion,
                 new Dictionary<string, object?> { ["notes"] = "please check this one" });
 
             client.Invocations.Should().ContainSingle();
@@ -244,8 +246,9 @@ public class SupportSystemActionExecutionTests
         try
         {
             var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
 
             // Still pending: the client hasn't been told to resolve yet.
             var stillWaiting = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile, afterSplit.InstanceId);
@@ -280,8 +283,9 @@ public class SupportSystemActionExecutionTests
         try
         {
             var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
 
             client.Invocations.Single().Context.WebhookExpected.Should().BeTrue();
 
@@ -306,10 +310,11 @@ public class SupportSystemActionExecutionTests
         try
         {
             var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
 
-            var stillWaiting = engine.GetQueueWorkItems(CaseworkerProfile).Items
+            var stillWaiting = engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items
                 .Single(i => i.InstanceId == afterSplit.InstanceId);
             stillWaiting.StageKey.Should().Be("check-complete");
             stillWaiting.IsWaiting.Should().BeTrue();
@@ -326,7 +331,7 @@ public class SupportSystemActionExecutionTests
             // behaviour). The proof the poll genuinely ran from inside GetQueueWorkItems, not a
             // side-channel GetCurrent call, is that the instance is now gone from the list at
             // all.
-            var afterRefresh = engine.GetQueueWorkItems(CaseworkerProfile).Items
+            var afterRefresh = engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items
                 .Where(i => i.InstanceId == afterSplit.InstanceId)
                 .ToList();
             afterRefresh.Should().BeEmpty();
@@ -349,11 +354,12 @@ public class SupportSystemActionExecutionTests
         try
         {
             var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
 
             client.CheckStatusCallCount.Should().Be(0);
-            var stillWaiting = engine.GetQueueWorkItems(CaseworkerProfile).Items
+            var stillWaiting = engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items
                 .Single(i => i.InstanceId == afterSplit.InstanceId);
 
             stillWaiting.StageKey.Should().Be("check-complete");
@@ -373,8 +379,9 @@ public class SupportSystemActionExecutionTests
         try
         {
             var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
 
             var invocationId = engine.GetAllInstances()
                 .Single(i => i.InstanceId == afterSplit.InstanceId)
@@ -421,8 +428,9 @@ public class SupportSystemActionExecutionTests
         try
         {
             var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
             var invocationId = engine.GetAllInstances()
                 .Single(i => i.InstanceId == afterSplit.InstanceId)
                 .SupportSystemInvocations.Single().InvocationId;
@@ -451,8 +459,9 @@ public class SupportSystemActionExecutionTests
         try
         {
             var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
             var afterSplit = engine.Advance(
-                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", started.StateVersion, null);
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
             var invocationId = engine.GetAllInstances()
                 .Single(i => i.InstanceId == afterSplit.InstanceId)
                 .SupportSystemInvocations.Single().InvocationId;

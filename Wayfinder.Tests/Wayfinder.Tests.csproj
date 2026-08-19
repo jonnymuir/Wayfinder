@@ -21,6 +21,9 @@
   <ItemGroup>
     <ProjectReference Include="../Wayfinder/Wayfinder.csproj" />
     <ProjectReference Include="../Wayfinder.Engine/Wayfinder.Engine.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine.Http/Wayfinder.Engine.Http.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine.Journey/Wayfinder.Engine.Journey.csproj" />
+    <ProjectReference Include="../Wayfinder.Engine.Worklist/Wayfinder.Engine.Worklist.csproj" />
     <ProjectReference Include="../Wayfinder.Rendering.GovUk/Wayfinder.Rendering.GovUk.csproj" />
   </ItemGroup>
 

@@ -747,7 +747,7 @@ public record ServiceBlueprint
     /// <summary>
     /// Every field key a <c>bulk-dataset-ingest</c> action anywhere in this blueprint declares
     /// via its <c>datasetIdField</c>/<c>errorCountField</c>/<c>warningCountField</c>/
-    /// <c>acceptedCountField</c> params —
+    /// <c>acceptedCountField</c>/<c>dirtyCountField</c> params —
     /// <see cref="ValidateDataDisplayBindings"/>'s "known field" set for stat-group/summary-list
     /// bindings, the same role <see cref="GetSupportSystemOutputFieldKeys"/> plays for a support
     /// system's own declared <c>Outputs</c>.
@@ -765,7 +765,7 @@ public record ServiceBlueprint
                     continue;
                 }
 
-                foreach (var countFieldParam in new[] { "datasetIdField", "errorCountField", "warningCountField", "acceptedCountField" })
+                foreach (var countFieldParam in new[] { "datasetIdField", "errorCountField", "warningCountField", "acceptedCountField", "dirtyCountField" })
                 {
                     var fieldKey = action.Parameters[countFieldParam]?.GetValue<string>();
                     if (!string.IsNullOrWhiteSpace(fieldKey))
@@ -1307,8 +1307,33 @@ public record QueueDefinition
         init => _key = value;
     }
 
+    /// <summary>
+    /// Which team/skill capabilities may pick up from or start work in this queue — an any-of list
+    /// checked against <c>ActorProfile.Capabilities</c> (see <c>ProcessManagerEngine.HasQueueEligibility</c>).
+    /// Null/empty (the default) means unrestricted, exactly matching every blueprint that predates
+    /// this — the same convention <c>ActorProfile</c>'s own allow-lists already use. Distinct from
+    /// <c>IQueueCapabilitiesProvider</c>'s unrelated, pre-existing use of the word "capability"
+    /// (which component types a host can render for a queue) — see docs/guides/work-allocation.md.
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? RoleGates { get; init; }
+
+    /// <summary>
+    /// Null (the default) means legacy: no mandatory-assignment enforcement for this queue —
+    /// <c>RequestCursor.AssignedTo</c> governs any optional pickup exactly as it did before this
+    /// field existed. <c>"assign-to-initiator"</c>: whoever's action lands work here becomes its
+    /// individual owner immediately. <c>"team-tray"</c>: work lands owned by <see cref="OwningTeamId"/>
+    /// as a whole, pickable by any member, actionable only once picked up. Orthogonal to
+    /// <see cref="RoleGates"/> — RoleGates governs eligibility to see/act on this queue at all;
+    /// this governs who, among those already eligible, actually owns a given row. See
+    /// docs/guides/team-assignment.md.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AssignmentPolicy { get; init; }
+
+    /// <summary>The team that owns this queue — only meaningful when <see cref="AssignmentPolicy"/> is set.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OwningTeamId { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, string>? Tags { get; init; }
