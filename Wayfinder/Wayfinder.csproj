@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder</PackageId>
     <Title>Wayfinder</Title>
-    <Version>0.7.0</Version>
+    <Version>0.7.1</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>Umbraco/Umbraco.Cms-independent GDS-style service blueprint domain models (ServiceBlueprint, ServiceRequestResponseEnvelope, etc.), the declarative calculation engine, and the sanitizer interface. Zero framework dependency.</Description>

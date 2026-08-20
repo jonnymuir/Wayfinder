@@ -13,9 +13,13 @@
  * classes (govuk-body, govuk-label, govuk-link, ...) declares font-family itself. So anything
  * rendered only under a wayfinder-* class, with no govuk-* class alongside it, inherits nothing
  * and falls back to the browser's serif default. This one rule is that declaration, shared by
- * every wayfinder-* class rather than repeated per class.
+ * every wayfinder-* class rather than repeated per class — also covers stage-page/stage-alert
+ * (GovUkStageJourney's shared render pipeline), whose classes don't match the wayfinder-*
+ * pattern but need the exact same fix for the exact same reason.
  */
 
+.stage-page,
+.stage-alert,
 [class^="wayfinder-"],
 [class*=" wayfinder-"] {
   font-family: GDS Transport, arial, sans-serif;
@@ -158,6 +162,109 @@
   font-size: 0.625rem;
   color: #505a5f;
   min-height: 1em;
+}
+
+/*
+ * Stage-shell chrome (stage-page/stage-alert — GovUkStageJourney's own shared render pipeline,
+ * see Wayfinder.Umbraco/Views/Partials/_WayfinderStageRender.cshtml) and the caseworker worklist
+ * table (ServiceRequestWorklistService's own markup) — neither carried any box styling at all
+ * before this. Colours match this file's own established palette (GOV.UK blue/red/amber/green),
+ * not hand-picked anew.
+ */
+.stage-page__title {
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.25;
+  margin: 0 0 1.5rem;
+  color: #0b0c0c;
+}
+
+.stage-alert {
+  border-left: 5px solid #b1b4b6;
+  background: #f3f2f1;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.stage-alert p {
+  margin: 0;
+}
+
+.stage-alert--error {
+  border-left-color: #d4351c;
+  background: #fef4f2;
+  color: #d4351c;
+}
+
+.stage-alert--warn {
+  border-left-color: #f47738;
+  background: #fff7f0;
+  color: #594d00;
+}
+
+.wayfinder-worklist {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+  font-size: 1.1875rem;
+  line-height: 1.31579;
+}
+
+.wayfinder-worklist th,
+.wayfinder-worklist td {
+  text-align: left;
+  padding: 0.625rem 1.25rem 0.625rem 0;
+  border-bottom: 1px solid #b1b4b6;
+}
+
+.wayfinder-worklist th {
+  font-weight: 700;
+}
+
+.wayfinder-tag {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.3125rem 0.625rem;
+  border-radius: 2px;
+  background: #f3f2f1;
+  color: #0b0c0c;
+}
+
+.wayfinder-tag--blue {
+  background: #d2e2f1;
+  color: #144e81;
+}
+
+.wayfinder-tag--yellow {
+  background: #fff7bf;
+  color: #594d00;
+}
+
+.wayfinder-tag--green {
+  background: #cce2d8;
+  color: #00703c;
+}
+
+.wayfinder-button {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  background: #00703c;
+  color: #ffffff;
+  box-shadow: 0 2px 0 #002d18;
+}
+
+.wayfinder-button--secondary {
+  background: #f3f2f1;
+  color: #0b0c0c;
+  box-shadow: 0 2px 0 #929191;
 }
 
 .wayfinder-visually-hidden {
