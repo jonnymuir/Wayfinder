@@ -391,7 +391,8 @@ public class ProcessManagerEngine : IProcessManager
             var jumpAuditEvent = TransitionAuditEvent(
                 instance.InstanceId, userId, cursorId: null,
                 fromStageKey: instance.CurrentStage, toStageKey: targetStageKey, action: action, detail: "admin change-link jump");
-            if (!TrySaveInstanceIfVersionMatches(jumped, userId, instance.StateVersion, jumpAuditEvent))
+            var savedJumped = TrySaveInstanceIfVersionMatches(jumped, userId, instance.StateVersion, jumpAuditEvent);
+            if (savedJumped is null)
             {
                 return ErrorEnvelope(
                     $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
@@ -402,7 +403,7 @@ public class ProcessManagerEngine : IProcessManager
                 "Change-link: jumped instance {Id} to stage '{State}'",
                 instanceId,
                 targetStageKey);
-            return BuildEnvelope(jumped, definition, accessProfile, userId);
+            return BuildEnvelope(savedJumped, definition, accessProfile, userId);
         }
 
         var visibleWorkItem = FindAccessibleWorkItems(instance, definition, accessProfile, userId)
@@ -539,7 +540,8 @@ public class ProcessManagerEngine : IProcessManager
             var multiAuditEvent = TransitionAuditEvent(
                 instance.InstanceId, userId, cursorId: sourceCursor?.CursorId,
                 fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
-            if (!TrySaveInstanceIfVersionMatches(updatedMulti, userId, instance.StateVersion, multiAuditEvent))
+            var savedMulti = TrySaveInstanceIfVersionMatches(updatedMulti, userId, instance.StateVersion, multiAuditEvent);
+            if (savedMulti is null)
             {
                 return ErrorEnvelope(
                     $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
@@ -549,7 +551,7 @@ public class ProcessManagerEngine : IProcessManager
             Logger.LogInformation(
                 "Multi-cursor advance instance {Id}: cursor {CursorId} → {To}",
                 instanceId, sourceCursor?.CursorId ?? "(none)", transition.ToState);
-            return BuildEnvelope(updatedMulti, definition, accessProfile, userId);
+            return BuildEnvelope(savedMulti, definition, accessProfile, userId);
         }
 
         var updated = instance with
@@ -563,7 +565,8 @@ public class ProcessManagerEngine : IProcessManager
         var advanceAuditEvent = TransitionAuditEvent(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
-        if (!TrySaveInstanceIfVersionMatches(updated, userId, instance.StateVersion, advanceAuditEvent))
+        var savedUpdated = TrySaveInstanceIfVersionMatches(updated, userId, instance.StateVersion, advanceAuditEvent);
+        if (savedUpdated is null)
         {
             return ErrorEnvelope(
                 $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
@@ -576,7 +579,7 @@ public class ProcessManagerEngine : IProcessManager
             visibleWorkItem.StageKey,
             transition.ToState);
 
-        return BuildEnvelope(updated, definition, accessProfile, userId);
+        return BuildEnvelope(savedUpdated, definition, accessProfile, userId);
     }
 
     public IEnumerable<ServiceRequest> GetAllInstances() => _instanceStore.GetAll();
@@ -814,10 +817,11 @@ public class ProcessManagerEngine : IProcessManager
                     };
             }
 
-            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
-                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PickedUp, "picked up")))
+            var savedPickup = TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
+                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PickedUp, "picked up"));
+            if (savedPickup is not null)
             {
-                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+                return BuildEnvelope(savedPickup, definition, accessProfile, userId);
             }
         }
 
@@ -917,10 +921,11 @@ public class ProcessManagerEngine : IProcessManager
                 };
             }
 
-            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
-                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PutBack, "put back in the pool")))
+            var savedPutback = TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
+                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PutBack, "put back in the pool"));
+            if (savedPutback is not null)
             {
-                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+                return BuildEnvelope(savedPutback, definition, accessProfile, userId);
             }
         }
 
@@ -989,9 +994,10 @@ public class ProcessManagerEngine : IProcessManager
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            if (TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion, auditEvent: null))
+            var savedSync = TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion, auditEvent: null);
+            if (savedSync is not null)
             {
-                return BuildEnvelope(updatedInstance, definition, accessProfile, userId);
+                return BuildEnvelope(savedSync, definition, accessProfile, userId);
             }
         }
 
@@ -1554,13 +1560,25 @@ public class ProcessManagerEngine : IProcessManager
     /// by any member, actionable only once picked up. See docs/guides/team-assignment.md.</summary>
     private const string TeamTrayPolicy = "team-tray";
 
-    protected void SaveInstance(ServiceRequest instance, string actingUserId, AuditEvent? auditEvent = null)
+    /// <summary>
+    /// Returns the actually-persisted instance (post <see cref="EstablishQueueAssignmentsIfNeeded"/>),
+    /// not the pre-save argument — a caller building a render envelope from the return value (not
+    /// the stale local it passed in) sees a queue assignment established by this very save, e.g. an
+    /// <c>assign-to-initiator</c> queue's very first stage rendering its action buttons on the same
+    /// response that created the instance, rather than only from the *next* request. Confirmed live:
+    /// building the envelope from the pre-save argument instead left a brand-new instance on such a
+    /// queue with zero available actions until a second page load re-read the store fresh.
+    /// </summary>
+    protected ServiceRequest SaveInstance(ServiceRequest instance, string actingUserId, AuditEvent? auditEvent = null)
     {
-        _instanceStore.Save(EstablishQueueAssignmentsIfNeeded(instance, actingUserId));
+        var established = EstablishQueueAssignmentsIfNeeded(instance, actingUserId);
+        _instanceStore.Save(established);
         if (auditEvent is not null)
         {
             _auditLogStore.Record(auditEvent);
         }
+
+        return established;
     }
 
     /// <summary>
@@ -1568,13 +1586,17 @@ public class ProcessManagerEngine : IProcessManager
     /// by <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>'s
     /// own plain (non-gateway) mutation paths, where two callers racing against the same
     /// not-yet-picked-up item is a real, user-facing concern (see docs/guides/work-allocation.md). Records
-    /// <paramref name="auditEvent"/> only when the save actually lands.
+    /// <paramref name="auditEvent"/> only when the save actually lands. Returns the established,
+    /// actually-persisted instance on success (see <see cref="SaveInstance"/>'s own remarks on why a
+    /// caller must render from this, not its pre-save argument) — <see langword="null"/> on a CAS
+    /// conflict.
     /// </summary>
-    private bool TrySaveInstanceIfVersionMatches(ServiceRequest instance, string actingUserId, int expectedStateVersion, AuditEvent? auditEvent)
+    private ServiceRequest? TrySaveInstanceIfVersionMatches(ServiceRequest instance, string actingUserId, int expectedStateVersion, AuditEvent? auditEvent)
     {
-        if (!_instanceStore.TrySaveIfVersionMatches(EstablishQueueAssignmentsIfNeeded(instance, actingUserId), expectedStateVersion))
+        var established = EstablishQueueAssignmentsIfNeeded(instance, actingUserId);
+        if (!_instanceStore.TrySaveIfVersionMatches(established, expectedStateVersion))
         {
-            return false;
+            return null;
         }
 
         if (auditEvent is not null)
@@ -1582,7 +1604,7 @@ public class ProcessManagerEngine : IProcessManager
             _auditLogStore.Record(auditEvent);
         }
 
-        return true;
+        return established;
     }
 
     /// <summary>
@@ -2347,7 +2369,7 @@ public class ProcessManagerEngine : IProcessManager
             return error;
         }
 
-        SaveInstance(instance, userId);
+        instance = SaveInstance(instance, userId);
 
         Logger.LogInformation(logMessage, [instance.InstanceId, .. additionalLogArgs]);
         return BuildEnvelope(instance, definition, accessProfile, userId);
@@ -3292,7 +3314,7 @@ public class ProcessManagerEngine : IProcessManager
             }
         }
 
-        SaveInstance(updated, userId, TransitionAuditEvent(
+        updated = SaveInstance(updated, userId, TransitionAuditEvent(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: arrivingTransition.FromState, toStageKey: splitGateway.Key, action: arrivingTransition.Action,
             detail: $"split gateway fanned out to {newCursors.Count} cursors"));
@@ -3373,7 +3395,7 @@ public class ProcessManagerEngine : IProcessManager
                 FieldValues = Merge(instance.FieldValues, fieldValues)
             };
 
-            SaveInstance(waitingInstance, userId, TransitionAuditEvent(
+            waitingInstance = SaveInstance(waitingInstance, userId, TransitionAuditEvent(
                 instance.InstanceId, userId, cursorId: arrivingCursorId,
                 fromStageKey: arrivingTransition.FromState, toStageKey: gatewayKey, action: arrivingTransition.Action,
                 detail: $"arrived at join, waiting ({arrivedQueues.Count}/{requiredQueues.Count} queues)"));
@@ -4138,7 +4160,7 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = releasedFieldValues
         };
 
-        SaveInstance(releasedInstance, userId, TransitionAuditEvent(
+        releasedInstance = SaveInstance(releasedInstance, userId, TransitionAuditEvent(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: gatewayKey, toStageKey: selectedOutgoing[0].ToState, action: selectedOutgoing[0].Action,
             detail: "join released"));
