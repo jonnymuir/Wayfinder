@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Wayfinder.Models.ServiceDesign.Calculations;
 
@@ -461,8 +462,30 @@ public sealed class CalculationEvaluator
             throw new CalculationException($"'{path}' cannot be resolved ('{segment}' is not a group) in {context}.");
         }
 
-        return current;
+        return UnwrapJsonElement(current);
     }
+
+    /// <summary>
+    /// A field value set on the same request that reads it survives as its original CLR type
+    /// (decimal/bool/string); one reloaded from a JSON-backed FieldValues store (e.g. a real DB —
+    /// Wayfinder.Umbraco's own UmbracoServiceRequestStore) comes back as a boxed
+    /// <see cref="JsonElement"/> instead, with no custom converter applied. Every downstream
+    /// consumer here (<see cref="ValuesEqual"/>, <see cref="ToDecimal"/>, <see cref="ToBool"/>,
+    /// <see cref="ToStr"/>) expects a plain CLR value, so this is the one place that needs to
+    /// unwrap it — every showWhen/calculation comparison against a service-sourced field silently
+    /// evaluated false (or threw, for &lt;/&gt;/arithmetic) once that field's value had round-tripped
+    /// through persistence, otherwise. Found live: "Accept and finish" never became available even
+    /// once every one of a bulk-data-review stage's own showWhen conditions (contributionsErrorCount
+    /// = 0, contributionsDirtyCount = 0) genuinely held.
+    /// </summary>
+    private static object? UnwrapJsonElement(object? value) => value switch
+    {
+        JsonElement { ValueKind: JsonValueKind.String } je => je.GetString(),
+        JsonElement { ValueKind: JsonValueKind.Number } je => je.GetDecimal(),
+        JsonElement { ValueKind: JsonValueKind.True or JsonValueKind.False } je => je.GetBoolean(),
+        JsonElement { ValueKind: JsonValueKind.Null } => null,
+        _ => value
+    };
 
     private static bool ValuesEqual(object? left, object? right)
     {
