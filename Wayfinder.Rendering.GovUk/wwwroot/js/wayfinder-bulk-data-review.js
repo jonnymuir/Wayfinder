@@ -50,7 +50,15 @@ function syncStateVersion(actionBarFragmentEl) {
     return;
   }
 
-  const stateVersionInput = document.querySelector('form input[name="stateVersion"]');
+  // Case-insensitive: GovUkComponentRenderer.RenderForm (Wayfinder.ReferenceApp,
+  // Wayfinder.Engine.Worklist) names this field "stateVersion", but Wayfinder.Umbraco's own
+  // StageFormTagHelper independently renders the exact same form and names it "StateVersion" —
+  // two genuinely different host-side implementations of the same optimistic-concurrency
+  // contract, sharing this one script. A plain [name="stateVersion"] selector only ever matches
+  // the first; on the second, this silently no-ops every time, so the very next resubmit or
+  // accept posts a stale version and gets rejected with VERSION_MISMATCH — found live, in a real
+  // Playwright walkthrough against a Wayfinder.Umbraco-hosted page.
+  const stateVersionInput = document.querySelector('form input[name="stateVersion" i]');
   if (stateVersionInput) {
     stateVersionInput.value = version;
   }
