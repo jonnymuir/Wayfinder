@@ -1054,7 +1054,22 @@ public class ProcessManagerEngine : IProcessManager
             .FirstOrDefault(action =>
                 string.Equals(action.Type, BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal)
                 && action.Parameters["datasetIdField"]?.GetValue<string>() is { Length: > 0 } datasetIdField
-                && string.Equals(fieldValues.GetValueOrDefault(datasetIdField) as string, datasetId, StringComparison.Ordinal));
+                && string.Equals(ReadStringFieldValue(fieldValues, datasetIdField), datasetId, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Reads a field value that's always been written as a plain string (a datasetId, never
+    /// anything else) — tolerant of the same fresh-CLR-value-vs-reloaded-JsonElement split
+    /// <see cref="GetDisplayValue"/>'s own remarks describe for other field types stored the same
+    /// way. A bare `is string`/`as string` check against a reloaded JsonElement fails silently,
+    /// not with an exception, so this is the only safe way to read one back.
+    /// </summary>
+    private static string? ReadStringFieldValue(IReadOnlyDictionary<string, object?> fieldValues, string fieldKey) =>
+        fieldValues.GetValueOrDefault(fieldKey) switch
+        {
+            string { Length: > 0 } value => value,
+            JsonElement { ValueKind: JsonValueKind.String } jsonElement => jsonElement.GetString(),
+            _ => null
+        };
 
     /// <summary>
     /// See <see cref="IProcessManager.PickupNextAvailableWorkItem"/>. Scans for the oldest eligible,
@@ -3676,7 +3691,16 @@ public class ProcessManagerEngine : IProcessManager
             return ImmutableFieldValueUpdates.Empty;
         }
 
-        if (fieldValues.GetValueOrDefault(datasetIdField) is not string { Length: > 0 } datasetId)
+        // A freshly-ingested datasetId survives this request as its original CLR string; one
+        // reloaded from a JSON-backed store (e.g. UmbracoServiceRequestStore) comes back as a
+        // boxed JsonElement instead (no custom converter on FieldValues — see GetDisplayValue's
+        // own remarks on the same shape for file-upload/checkboxlist fields). An `is not string`
+        // check against a JsonElement fails silently, misreading a genuinely-set datasetId as "no
+        // value yet" and always falling back to the safe no-op — the original, uncorrected upload
+        // materialized on every resubmit, forever. Found live: a real Playwright walkthrough where
+        // a saved correction never once reached the downstream support system on resubmission.
+        var datasetId = ReadStringFieldValue(fieldValues, datasetIdField);
+        if (string.IsNullOrEmpty(datasetId))
         {
             return ImmutableFieldValueUpdates.Empty;
         }

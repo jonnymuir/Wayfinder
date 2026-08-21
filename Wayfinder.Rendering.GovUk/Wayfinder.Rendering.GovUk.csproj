@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Rendering.GovUk</PackageId>
     <Title>Wayfinder GOV.UK Design System Rendering</Title>
-    <Version>0.3.2</Version>
+    <Version>0.3.4</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <!-- Sdk.Web (not the plain Sdk) is only here so this project can ship the CSS/JS below as

@@ -50,7 +50,15 @@ function syncStateVersion(actionBarFragmentEl) {
     return;
   }
 
-  const stateVersionInput = document.querySelector('form input[name="stateVersion"]');
+  // Case-insensitive: GovUkComponentRenderer.RenderForm (Wayfinder.ReferenceApp,
+  // Wayfinder.Engine.Worklist) names this field "stateVersion", but Wayfinder.Umbraco's own
+  // StageFormTagHelper independently renders the exact same form and names it "StateVersion" —
+  // two genuinely different host-side implementations of the same optimistic-concurrency
+  // contract, sharing this one script. A plain [name="stateVersion"] selector only ever matches
+  // the first; on the second, this silently no-ops every time, so the very next resubmit or
+  // accept posts a stale version and gets rejected with VERSION_MISMATCH — found live, in a real
+  // Playwright walkthrough against a Wayfinder.Umbraco-hosted page.
+  const stateVersionInput = document.querySelector('form input[name="stateVersion" i]');
   if (stateVersionInput) {
     stateVersionInput.value = version;
   }
@@ -328,17 +336,28 @@ function initBulkReview(root) {
         }))
         .then((response) => {
           if (response.ok) {
-            // Not "Saved" — this system never validates a correction itself, only whatever
-            // external system a resubmit sends it to does (see loadSummary's own sync-status line
-            // above, and docs/guides/bulk-data-review.md's sync-state section for why "saved"
-            // alone was the misleading word here). pendingLabel, the same word the dataset-level
-            // line uses when dirty — consistent vocabulary, one property controls both.
-            setSaveStatus(pendingLabel, 'saved');
-            if (!dirty) {
-              pendingSaves.delete(row.rowKey);
-            }
             return response.text().then((html) => {
+              // applyActionBarUpdate (via syncStateVersion) must land before the row reports
+              // itself saved: it's what keeps the form's own hidden stateVersion input current,
+              // and the whole point of surfacing pendingLabel here is to invite an immediate
+              // "Resubmit corrected file" click. Reversing this order (as an earlier version of
+              // this file did) opens a real window where that click still carries the state
+              // version from before this correction — VERSION_MISMATCH, caught live via a
+              // Playwright walkthrough clicking resubmit the instant "Pending resubmission"
+              // appeared, exactly the speed a real caseworker typing then clicking can hit too.
               applyActionBarUpdate(html);
+
+              // Not "Saved" — this system never validates a correction itself, only whatever
+              // external system a resubmit sends it to does (see loadSummary's own sync-status
+              // line above, and docs/guides/bulk-data-review.md's sync-state section for why
+              // "saved" alone was the misleading word here). pendingLabel, the same word the
+              // dataset-level line uses when dirty — consistent vocabulary, one property
+              // controls both.
+              setSaveStatus(pendingLabel, 'saved');
+              if (!dirty) {
+                pendingSaves.delete(row.rowKey);
+              }
+
               return loadSummary();
             });
           }
