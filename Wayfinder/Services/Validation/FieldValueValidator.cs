@@ -97,8 +97,22 @@ public static class FieldValueValidator
             // Get submitted value (handle checkboxlist suffix)
             var raw = GetSubmittedValue(field, submitted);
 
-            // a. Required check
-            if (field.Required && string.IsNullOrWhiteSpace(raw))
+            // a. Required check. A boolean field needs its own branch: CoerceFieldValues
+            // stamps an unchecked checkbox as a real "false" (see its own remarks — absence IS
+            // false, so the coerced value is never itself absent), which round-trips through
+            // ToString() as the non-empty string "False". The generic IsNullOrWhiteSpace check
+            // below would treat that as "present" and let a required declaration checkbox pass
+            // validation unchecked. Confirmed live: an AI-authored blueprint's required
+            // declaration checkbox was accepted by this validator while genuinely unchecked.
+            if (field.Required && string.Equals(field.FieldType, "boolean", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    errors[field.FieldKey] = $"{field.Label} is required.";
+                    continue; // Don't cascade errors
+                }
+            }
+            else if (field.Required && string.IsNullOrWhiteSpace(raw))
             {
                 errors[field.FieldKey] = $"{field.Label} is required.";
                 continue; // Don't cascade errors
