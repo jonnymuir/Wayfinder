@@ -24,6 +24,63 @@ public class FieldValueValidatorTests
         Assert.True(result.IsValid);
     }
 
+    private static FieldRenderPayload BooleanField(string key = "declaration", bool required = true) => new()
+    {
+        FieldKey = key,
+        Label = "Declaration",
+        FieldType = "boolean",
+        Required = required,
+    };
+
+    [Fact]
+    public void Validate_ARequiredBooleanField_SubmittedAsFalse_IsRejected()
+    {
+        // CoerceFieldValues stamps an unchecked checkbox as a real "false" (never absent), which
+        // round-trips as the non-empty string "False" — the generic IsNullOrWhiteSpace required
+        // check would wrongly treat that as "present" and let an unchecked required declaration
+        // through. Confirmed live: an AI-authored blueprint's required declaration checkbox was
+        // accepted while genuinely unchecked, before this test's own fix.
+        var fields = new[] { BooleanField() };
+        var submitted = new Dictionary<string, string> { ["declaration"] = "False" };
+
+        var result = FieldValueValidator.Validate(fields, submitted);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public void Validate_ARequiredBooleanField_AbsentEntirely_IsRejected()
+    {
+        var fields = new[] { BooleanField() };
+        var submitted = new Dictionary<string, string>();
+
+        var result = FieldValueValidator.Validate(fields, submitted);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public void Validate_ARequiredBooleanField_SubmittedAsTrue_IsAccepted()
+    {
+        var fields = new[] { BooleanField() };
+        var submitted = new Dictionary<string, string> { ["declaration"] = "True" };
+
+        var result = FieldValueValidator.Validate(fields, submitted);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Validate_ANonRequiredBooleanField_SubmittedAsFalse_IsAccepted()
+    {
+        var fields = new[] { BooleanField(required: false) };
+        var submitted = new Dictionary<string, string> { ["declaration"] = "False" };
+
+        var result = FieldValueValidator.Validate(fields, submitted);
+
+        Assert.True(result.IsValid);
+    }
+
     [Fact]
     public void Validate_RejectsUnknownFieldKey()
     {

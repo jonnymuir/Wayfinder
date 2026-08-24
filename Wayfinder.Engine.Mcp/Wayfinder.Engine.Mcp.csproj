@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Mcp</PackageId>
     <Title>Umbraco Prism Blueprint Authoring MCP</Title>
-    <Version>0.7.5</Version>
+    <Version>0.7.6</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Umbraco Prism</Company>
     <Description>ASP.NET Core MCP-over-HTTP endpoint mapping that exposes Umbraco Prism service blueprint authoring (list/read/validate/save/simulate) as MCP tools — a single MapPrismServiceBlueprintAuthoringMcp() call any host adds to its own pipeline, alongside MapPrismServiceBlueprintAuthoringApi(), inheriting its own auth.</Description>

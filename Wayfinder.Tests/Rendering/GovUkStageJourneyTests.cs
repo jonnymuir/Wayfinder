@@ -137,6 +137,29 @@ public class GovUkStageJourneyTests
     }
 
     [Fact]
+    public void CoerceFieldValues_ABooleanSiblingOfASummaryList_StillCoercesCorrectly()
+    {
+        var step = Step("check-answers", "Check your answers and declare",
+            new ComponentRenderPayload
+            {
+                Type = "summary-list",
+                Fields = [new FieldRenderPayload { FieldKey = "fullName", Label = "Full name", FieldType = "text", Required = false, Value = "Alex Applicant" }]
+            },
+            new ComponentRenderPayload
+            {
+                Type = "fieldset",
+                Fields = [new FieldRenderPayload { FieldKey = "declaration", Label = "I confirm this is accurate", FieldType = "boolean", Required = true }]
+            });
+
+        var checkedResult = GovUkStageJourney.CoerceFieldValues(Form(("field:declaration", "true")), step);
+        var uncheckedResult = GovUkStageJourney.CoerceFieldValues(Form(), step);
+
+        checkedResult["declaration"].Should().Be(true, "the sibling boolean was actually checked and posted");
+        uncheckedResult["declaration"].Should().Be(false);
+        checkedResult.Should().NotContainKey("fullName", "the summary-list row is still read-only and must never be coerced");
+    }
+
+    [Fact]
     public void CoerceFieldValues_NeverCoercesAFileUploadField_ExclusivelyStageFileUploadsConcern()
     {
         var step = Step("question", "Upload",
