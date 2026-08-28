@@ -3121,6 +3121,25 @@ public class ProcessManagerEngine : IProcessManager
             return null;
         }
 
+        // Defensive, regardless of THIS field's own declared type: a summary-list/stat-group
+        // child echoing a file-upload field's captured value has no requirement to itself be
+        // declared as file-upload — GOV.UK's own "check your answers" convention is one row per
+        // answer, and nothing in the authoring surface enforces that a summary child's type
+        // matches the field it echoes. Confirmed live: a real MCP-authored blueprint declared
+        // such a child as plain "text", so fieldType here was "text", the file-upload branch
+        // below never ran, and a citizen's own "check your answers" page rendered the raw
+        // stored ServiceRequestFileReference JSON instead of the filename. FromFieldValue
+        // returns null for every ordinary string/date/boolean/JsonElement-non-object value (a
+        // normal answer can never coincidentally look like a file reference), and even an
+        // unrelated object-shaped value (a support-system JsonObject payload, say) parses with
+        // an empty OriginalFileName rather than a real one — the non-empty check below is what
+        // makes this safe to attempt unconditionally rather than gated on fieldType.
+        if (ServiceRequestFileReference.FromFieldValue(raw) is { } fileReference
+            && !string.IsNullOrEmpty(fileReference.OriginalFileName))
+        {
+            return fileReference.OriginalFileName;
+        }
+
         if (fieldType == "checkboxlist" || fieldType == "checkboxes")
         {
             var rawString = raw switch
@@ -3140,18 +3159,11 @@ public class ProcessManagerEngine : IProcessManager
 
         if (fieldType == "file-upload")
         {
-            // A freshly-uploaded file survives as its original CLR type for the rest of the
-            // current request; a previously-uploaded one reloads from persistence as a boxed
-            // JsonElement (no custom converter on FieldValues) — display the original filename
-            // either way, never the reference object itself.
-            return raw switch
-            {
-                ServiceRequestFileReference reference => reference.OriginalFileName,
-                JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Object
-                    && jsonElement.TryGetProperty(nameof(ServiceRequestFileReference.OriginalFileName), out var nameProperty)
-                    => nameProperty.GetString(),
-                _ => null
-            };
+            // Reaching here means the FromFieldValue attempt above already tried and failed to
+            // extract a real filename (raw isn't a valid/complete file reference — e.g. nothing
+            // uploaded yet) — never fall through to the generic prefix/raw-value return below,
+            // which would leak whatever raw shape this is as literal display text.
+            return null;
         }
 
         var prefix = input switch
