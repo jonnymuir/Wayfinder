@@ -187,14 +187,32 @@ public static class GovUkFields
         var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         var errorClass = error is null ? "" : " govuk-input--error";
+        var lengthAttrs = LengthAttrs(field);
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
               <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
               {ErrorMessage($"{id}-error", error)}
-              <input class="govuk-input{errorClass}" id="{id}" name="{name}" type="text" value="{GovUk.Esc(value)}"{describedBy} {required}>
+              <input class="govuk-input{errorClass}" id="{id}" name="{name}" type="text" value="{GovUk.Esc(value)}"{describedBy} {required}{lengthAttrs}>
             </div>
             """;
+    }
+
+    /// <summary>
+    /// <c>maxlength</c>/<c>minlength</c> attributes for a text/textarea field — <see
+    /// cref="Wayfinder.Services.Validation.FieldValueValidator"/> enforces
+    /// <see cref="FieldRenderPayload.MaxLength"/>/<see cref="FieldRenderPayload.MinLength"/>
+    /// server-side, but until now nothing told the browser: the rendered markup gave a citizen no
+    /// warning at all while typing, only a rejection after a full round-trip submit. maxlength
+    /// additionally stops the browser accepting further input past the limit — minlength doesn't
+    /// block typing (no shorter HTML equivalent exists) but still drives the browser's own
+    /// constraint-validation UI on submit.
+    /// </summary>
+    private static string LengthAttrs(FieldRenderPayload field)
+    {
+        var maxAttr = field.MaxLength.HasValue ? $" maxlength=\"{field.MaxLength.Value}\"" : "";
+        var minAttr = field.MinLength.HasValue ? $" minlength=\"{field.MinLength.Value}\"" : "";
+        return maxAttr + minAttr;
     }
 
     private static string RenderNumber(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
@@ -246,12 +264,13 @@ public static class GovUkFields
         var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";
         var errorClass = error is null ? "" : " govuk-textarea--error";
+        var lengthAttrs = LengthAttrs(field);
         return $"""
             <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
               <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
               {ErrorMessage($"{id}-error", error)}
-              <textarea class="govuk-textarea{errorClass}" id="{id}" name="{name}" rows="5"{describedBy} {required}>{GovUk.Esc(value)}</textarea>
+              <textarea class="govuk-textarea{errorClass}" id="{id}" name="{name}" rows="5"{describedBy} {required}{lengthAttrs}>{GovUk.Esc(value)}</textarea>
             </div>
             """;
     }

@@ -360,6 +360,57 @@ public class GovUkComponentRendererTests
     }
 
     [Fact]
+    public void RenderField_Text_WithMaxAndMinLength_EmitsRealHtmlConstraints()
+    {
+        // FieldValueValidator enforces both server-side ("must be no more than/at least N
+        // characters") — until this test's own fix, nothing told the browser, so a citizen only
+        // found out after a full round-trip submit rather than while typing. maxlength additionally
+        // stops the browser accepting further input past the limit.
+        var html = GovUkFields.Render(new FieldRenderPayload
+        {
+            FieldKey = "licenceNumber",
+            Label = "Licence number",
+            FieldType = "text",
+            Required = true,
+            MaxLength = 20,
+            MinLength = 3,
+        }, NoErrors);
+
+        Assert.Contains("maxlength=\"20\"", html);
+        Assert.Contains("minlength=\"3\"", html);
+    }
+
+    [Fact]
+    public void RenderField_Textarea_WithMaxLength_EmitsRealHtmlConstraint()
+    {
+        var html = GovUkFields.Render(new FieldRenderPayload
+        {
+            FieldKey = "notes",
+            Label = "Notes",
+            FieldType = "textarea",
+            Required = false,
+            MaxLength = 500,
+        }, NoErrors);
+
+        Assert.Contains("maxlength=\"500\"", html);
+    }
+
+    [Fact]
+    public void RenderField_Text_WithNoLengthConstraints_EmitsNeitherAttribute()
+    {
+        var html = GovUkFields.Render(new FieldRenderPayload
+        {
+            FieldKey = "fullName",
+            Label = "Full name",
+            FieldType = "text",
+            Required = true,
+        }, NoErrors);
+
+        Assert.DoesNotContain("maxlength", html);
+        Assert.DoesNotContain("minlength", html);
+    }
+
+    [Fact]
     public void RenderField_Date_SubInputIdsStayBare_NamesCarryFieldPrefix()
     {
         var html = GovUkFields.Render(new FieldRenderPayload
