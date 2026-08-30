@@ -30,6 +30,14 @@ public static class MockBusinessAppExtensions
             return blueprint is null ? Results.NotFound() : Results.Json(blueprint);
         });
 
+        group.MapPost("/validate", async (HttpContext ctx, ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
+        {
+            var blueprint = await ctx.Request.ReadFromJsonAsync<ServiceBlueprint>(ct);
+            return blueprint is null
+                ? Results.BadRequest()
+                : Results.Json(authoring.Validate(blueprint));
+        });
+
         group.MapPut("/{key}", async (string key, HttpContext ctx, ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
         {
             var blueprint = await ctx.Request.ReadFromJsonAsync<ServiceBlueprint>(ct);

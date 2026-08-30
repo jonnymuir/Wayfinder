@@ -350,4 +350,59 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await expect(page.locator('[data-wayfinder-validation-rail]')).toContainText('has an invalid when expression');
     await expect(page.locator('[data-wayfinder-save]')).toBeDisabled();
   });
+
+  test('renders the host validator’s diagnostics verbatim and gates Save on them when the source provides validate', async ({ page }) => {
+    await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+
+    // Graft a `validate` onto the story's in-memory source. `window.__wayfinderServerOutcome`
+    // is the canned ServiceBlueprintValidationOutcome the "server" returns — swapped mid-test.
+    await page.locator('wayfinder-service-blueprint-editor').evaluate((node) => {
+      const editor = node as HTMLElement & {
+        serviceBlueprintSource?: Record<string, unknown>;
+      };
+      const current = editor.serviceBlueprintSource;
+      if (!current) {
+        throw new Error('ServiceBlueprint source not found.');
+      }
+      (window as unknown as { __wayfinderServerOutcome: unknown }).__wayfinderServerOutcome = {
+        isValid: false,
+        diagnostics: [
+          { code: 'CALC_FIELD_ERROR', path: 'calculations.fields.total', message: 'SERVER SAYS: total is broken', severity: 'Error' },
+          { code: 'CALC_SERVICE_FIELD_UNVERIFIED', path: 'calculations.fields.member', message: 'SERVER SAYS: member is unverified', severity: 'Warning' },
+        ],
+      };
+      editor.serviceBlueprintSource = {
+        ...current,
+        list: (...args: unknown[]) => (current.list as (...a: unknown[]) => unknown)(...args),
+        load: (...args: unknown[]) => (current.load as (...a: unknown[]) => unknown)(...args),
+        save: (...args: unknown[]) => (current.save as (...a: unknown[]) => unknown)(...args),
+        validate: async () => (window as unknown as { __wayfinderServerOutcome: unknown }).__wayfinderServerOutcome,
+      };
+    });
+
+    await page.locator('wayfinder-service-blueprint-editor').evaluate((node) =>
+      (node as HTMLElement & { flushValidationPending: () => Promise<void> }).flushValidationPending()
+    );
+
+    await page.getByRole('tab', { name: 'Validation' }).click();
+    const rail = page.locator('[data-wayfinder-validation-rail]');
+    await expect(rail).toContainText('SERVER SAYS: total is broken');
+    await expect(rail).toContainText('SERVER SAYS: member is unverified');
+    // Error blocks; Warning does not.
+    await expect(page.locator('[data-wayfinder-validation-errors]')).toContainText('1 error');
+    await expect(page.locator('[data-wayfinder-validation-warnings]')).toContainText('1 warning');
+    await expect(page.locator('[data-wayfinder-save]')).toBeDisabled();
+
+    // Server now reports the blueprint clean — the rail and Save follow it, with no in-browser recheck.
+    await page.evaluate(() => {
+      (window as unknown as { __wayfinderServerOutcome: unknown }).__wayfinderServerOutcome = { isValid: true, diagnostics: [] };
+    });
+    await page.locator('wayfinder-service-blueprint-editor').evaluate((node) =>
+      (node as HTMLElement & { flushValidationPending: () => Promise<void> }).flushValidationPending()
+    );
+
+    await expect(rail).not.toContainText('SERVER SAYS');
+    await expect(page.locator('[data-wayfinder-save]')).toBeEnabled();
+  });
 });

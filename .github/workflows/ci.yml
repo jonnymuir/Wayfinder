@@ -86,6 +86,10 @@ jobs:
         working-directory: Wayfinder.Editor.Client
         run: npm run test:component-schema
 
+      - name: Validation rail tests (server diagnostic mapping + in-browser fallback)
+        working-directory: Wayfinder.Editor.Client
+        run: npm run test:server-diagnostic-location && npm run test:service-blueprint-validation
+
       - name: Install Playwright browsers
         working-directory: Wayfinder.Editor.Client
         run: npx playwright install --with-deps

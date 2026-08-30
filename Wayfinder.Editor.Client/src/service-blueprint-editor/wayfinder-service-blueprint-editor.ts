@@ -25,6 +25,7 @@ import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-c
 import type { QueueDefinition } from './stage-assignment.js';
 import { availableContexts, contextForTiming, timingForContext, updateActionSummary } from './action-editing.js';
 import { validateServiceBlueprint, type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
+import { mapServerDiagnosticsToIssues } from './server-diagnostic-location.js';
 import { flattenRoutes, newRouteId } from './route-model.js';
 import { findServiceBlueprintShortcut, matchesShortcut, SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
 import './wayfinder-service-blueprint-graph.js';
@@ -250,6 +251,18 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _serviceBlueprintLoadRequestId = 0;
   private _versionPollTimer: number | null = null;
 
+  /**
+   * The validation-rail issue list. When the host's `ServiceBlueprintSource` implements
+   * `validate`, this holds the *server's* authoritative diagnostics (debounced via
+   * `_revalidate`); otherwise the in-browser `validateServiceBlueprint` fallback. Read by every
+   * `_*ValidationIssues` getter, the rail, the status line and the minimap counts.
+   */
+  @state() private _validationIssues: ServiceBlueprintValidationIssue[] = [];
+  /** A server `validate` call is in flight — the rail shows a "checking…" hint; Save stays gated on the last result. */
+  @state() private _validationPending = false;
+  private _validationDebounceHandle: number | null = null;
+  private _validationRequestId = 0;
+
   private get _selectedStageKey(): string | null {
     return this._selection?.kind === 'stage' ? this._selection.stageKey : null;
   }
@@ -310,11 +323,34 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     if (_changedProperties.has('_componentCatalog') && this._definitionText) {
       this._tryApplyDefinitionText();
     }
+
+    // Recompute the validation rail whenever the blueprint, a catalog the fallback validator
+    // needs, or the host source itself changes. Debounced inside _scheduleRevalidate — a server
+    // `validate` is a round-trip, and the fallback is cheap enough that debouncing it too keeps
+    // the two paths behaving identically. The first load (null → a blueprint) validates
+    // immediately so the rail isn't blank for the debounce interval right after opening.
+    if (
+      _changedProperties.has('_serviceBlueprint')
+      || _changedProperties.has('_componentCatalog')
+      || _changedProperties.has('_actionCatalog')
+      || _changedProperties.has('_supportSystemCatalog')
+      || _changedProperties.has('serviceBlueprintSource')
+    ) {
+      if (_changedProperties.has('_serviceBlueprint') && !_changedProperties.get('_serviceBlueprint') && this._serviceBlueprint) {
+        void this._revalidate();
+      } else {
+        this._scheduleRevalidate();
+      }
+    }
   }
 
   disconnectedCallback() {
     this.removeEventListener('keydown', this._handleEditorKeydown, true);
     this._clearVersionPollTimer();
+    if (this._validationDebounceHandle !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this._validationDebounceHandle);
+      this._validationDebounceHandle = null;
+    }
     if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(this._toastDismissTimer);
     }
@@ -641,10 +677,79 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       : `Clipboard: action “${this._clipboard.label}” ready to paste.`;
   }
 
-  private get _validationIssues(): ServiceBlueprintValidationIssue[] {
-    return this._serviceBlueprint
-      ? validateServiceBlueprint(this._serviceBlueprint, this._actionCatalog, this._componentCatalog, this._supportSystemCatalog)
-      : [];
+  /** ~400ms after the last edit the rail refreshes; long enough that a fast typist isn't firing a validate per keystroke. */
+  private static readonly VALIDATION_DEBOUNCE_MS = 400;
+
+  private _scheduleRevalidate() {
+    if (typeof window === 'undefined') {
+      void this._revalidate();
+      return;
+    }
+    if (this._validationDebounceHandle !== null) {
+      window.clearTimeout(this._validationDebounceHandle);
+    }
+    this._validationDebounceHandle = window.setTimeout(() => {
+      this._validationDebounceHandle = null;
+      void this._revalidate();
+    }, WayfinderServiceBlueprintEditorElement.VALIDATION_DEBOUNCE_MS);
+  }
+
+  private _fallbackValidationIssues(blueprint: AuthoredServiceBlueprint): ServiceBlueprintValidationIssue[] {
+    return validateServiceBlueprint(blueprint, this._actionCatalog, this._componentCatalog, this._supportSystemCatalog);
+  }
+
+  /**
+   * Refresh `_validationIssues`. If the host's source implements `validate`, that server call is
+   * authoritative — its diagnostics are exactly what Save enforces and what the
+   * `validate_service_blueprint` tool reports. Otherwise, and if that call fails, fall back to
+   * the in-browser `validateServiceBlueprint`. A stale in-flight response is discarded via
+   * `_validationRequestId`.
+   */
+  private async _revalidate() {
+    const blueprint = this._serviceBlueprint;
+    if (!blueprint) {
+      this._validationIssues = [];
+      this._validationPending = false;
+      return;
+    }
+
+    const source = this.serviceBlueprintSource;
+    if (!source || typeof source.validate !== 'function') {
+      this._validationIssues = this._fallbackValidationIssues(blueprint);
+      this._validationPending = false;
+      return;
+    }
+
+    const requestId = ++this._validationRequestId;
+    this._validationPending = true;
+    try {
+      const outcome = await source.validate(this.blueprintKey || blueprint.definitionKey, blueprint);
+      if (requestId !== this._validationRequestId) {
+        return;
+      }
+      this._validationIssues = mapServerDiagnosticsToIssues(outcome, blueprint);
+    } catch {
+      if (requestId !== this._validationRequestId) {
+        return;
+      }
+      // Host/server unreachable — never wedge the rail or gate Save on a stale-blank result;
+      // show the best-effort in-browser check for this cycle.
+      this._validationIssues = this._fallbackValidationIssues(blueprint);
+    } finally {
+      if (requestId === this._validationRequestId) {
+        this._validationPending = false;
+      }
+    }
+  }
+
+  /** Public hook for tests/host: run the pending revalidation now instead of after the debounce. */
+  async flushValidationPending() {
+    if (this._validationDebounceHandle !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this._validationDebounceHandle);
+      this._validationDebounceHandle = null;
+    }
+    await this._revalidate();
+    await this.updateComplete;
   }
 
   private get _blockingValidationIssues() {
@@ -681,6 +786,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private get _validationStatusSummary() {
     if (!this._serviceBlueprint) {
       return 'Validation will appear when the service blueprint loads.';
+    }
+
+    if (this._validationPending && this._validationIssues.length === 0) {
+      return 'Checking the service blueprint…';
     }
 
     if (this._validationIssues.length === 0) {
@@ -1460,6 +1569,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return;
     }
 
+    // A server diagnostic that names nothing navigable — leave the view where it is.
+    if (issue.location.kind === 'document') {
+      return;
+    }
+
     this._activeConfidenceTab = 'canvas';
     this._inspectorCollapsed = false;
 
@@ -1641,6 +1755,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             <p class="validation-panel-summary">${this._validationStatusSummary}</p>
           </div>
           <div class="validation-panel-meta">
+            ${this._validationPending
+              ? html`<span class="validation-count" data-wayfinder-validation-pending>checking…</span>`
+              : nothing}
             <span class="validation-count validation-count-error" data-wayfinder-validation-errors>${errorCount} errors</span>
             <span class="validation-count validation-count-warning" data-wayfinder-validation-warnings>${warningCount} warnings</span>
           </div>

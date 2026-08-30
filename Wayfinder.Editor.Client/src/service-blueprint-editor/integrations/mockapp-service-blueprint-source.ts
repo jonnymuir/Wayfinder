@@ -10,6 +10,7 @@ import {
   type ServiceBlueprintSaveErrorDetail,
   type ServiceBlueprintSource,
   type ServiceBlueprintSummary,
+  type ServiceBlueprintValidationOutcome,
 } from '../service-blueprint-source.js';
 import type { AuthoredServiceBlueprint } from '../types.js';
 import { hydrateServiceBlueprintDefinition } from '../types.js';
@@ -243,6 +244,24 @@ export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSo
     if (!response.ok) {
       throw await buildSaveError(response, blueprintKey);
     }
+  }
+
+  /**
+   * Runs the host's authoritative validator (`ServiceBlueprintAuthoringService.Validate`, via
+   * `POST /mockapp/service-blueprints/validate`) — the same check `save` enforces and the MCP
+   * `validate_service_blueprint` tool reports.
+   */
+  async validate(_blueprintKey: string, serviceBlueprint: AuthoredServiceBlueprint): Promise<ServiceBlueprintValidationOutcome> {
+    const response = await fetch(`${this.base}/mockapp/service-blueprints/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      credentials: 'same-origin',
+      body: serializeAuthoredServiceBlueprint(serviceBlueprint),
+    });
+    if (!response.ok) {
+      throw new Error(`Validation request failed (${response.status} ${response.statusText}).`);
+    }
+    return (await response.json()) as ServiceBlueprintValidationOutcome;
   }
 
   /**

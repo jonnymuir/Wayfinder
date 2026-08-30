@@ -215,4 +215,36 @@ test.describe('Service blueprint editor', () => {
       });
     }
   });
+
+  // The validation rail now runs the host's authoritative validator
+  // (ServiceBlueprintAuthoringService.Validate, via POST /mockapp/service-blueprints/validate) —
+  // the same check Save enforces and validate_service_blueprint reports — instead of the editor's
+  // in-browser re-derivation. Invisible to Wayfinder.Editor.Client's own suite, whose in-memory
+  // source has no `validate`; only a real host exercises this path.
+  test('the validation rail is driven by the server validator, not the in-browser fallback', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.caseworker);
+
+    const validateCall = page.waitForResponse(
+      response => response.url().includes('/mockapp/service-blueprints/validate') && response.request().method() === 'POST',
+      { timeout: 20_000 }
+    );
+
+    await page.getByRole('link', { name: 'Editor' }).click();
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute('blueprint-key', 'juggling-licence', {
+      timeout: 15_000,
+    });
+
+    // The editor consulted the server validator on load.
+    const response = await validateCall;
+    const outcome = await response.json();
+    expect(outcome).toHaveProperty('isValid');
+    expect(Array.isArray(outcome.diagnostics)).toBe(true);
+
+    // juggling-licence is a valid seed — the rail shows the server's clean verdict and Save is open.
+    await page.getByRole('tab', { name: 'Validation' }).click();
+    const rail = page.locator('[data-wayfinder-validation-rail]');
+    await expect(rail).toBeVisible();
+    await expect(page.locator('[data-wayfinder-validation-errors]')).toContainText('0 errors');
+    await expect(page.locator('[data-wayfinder-save]')).toBeEnabled();
+  });
 });

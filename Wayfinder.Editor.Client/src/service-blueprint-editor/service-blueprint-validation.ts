@@ -31,7 +31,10 @@ export type ServiceBlueprintValidationLocation =
       fieldKey?: string;
       formFieldIndex?: number;
     }
-  | { kind: 'calculation'; field?: string; series?: string };
+  | { kind: 'calculation'; field?: string; series?: string }
+  // A server diagnostic whose document path names nothing the rail can navigate to (e.g.
+  // `definitionKey`). Still listed; just not clickable.
+  | { kind: 'document' };
 
 export interface ServiceBlueprintValidationIssue {
   id: string;
@@ -52,7 +55,10 @@ export interface ServiceBlueprintValidationIssue {
     | 'calculation-cycle'
     | 'calculation-order'
     | 'calculation-loop-variable-collision'
-    | 'stage-validation-parse-error';
+    | 'stage-validation-parse-error'
+    // A diagnostic that came verbatim from the host's authoritative validator
+    // (ServiceBlueprintSource.validate) rather than these in-browser checks.
+    | 'server';
   severity: ServiceBlueprintValidationSeverity;
   message: string;
   blocking: boolean;
@@ -560,6 +566,16 @@ function stageValidationRuleIssues(serviceBlueprint: AuthoredServiceBlueprint): 
   );
 }
 
+/**
+ * The editor's **fallback** validator, used only when the host's `ServiceBlueprintSource` does
+ * not implement `validate`. It is a best-effort in-browser re-derivation of the C# rules in
+ * `ServiceBlueprintAuthoringService.Validate` — kept in genuine parity only for the calculation
+ * expression evaluator (via `Wayfinder/calculation-fixtures/`); the rest, and its dependence on
+ * a separately-loaded component catalog to know which components are inputs, can drift. Any host
+ * with a server (`ServiceBlueprintSource.validate`) bypasses this entirely and the rail shows
+ * the authoritative result — see `server-diagnostic-location.ts` and
+ * `wayfinder-service-blueprint-editor.ts`'s `_revalidate`.
+ */
 export function validateServiceBlueprint(
   serviceBlueprint: AuthoredServiceBlueprint,
   actionCatalog: ActionCatalogEntry[] = [],
