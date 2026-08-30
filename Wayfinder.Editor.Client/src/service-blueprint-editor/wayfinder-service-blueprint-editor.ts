@@ -727,7 +727,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       if (requestId !== this._validationRequestId) {
         return;
       }
-      this._validationIssues = mapServerDiagnosticsToIssues(outcome, blueprint);
+      this._validationIssues = mapServerDiagnosticsToIssues(outcome);
     } catch {
       if (requestId !== this._validationRequestId) {
         return;
