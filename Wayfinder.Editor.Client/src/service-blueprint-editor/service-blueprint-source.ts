@@ -15,6 +15,27 @@
 import type { AuthoredServiceBlueprint } from './types.js';
 
 /**
+ * The wire shape of one `Wayfinder.Models.ServiceDesign.ServiceBlueprintDiagnostic` — a single
+ * authoring-time diagnostic from the server's authoritative validator
+ * (`ServiceBlueprintAuthoringService.Validate`). `path` is a document path in the C# grammar
+ * (`stages.{key}.actions[{n}]`, `calculations.fields.{name}`, …); `severity` may arrive as the
+ * string enum name or, from a host that serializes enums numerically, as `0` (Error) / `1`
+ * (Warning) — `server-diagnostic-location.ts` normalises both.
+ */
+export interface ServiceBlueprintServerDiagnostic {
+  code: string;
+  path: string;
+  message: string;
+  severity: 'Error' | 'Warning' | 0 | 1;
+}
+
+/** The wire shape of `Wayfinder.Engine.Services.ServiceBlueprintValidationOutcome`. */
+export interface ServiceBlueprintValidationOutcome {
+  isValid: boolean;
+  diagnostics: ServiceBlueprintServerDiagnostic[];
+}
+
+/**
  * One save-error detail line, optionally locating the stage it came from — a server-side
  * diagnostic's `path` (e.g. `stages.licence-details.components[0].items[0].fieldKey`) names a
  * real stage the editor can jump to, the way the Validation rail's structural issues already
@@ -201,4 +222,15 @@ export interface ServiceBlueprintSource {
    * finding out via a `save` conflict. Hosts that don't support versioning can omit this.
    */
   checkVersion?(key: string): Promise<number | null>;
+
+  /**
+   * Optional: runs the host's authoritative validator
+   * (`ServiceBlueprintAuthoringService.Validate`) over the draft and returns its diagnostics —
+   * the exact same check `save` enforces and the AI-authoring `validate_service_blueprint` tool
+   * reports. When a host provides this, the editor's validation rail and Save gate reflect it
+   * verbatim (debounced) instead of the editor's own in-browser re-derivation, so the two can
+   * never disagree. A host with no server omits it and the editor falls back to its built-in
+   * best-effort checks.
+   */
+  validate?(key: string, serviceBlueprint: AuthoredServiceBlueprint): Promise<ServiceBlueprintValidationOutcome>;
 }
