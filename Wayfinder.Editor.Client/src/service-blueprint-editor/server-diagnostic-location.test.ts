@@ -3,7 +3,6 @@ import {
   normaliseServerSeverity,
   parseDiagnosticPath,
 } from './server-diagnostic-location.js';
-import type { AuthoredServiceBlueprint } from './types.js';
 import type { ServiceBlueprintValidationOutcome } from './service-blueprint-source.js';
 
 let failures = 0;
@@ -17,8 +16,6 @@ function check(name: string, condition: boolean, detail?: string) {
   }
 }
 
-const blueprint = { definitionKey: 'x', displayName: 'X', initialStage: 's', stages: [], gateways: [] } as unknown as AuthoredServiceBlueprint;
-
 export function run(): number {
   failures = 0;
 
@@ -31,37 +28,37 @@ export function run(): number {
   // ── path → location ────────────────────────────────────────────────────
   check(
     'calculations.fields.{name} → calculation field location',
-    JSON.stringify(parseDiagnosticPath('calculations.fields.totalCost', blueprint)) ===
+    JSON.stringify(parseDiagnosticPath('calculations.fields.totalCost')) ===
       JSON.stringify({ kind: 'calculation', field: 'totalCost' })
   );
   check(
     'calculations.series.{name} → calculation series location',
-    JSON.stringify(parseDiagnosticPath('calculations.series.trend', blueprint)) ===
+    JSON.stringify(parseDiagnosticPath('calculations.series.trend')) ===
       JSON.stringify({ kind: 'calculation', series: 'trend' })
   );
   check(
     'stages.{key}.actions[{n}] → stage action location',
-    JSON.stringify(parseDiagnosticPath('stages.review.actions[2]', blueprint)) ===
+    JSON.stringify(parseDiagnosticPath('stages.review.actions[2]')) ===
       JSON.stringify({ kind: 'action', target: 'stage', stageKey: 'review', actionIndex: 2 })
   );
   check(
     'stages.{key}.routes[{n}] → containing stage location',
-    JSON.stringify(parseDiagnosticPath('stages.review.routes[0]', blueprint)) ===
+    JSON.stringify(parseDiagnosticPath('stages.review.routes[0]')) ===
       JSON.stringify({ kind: 'stage', stageKey: 'review' })
   );
   check(
     'stages.{key}.components[{n}].showWhen → containing stage location',
-    JSON.stringify(parseDiagnosticPath('stages.review.components[3].showWhen', blueprint)) ===
+    JSON.stringify(parseDiagnosticPath('stages.review.components[3].showWhen')) ===
       JSON.stringify({ kind: 'stage', stageKey: 'review' })
   );
   check(
     'stages.{key} → stage location',
-    JSON.stringify(parseDiagnosticPath('stages.declaration', blueprint)) ===
+    JSON.stringify(parseDiagnosticPath('stages.declaration')) ===
       JSON.stringify({ kind: 'stage', stageKey: 'declaration' })
   );
   check(
     'an unlocatable path (definitionKey) → non-jumpable document location',
-    JSON.stringify(parseDiagnosticPath('definitionKey', blueprint)) === JSON.stringify({ kind: 'document' })
+    JSON.stringify(parseDiagnosticPath('definitionKey')) === JSON.stringify({ kind: 'document' })
   );
 
   // ── outcome → issues ───────────────────────────────────────────────────
@@ -73,7 +70,7 @@ export function run(): number {
         { code: 'CALC_SERVICE_FIELD_UNVERIFIED', path: 'calculations.fields.member', message: 'cannot verify', severity: 'Warning' },
       ],
     };
-    const issues = mapServerDiagnosticsToIssues(outcome, blueprint);
+    const issues = mapServerDiagnosticsToIssues(outcome);
     check('every server diagnostic becomes one issue', issues.length === 2, JSON.stringify(issues));
     check('an Error diagnostic is blocking', issues[0].severity === 'error' && issues[0].blocking === true);
     check('a Warning diagnostic is non-blocking', issues[1].severity === 'warning' && issues[1].blocking === false);
@@ -83,7 +80,7 @@ export function run(): number {
   }
 
   {
-    const issues = mapServerDiagnosticsToIssues({ isValid: true, diagnostics: [] }, blueprint);
+    const issues = mapServerDiagnosticsToIssues({ isValid: true, diagnostics: [] });
     check('a valid outcome produces no issues', issues.length === 0);
   }
 

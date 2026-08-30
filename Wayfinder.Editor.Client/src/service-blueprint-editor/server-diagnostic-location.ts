@@ -14,7 +14,6 @@
  * (`definitionKey`, `params.*`).
  */
 
-import type { AuthoredServiceBlueprint } from './types.js';
 import type {
   ServiceBlueprintServerDiagnostic,
   ServiceBlueprintValidationOutcome,
@@ -46,10 +45,7 @@ const STAGE_ANY = /^stages\.([^.[]+)/;
  * jump target); anything unlocatable (`definitionKey`, `params.*`) becomes a non-jumpable
  * `document` location — the message is still listed.
  */
-export function parseDiagnosticPath(
-  path: string,
-  _serviceBlueprint: AuthoredServiceBlueprint
-): ServiceBlueprintValidationLocation {
+export function parseDiagnosticPath(path: string): ServiceBlueprintValidationLocation {
   const calcField = CALC_FIELD.exec(path);
   if (calcField) {
     return { kind: 'calculation', field: calcField[1] };
@@ -95,8 +91,7 @@ function issueCodeFor(diagnostic: ServiceBlueprintServerDiagnostic): ServiceBlue
  * everything else blocks Save.
  */
 export function mapServerDiagnosticsToIssues(
-  outcome: ServiceBlueprintValidationOutcome,
-  serviceBlueprint: AuthoredServiceBlueprint
+  outcome: ServiceBlueprintValidationOutcome
 ): ServiceBlueprintValidationIssue[] {
   return (outcome.diagnostics ?? []).map((diagnostic, index) => {
     const severity = normaliseServerSeverity(diagnostic.severity);
@@ -106,7 +101,7 @@ export function mapServerDiagnosticsToIssues(
       severity,
       blocking: severity === 'error',
       message: diagnostic.message,
-      location: parseDiagnosticPath(diagnostic.path, serviceBlueprint),
+      location: parseDiagnosticPath(diagnostic.path),
     };
   });
 }
