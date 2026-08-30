@@ -100,6 +100,37 @@ the code do internally?"*. Adapted from the Umbraco.Prism squad's Tester charter
 9. **Keep every suite green before a PR** (`dotnet test`, the TS conformance scripts, the
    relevant Playwright configs).
 
+### Security — non-negotiable
+
+Adapted from the Umbraco.Prism squad's Copper mandate (tenant-isolation and auth-threat
+reduction). Security correctness is a release gate, not a follow-up — the same standing this
+project gives behavioural testing.
+
+1. **Auth and trust-chain flows are spec-exact.** OAuth 2.0 / OIDC / PKCE / RFC 8414 / RFC 9207
+   / RFC 9728 token, claim and discovery handling follows the RFC — no fabricated identifiers,
+   no "works for now" shims, no deviation for convenience. If the spec and an easier path
+   conflict, the spec wins or the work stops and the trade-off is raised explicitly.
+2. **The framework-agnostic core takes no auth or tenant bypass.** Identity, tenancy and
+   authorization enter only through a host-supplied seam (`ResolveServiceInputs`,
+   `IServiceRequestStore`, a policy the host registers). Never a hardcoded actor, queue, tenant
+   or allow-all default in `Wayfinder` / `Wayfinder.Engine`.
+3. **Deny by default at every new seam.** A `Wayfinder.Engine.Api` route or a
+   `Wayfinder.Engine.Mcp` tool ships with an explicit authorization requirement, documented at
+   the call site; anonymous access carries a written reason in the code.
+4. **The calculation language stays total and side-effect-free** — no eval, no loops, no host
+   callouts. That is a security property (untrusted blueprint input is evaluated), not only a
+   design choice.
+5. **No secrets in source, committed config, logs, or test fixtures** (golden fixtures
+   included).
+6. **Evaluate every change through the CIA lens** — confidentiality (cross-actor / cross-tenant
+   leakage), integrity (can input forge state or skip a gateway), availability (can input force
+   unbounded work). Anything that moves the threat surface is called out in the commit body and
+   the PR description.
+7. **Define a security regression check for any boundary you touch** — a behavioural test that
+   goes red if the isolation or the validation regresses, per the testing rules above.
+8. **Report security findings plainly.** No minimising language — "just a hack", "edge case",
+   "couldn't survive". Name the defect and its impact.
+
 ### Branch policy
 
 Feature branches + PRs for substantive changes: `{type}/{kebab-slug}`. Direct commits to `main`
