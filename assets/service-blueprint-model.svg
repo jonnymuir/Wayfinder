@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 474" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="1000" height="474" fill="#ffffff"/>
+  <rect x="0.5" y="0.5" width="999" height="473" fill="none" stroke="#d0d7de"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#57606a"/>
+    </marker>
+  </defs>
+
+  <text x="24" y="28" font-size="16" font-weight="700" fill="#1f2328">The service blueprint model in Wayfinder</text>
+  <text x="24" y="47" font-size="11.5" fill="#57606a">Nielsen Norman Group's lanes and lines of separation, and how a ServiceBlueprint maps onto them</text>
+
+  <text x="150" y="68" font-size="10" fill="#8c959f" text-anchor="end">time / phases</text>
+  <line x1="166" y1="64" x2="974" y2="64" stroke="#c9d1d9" stroke-width="1" marker-end="url(#arrow)"/>
+
+  <!-- Customer actions -->
+  <text x="150" y="95" font-size="11" font-weight="700" fill="#0b3d63" text-anchor="end">Customer</text>
+  <text x="150" y="109" font-size="11" font-weight="700" fill="#0b3d63" text-anchor="end">actions</text>
+  <g fill="#eaf2fb" stroke="#b6d4f0">
+    <rect x="166" y="76" width="188" height="46" rx="4"/>
+    <rect x="374" y="76" width="188" height="46" rx="4"/>
+    <rect x="582" y="76" width="188" height="46" rx="4"/>
+    <rect x="790" y="76" width="188" height="46" rx="4"/>
+  </g>
+  <g font-size="11" fill="#0b3d63" text-anchor="middle">
+    <text x="260" y="103">Discovers</text>
+    <text x="468" y="103">Applies</text>
+    <text x="676" y="103">Submits</text>
+    <text x="884" y="103">Gets outcome</text>
+  </g>
+  <g stroke="#57606a" stroke-width="1.2" marker-end="url(#arrow)">
+    <line x1="354" y1="99" x2="373" y2="99"/>
+    <line x1="562" y1="99" x2="581" y2="99"/>
+    <line x1="770" y1="99" x2="789" y2="99"/>
+  </g>
+
+  <line x1="166" y1="134" x2="978" y2="134" stroke="#3d3d3d" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="150" y="138" font-size="9.5" fill="#57606a" text-anchor="end">line of interaction</text>
+
+  <!-- Frontstage -->
+  <text x="150" y="172" font-size="11" font-weight="700" fill="#0b3d63" text-anchor="end">Frontstage</text>
+  <g fill="#eff5fc" stroke="#b6d4f0">
+    <rect x="166" y="146" width="258" height="46" rx="4"/>
+    <rect x="444" y="146" width="258" height="46" rx="4"/>
+    <rect x="722" y="146" width="258" height="46" rx="4"/>
+  </g>
+  <g font-size="11" fill="#0b3d63" text-anchor="middle">
+    <text x="295" y="173">Guidance &amp; forms</text>
+    <text x="573" y="173">Confirmation</text>
+    <text x="851" y="173">Notification</text>
+  </g>
+  <g stroke="#57606a" stroke-width="1.2" marker-end="url(#arrow)">
+    <line x1="424" y1="169" x2="443" y2="169"/>
+    <line x1="702" y1="169" x2="721" y2="169"/>
+  </g>
+
+  <line x1="166" y1="204" x2="978" y2="204" stroke="#3d3d3d" stroke-width="2.5"/>
+  <text x="150" y="208" font-size="9.5" fill="#57606a" text-anchor="end">line of visibility</text>
+
+  <!-- Backstage -->
+  <text x="150" y="242" font-size="11" font-weight="700" fill="#0f5132" text-anchor="end">Backstage</text>
+  <g fill="#e8f6f1" stroke="#b6e0d2">
+    <rect x="166" y="216" width="258" height="46" rx="4"/>
+    <rect x="444" y="216" width="258" height="46" rx="4"/>
+    <rect x="722" y="216" width="258" height="46" rx="4"/>
+  </g>
+  <g font-size="11" fill="#0f5132" text-anchor="middle">
+    <text x="295" y="243">Caseworker review</text>
+    <text x="573" y="243">Checks</text>
+    <text x="851" y="243">Decision</text>
+  </g>
+  <g stroke="#57606a" stroke-width="1.2" marker-end="url(#arrow)">
+    <line x1="424" y1="239" x2="443" y2="239"/>
+    <line x1="702" y1="239" x2="721" y2="239"/>
+  </g>
+
+  <line x1="166" y1="274" x2="978" y2="274" stroke="#3d3d3d" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="150" y="278" font-size="9.5" fill="#57606a" text-anchor="end">line of internal interaction</text>
+
+  <!-- Support processes -->
+  <text x="150" y="306" font-size="11" font-weight="700" fill="#0f5132" text-anchor="end">Support</text>
+  <text x="150" y="320" font-size="11" font-weight="700" fill="#0f5132" text-anchor="end">processes</text>
+  <g fill="#e8f6f1" stroke="#b6e0d2">
+    <rect x="166" y="286" width="258" height="46" rx="4"/>
+    <rect x="444" y="286" width="258" height="46" rx="4"/>
+    <rect x="722" y="286" width="258" height="46" rx="4"/>
+  </g>
+  <g font-size="11" fill="#0f5132" text-anchor="middle">
+    <text x="295" y="313">Payment</text>
+    <text x="573" y="313">Records system</text>
+    <text x="851" y="313">Third-party checks</text>
+  </g>
+
+  <!-- cross-line gateways -->
+  <g stroke="#57606a" stroke-width="1.4" marker-end="url(#arrow)">
+    <line x1="295" y1="192" x2="295" y2="215"/>
+    <line x1="851" y1="262" x2="851" y2="285"/>
+  </g>
+  <text x="305" y="211" font-size="9.5" font-style="italic" fill="#57606a">gateway</text>
+
+  <!-- legend -->
+  <line x1="24" y1="352" x2="976" y2="352" stroke="#eaeef2"/>
+  <g font-size="10.5" fill="#1f2328">
+    <text x="60" y="376"><tspan font-weight="700">queue</tspan> = one of NN/g's horizontal lanes, one per team or system that does the work</text>
+
+    <rect x="24" y="386" width="26" height="12" rx="2" fill="#ffffff" stroke="#8c959f"/>
+    <text x="60" y="396"><tspan font-weight="700">stage</tspan> = a step in the journey. A stage sits in a queue, and the queue sets which lane it is in</text>
+
+    <line x1="24" y1="412" x2="50" y2="412" stroke="#57606a" stroke-width="1.4" marker-end="url(#arrow)"/>
+    <text x="60" y="416"><tspan font-weight="700">gateway</tspan> = the route from one stage to the next (any lane to any lane), carrying split / join, waiting, and conditions</text>
+
+    <text x="24" y="436"><tspan font-weight="700">Support Systems</tspan> = NN/g's support-processes lane, made first-class in Wayfinder</text>
+  </g>
+
+  <text x="24" y="462" font-size="9.5" fill="#8c959f">Based on the Nielsen Norman Group service blueprint (Sarah Gibbons, 2017): nngroup.com/articles/service-blueprints-definition/</text>
+</svg>

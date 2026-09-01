@@ -1,29 +1,29 @@
-# ServiceBlueprint editor — component API
+# ServiceBlueprint editor: component API
 
 The service blueprint editor ships as a Lit-based bundle, built in two forms
 from the same `src/index.ts` public entry (`vite.service-blueprint-editor.config.ts`),
 both landing in `Wayfinder.Editor`'s NuGet package as static web assets under
-`wwwroot/dist/` — there is no separate npm package to install. Only three
+`wwwroot/dist/`, there is no separate npm package to install. Only three
 custom elements are considered **public API**. Everything else in this folder
-is composition detail and is marked `@internal` in its source — Razor authors
+is composition detail and is marked `@internal` in its source, Razor authors
 and host applications should not depend on it, and breaking changes there will
 not bump a contract.
 
 | Bundle | Entry | Use |
 |---|---|---|
-| `service-blueprint-editor.js` | `service-blueprint-editor.html` | Standalone host page — a business app with no backoffice serves this directly (see MockBusinessApp, TestSite Razor pages, the Storybook harness). |
-| `wayfinder-elements.js` | `src/index.ts` | Bare ES module, no HTML wrapper — registers the same three custom elements for a host that embeds them into its own page, e.g. loaded by URL from an Umbraco backoffice extension manifest the same way Umbraco loads any other extension bundle. |
+| `service-blueprint-editor.js` | `service-blueprint-editor.html` | Standalone host page, a business app with no backoffice serves this directly (see MockBusinessApp, TestSite Razor pages, the Storybook harness). |
+| `wayfinder-elements.js` | `src/index.ts` | Bare ES module, no HTML wrapper, registers the same three custom elements for a host that embeds them into its own page, e.g. loaded by URL from an Umbraco backoffice extension manifest the same way Umbraco loads any other extension bundle. |
 
 Both bundles are fully self-contained (React, Lit, and `@xyflow/react` ship
-bundled in) since there's no host-side bundler to dedupe against — a browser
+bundled in) since there's no host-side bundler to dedupe against, a browser
 loading a URL, not a `node_modules` resolution.
 
 > **Host it wherever the implementation needs it.** The editor is a plain Lit
-> bundle with no assumptions about its host — the toolkit's job is to make
+> bundle with no assumptions about its host, the toolkit's job is to make
 > hosting trivial anywhere, not to prescribe one hosting model. Today's only
 > backoffice host is Umbraco.Prism's own CMS Service Blueprint feature
 > (`UmbracoPrism.Core`), whose entire reason for existing is the backoffice
-> editing experience — it mounts the same components natively as a Collection +
+> editing experience, it mounts the same components natively as a Collection +
 > entity-actions + Workspace backoffice screen instead (`vite.config.ts`'s
 > `prism-cms-service-blueprint-tab` entry → `UmbracoPrism.Core`'s own bundle;
 > `<wayfinder-service-blueprint-editor>` itself is mounted by
@@ -31,7 +31,7 @@ loading a URL, not a `node_modules` resolution.
 > `UmbracoPrism.Client/src/backoffice/cms-service-blueprint/workspace/`, scoped to whichever
 > definitionKey the workspace route is currently editing). This is expected to
 > move to a `Wayfinder.Umbraco`-native backoffice section that instead loads
-> `wayfinder-elements.js` by URL from `Wayfinder.Editor`'s static web assets —
+> `wayfinder-elements.js` by URL from `Wayfinder.Editor`'s static web assets,
 > see the Phase 2 plan.
 
 ## Public elements
@@ -39,7 +39,7 @@ loading a URL, not a `node_modules` resolution.
 | Element | Role | Bundle entry |
 |---------|------|--------------|
 | `<wayfinder-service-blueprint-editor>` | Full authoring surface: graph + inspector + outline + validation + dialogs. | yes |
-| `<wayfinder-service-blueprint-editor-shell>` | Host harness — serviceBlueprint picker, API base wiring, URL sync. Mounts `<wayfinder-service-blueprint-editor>`. | yes |
+| `<wayfinder-service-blueprint-editor-shell>` | Host harness, serviceBlueprint picker, API base wiring, URL sync. Mounts `<wayfinder-service-blueprint-editor>`. | yes |
 | `<wayfinder-service-blueprint-graph>` | Vertical-queues graph. Authoring (default) or **read-only viewer** when `read-only` is set. | yes |
 
 All three are registered as `customElements` when either bundle loads.
@@ -50,7 +50,7 @@ the element contract (properties, events, dialogs, context menu, announcer)
 while React Flow renders lanes, nodes, and edges inside the same shadow root
 and provides pan, wheel zoom, and fitView. Node positions are derived by the
 pure layout module `graph/service-blueprint-graph-layout.ts` (queue swim lanes for X,
-Kahn longest-path ranking for Y — `npm run test:graph-layout` covers it).
+Kahn longest-path ranking for Y, `npm run test:graph-layout` covers it).
 
 ---
 
@@ -70,22 +70,22 @@ Full authoring experience.
 |----------|------|-------|
 | `serviceBlueprintSource` | `ServiceBlueprintSource \| undefined` | Host-supplied source the editor reads serviceBlueprints from and writes back to. Required for runtime use. Storybook stories can pass `initialServiceBlueprint` instead. See `integrations/mockapp-service-blueprint-source.ts` for a reference HTTP implementation. |
 | `actionCatalog` | `ServiceBlueprintActionCatalog \| undefined` | Host-supplied catalog of action types the editor can render. Falls back to `BuiltInServiceBlueprintActionCatalog` when unset. |
-| `authorContext` | `ServiceBlueprintAuthorContext \| undefined` | Optional UX hint about the current author (`{ canSave?: boolean }`). Never authoritative — server-side authorization stays in the host application. |
+| `authorContext` | `ServiceBlueprintAuthorContext \| undefined` | Optional UX hint about the current author (`{ canSave?: boolean }`). Never authoritative, server-side authorization stays in the host application. |
 | `availableQueues` | `QueueDefinition[]` | Host-supplied queue catalog used for queue labels and queue pickers. Shared editor code stays generic; the host decides which queues exist. |
 | `initialServiceBlueprint` | `AuthoredServiceBlueprint \| null` | If set, bypasses `serviceBlueprintSource.load` and uses this serviceBlueprint directly. Designed for Storybook / fixtures. |
 
 The editor has **no built-in HTTP client and no opinion about authentication**.
 Hosts are responsible for implementing the `ServiceBlueprintSource` contract
-(`list / load / save`) against their own persistence — the editor only sees
+(`list / load / save`) against their own persistence, the editor only sees
 typed `AuthoredServiceBlueprint` values. A reference implementation that talks to the
 MockBusinessApp's `/mockapp/serviceBlueprints/*` endpoints lives at
 [`integrations/mockapp-service-blueprint-source.ts`](./integrations/mockapp-service-blueprint-source.ts).
 
-**Definition tab — JSON twin-pane**
+**Definition tab, JSON twin-pane**
 
 Alongside Canvas / Calculations / Validation, the editor exposes a **Definition**
 tab containing an editable JSON view of the current `AuthoredServiceBlueprint`.
-Author-facing copy uses "Definition" — JSON is the implementation detail.
+Author-facing copy uses "Definition", JSON is the implementation detail.
 
 * **Editor library:** [CodeMirror 6](https://codemirror.net/) (modules
   `@codemirror/{state,view,commands,language,lang-json,lint}`). Chosen for
@@ -115,19 +115,19 @@ Author-facing copy uses "Definition" — JSON is the implementation detail.
 * **Diagnostics:** parse errors and schema violations render as inline
   CodeMirror lint markers on the offending lines.
 * **Document-level undo:** an applied Definition edit goes onto the same
-  history stack as visual edits — one Ctrl/Cmd-Z from the Canvas tab
+  history stack as visual edits, one Ctrl/Cmd-Z from the Canvas tab
   reverses it, and the Definition tab re-renders the prior canonical text.
   While the user is typing invalid or pending text, undo stays local to
   CodeMirror's own history (intra-text).
 * **Read-only mode:** the underlying `<wayfinder-definition-editor>` supports a
   `read-only` flag (used by future host-level read-only mode). Currently not
-  exposed at the editor host level — that's Slice 8 territory.
+  exposed at the editor host level, that's Slice 8 territory.
 * **Test hooks:** `data-wayfinder-confidence-tab="definition"`,
   `data-wayfinder-definition-panel`, `data-wayfinder-definition-editor`,
   `data-wayfinder-definition-banner`, `data-wayfinder-definition-apply`,
   `data-wayfinder-definition-revert`, `data-wayfinder-definition-announcement`.
 
-**Data hooks (test selectors)** — see the JSDoc block at the top of
+**Data hooks (test selectors)**: see the JSDoc block at the top of
 `wayfinder-service-blueprint-editor.ts` for the full list. The most stable ones are
 `data-wayfinder-save`, `data-wayfinder-validation-rail`, `data-wayfinder-toast`,
 `data-wayfinder-help-button`, `data-wayfinder-history-undo`,
@@ -168,7 +168,7 @@ the cards.
 
 | Attribute | Type | Default | Notes |
 |-----------|------|---------|-------|
-| `read-only` | boolean | `false` | Viewer mode — hides Add stage / Add gateway HUD buttons, all dialogs, and the canvas context menu. Selection and zoom remain available. Reflected to the DOM, so CSS can target `[read-only]`. |
+| `read-only` | boolean | `false` | Viewer mode, hides Add stage / Add gateway HUD buttons, all dialogs, and the canvas context menu. Selection and zoom remain available. Reflected to the DOM, so CSS can target `[read-only]`. |
 | `service-blueprint-json` | string | `null` | Declarative form of the `serviceBlueprint` property. Parsed in `updated()` and assigned to `serviceBlueprint`. Invalid JSON is logged via `console.error`. Lets Razor / static HTML embed a graph with no JS wiring: `<wayfinder-service-blueprint-graph read-only service-blueprint-json='...'>`. |
 
 **JS-only properties**
@@ -176,10 +176,10 @@ the cards.
 | Property | Type | Notes |
 |----------|------|-------|
 | `serviceBlueprint` | `AuthoredServiceBlueprint \| null` | Programmatic form of `service-blueprint-json`. |
-| `selectedStageKey` | `string \| null` | Inbound selection — host sets this to drive the graph's highlight. |
+| `selectedStageKey` | `string \| null` | Inbound selection, host sets this to drive the graph's highlight. |
 | `selectedGatewayKey` | `string \| null` | Inbound selection. |
 | `selectedTransitionIndex` | `number \| null` | Inbound transition highlight. |
-| `simulationCurrentStageKey` / `simulationPathStageKeys` / `simulationPathTransitionIndices` | various | Path-highlighting overlay state. No current caller sets these (the Simulation tab that used to was removed) — always default, so the highlighting they drive never actually shows. Left in place for a future path-highlighting feature to reuse rather than reinventing. |
+| `simulationCurrentStageKey` / `simulationPathStageKeys` / `simulationPathTransitionIndices` | various | Path-highlighting overlay state. No current caller sets these (the Simulation tab that used to was removed), always default, so the highlighting they drive never actually shows. Left in place for a future path-highlighting feature to reuse rather than reinventing. |
 
 **Events**
 
@@ -190,7 +190,7 @@ the cards.
 | `transition-selected` | `{ transitionIndex }` | A transition arrow is activated. |
 | `selection-change` | `GraphSelectionDetail` | Any selection change (broader umbrella). |
 | `inspector-requested` | `GraphSelectionDetail` | User explicitly asks for the inspector (e.g. Enter on focus). |
-| `service-blueprint-updated` | `ServiceBlueprintUpdatedDetail` | Mutation occurred — authoring-only; never fires in `read-only` mode. |
+| `service-blueprint-updated` | `ServiceBlueprintUpdatedDetail` | Mutation occurred, authoring-only; never fires in `read-only` mode. |
 
 **Read-only behaviour**
 
@@ -228,10 +228,10 @@ notice:
 * `<wayfinder-service-blueprint-outline>`
 * `<wayfinder-stage-action-editor>`
 * `<wayfinder-inline-help>`
-* `<wayfinder-definition-editor>` — JSON twin-pane for the Definition tab
+* `<wayfinder-definition-editor>`, JSON twin-pane for the Definition tab
 
 If a host needs functionality that one of these provides, raise a Squad
-decision — we'd rather promote a stable element than have callers reach past
+decision, we'd rather promote a stable element than have callers reach past
 the public surface.
 
 ---
@@ -241,9 +241,9 @@ the public surface.
 Built artefacts land in `Wayfinder.Editor/wwwroot/dist/`, packaged into the
 `Wayfinder.Editor` NuGet package as static web assets:
 
-* `service-blueprint-editor.js` — Lit bundle that registers the three public elements, for the standalone host page.
-* `service-blueprint-editor.html` — host harness used by TestSite Razor pages.
-* `wayfinder-elements.js` — bare ES module registering the same three elements, for embedding into a host's own page (e.g. an Umbraco backoffice extension manifest).
+* `service-blueprint-editor.js`, Lit bundle that registers the three public elements, for the standalone host page.
+* `service-blueprint-editor.html`, host harness used by TestSite Razor pages.
+* `wayfinder-elements.js`, bare ES module registering the same three elements, for embedding into a host's own page (e.g. an Umbraco backoffice extension manifest).
 
 Build with `npm run build` from `Wayfinder.Editor.Client/`.
 
@@ -253,7 +253,7 @@ Build with `npm run build` from `Wayfinder.Editor.Client/`.
 
 The canvas has a dedicated visual regression suite proving five reading-level
 concerns: lane fit, no-overlap, label fit (text doesn't crash), pan/fitView
-behaviour, and arrow legibility — plus an ergonomics suite covering the
+behaviour, and arrow legibility, plus an ergonomics suite covering the
 named author flows (add stage, selection survives a tab switch, keyboard
 reach). The full strategy lives in
 [`docs/testing/serviceBlueprint-editor-visual-tests.md`](../../../../docs/testing/serviceBlueprint-editor-visual-tests.md).
@@ -276,7 +276,7 @@ remove or rename without updating the suite in the same commit.**
 | `data-wayfinder-component="serviceBlueprint-graph"` | Graph root marker. |
 | `data-wayfinder-mode="graph"` | Workspace mode. |
 | `data-wayfinder-read-only="true|false"` | Read-only viewer marker. |
-| `data-wayfinder-graph-ready="true"` | Set on the host element once the React Flow canvas has committed nodes/edges — test probes wait on this. |
+| `data-wayfinder-graph-ready="true"` | Set on the host element once the React Flow canvas has committed nodes/edges, test probes wait on this. |
 | `data-wayfinder-queue-container=<queueKey>` | Lane bounding box for fit/overlap/arrow specs. |
 | `data-wayfinder-role-queue=<queueKey>` | Synonym kept for backwards compat. |
 | `data-wayfinder-queue-header=<queueKey>` | Lane header (pans with the canvas; not sticky). |
@@ -286,4 +286,4 @@ remove or rename without updating the suite in the same commit.**
 | `data-wayfinder-gateway=<gatewayKey>` | Gateway click target + label container. |
 | `data-wayfinder-route-path=<key>` | SVG route path (endpoint assertion). |
 | `data-wayfinder-route-from=<key>` / `data-wayfinder-route-to=<key>` | Route endpoint mapping. |
-| `data-wayfinder-auto-arrange` | Tidy layout HUD button — rewrites every node's position back to the automatic arrangement in one undoable commit. |
+| `data-wayfinder-auto-arrange` | Tidy layout HUD button, rewrites every node's position back to the automatic arrangement in one undoable commit. |
