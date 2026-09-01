@@ -1,6 +1,6 @@
 # Extending the component catalog
 
-How a toolkit user — a human integrator, or an AI agent working on their behalf —
+How a toolkit user, a human integrator, or an AI agent working on their behalf,
 registers a genuinely new `Component` type, beyond the ~27 Wayfinder ships out of the box.
 This is for whoever is *building* a Wayfinder host, not whoever is *authoring* a
 service blueprint against one; if that's you, see
@@ -14,28 +14,28 @@ directly without repo access.
 
 ## The three separate things a component type is
 
-Registering a new type touches three independent pieces — you can supply any subset,
+Registering a new type touches three independent pieces, you can supply any subset,
 though in practice you almost always want all three:
 
-1. **A CLR record** — your own type deriving from `Component` (or `InputComponent`, if
+1. **A CLR record**: your own type deriving from `Component` (or `InputComponent`, if
    it captures a value). Plain data, same shape as any built-in component.
-2. **A `ComponentDescriptor`** — "what it is": display name, category, its property
+2. **A `ComponentDescriptor`**, "what it is": display name, category, its property
    schema (for validation and, eventually, a generic editor UI), and how it contains
    other components, if it does. Registered via `ComponentTypeRegistry.Register<T>()`.
-3. **A renderer override** — "how it renders": a plain delegate registered via
+3. **A renderer override**: "how it renders": a plain delegate registered via
    `GovUkComponentRenderer.RegisterComponent`/`RegisterField`
    (`Wayfinder.Rendering.GovUk`), independent of the descriptor.
 
 The descriptor and the renderer are genuinely separate registrations. A type with a
 descriptor but no renderer override falls back to whatever generic rendering Wayfinder
 already does for its category (an unrecognised `InputComponent` renders as a plain text
-field, for instance) — useful as a starting point, but you'll usually want your own
+field, for instance), useful as a starting point, but you'll usually want your own
 renderer for anything that isn't just a differently-labelled text box.
 
 ## Worked example: a five-point confidence rating
 
 `Wayfinder.ReferenceApp/Services/CustomComponents.cs` in this repo is a complete, real,
-tested example — not a hypothetical. It defines `RatingComponent`, a five-point
+tested example, not a hypothetical. It defines `RatingComponent`, a five-point
 confidence scale, entirely outside Wayfinder's own assembly, and proves it end to end
 (`Wayfinder.ReferenceApp.Tests/tests/custom-component.spec.ts`: authors it into a live
 blueprint via the real authoring API, then drives it through the actual browser-rendered
@@ -51,7 +51,7 @@ public sealed record RatingComponent : InputComponent;
 Deriving from `InputComponent` (rather than `Component` directly) gets you `FieldKey`,
 `Label`, `Hint`, `Required`, `ConditionalOn`, `VisibleWhen`, `Default`, `DefaultFrom`,
 `ChangeStateKey` for free, and participation in the calculation scope. Add your own
-properties as ordinary C# properties — `RatingComponent` deliberately adds none (see
+properties as ordinary C# properties, `RatingComponent` deliberately adds none (see
 [a known limitation](#known-limitation-a-renderfield-override-only-sees-fieldrenderpayload)
 below for why that's a deliberate, not accidental, choice here).
 
@@ -76,7 +76,7 @@ ComponentTypeRegistry.Register<RatingComponent>(new ComponentDescriptor
 });
 ```
 
-Call this **once, at host startup, before any `ServiceBlueprint` is read or written** —
+Call this **once, at host startup, before any `ServiceBlueprint` is read or written**,
 see [Registration timing](#registration-timing-the-registry-freezes) below; this is not
 optional, it's the single most common way this goes wrong.
 
@@ -90,7 +90,7 @@ where `RenderRating` builds real `govuk-frontend`-styled HTML by hand (a `<field
 with a `<legend>`, five `<input type="radio">` options, hint/error markup matching every
 other field's accessibility pattern) using nothing but the public `GovUk.Esc`/
 `GovUk.FieldName` helpers Wayfinder itself ships. See the real source for the full
-markup — it's a genuinely accessible (WCAG AA) radios group, not a placeholder.
+markup, it's a genuinely accessible (WCAG AA) radios group, not a placeholder.
 
 ### 4. Declare it as a queue capability (optional, but recommended)
 
@@ -103,10 +103,10 @@ private static readonly IReadOnlyList<string> CitizenComponentTypes =
 ```
 
 A typo here is caught immediately (`QUEUE_CAPABILITY_UNKNOWN_COMPONENT_TYPE`) the next
-time any blueprint is validated — see
+time any blueprint is validated, see
 [Reference Service Blueprint Contract § Queue render capabilities](./reference-service-blueprint-contract.md#queue-render-capabilities-host-declared).
 
-That's it — a service blueprint can now use `{"type": "rating", "fieldKey": "...", ...}`
+That's it, a service blueprint can now use `{"type": "rating", "fieldKey": "...", ...}`
 anywhere a component is expected, validated, saved, and rendered exactly like a
 built-in type.
 
@@ -114,50 +114,50 @@ built-in type.
 
 | Field | Meaning |
 |---|---|
-| `Discriminator` | The `"type"` JSON value, e.g. `"rating"`. Must be unique across the whole process — a duplicate throws at registration time. |
-| `DisplayName` | Human-readable name, e.g. "Confidence rating" — for editor UI and docs. |
-| `Category` | `Input` \| `Content` \| `Container` \| `DataDisplay` \| `FlowControl` — see [the contract doc](./reference-service-blueprint-contract.md#components) for what each means. |
-| `Description` | Longer help text — editor tooltip / AI-agent-readable prose. |
+| `Discriminator` | The `"type"` JSON value, e.g. `"rating"`. Must be unique across the whole process, a duplicate throws at registration time. |
+| `DisplayName` | Human-readable name, e.g. "Confidence rating", for editor UI and docs. |
+| `Category` | `Input` \| `Content` \| `Container` \| `DataDisplay` \| `FlowControl`, see [the contract doc](./reference-service-blueprint-contract.md#components) for what each means. |
+| `Description` | Longer help text, editor tooltip / AI-agent-readable prose. |
 | `ClrType` | The `Component`-derived CLR type backing this discriminator. |
-| `IsInput` | `true` for anything deriving from `InputComponent` — declares a `fieldKey`, participates in the calculation scope. |
-| `Properties` | `IReadOnlyList<ComponentPropertyDescriptor>` — see below. Drives [descriptor-driven validation](#validation-comes-for-free). |
-| `Containment` | How (if at all) this type holds other components — see below. Defaults to `ComponentContainment.None`. |
+| `IsInput` | `true` for anything deriving from `InputComponent`, declares a `fieldKey`, participates in the calculation scope. |
+| `Properties` | `IReadOnlyList<ComponentPropertyDescriptor>`, see below. Drives [descriptor-driven validation](#validation-comes-for-free). |
+| `Containment` | How (if at all) this type holds other components, see below. Defaults to `ComponentContainment.None`. |
 
 ## `ComponentPropertyDescriptor` reference
 
-Describes one property — deliberately the same shape as `AuthoredParameterDefinition`,
+Describes one property, deliberately the same shape as `AuthoredParameterDefinition`,
 the editor's own proven schema for action parameters, so a component's property schema
 and an action's parameter schema are the same shape a host or editor UI only has to
 understand once.
 
 | Field | Meaning |
 |---|---|
-| `Key` | The CLR property name, e.g. `"FieldKey"` — reflected against the component instance directly, so use `nameof(YourComponent.YourProperty)`, never a raw string. |
+| `Key` | The CLR property name, e.g. `"FieldKey"`, reflected against the component instance directly, so use `nameof(YourComponent.YourProperty)`, never a raw string. |
 | `Title` | Human-readable label, e.g. "Field key". |
 | `Description` | Longer help text. |
 | `ValueKind` | `String` \| `Number` \| `Integer` \| `Boolean` \| `StringArray` \| `Object` \| `Array`. |
 | `Format` | Semantic hint, e.g. `"email"`, `"date"`, `"color"`, or one of the [reference-aware tags](#reference-aware-properties) below. |
 | `Editor` | Explicit editor widget hint, e.g. `"textarea"`, `"select"`, `"toggle"`. `null` infers from `ValueKind`/`AllowedValues`. |
 | `AllowedValues` | Closed set of legal string values, if any. |
-| `Required` | Whether this property must have a real (non-null, non-empty) value — see [Validation](#validation-comes-for-free). |
+| `Required` | Whether this property must have a real (non-null, non-empty) value, see [Validation](#validation-comes-for-free). |
 | `DefaultValue` | Suggested default for an editor UI. |
 | `Minimum` / `Maximum` | Numeric bounds, checked for `Integer`/`Number` properties. |
 | `MinLength` / `MaxLength` | String length bounds. |
 | `Pattern` | Regex a string value must match. |
 | `Properties` | Nested property schema when `ValueKind` is `Object`. |
-| `Items` | Element schema when `ValueKind` is `Array` — see `ChartComponent.Bands`/`StatGroupComponent.Items` in `BuiltInComponentDescriptors.cs` for a real recursive example. |
+| `Items` | Element schema when `ValueKind` is `Array`, see `ChartComponent.Bands`/`StatGroupComponent.Items` in `BuiltInComponentDescriptors.cs` for a real recursive example. |
 
 ## Containment shapes
 
-Only three shapes exist across the whole built-in catalog (verified) — pick whichever
+Only three shapes exist across the whole built-in catalog (verified), pick whichever
 matches your own container type, or `None` if it's a leaf:
 
-- **`None`** — a leaf. Most types, including `RatingComponent`.
-- **`ChildList(propertyName)`** — a single flat `IReadOnlyList<Component>` property, e.g.
+- **`None`**, a leaf. Most types, including `RatingComponent`.
+- **`ChildList(propertyName)`**, a single flat `IReadOnlyList<Component>` property, e.g.
   `FieldsetComponent.Children`.
-- **`NamedSections(propertyName, sectionChildrenPropertyName)`** — a list of named
+- **`NamedSections(propertyName, sectionChildrenPropertyName)`**, a list of named
   sections, each with its own children, e.g. `AccordionComponent.Sections[].Children`.
-- **`KeyedChildren(propertyName, keySourceProperty)`** — an
+- **`KeyedChildren(propertyName, keySourceProperty)`**, an
   `IReadOnlyDictionary<string, IReadOnlyList<Component>>` keyed by a value that should be
   a subset of another property on the *same* component, e.g.
   `RadiosComponent.ConditionalChildren` keyed against `Options`. Declaring
@@ -167,17 +167,17 @@ matches your own container type, or `None` if it's a leaf:
 
 Whichever shape you declare, `ComponentExtensions.Flatten`/`FlattenWithPaths` (the tree
 walker every validation/calculation-scope/rendering pass in the toolkit is built on)
-automatically descends into it — no engine change needed for a new container type to
+automatically descends into it, no engine change needed for a new container type to
 work correctly.
 
 ## Registration timing: the registry freezes
 
 `ComponentTypeRegistry` is global, process-wide state. It **freezes the first time
-anything actually reads it** — the first `(de)serialization`, `list_component_types`
-call, or direct `.All`/`.Find`/`.DescriptorFor` — and `Register` throws after that,
+anything actually reads it**, the first `(de)serialization`, `list_component_types`
+call, or direct `.All`/`.Find`/`.DescriptorFor`, and `Register` throws after that,
 loudly, rather than silently doing nothing:
 
-> `ComponentTypeRegistry is frozen — a component has already been read/(de)serialized,
+> `ComponentTypeRegistry is frozen, a component has already been read/(de)serialized,
 > so 'x' can't be registered now.`
 
 Call every `Register<T>()` at host startup, before anything else touches a
@@ -188,10 +188,10 @@ DI singletons resolving in an order you don't fully control.
 
 If you're using the REST authoring API (`Wayfinder.Engine.Api`), also call
 `services.AddServiceBlueprintAuthoringApi()` alongside `AddServiceBlueprintAuthoring()`
-at startup — ASP.NET Core's own minimal-API `[FromBody]` binding uses a *separate*
+at startup, ASP.NET Core's own minimal-API `[FromBody]` binding uses a *separate*
 `JsonSerializerOptions` to `ServiceBlueprintJson`'s by default, and won't otherwise pick
 up your registered type at all (a built-in type still works either way, since those are
-also seeded onto `Component` via `[JsonDerivedType]` as a fallback — only a
+also seeded onto `Component` via `[JsonDerivedType]` as a fallback, only a
 custom-registered type is affected). The MCP tools don't need this; they already
 deserialize with `ServiceBlueprintJson.ReadOptions` directly.
 
@@ -199,10 +199,10 @@ deserialize with `ServiceBlueprintJson.ReadOptions` directly.
 
 Once registered, `ServiceBlueprintAuthoringService.Validate` (and therefore
 `validate_service_blueprint`/`save_service_blueprint`) automatically checks every
-instance of your type against its own `ComponentPropertyDescriptor`s — required
+instance of your type against its own `ComponentPropertyDescriptor`s, required
 properties present, `AllowedValues` respected, `Pattern`/`MinLength`/`MaxLength`/
 `Minimum`/`Maximum` satisfied, recursing into any `Object`/`Array`-shaped nested
-properties — with no extra code. See `Wayfinder.Engine.Services.ComponentPropertyValidator`
+properties, with no extra code. See `Wayfinder.Engine.Services.ComponentPropertyValidator`
 for the implementation if you want the exact diagnostic codes
 (`COMPONENT_PROPERTY_REQUIRED`, `COMPONENT_PROPERTY_INVALID_VALUE`,
 `COMPONENT_PROPERTY_PATTERN_MISMATCH`, `COMPONENT_PROPERTY_TOO_SHORT`/`_TOO_LONG`/
@@ -211,7 +211,7 @@ for the implementation if you want the exact diagnostic codes
 ## Reference-aware properties
 
 Some properties are really references to something else that already exists in the
-same blueprint — `ConditionalOn` must be a sibling input field's `fieldKey`, `DefaultFrom`
+same blueprint, `ConditionalOn` must be a sibling input field's `fieldKey`, `DefaultFrom`
 must be a name in `Calculations.Fields`, `ChangeStateKey` must be a real stage key. The
 built-in catalog tags these with a `Format` value so the properties-panel editor UI
 offers a `<select>` populated from the live blueprint instead of a blank text box, and so
@@ -220,40 +220,40 @@ offers a `<select>` populated from the live blueprint instead of a blank text bo
 
 | `Format` | Meaning |
 |---|---|
-| `field-ref` | Another input field's `fieldKey`, declared in the **same stage** — visibility is only ever checked against the current stage's own submitted values. |
+| `field-ref` | Another input field's `fieldKey`, declared in the **same stage**: visibility is only ever checked against the current stage's own submitted values. |
 | `conditional-value-ref` | Legal values are whatever the sibling `field-ref` property currently points at (that field's own `AllowedValues`/options, or `"true"`/`"false"` for a boolean field). |
 | `own-options-ref` | One of this same component's own declared options (e.g. `Default` on `select`/`radio`/`checkboxlist`). |
 | `calculation-ref` | A name declared in the blueprint's `Calculations.Fields`. |
-| `stage-ref` | An existing stage's key — blueprint-wide, not stage-scoped (a "Change" link typically points back at an *earlier* stage). |
+| `stage-ref` | An existing stage's key, blueprint-wide, not stage-scoped (a "Change" link typically points back at an *earlier* stage). |
 | `field-or-calc-ref` | Either of the above two field kinds, blueprint-wide (e.g. a stat-group tile's `FieldKey`, which typically reads a value captured on an earlier stage). |
 
 **Known limitation:** this is currently a hand-wired mechanism, not a generic plugin
-point — `Wayfinder.Editor.Client/src/service-blueprint-editor/component-property-editor.ts`'s
+point, `Wayfinder.Editor.Client/src/service-blueprint-editor/component-property-editor.ts`'s
 `renderScalarLikeField` dispatches on exactly these six tag values, and
 `ServiceBlueprint.ValidateFieldReferences` only checks `field-ref`/`calculation-ref`
 (`stage-ref` is already covered by `ValidateDataDisplayBindings` wherever it matters). A
 third-party component using its own new `Format` value won't get a smart `<select>` or a
-validation check without extending those two places yourself — the same honest boundary
+validation check without extending those two places yourself, the same honest boundary
 as the `RegisterField` limitation below, not an oversight.
 
 ## Known limitation: a `RegisterField` override only sees `FieldRenderPayload`
 
-`GovUkComponentRenderer.RegisterField`'s delegate receives a `FieldRenderPayload` — the
+`GovUkComponentRenderer.RegisterField`'s delegate receives a `FieldRenderPayload`, the
 same generic rendering DTO every built-in field type shares (`FieldKey`, `Label`,
 `Hint`, `Required`, `Value`, plus a handful of type-specific extras like `Options` or
-`Min`/`Max` that only populate for the built-in types that declare them) — **not** the
+`Min`/`Max` that only populate for the built-in types that declare them), **not** the
 original `Component` instance. If your new type's own properties beyond that base set
 (FieldKey/Label/Hint/Required/Value, which all thread through generically for any
 `InputComponent`) need to reach your renderer, there's no mechanism for that today.
 This is exactly why `RatingComponent` deliberately declares no properties beyond
-`InputComponent`'s own — its five-point scale is fixed data the renderer hardcodes, not
+`InputComponent`'s own, its five-point scale is fixed data the renderer hardcodes, not
 threaded through the payload. A component needing genuinely dynamic extra data (e.g. a
 configurable number of rating points) isn't fully supported by the render pipeline yet;
 treat this as a real, current boundary, not an oversight to design around.
 
 ## Related documentation
 
-- [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md) — the
+- [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md), the
   full `ServiceBlueprint` JSON shape, including the built-in component catalog table.
-- [AI-Ready Blueprint Authoring — Integrator Guide](./ai-service-blueprint-authoring.md) —
+- [AI-Ready Blueprint Authoring, Integrator Guide](./ai-service-blueprint-authoring.md),
   wiring the MCP/REST authoring surface into a host's own pipeline.
