@@ -1,4 +1,4 @@
-# Graph Layout Regression Proof, Test Results Summary
+# Graph Layout Regression Proof: Test Results Summary
 
 **Date:** 2026-05-23T12:27:26.493+01:00  
 **Tester:** Tangy  

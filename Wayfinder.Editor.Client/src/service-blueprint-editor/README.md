@@ -1,4 +1,4 @@
-# ServiceBlueprint editor, component API
+# ServiceBlueprint editor: component API
 
 The service blueprint editor ships as a Lit-based bundle, built in two forms
 from the same `src/index.ts` public entry (`vite.service-blueprint-editor.config.ts`),

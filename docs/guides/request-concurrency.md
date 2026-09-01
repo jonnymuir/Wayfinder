@@ -35,7 +35,7 @@ as one: `ServiceRequest.FieldValues` is empty until an instance's first submissi
 these decisions happen *before* any submission exists, so there's nothing to resolve a
 blueprint-declared field-ref against yet.
 
-## `GetCurrentOrStartFresh`, a distinct "start" affordance
+## `GetCurrentOrStartFresh`: a distinct "start" affordance
 
 ```csharp
 ServiceRequestResponseEnvelope GetCurrentOrStartFresh(
@@ -62,7 +62,7 @@ your host surfaces a way to browse past instances (the reference app doesn't, to
 route to this method trades "the old confirmation is the only thing this link can ever show again"
 for "you can actually start a new one", know which one your users need before switching.
 
-## `ActorProfile.ConcurrencyScopeKey`, scoping "existing" beyond one user
+## `ActorProfile.ConcurrencyScopeKey`: scoping "existing" beyond one user
 
 ```csharp
 public string? ConcurrencyScopeKey { get; init; } // on ActorProfile
@@ -85,7 +85,7 @@ regardless of which of them actually submits. Attribution isn't lost, `ServiceRe
 still always records who actually created each instance; `ConcurrencyScopeKey` is a separate field
 on the instance, defaulting to `userId` at creation when nothing overrides it.
 
-## `IRequestConcurrencyPolicy`, an escape hatch for rules a scope key can't express
+## `IRequestConcurrencyPolicy`: an escape hatch for rules a scope key can't express
 
 For anything a single grouping key can't capture, a blackout window, a check against another
 system, a rule spanning more than one blueprint, register a custom policy, mirroring

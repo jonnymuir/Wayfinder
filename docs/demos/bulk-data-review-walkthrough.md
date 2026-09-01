@@ -1,4 +1,4 @@
-# Bulk data review, a walkthrough
+# Bulk data review: a walkthrough
 
 A narrated companion to [`bulk-data-review.webm`](./bulk-data-review.webm), this document mirrors
 the recording beat for beat, so you can read it standalone or follow along while watching. It
@@ -30,7 +30,7 @@ The person doing this isn't a licensing caseworker, it's **Priya Shah**, NJF ope
 Same shared backstage tool as the caseworker (the reference app deliberately runs multiple
 services through one worklist, see `DemoUsers.cs`), different job entirely.
 
-## Act 1, submitting the file
+## Act 1: submitting the file
 
 Priya signs in and opens **Submit an NJF contributions file**: a plain GOV.UK upload page, one
 file field, nothing unusual yet.
@@ -49,7 +49,7 @@ tagged **Waiting**, never lost from view. That's the same underlying join-gatewa
 mechanism the licensing demo's own "send to insurer" step uses; it just now lands you on the
 useful screen by default instead of an extra click away from it.
 
-## Act 2, only the rows that need attention
+## Act 2: only the rows that need attention
 
 SafetyNet Underwriting, a genuinely separate ASP.NET app, running on its own port, that knows
 nothing about Wayfinder's internals, validates the file for real and sends back the same five
@@ -68,7 +68,7 @@ disabled button with an explanation, it simply isn't offered. One row still has 
 and the blueprint's own declared rule (`contributionsErrorCount = 0`) means that route doesn't
 exist yet, the same way a route can be withheld anywhere else in Wayfinder.
 
-## Act 3, correcting a row, without reloading the page
+## Act 3: correcting a row, without reloading the page
 
 Priya fixes the tier on Cara Delgado's card directly, types "Recreational" over "Bogus". There's
 no "Save" button to click: the correction **autosaves**, shortly after she stops typing, and the
@@ -91,7 +91,7 @@ corrected dataset, not Priya's original upload. It's a genuine loop through the 
 not a special-cased "try again" path: the same split gateway, the same wait screen, the same
 review stage, all over again.
 
-## Act 4, a warning still needs an explicit yes
+## Act 4: a warning still needs an explicit yes
 
 SafetyNet Underwriting genuinely re-validates the corrected file. Cara Delgado's row is gone, no
 error left to show. Dev Patel's row is still there, still flagged, and **Accept and finish**
@@ -113,7 +113,7 @@ anything already ingested.
 Confirming lands on a plain confirmation page: **Contributions file accepted**: with the warning
 still on record, exactly as it should be.
 
-## Act 5, none of this is hidden in host code
+## Act 5: none of this is hidden in host code
 
 Everything Acts 1–4 just showed, the review stage, the two-route "Accept and finish", the
 confirmation stage, is **declared**, in the same visual editor used throughout the rest of

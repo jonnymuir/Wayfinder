@@ -26,7 +26,7 @@ only in *who* may act and whether there's a pickup step at all:
 | `"team-tray"` | Whoever on the team picks it up | Yes, team members only | Team members (unpicked); holder only (picked up) |
 | `"assign-to-initiator"` | Whoever started the instance | No, already owned | Owner only |
 
-## `"assign-to-initiator"`, owned the instant it exists
+## `"assign-to-initiator"`: owned the instant it exists
 
 Ownership is `ServiceRequest.UserId`, whoever's `Advance`/`GetCurrent` call actually created the
 instance. `PickupWorkItem`/`PutbackWorkItem` both return `PICKUP_NOT_AVAILABLE` for these rows:
@@ -37,7 +37,7 @@ without changing this).
 `QueueWorkItemPickupState` is `null` for these rows (see `work-allocation.md`), the same "nothing
 to pick up here" signal a `Waiting`/`Done` row gives, for a different reason.
 
-## `"team-tray"`, visible to the team, actionable only once picked up
+## `"team-tray"`: visible to the team, actionable only once picked up
 
 An unpicked team-tray row is visible to every member of `OwningTeamId` (via
 `ActorProfile.TeamIds`/`IsTeamMember`), and to nobody outside it, a genuinely different gate from
@@ -54,7 +54,7 @@ same "hidden entirely, not shown-but-disabled" behavior any picked-up row gets (
 - Putback is self-service only, same as every other queue (`work-allocation.md`'s own rule),
   returns the row to the tray, visible to every team member again as `Unassigned`.
 
-## Where ownership actually lives, two different places, by design
+## Where ownership actually lives: two different places, by design
 
 Unlike a no-policy queue, where ownership lives directly on `RequestCursor.AssignedTo` (see
 `work-allocation.md`), a queue declaring *any* `AssignmentPolicy` tracks ownership in
@@ -84,7 +84,7 @@ regardless of who owned the row on the queue you just left (see
 This mirrors the same "a cursor crossing a gateway is a new unit of work in a new queue" principle
 `work-allocation.md`'s own pickup-lifecycle table already establishes for plain pickup.
 
-## Worked example, the reference app
+## Worked example: the reference app
 
 `Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `"caseworker"` queue declares
 `assignmentPolicy: "team-tray"`, `owningTeamId` matching `DemoTeams.JugglingLicenceReviewers`,

@@ -34,7 +34,7 @@ different concept (skill/team eligibility), and deliberately uses the opposite n
 convention from `IQueueCapabilitiesProvider`'s own (there, null vs. empty is meaningfully
 distinguished; here, null and empty both simply mean "unrestricted"). Don't confuse the two.
 
-## Queue eligibility, `QueueDefinition.RoleGates` / `ActorProfile.Capabilities`
+## Queue eligibility: `QueueDefinition.RoleGates` / `ActorProfile.Capabilities`
 
 ```csharp
 // QueueDefinition (blueprint-authored)
@@ -61,7 +61,7 @@ keeps `ActorProfile.UnrestrictedOwner` (and every `GetCurrent`/`Advance` overloa
 it) working unchanged once a real blueprint's queue starts declaring `RoleGates`, the same way
 those calls were never restricted by queue name either.
 
-## Pickup/ownership, per-cursor, scoped to a cursor's dwell at its current node
+## Pickup/ownership: per-cursor, scoped to a cursor's dwell at its current node
 
 ```csharp
 ServiceRequestResponseEnvelope PickupWorkItem(string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile);
@@ -131,7 +131,7 @@ either way. Null for `Waiting`/`Done` rows, owner-restricted queues, and `"assig
 queues, since none of those have anything to pick up. There's no "picked up by someone else" value,
 that row simply never appears for anyone but whoever holds it.
 
-### Pickup lifecycle, which transitions preserve it, which clear it
+### Pickup lifecycle: which transitions preserve it, which clear it
 
 | Transition | Pickup preserved? |
 |---|---|
@@ -160,7 +160,7 @@ non-obvious, tested consequence: once materialized, the instance permanently swi
 multi-cursor `Advance` code path for the rest of its life, even for a blueprint with no gateways at
 all.
 
-### No `expectedStateVersion` on pickup/putback, and why
+### No `expectedStateVersion` on pickup/putback: and why
 
 Unlike `Advance`, which needs a caller-supplied expected version because it carries real,
 user-typed field edits that must not silently overwrite a concurrent change, picking up carries no
@@ -180,7 +180,7 @@ implementation, a persistent store typically does this with a conditional update
 through this same primitive now too, closing the identical race for two caseworkers clicking
 "approve" on the same not-picked-up item simultaneously, not just explicit pickups.
 
-### `PickupNextAvailableWorkItem`, deliberately simple in v1
+### `PickupNextAvailableWorkItem`: deliberately simple in v1
 
 For an automated/scaled-out caller: atomically picks up the single oldest eligible, not-picked-up,
 Actionable row (by `CreatedAt`, tiebroken by `InstanceId` for determinism), retrying against the
@@ -224,7 +224,7 @@ oversight: an audit trail outliving the record it describes is the point, and si
 history on every demo reset would be the wrong default. A host wanting log cleanup on reset calls
 its own store directly, nothing in `IAuditLogStore`'s contract offers one.
 
-## Not built yet, the seams that don't preclude them
+## Not built yet: the seams that don't preclude them
 
 **Reassignment** (a manager moving a pickup from one person to another, e.g. someone's off sick):
 `AssignedTo`/`AssignedAt` carry no type-level "only the holder can change this" invariant, only
@@ -245,7 +245,7 @@ once resolved to a `userId`, the granted person authenticates through the same
 `Advance`/`PickupWorkItem` surface as anyone else, `RequestCursor.AssignedTo` doesn't care how a
 `userId` came to exist.
 
-## `RequiresRole`, now genuinely enforced
+## `RequiresRole`: now genuinely enforced
 
 `ServiceBlueprintRouteDefinition.RequiresRole` existed on routes before this feature, but was never
 actually checked against the accessing actor, `BuildAvailableActions` only ever stripped a
@@ -256,7 +256,7 @@ the normal case. It's now checked for real, against the same `ActorProfile.Capab
 value. Reuses `Capabilities` rather than inventing a near-duplicate `Roles` set, since both already
 express "does this actor hold X".
 
-## Worked example, the reference app
+## Worked example: the reference app
 
 Both `juggling-licence.json` and `njf-contributions.json` independently declare a queue literally
 named `"caseworker"`, before `RoleGates` existed, Casey (juggling-licence) and Priya (NJF

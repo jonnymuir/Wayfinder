@@ -19,7 +19,7 @@ reachable only by a remembered URL. That was fine as long as nothing needed to l
 finished work, but a real caseworker worklist does: "show me what I've already dealt with", "hide
 the ones I'm just waiting on", "find the application for a specific applicant".
 
-## `QueueWorkItemStatus`, three buckets, not a ladder
+## `QueueWorkItemStatus`: three buckets, not a ladder
 
 ```csharp
 public enum QueueWorkItemStatus { Actionable, Waiting, Done }
@@ -44,7 +44,7 @@ since "include Done" and "exclude Waiting" are independent asks:
   oversight: nothing asked for a fourth bucket, and inventing one risks mislabeling a row that's
   actually still live as "finished".
 
-## `GetQueueWorkItems`, the query surface
+## `GetQueueWorkItems`: the query surface
 
 ```csharp
 QueueWorkListEnvelope GetQueueWorkItems(

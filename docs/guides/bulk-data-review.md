@@ -302,7 +302,7 @@ resolves every default exactly once, server-side, and passes the concrete string
 `data-wayfinder-bulk-review-*-label` attributes, `wayfinder-bulk-data-review.js` never has its own
 fallback copy to keep in sync.
 
-### `IProcessManager.SyncServiceFields`, the general primitive underneath
+### `IProcessManager.SyncServiceFields`: the general primitive underneath
 
 Nothing before this fed a value into `FieldValues` outside of `Advance`'s own transition/onEnter
 pipeline. `SyncServiceFields(instanceId, tenantId, userId, accessProfile, updates)` is a new,

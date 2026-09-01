@@ -27,7 +27,7 @@ check uses):
 
 ![Fields section with live preview values](screenshots/fields-live-preview.png)
 
-### Fields must be declared before they're referenced, handled automatically
+### Fields must be declared before they're referenced: handled automatically
 
 A field referencing another field that isn't declared yet is a hard error at evaluation
 time. Rather than asking the designer to maintain declaration order by hand, editing an
