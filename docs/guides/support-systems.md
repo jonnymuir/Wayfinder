@@ -151,6 +151,62 @@ fails validation with no clue why. `SupportSystemRegistry.Register` now rejects 
 key at registration time with a message explaining this, if you hit it, just lowercase the key's
 first letter; nothing else needs to change.
 
+## Registering one from configuration alone (no C#)
+
+The common case, a support system reached by POSTing an invocation to a URL and getting the
+outcome back on a callback, needs no bespoke `ISupportSystemClient` at all. It is a plain
+outbound-webhook contract, and an [Umbraco Automate](https://docs.umbraco.com/umbraco-automate)
+automation, Zapier, Make, n8n, Power Automate or a small service all satisfy it identically.
+`AddConfiguredSupportSystems(IConfiguration)` (`Wayfinder.Engine`) reads a
+`Wayfinder:SupportSystems` section and, per entry, registers both the `SupportSystemDescriptor`
+and a keyed `WebhookSupportSystemClient`:
+
+```jsonc
+"Wayfinder": {
+  "SupportSystems": [{
+    "key": "njf-coaching-standards",
+    "displayName": "NJF Coaching Standards",
+    "endpoint": {
+      "url": "https://your-host/umbraco/automate/webhook/<automation-guid>",
+      "auth": { "type": "hmac-sha256", "secretRef": "NJF_STANDARDS_SIGNING_KEY" },
+      "callbackSecretRef": "NJF_STANDARDS_CALLBACK_SECRET"
+    },
+    "capabilities": [{
+      "key": "check-coaching-standards",
+      "displayName": "Check coaching standards",
+      "completionModes": [ "Webhook" ],
+      "inputs": [
+        { "key": "applicantName", "title": "Applicant name", "valueKind": "String", "format": "field-ref", "required": true },
+        { "key": "yearsCoaching", "title": "Years coaching", "valueKind": "Integer", "format": "field-ref" }
+      ],
+      "outputs": [ { "key": "coachingStandardsNote", "title": "Standards note", "valueKind": "String" } ],
+      "outcomes": [
+        { "key": "accredited",  "displayName": "Accredited"  },
+        { "key": "provisional", "displayName": "Provisional" },
+        { "key": "referred",    "displayName": "Referred"    }
+      ]
+    }]
+  }]
+}
+```
+
+- `endpoint.auth.type` is `hmac-sha256` (preferred, header `X-Webhook-Signature: sha256=<hex>`
+  of HMAC-SHA256 over the raw body), `header` (a plain shared secret in `X-Webhook-Secret`), or
+  `none` (trusted network only, logs a warning). Both header defaults match Umbraco Automate's
+  built-in webhook authenticators exactly.
+- Every `*SecretRef` is the **name of a configuration key** (env var or user-secret), never the
+  secret itself (no secrets in committed config).
+- The POSTed envelope is `{ invocationId, instanceId, supportSystemKey, capabilityKey, inputs{…} }`.
+  It deliberately carries **no callback URL**. The consumer owns its own callback target as its
+  own configuration. A caller-supplied callback URL would let anyone reaching the endpoint (say,
+  with a leaked signing key) turn the host into an HTTP client aimed anywhere.
+- **Scalar inputs only.** A `file-upload`-backed input throws. That needs a bespoke client that
+  reads bytes via `IServiceRequestFileStorage` (see `SafetyNetUnderwritingClient` in
+  `Wayfinder.ReferenceApp`).
+
+Call `AddConfiguredSupportSystems` at host startup (it registers descriptors synchronously, so
+before the engine reads any blueprint); it is a no-op when the section is absent and idempotent.
+
 ## Delivering the outcome
 
 `ProcessManagerEngine.ResolveSupportSystemOutcome(invocationId, outcomeKey, resultPayload?)` is
@@ -164,22 +220,28 @@ outcome is known, the single code path both delivery mechanisms end up calling:
   answer. Nothing for a host to wire up.
 - **Webhook**: a host's own job, the same way `GetCurrent`/`Advance` themselves are, this
   toolkit's authoring surface (`Wayfinder.Engine.Api`) is deliberately scoped to blueprint
-  *authoring* only, not runtime request handling, so it doesn't ship a webhook route itself. Add
-  one directly against your `ProcessManagerEngine` instance, e.g.:
+  *authoring* only, not runtime request handling, so it doesn't ship a webhook route itself.
+  `Wayfinder.Engine.Http` provides the route as a helper, mapped against your
+  `ProcessManagerEngine` instance:
 
   ```csharp
-  // CallbackPayload is a small host-defined DTO { string OutcomeKey, JsonObject? ResultPayload }
-  // matching whatever shape the external system's callback actually posts — Wayfinder doesn't
-  // prescribe one.
-  app.MapPost("/wayfinder/support-systems/callbacks/{invocationId}", (
-      string invocationId, CallbackPayload payload, ProcessManagerEngine engine) =>
-      Results.Ok(engine.ResolveSupportSystemOutcome(invocationId, payload.OutcomeKey, payload.ResultPayload)));
+  // sharedSecret is REQUIRED in practice. The callback endpoint denies by default when it is
+  // set (checks X-Webhook-Secret in fixed time). Pass the resolved value of the entry's
+  // endpoint.callbackSecretRef. Omit it only when the route is unreachable from outside a
+  // trusted network (it logs a warning).
+  app.MapWebhookSupportSystemCallbacks(engine, sharedSecret: builder.Configuration["NJF_STANDARDS_CALLBACK_SECRET"]);
   ```
 
+  It maps `POST /wayfinder/support-systems/callbacks/{invocationId}` binding
+  `{ outcomeKey, resultPayload? }`, and returns 200 on resolution, 200 `no-op` for an unknown or
+  already-resolved invocation (so a retrying caller does not storm the route), 400 for an
+  undeclared outcome key, 401 for a missing or invalid secret. To hand-roll it instead, call
+  `engine.ResolveSupportSystemOutcome(invocationId, outcomeKey, resultPayload)` directly.
+
   `invocationId` is an unguessable per-invocation token generated when the capability's onEnter
-  action ran (`SupportSystemInvocationContext.InvocationId`, handed to the client's `InvokeAsync`),
-treat it as the correlation/auth token an external system's callback proves it, the same
-  reasoning `Wayfinder.ReferenceApp`'s already-minimal auth boundary applies elsewhere.
+  action ran (`SupportSystemInvocationContext.InvocationId`, handed to the client's `InvokeAsync`).
+  It is defence-in-depth on top of the shared secret, not the gate. It can appear in logs and in
+  the consumer's run history.
 
 A capability declaring both modes (SafetyNet Underwriting's does) may have both resolve the same
 invocation, `ResolveSupportSystemOutcome` marks an invocation resolved before advancing anything,
