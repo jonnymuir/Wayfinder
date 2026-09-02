@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Http</PackageId>
     <Title>Wayfinder Engine HTTP Request Glue</Title>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>The engine's own HTTP-request-processing glue a host otherwise hand-copies per route — currently just file-upload handling (validating a posted file against a field's own declared MaxSizeBytes/AcceptedFileTypes, saving it via IServiceRequestFileStorage, and writing the resulting reference into fieldValues). Plain functions, no routing of its own — a host calls these from inside its own minimal-API handlers, the same way Wayfinder.Rendering.GovUk's GovUkStageJourney functions are called.</Description>
