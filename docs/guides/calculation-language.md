@@ -373,6 +373,33 @@ no value supplied is a `CalculationException` when evaluated for real; the
 `validate_service_blueprint`/`simulate_service_blueprint` MCP tools have specific, non-fatal handling
 for this case, see [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md).
 
+### `valueKind` and `default` (authoring-time only)
+
+Static validation has no real value for a service field, so it can't check any
+`showWhen`, calculated field or stage rule that reads one, and reports each such
+field as `CALC_SERVICE_FIELD_UNVERIFIED` (a **Warning**, never blocking). Two
+optional properties let you close that gap for a scalar value:
+
+```json
+"contributionsErrorCount": { "source": "service", "valueKind": "number", "default": "0" }
+```
+
+- **`valueKind`** — `"number"`, `"string"` or `"boolean"`. With a kind declared,
+  validation gives a `"string"`/`"boolean"` field the same safe placeholder (`""` /
+  `false`) an unfilled input of that kind already gets, and every expression that
+  reads it is checked normally. A `"number"` has no safe placeholder (`0` is a real
+  value), so it *also* needs `default`.
+- **`default`** — a string, parsed per `valueKind` (`"0"` is the number zero). A
+  stand-in for validation only; it is **never** a runtime fallback. If the host's
+  resolver fails to supply the value at render time that is still a
+  `CalculationException`, not silently papered over.
+
+Omit both for a value with no scalar kind (an object handed back whole, like
+`member` above) — it stays unverifiable, and the Warning is expected. Structural
+mistakes are errors: a `valueKind` outside the three values, a `default` with no
+`valueKind` to parse it, a `default` that doesn't parse, or either property on a
+non-`service` field.
+
 ## Format hints
 
 A field may declare `"format": "gbp"` to tell the *rendering* layer (not the
@@ -410,11 +437,13 @@ service blueprint to discover a broken expression, see
 
 One class of `Unknown name` is downgraded from `Error` to `Warning` rather than
 blocking the save: an expression referencing a `number`-typed input with no
-declared default (see the callout above), the same treatment already used for a
-service-sourced field validation can't supply a real value for statically. Both
-say plainly that they're a limit of static checking, not a broken expression, and
-name `simulate_service_blueprint` as the way to verify the expression with real
-values instead.
+declared default (see the callout above), or a `source: "service"` field with no
+`valueKind`/`default` to stand in for the host's value (see *Service-sourced
+fields*). Both say plainly that they're a limit of static checking, not a broken
+expression, and name `simulate_service_blueprint` as the way to verify the
+expression with real values instead. Neither ever stops the rest of the
+validation pass: a genuine mistake in another expression in the same service
+blueprint is still reported in the same run.
 
 ## Worked example: `money-modeller.json`
 

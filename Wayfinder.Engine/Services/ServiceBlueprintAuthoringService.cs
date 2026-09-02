@@ -114,16 +114,34 @@ public sealed class ServiceBlueprintAuthoringService(
         }
         var evaluator = new CalculationEvaluator();
 
-        // Only numeric fields can still be genuinely unresolvable here — CalculationScopeBuilder.Build
-        // now gives every string/boolean field a safe "nothing here" placeholder ("" / false) even
-        // with neither a real submission nor a declared default, since design-time validation never
-        // has a real citizen behind it to supply one. A missing number has no equally safe
-        // placeholder (0 is a real, meaningful value), so it still requires an explicit default —
-        // computed once, up front, since calc fields/showWhen/stage validations below all need it.
+        // Which field names are genuinely unresolvable at authoring time (no real submission, no
+        // safe stand-in) — a reference to one of these fails static evaluation as expected, so
+        // ClassifyEvalDiagnostic downgrades that specific failure to a Warning rather than an
+        // error. Two sources:
+        //  - numeric input fields with no declared "default": "" / false is a safe placeholder for
+        //    a missing string/checkbox, but 0 is a real, meaningful number, not "nothing yet".
+        //  - source: "service" calc fields with neither a mockServiceInput nor enough declared
+        //    shape (valueKind [+ default for a number]) to stand in for the host's real value.
         var numericInputsWithoutDefault = CalculationScopeBuilder.DescribeInputs(blueprint)
             .Where(kvp => kvp.Value.Type == "number" && string.IsNullOrWhiteSpace(kvp.Value.Default))
             .Select(kvp => kvp.Key)
             .ToHashSet(StringComparer.Ordinal);
+
+        var (staticServiceInputs, unresolvedServiceFields) =
+            BuildStaticServiceInputs(blueprint.Calculations, mockServiceInputs);
+        var gaps = new StaticScopeGaps(numericInputsWithoutDefault, unresolvedServiceFields);
+
+        foreach (var name in unresolvedServiceFields)
+        {
+            diagnostics.Add(new ServiceBlueprintDiagnostic(
+                "CALC_SERVICE_FIELD_UNVERIFIED",
+                $"calculations.fields.{name}",
+                $"Field '{name}' is service-sourced and validate has no value to stand in for it, so " +
+                "expressions that read it can't be checked here (they're reported as unverified below, " +
+                "not as errors). Declare \"valueKind\" (\"string\"/\"boolean\" gets a safe placeholder; " +
+                "\"number\" also needs a \"default\"), pass mockServiceInputs, or use simulate_service_blueprint.",
+                ServiceBlueprintDiagnosticSeverity.Warning));
+        }
 
         IReadOnlyDictionary<string, object?> showWhenScope;
 
@@ -133,32 +151,7 @@ public sealed class ServiceBlueprintAuthoringService(
         }
         else
         {
-            var unresolvedServiceFields = blueprint.Calculations.Fields
-                .Where(f => string.Equals(f.Value.Source, "service", StringComparison.OrdinalIgnoreCase))
-                .Select(f => f.Key)
-                .Where(name => mockServiceInputs is null || !mockServiceInputs.ContainsKey(name))
-                .ToList();
-
-            if (unresolvedServiceFields.Count > 0)
-            {
-                foreach (var name in unresolvedServiceFields)
-                {
-                    diagnostics.Add(new ServiceBlueprintDiagnostic(
-                        "CALC_SERVICE_FIELD_UNVERIFIED",
-                        $"calculations.fields.{name}",
-                        $"Field '{name}' is service-sourced; validate cannot supply a real value for it " +
-                        "statically. Pass mockServiceInputs, or use simulate_service_blueprint, to verify " +
-                        "calculations that depend on it.",
-                        ServiceBlueprintDiagnosticSeverity.Warning));
-                }
-
-                // Calculated fields, and any showWhen depending on them, can't be reliably
-                // evaluated without every service field resolved — stop here for this call.
-                return new ServiceBlueprintValidationOutcome(
-                    !diagnostics.Any(d => d.Severity == ServiceBlueprintDiagnosticSeverity.Error), diagnostics);
-            }
-
-            var scope = CalculationScopeBuilder.Build(blueprint, EmptyFieldValues, mockServiceInputs);
+            var scope = CalculationScopeBuilder.Build(blueprint, EmptyFieldValues, staticServiceInputs);
             var evaluation = evaluator.EvaluateCollectingErrors(blueprint.Calculations, scope);
             foreach (var fieldOrSeries in evaluation.Diagnostics)
             {
@@ -166,7 +159,7 @@ public sealed class ServiceBlueprintAuthoringService(
                     ? ("CALC_FIELD_ERROR", "CALC_FIELD_UNVERIFIED", $"calculations.fields.{fieldOrSeries.Name}")
                     : ("CALC_SERIES_ERROR", "CALC_SERIES_UNVERIFIED", $"calculations.series.{fieldOrSeries.Name}");
                 diagnostics.Add(ClassifyEvalDiagnostic(
-                    errorCode, unverifiedCode, path, fieldOrSeries.Message, numericInputsWithoutDefault));
+                    errorCode, unverifiedCode, path, fieldOrSeries.Message, gaps));
             }
 
             var mergedScope = new Dictionary<string, object?>(scope, StringComparer.Ordinal);
@@ -194,8 +187,7 @@ public sealed class ServiceBlueprintAuthoringService(
                 catch (CalculationException ex)
                 {
                     diagnostics.Add(ClassifyEvalDiagnostic(
-                        "SHOW_WHEN_EVAL_ERROR", "SHOW_WHEN_UNVERIFIED", $"{path}.showWhen", ex.Message,
-                        numericInputsWithoutDefault));
+                        "SHOW_WHEN_EVAL_ERROR", "SHOW_WHEN_UNVERIFIED", $"{path}.showWhen", ex.Message, gaps));
                 }
             }
 
@@ -210,13 +202,13 @@ public sealed class ServiceBlueprintAuthoringService(
                     CheckStageValidationExpression(
                         evaluator, rule.When, showWhenScope, blueprint.Calculations,
                         "STAGE_VALIDATION_WHEN_EVAL_ERROR", "STAGE_VALIDATION_WHEN_UNVERIFIED", $"{path}.when",
-                        numericInputsWithoutDefault, diagnostics);
+                        gaps, diagnostics);
                 }
 
                 CheckStageValidationExpression(
                     evaluator, rule.Rule, showWhenScope, blueprint.Calculations,
                     "STAGE_VALIDATION_RULE_EVAL_ERROR", "STAGE_VALIDATION_RULE_UNVERIFIED", $"{path}.rule",
-                    numericInputsWithoutDefault, diagnostics);
+                    gaps, diagnostics);
             }
 
             // ServiceBlueprintRouteDefinition.ShowWhen is evaluated by ProcessManagerEngine with
@@ -243,7 +235,7 @@ public sealed class ServiceBlueprintAuthoringService(
                 {
                     diagnostics.Add(ClassifyEvalDiagnostic(
                         "ROUTE_SHOW_WHEN_EVAL_ERROR", "ROUTE_SHOW_WHEN_UNVERIFIED", $"{routePath}.showWhen",
-                        ex.Message, numericInputsWithoutDefault));
+                        ex.Message, gaps));
                 }
             }
         }
@@ -299,7 +291,7 @@ public sealed class ServiceBlueprintAuthoringService(
         string errorCode,
         string unverifiedCode,
         string path,
-        IReadOnlySet<string> numericInputsWithoutDefault,
+        StaticScopeGaps gaps,
         List<ServiceBlueprintDiagnostic> diagnostics)
     {
         try
@@ -317,8 +309,70 @@ public sealed class ServiceBlueprintAuthoringService(
         }
         catch (CalculationException ex)
         {
-            diagnostics.Add(ClassifyEvalDiagnostic(errorCode, unverifiedCode, path, ex.Message, numericInputsWithoutDefault));
+            diagnostics.Add(ClassifyEvalDiagnostic(errorCode, unverifiedCode, path, ex.Message, gaps));
         }
+    }
+
+    /// <summary>
+    /// Field names that static validation has no real value for, so an expression that references
+    /// one is expected to fail evaluation — <see cref="ClassifyEvalDiagnostic"/> reports that as
+    /// "unverified" (a Warning) rather than an error, with a message tailored to why. See
+    /// <see cref="Validate"/> where this is built.
+    /// </summary>
+    private readonly record struct StaticScopeGaps(
+        IReadOnlySet<string> NumericInputsWithoutDefault,
+        IReadOnlySet<string> UnresolvedServiceFields);
+
+    /// <summary>
+    /// Builds the <c>source: "service"</c> values static validation evaluates against, and the set
+    /// of service fields it still has nothing for. Precedence per field: an explicit
+    /// <paramref name="mockServiceInputs"/> entry wins; then a declared <c>default</c> parsed per
+    /// <c>valueKind</c>; then, for a <c>valueKind</c> of "string"/"boolean" with no default, the
+    /// same safe placeholder ("" / false) <see cref="CalculationScopeBuilder"/> already gives an
+    /// unfilled input of that kind. A "number" with no default, or a field with no scalar
+    /// <c>valueKind</c> at all (e.g. an object handed back whole), stays unresolved.
+    /// </summary>
+    private static (Dictionary<string, object?> Resolved, IReadOnlySet<string> Unresolved) BuildStaticServiceInputs(
+        ServiceBlueprintCalculationSet? calculations,
+        IReadOnlyDictionary<string, object?>? mockServiceInputs)
+    {
+        var resolved = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var unresolved = new HashSet<string>(StringComparer.Ordinal);
+        if (calculations is null)
+        {
+            return (resolved, unresolved);
+        }
+
+        foreach (var (name, field) in calculations.Fields)
+        {
+            if (!string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (mockServiceInputs is not null && mockServiceInputs.TryGetValue(name, out var mocked))
+            {
+                resolved[name] = mocked;
+                continue;
+            }
+
+            var kind = field.ValueKind?.Trim().ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(field.Default) && kind is "number" or "string" or "boolean")
+            {
+                resolved[name] = CalculationScopeBuilder.CoerceScalar(field.Default!, kind);
+                continue;
+            }
+
+            if (kind is "string" or "boolean")
+            {
+                resolved[name] = kind == "boolean" ? false : string.Empty;
+                continue;
+            }
+
+            unresolved.Add(name);
+        }
+
+        return (resolved, unresolved);
     }
 
     /// <summary>
@@ -426,39 +480,51 @@ public sealed class ServiceBlueprintAuthoringService(
     private static readonly Regex UnknownNamePattern = new(@"^Unknown name '([^']+)' in", RegexOptions.Compiled);
 
     /// <summary>
-    /// Validation has no real submitted data, but <see cref="CalculationScopeBuilder.Build"/> now
+    /// Validation has no real submitted data, but <see cref="CalculationScopeBuilder.Build"/>
     /// gives every string/boolean input a safe placeholder ("" / false) regardless — a missing
-    /// default no longer makes those fields "Unknown" here. A numeric field is the one case left
-    /// where that's not possible (0 is a real, meaningful value, not a safe stand-in for "nothing
-    /// submitted yet"), so referencing one with no declared default is expected to fail static
-    /// evaluation; that's not an authoring mistake, just a limit of what validation (as opposed to
-    /// simulate_service_blueprint, which takes real field values) can check. Downgrade exactly that
-    /// case to a Warning with an explanation, matching the CALC_SERVICE_FIELD_UNVERIFIED precedent;
-    /// anything else genuinely is an error.
+    /// default no longer makes those fields "Unknown" here. Two cases can still be genuinely
+    /// unresolvable, and referencing one is expected to fail static evaluation rather than being
+    /// an authoring mistake: a numeric input with no declared default (0 is a real value, not a
+    /// safe stand-in), and a <c>source: "service"</c> field with no <c>valueKind</c>/<c>default</c>
+    /// to stand in for the host's value. Downgrade exactly those to a Warning with a message
+    /// pointing at the fix; anything else genuinely is an error.
     /// </summary>
     private static ServiceBlueprintDiagnostic ClassifyEvalDiagnostic(
         string errorCode,
         string unverifiedCode,
         string path,
         string message,
-        IReadOnlySet<string> numericInputsWithoutDefault)
+        StaticScopeGaps gaps)
     {
         var match = UnknownNamePattern.Match(message);
-        if (!match.Success || !numericInputsWithoutDefault.Contains(match.Groups[1].Value))
+        var name = match.Success ? match.Groups[1].Value : null;
+
+        if (name is not null && gaps.NumericInputsWithoutDefault.Contains(name))
         {
-            return new ServiceBlueprintDiagnostic(errorCode, path, message);
+            return new ServiceBlueprintDiagnostic(
+                unverifiedCode,
+                path,
+                $"{message} '{name}' is a real numeric input field on this blueprint, but it has no " +
+                "declared \"default\" value and there's no real submitted data to fall back on outside a live " +
+                "instance — unlike text/checkbox fields, there's no safe placeholder for a missing number, so " +
+                "validate_service_blueprint can't verify this expression statically. Add a default to that " +
+                "component to verify it here, or use simulate_service_blueprint with real field values instead.",
+                ServiceBlueprintDiagnosticSeverity.Warning);
         }
 
-        var fieldKey = match.Groups[1].Value;
-        return new ServiceBlueprintDiagnostic(
-            unverifiedCode,
-            path,
-            $"{message} '{fieldKey}' is a real numeric input field on this blueprint, but it has no " +
-            "declared \"default\" value and there's no real submitted data to fall back on outside a live " +
-            "instance — unlike text/checkbox fields, there's no safe placeholder for a missing number, so " +
-            "validate_service_blueprint can't verify this expression statically. Add a default to that " +
-            "component to verify it here, or use simulate_service_blueprint with real field values instead.",
-            ServiceBlueprintDiagnosticSeverity.Warning);
+        if (name is not null && gaps.UnresolvedServiceFields.Contains(name))
+        {
+            return new ServiceBlueprintDiagnostic(
+                unverifiedCode,
+                path,
+                $"{message} '{name}' is a source: \"service\" field with no \"valueKind\"/\"default\" for " +
+                "validate to stand in for the host's value, so this expression can't be verified statically. " +
+                "Declare its valueKind (a \"number\" also needs a \"default\"), pass mockServiceInputs, or use " +
+                "simulate_service_blueprint.",
+                ServiceBlueprintDiagnosticSeverity.Warning);
+        }
+
+        return new ServiceBlueprintDiagnostic(errorCode, path, message);
     }
 
     /// <summary>

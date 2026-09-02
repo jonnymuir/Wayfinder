@@ -181,13 +181,11 @@ test.describe('Bulk data review — walkthrough screenshot capture', () => {
     await expect(shell).toHaveAttribute('data-wayfinder-active-service-blueprint', 'njf-contributions', { timeout: 15_000 });
     await page.waitForTimeout(400);
 
-    // Blocking capability errors are fixed (see ReferenceActors.NjfTeamComponentTypes) — the
-    // rail's only remarks now are the advisory "service-sourced field" warnings, which don't
-    // block Save. Guard that so this screenshot can't silently go back to showing a broken blueprint.
-    const validationBanner = page.getByText(/need attention/).first();
-    if (await validationBanner.count()) {
-      await expect(validationBanner).not.toContainText(/error/i);
-    }
+    // The seed validates completely clean: capability errors fixed (ReferenceActors.NjfTeamComponentTypes),
+    // and the three source: "service" count fields now declare valueKind "number" + a default, so
+    // static validation has real values for "Accept and finish"'s showWhen — no unverified warnings
+    // either. Guard that so this screenshot can't silently go back to showing a flagged blueprint.
+    await expect(page.getByText(/need attention/)).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Fit to screen' }).click();
     await page.waitForTimeout(400);

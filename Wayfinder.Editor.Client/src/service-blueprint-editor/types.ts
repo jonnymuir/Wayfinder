@@ -53,7 +53,10 @@ export interface ServiceBlueprintNodePosition {
  */
 export interface ServiceBlueprintCalculationsBlock {
   tables?: Record<string, { interpolate?: string; values: Record<string, number> }>;
-  fields: Record<string, { expr?: string; source?: string; format?: string }>;
+  // `valueKind`/`default` are only meaningful with `source: "service"`: an authoring-time aid
+  // (see ServiceBlueprintCalculationField in Wayfinder.Models). "string"/"boolean" get a safe
+  // placeholder for static validation; "number" also needs a `default`. Never read at runtime.
+  fields: Record<string, { expr?: string; source?: string; format?: string; valueKind?: string; default?: string }>;
   series?: Record<string, { over: string; from: string; to: string; values: Record<string, string> }>;
 }
 

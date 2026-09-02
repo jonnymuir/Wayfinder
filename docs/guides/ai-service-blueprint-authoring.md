@@ -161,7 +161,10 @@ using them through a chat interface or an agent driving them directly:
    directly instead of parsing rendered UI text. If the definition has a
    `source: "service"` calculation field, pass `mockServiceInputsJson` to resolve
    it, without one, those fields simply stay unresolved rather than erroring, the
-   same as against a host with no data for them.
+   same as against a host with no data for them. For a scalar service value,
+   declaring `valueKind` (+ `default` for a `number`) on the field lets
+   `validate_service_blueprint` check the expressions that read it with no mock at
+   all, see [Calculation Language](./calculation-language.md#valuekind-and-default-authoring-time-only).
 6. **`save_service_blueprint`** with the `version` read in step 1. A concurrent edit
    (human or another agent) surfaces as a conflict, not a silent overwrite,
    reload and reapply.
