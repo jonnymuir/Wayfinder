@@ -37,10 +37,26 @@ public static class SupportSystemCallbacks
         this IEndpointRouteBuilder endpoints,
         ProcessManagerEngine engine,
         string basePath = "/wayfinder/support-systems/callbacks",
+        string? sharedSecret = null) =>
+        endpoints.MapWebhookSupportSystemCallbacks(() => engine, basePath, sharedSecret);
+
+    /// <summary>
+    /// <inheritdoc cref="MapWebhookSupportSystemCallbacks(IEndpointRouteBuilder, ProcessManagerEngine, string, string?)"/>
+    /// <para/>
+    /// Takes a <paramref name="resolveEngine"/> accessor rather than an instance so the engine is
+    /// resolved lazily on the first callback, not at <c>Map…</c> time. A host whose engine's own
+    /// construction reads a database (e.g. an Umbraco host loading blueprint definitions) must use
+    /// this overload — resolving the engine eagerly during <c>Program.cs</c> would run before the
+    /// host's schema migrations.
+    /// </summary>
+    public static RouteHandlerBuilder MapWebhookSupportSystemCallbacks(
+        this IEndpointRouteBuilder endpoints,
+        Func<ProcessManagerEngine> resolveEngine,
+        string basePath = "/wayfinder/support-systems/callbacks",
         string? sharedSecret = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(resolveEngine);
 
         var logger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger("Wayfinder.Engine.Http.SupportSystemCallbacks");
@@ -73,7 +89,7 @@ public static class SupportSystemCallbacks
                 return Results.BadRequest(new { error = "outcomeKey is required." });
             }
 
-            var result = engine.ResolveSupportSystemOutcome(invocationId, payload.OutcomeKey, payload.ResultPayload);
+            var result = resolveEngine().ResolveSupportSystemOutcome(invocationId, payload.OutcomeKey, payload.ResultPayload);
 
             if (result.ResponseState != "error")
             {

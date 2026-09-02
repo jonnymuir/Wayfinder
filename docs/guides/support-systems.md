@@ -229,7 +229,14 @@ outcome is known, the single code path both delivery mechanisms end up calling:
   // set (checks X-Webhook-Secret in fixed time). Pass the resolved value of the entry's
   // endpoint.callbackSecretRef. Omit it only when the route is unreachable from outside a
   // trusted network (it logs a warning).
-  app.MapWebhookSupportSystemCallbacks(engine, sharedSecret: builder.Configuration["NJF_STANDARDS_CALLBACK_SECRET"]);
+  //
+  // Pass an accessor, not an instance, when the engine's own construction reads a database (an
+  // Umbraco host loads blueprint definitions in its constructor) — resolving it eagerly in
+  // Program.cs runs before the host's schema migrations. A plain `engine` instance is fine for a
+  // host that builds the engine after its store is ready.
+  app.MapWebhookSupportSystemCallbacks(
+      () => app.Services.GetRequiredService<ProcessManagerEngine>(),
+      sharedSecret: builder.Configuration["NJF_STANDARDS_CALLBACK_SECRET"]);
   ```
 
   It maps `POST /wayfinder/support-systems/callbacks/{invocationId}` binding

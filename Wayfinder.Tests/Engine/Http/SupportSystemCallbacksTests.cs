@@ -268,4 +268,33 @@ public class SupportSystemCallbacksTests
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task TheLazyOverload_DoesNotResolveTheEngineUntilTheFirstCallback()
+    {
+        var (engine, invocationId) = BuildWaitingEngine();
+        var resolved = 0;
+
+        var host = new HostBuilder()
+            .ConfigureWebHost(web => web
+                .UseTestServer()
+                .ConfigureServices(s => { s.AddLogging(); s.AddRouting(); })
+                .Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseEndpoints(e => e.MapWebhookSupportSystemCallbacks(
+                        () => { resolved++; return engine; }, sharedSecret: Secret));
+                }))
+            .Start();
+
+        resolved.Should().Be(0, "mapping the route must not resolve the engine");
+
+        var http = host.GetTestClient();
+        http.DefaultRequestHeaders.Add("X-Webhook-Secret", Secret);
+        var response = await http.PostAsJsonAsync(
+            $"/wayfinder/support-systems/callbacks/{invocationId}", new { outcomeKey = "accredited" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        resolved.Should().Be(1, "the engine is resolved on the first callback");
+    }
 }
