@@ -66,6 +66,18 @@ public static class ReferenceActors
             ComponentTypeRegistry.DiscriminatorFor<BulkDataReviewComponent>(),
         ];
 
+    // The NJF contributions queue renders everything the read-only caseworker review page does,
+    // plus a stat-group: njf-contributions.json's "review" and "confirm-warnings" stages both
+    // show a Summary tile group (rows with errors/warnings/accepted). Without this the seeded
+    // blueprint fails queue-capability validation the moment it's opened in the editor ("queue
+    // 'njf-team''s host does not declare support for stat-group"), blocking Save — even though
+    // the host renders it fine at runtime. See docs/demos/bulk-data-review-walkthrough.md's Act 5.
+    private static readonly IReadOnlyList<string> NjfTeamComponentTypes =
+        [
+            .. CaseworkerComponentTypes,
+            ComponentTypeRegistry.DiscriminatorFor<StatGroupComponent>(),
+        ];
+
     /// <summary>
     /// The applicant can see and act on their own citizen-queue stages only. Once their
     /// instance moves to the caseworker queue, GetCurrent returns ACCESS_DENIED rather than a
@@ -175,6 +187,6 @@ public static class ReferenceActors
         {
             [CitizenQueue] = CitizenComponentTypes,
             [CaseworkerQueue] = CaseworkerComponentTypes,
-            [NjfTeamQueue] = CaseworkerComponentTypes
+            [NjfTeamQueue] = NjfTeamComponentTypes
         });
 }
