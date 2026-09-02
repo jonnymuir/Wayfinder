@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
@@ -556,8 +557,9 @@ public record ServiceBlueprint
         {
             foreach (var (name, field) in Calculations.Fields)
             {
-                if (string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase) &&
-                    capturedInputFieldKeys.Contains(name))
+                var isService = string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase);
+
+                if (isService && capturedInputFieldKeys.Contains(name))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
                         "CALC_FIELD_SHADOWS_INPUT",
@@ -567,6 +569,57 @@ public record ServiceBlueprint
                         "automatically in the calculation scope already. `source: \"service\"` is for a value " +
                         "an external system supplies (e.g. a lookup a host resolves), never for the user's own " +
                         "submitted input. Remove this calculations entry, or use a different field name."));
+                }
+
+                var hasValueKind = !string.IsNullOrWhiteSpace(field.ValueKind);
+                var hasDefault = !string.IsNullOrWhiteSpace(field.Default);
+                var normalisedKind = field.ValueKind?.Trim().ToLowerInvariant();
+
+                if ((hasValueKind || hasDefault) && !isService)
+                {
+                    diagnostics.Add(new ServiceBlueprintDiagnostic(
+                        "CALC_FIELD_VALUE_KIND_WITHOUT_SERVICE",
+                        $"calculations.fields.{name}",
+                        $"'{name}' declares {(hasValueKind ? "valueKind" : "default")}, which is only " +
+                        "meaningful with source: \"service\" (an authoring-time aid for a value an external " +
+                        "system supplies). Remove it, or add \"source\": \"service\"."));
+                }
+                else if (isService)
+                {
+                    if (hasValueKind && normalisedKind is not ("number" or "string" or "boolean"))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "CALC_FIELD_INVALID_VALUE_KIND",
+                            $"calculations.fields.{name}",
+                            $"'{name}' declares valueKind '{field.ValueKind}'. Expected \"number\", " +
+                            "\"string\" or \"boolean\", or omit it for a value with no scalar kind."));
+                    }
+
+                    if (hasDefault && !hasValueKind)
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "CALC_FIELD_DEFAULT_WITHOUT_VALUE_KIND",
+                            $"calculations.fields.{name}",
+                            $"'{name}' declares a default but no valueKind — validation can't parse the " +
+                            "default without knowing its kind. Add \"valueKind\": \"number\" | \"string\" | \"boolean\"."));
+                    }
+                    else if (hasDefault && normalisedKind == "number" &&
+                             !decimal.TryParse(field.Default!.Replace("£", "").Replace(",", "").Trim(),
+                                 NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "CALC_FIELD_DEFAULT_UNPARSEABLE",
+                            $"calculations.fields.{name}",
+                            $"'{name}' declares valueKind \"number\" but its default '{field.Default}' is not a number."));
+                    }
+                    else if (hasDefault && normalisedKind == "boolean" &&
+                             !bool.TryParse(field.Default!.Trim(), out _))
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "CALC_FIELD_DEFAULT_UNPARSEABLE",
+                            $"calculations.fields.{name}",
+                            $"'{name}' declares valueKind \"boolean\" but its default '{field.Default}' is not true/false."));
+                    }
                 }
             }
         }

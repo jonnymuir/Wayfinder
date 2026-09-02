@@ -90,8 +90,16 @@ public sealed class CalculationEvaluator
         {
             if (string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase))
             {
-                if (!scope.ContainsKey(name))
+                if (!scope.ContainsKey(name) && !collectErrors)
                 {
+                    // Runtime treats an unsupplied service value as fatal — the host's resolver was
+                    // meant to provide it. The error-collecting pass (authoring-time validation via
+                    // ServiceBlueprintAuthoringService.Validate, and the no-writes render-scope
+                    // build in ProcessManagerEngine.BuildCalculationScope) instead leaves the name
+                    // unresolved and carries on, so a real mistake elsewhere in the calculations is
+                    // still reported in the same pass rather than lost behind this one. Any later
+                    // reference to the missing field then surfaces as "Unknown name 'name'", which
+                    // the authoring service classifies as a Warning, not an error.
                     throw new CalculationException(
                         $"Field '{name}' is service-sourced but the host did not supply it.");
                 }

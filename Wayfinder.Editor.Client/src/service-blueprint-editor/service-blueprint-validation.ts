@@ -55,6 +55,10 @@ export interface ServiceBlueprintValidationIssue {
     | 'calculation-cycle'
     | 'calculation-order'
     | 'calculation-loop-variable-collision'
+    | 'calculation-value-kind-without-service'
+    | 'calculation-invalid-value-kind'
+    | 'calculation-default-without-value-kind'
+    | 'calculation-default-unparseable'
     | 'stage-validation-parse-error'
     // A diagnostic that came verbatim from the host's authoritative validator
     // (ServiceBlueprintSource.validate) rather than these in-browser checks.
@@ -523,6 +527,38 @@ function calculationDiagnosticToIssue(diagnostic: CalculationDiagnostic, index: 
         code: 'calculation-loop-variable-collision',
         location: { kind: 'calculation', series: diagnostic.series },
         message: `Calculation series “${diagnostic.series}”'s loop variable “${diagnostic.variable}” collides with an existing field or input name.`,
+      };
+    case 'field-value-kind-without-service':
+      return {
+        ...base,
+        id: `calculation-field-value-kind-without-service-${diagnostic.field}`,
+        code: 'calculation-value-kind-without-service',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” declares ${diagnostic.property}, which is only meaningful with source: "service". Remove it, or add "source": "service".`,
+      };
+    case 'field-invalid-value-kind':
+      return {
+        ...base,
+        id: `calculation-field-invalid-value-kind-${diagnostic.field}`,
+        code: 'calculation-invalid-value-kind',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” declares valueKind “${diagnostic.valueKind}” — expected "number", "string" or "boolean", or omit it.`,
+      };
+    case 'field-default-without-value-kind':
+      return {
+        ...base,
+        id: `calculation-field-default-without-value-kind-${diagnostic.field}`,
+        code: 'calculation-default-without-value-kind',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” declares a default but no valueKind — validation can't parse the default without knowing its kind.`,
+      };
+    case 'field-default-unparseable':
+      return {
+        ...base,
+        id: `calculation-field-default-unparseable-${diagnostic.field}`,
+        code: 'calculation-default-unparseable',
+        location: { kind: 'calculation', field: diagnostic.field },
+        message: `Calculation field “${diagnostic.field}” declares valueKind "${diagnostic.valueKind}" but its default is not a valid ${diagnostic.valueKind}.`,
       };
   }
 }

@@ -192,7 +192,15 @@ export class WayfinderCalculationsEditorElement extends LitElement {
 
   private _setFieldSource(name: string, isService: boolean, order: string[]) {
     const fields = { ...this._calculations.fields };
-    fields[name] = isService ? { source: 'service' } : { expr: '' };
+    if (isService) {
+      // Keep any hand-authored valueKind/default (validation-only aids — see
+      // ServiceBlueprintCalculationField) rather than dropping them on the toggle; the Calculations
+      // tab has no field for them yet, but the Definition tab and server validator both read them.
+      const { valueKind, default: defaultValue } = fields[name] ?? {};
+      fields[name] = { source: 'service', ...(valueKind ? { valueKind } : {}), ...(defaultValue ? { default: defaultValue } : {}) };
+    } else {
+      fields[name] = { expr: '' };
+    }
     this._updateFields(fields, order);
   }
 

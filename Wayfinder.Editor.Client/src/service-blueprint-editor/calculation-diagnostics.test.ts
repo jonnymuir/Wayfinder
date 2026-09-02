@@ -229,5 +229,59 @@ export function run(): number {
     check('a reference to an input WITH a declared default is not flagged', !diagnostics.some(d => d.kind === 'field-unknown-reference'), JSON.stringify(diagnostics));
   }
 
+  // ── source: "service" valueKind / default ───────────────────────────────
+  {
+    const diagnostics = computeCalculationDiagnostics(base({
+      fields: { a: { source: 'service', valueKind: 'number', default: '0' } },
+    }));
+    check('a service field with a valid valueKind + default is quiet', diagnostics.length === 0, JSON.stringify(diagnostics));
+  }
+
+  {
+    const diagnostics = computeCalculationDiagnostics(base({
+      fields: { a: { source: 'service', valueKind: 'string' } },
+    }));
+    check('a service field with valueKind "string" needs no default', diagnostics.length === 0, JSON.stringify(diagnostics));
+  }
+
+  {
+    const diagnostics = computeCalculationDiagnostics(base({
+      fields: { a: { expr: '1', valueKind: 'number' } },
+    }));
+    check(
+      'valueKind on a non-service field is flagged',
+      diagnostics.some(d => d.kind === 'field-value-kind-without-service' && d.field === 'a' && d.property === 'valueKind'),
+      JSON.stringify(diagnostics)
+    );
+  }
+
+  {
+    const diagnostics = computeCalculationDiagnostics(base({
+      fields: { a: { source: 'service', valueKind: 'integer' } },
+    }));
+    check('an unrecognised valueKind is flagged', diagnostics.some(d => d.kind === 'field-invalid-value-kind' && d.field === 'a'), JSON.stringify(diagnostics));
+  }
+
+  {
+    const diagnostics = computeCalculationDiagnostics(base({
+      fields: { a: { source: 'service', default: '0' } },
+    }));
+    check('a default with no valueKind is flagged', diagnostics.some(d => d.kind === 'field-default-without-value-kind' && d.field === 'a'), JSON.stringify(diagnostics));
+  }
+
+  {
+    const diagnostics = computeCalculationDiagnostics(base({
+      fields: { a: { source: 'service', valueKind: 'number', default: 'not-a-number' } },
+    }));
+    check('a non-numeric default under valueKind "number" is flagged', diagnostics.some(d => d.kind === 'field-default-unparseable' && d.field === 'a'), JSON.stringify(diagnostics));
+  }
+
+  {
+    const diagnostics = computeCalculationDiagnostics(base({
+      fields: { member: { source: 'service' }, double: { expr: 'member.age * 2' } },
+    }));
+    check('a bare object-valued service field (no valueKind) is still quiet', diagnostics.length === 0, JSON.stringify(diagnostics));
+  }
+
   return failures;
 }

@@ -20,7 +20,7 @@ import { extractReferencedNames, tryParseExpression } from './calculation-runtim
 import { computeStableFieldOrder, type FieldInput } from './calculation-ordering.js';
 
 export interface CalculationDiagnosticsInput {
-  fields: Record<string, { expr?: string; source?: string }>;
+  fields: Record<string, { expr?: string; source?: string; valueKind?: string; default?: string }>;
   series: Record<string, { over?: string; from?: string; to?: string; values?: Record<string, string> }>;
   tableNames: Set<string>;
   /**
@@ -45,7 +45,13 @@ export type CalculationDiagnostic =
   | { kind: 'series-parse-error'; series: string; part: 'from' | 'to' | 'values'; column?: string; message: string }
   | { kind: 'series-unknown-reference'; series: string; part: 'from' | 'to' | 'values'; column?: string; name: string }
   | { kind: 'series-unknown-table'; series: string; part: 'from' | 'to' | 'values'; column?: string; table: string }
-  | { kind: 'series-loop-variable-collision'; series: string; variable: string };
+  | { kind: 'series-loop-variable-collision'; series: string; variable: string }
+  | { kind: 'field-value-kind-without-service'; field: string; property: 'valueKind' | 'default' }
+  | { kind: 'field-invalid-value-kind'; field: string; valueKind: string }
+  | { kind: 'field-default-without-value-kind'; field: string }
+  | { kind: 'field-default-unparseable'; field: string; valueKind: string };
+
+const SCALAR_VALUE_KINDS = new Set(['number', 'string', 'boolean']);
 
 export function computeCalculationDiagnostics(input: CalculationDiagnosticsInput): CalculationDiagnostic[] {
   const diagnostics: CalculationDiagnostic[] = [];
@@ -92,6 +98,30 @@ export function computeCalculationDiagnostics(input: CalculationDiagnosticsInput
 
     if (input.inScopeInputFieldKeys.has(name)) {
       diagnostics.push({ kind: 'field-name-collision', field: name });
+    }
+
+    // valueKind/default: only meaningful with source: "service" (mirrors ServiceBlueprint.cs's
+    // ValidateDataDisplayBindings). "" default is a real, intentional value, so trim-check only.
+    const hasValueKind = typeof field.valueKind === 'string' && field.valueKind.trim() !== '';
+    const hasDefault = typeof field.default === 'string' && field.default.trim() !== '';
+    const normalisedKind = hasValueKind ? field.valueKind!.trim().toLowerCase() : '';
+    if (!isService && hasValueKind) {
+      diagnostics.push({ kind: 'field-value-kind-without-service', field: name, property: 'valueKind' });
+    } else if (!isService && hasDefault) {
+      diagnostics.push({ kind: 'field-value-kind-without-service', field: name, property: 'default' });
+    } else if (isService) {
+      if (hasValueKind && !SCALAR_VALUE_KINDS.has(normalisedKind)) {
+        diagnostics.push({ kind: 'field-invalid-value-kind', field: name, valueKind: field.valueKind!.trim() });
+      }
+      if (hasDefault && !hasValueKind) {
+        diagnostics.push({ kind: 'field-default-without-value-kind', field: name });
+      } else if (hasDefault && normalisedKind === 'number'
+        && !Number.isFinite(Number(field.default!.replace(/[£,]/g, '').trim()))) {
+        diagnostics.push({ kind: 'field-default-unparseable', field: name, valueKind: 'number' });
+      } else if (hasDefault && normalisedKind === 'boolean'
+        && !['true', 'false'].includes(field.default!.trim().toLowerCase())) {
+        diagnostics.push({ kind: 'field-default-unparseable', field: name, valueKind: 'boolean' });
+      }
     }
 
     if (!isService && expr.trim()) {

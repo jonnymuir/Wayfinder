@@ -107,8 +107,12 @@ public class NjfContributionsBlueprintTests
 
             var outcome = new ServiceBlueprintAuthoringService(new UnusedStore()).Validate(LoadDefinition());
 
-            outcome.IsValid.Should().BeTrue(
-                because: string.Join("; ", outcome.Diagnostics.Select(d => $"{d.Code} {d.Path}: {d.Message}")));
+            var report = string.Join("; ", outcome.Diagnostics.Select(d => $"{d.Severity} {d.Code} {d.Path}: {d.Message}"));
+            outcome.IsValid.Should().BeTrue(because: report);
+            // No warnings either: the three source: "service" count fields each declare
+            // valueKind "number" + a default, so static validation has real values to check
+            // "Accept and finish"'s showWhen against — nothing left unverified.
+            outcome.Diagnostics.Should().BeEmpty(because: report);
         }
         finally
         {

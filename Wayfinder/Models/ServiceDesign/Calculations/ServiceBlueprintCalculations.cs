@@ -48,6 +48,29 @@ public sealed record ServiceBlueprintCalculationField
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Format { get; init; }
+
+    /// <summary>
+    /// Only meaningful with <see cref="Source"/> "service": the kind of value the host supplies —
+    /// "number", "string" or "boolean". Purely an authoring-time aid: with a declared kind,
+    /// static validation can give a "string"/"boolean" field a safe placeholder ("" / false) and
+    /// so verify every <c>showWhen</c>/calculation/stage rule that reads it, instead of skipping
+    /// those checks. A "number" field additionally needs <see cref="Default"/> (0 is a real value,
+    /// not a safe stand-in for "nothing supplied yet"). Omit for a value with no scalar kind (an
+    /// object handed back whole, e.g. a member record) — that stays statically unverifiable.
+    /// Never consulted at runtime; the host's own resolver still supplies the real value.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ValueKind { get; init; }
+
+    /// <summary>
+    /// Only meaningful with <see cref="Source"/> "service": a stand-in value for authoring-time
+    /// validation only, parsed per <see cref="ValueKind"/> (so "0" is the number zero when
+    /// ValueKind is "number"). Lets static validation evaluate every expression that reads this
+    /// field against a concrete value. Never a runtime fallback — if the host's resolver fails to
+    /// supply the value, that is still an error at render time, not silently papered over.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Default { get; init; }
 }
 
 /// <summary>

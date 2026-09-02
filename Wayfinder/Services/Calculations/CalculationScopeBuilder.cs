@@ -86,12 +86,7 @@ public static class CalculationScopeBuilder
             // C# bool is .ToString()'d above. CalculationEvaluator.ToBool requires a real bool,
             // not that string, so a bare boolean reference in showWhen/calculations would
             // otherwise always throw — parse it back to a real bool here instead.
-            scope[fieldKey] = type switch
-            {
-                "number" => ParseNumeric(raw, fieldKey),
-                "boolean" => bool.TryParse(raw, out var boolValue) ? boolValue : raw,
-                _ => raw,
-            };
+            scope[fieldKey] = CoerceScalar(raw, type);
         }
 
         foreach (var (key, value) in serviceInputs ?? new Dictionary<string, object?>())
@@ -102,7 +97,21 @@ public static class CalculationScopeBuilder
         return scope;
     }
 
-    private static object? ParseNumeric(string raw, string fieldKey)
+    /// <summary>
+    /// Parses one raw string into the scalar the calculation scope expects for the given kind
+    /// ("number" → decimal, tolerating "£"/thousands separators; "boolean" → real bool;
+    /// anything else → the string unchanged). Shared by input-field scope building above and by
+    /// authoring-time <c>source: "service"</c> default handling (see
+    /// <c>ServiceBlueprintAuthoringService.Validate</c>) so both coerce identically.
+    /// </summary>
+    public static object? CoerceScalar(string raw, string valueKind) => valueKind switch
+    {
+        "number" => ParseNumeric(raw),
+        "boolean" => bool.TryParse(raw.Trim(), out var boolValue) ? boolValue : raw,
+        _ => raw,
+    };
+
+    private static object? ParseNumeric(string raw)
     {
         var cleaned = raw.Replace("£", "").Replace(",", "").Trim();
         return decimal.TryParse(cleaned, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)

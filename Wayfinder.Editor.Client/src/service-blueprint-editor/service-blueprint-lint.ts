@@ -383,6 +383,38 @@ function diagnosticToDefinitionLint(
         line: findLine(source, `"${diagnostic.variable}"`),
       };
     }
+    case 'field-value-kind-without-service': {
+      const pathHint = `calculations.fields.${diagnostic.field}`;
+      return {
+        message: `"${pathHint}" declares ${diagnostic.property}, which is only meaningful with "source": "service".`,
+        pathHint,
+        line: findLine(source, `"${diagnostic.field}"`),
+      };
+    }
+    case 'field-invalid-value-kind': {
+      const pathHint = `calculations.fields.${diagnostic.field}.valueKind`;
+      return {
+        message: `"${pathHint}": "${diagnostic.valueKind}" is not a valid valueKind — expected "number", "string" or "boolean", or omit it.`,
+        pathHint,
+        line: findLine(source, `"${diagnostic.valueKind}"`),
+      };
+    }
+    case 'field-default-without-value-kind': {
+      const pathHint = `calculations.fields.${diagnostic.field}`;
+      return {
+        message: `"${pathHint}" declares a default but no valueKind — validation can't parse the default without knowing its kind.`,
+        pathHint,
+        line: findLine(source, `"${diagnostic.field}"`),
+      };
+    }
+    case 'field-default-unparseable': {
+      const pathHint = `calculations.fields.${diagnostic.field}.default`;
+      return {
+        message: `"${pathHint}": not a valid ${diagnostic.valueKind} for the declared valueKind.`,
+        pathHint,
+        line: findLine(source, `"${diagnostic.field}"`),
+      };
+    }
   }
 }
 

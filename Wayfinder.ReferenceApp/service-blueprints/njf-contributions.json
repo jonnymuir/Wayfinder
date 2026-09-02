@@ -7,9 +7,9 @@
   "requestPolicy": "single",
   "calculations": {
     "fields": {
-      "contributionsErrorCount": { "source": "service" },
-      "contributionsWarningCount": { "source": "service" },
-      "contributionsDirtyCount": { "source": "service" }
+      "contributionsErrorCount": { "source": "service", "valueKind": "number", "default": "0" },
+      "contributionsWarningCount": { "source": "service", "valueKind": "number", "default": "0" },
+      "contributionsDirtyCount": { "source": "service", "valueKind": "number", "default": "0" }
     }
   },
   "queues": [
