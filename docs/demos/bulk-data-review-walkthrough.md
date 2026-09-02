@@ -35,7 +35,7 @@ services through one worklist, see `DemoUsers.cs`), different job entirely.
 Priya signs in and opens **Submit an NJF contributions file**: a plain GOV.UK upload page, one
 file field, nothing unusual yet.
 
-![Cold open: what problem this solves](./screenshots/bulk-data-review/01-intro-slate.png)
+![The Submit contributions file upload page: a GOV.UK page with a single file field and a Submit button](./screenshots/bulk-data-review/01-submit-contributions-file.png)
 
 This month's file has five members. Three are completely fine. One has a genuine data problem,
 a membership tier ("Bogus") that doesn't exist. One has a contribution that's unusually high for
@@ -43,11 +43,16 @@ its tier, not wrong, exactly, but worth a second look.
 
 Priya uploads it and submits, and lands **directly on the wait screen**, the same position the
 citizen (frontstage applicant) side of the toolkit has always put people on straight away, rather
-than a detour through the queue list first just to click back in. If she navigates away, back to
-her own worklist, say, to check on something else, the submission is still there, findable,
-tagged **Waiting**, never lost from view. That's the same underlying join-gateway wait/poll
-mechanism the licensing demo's own "send to insurer" step uses; it just now lands you on the
-useful screen by default instead of an extra click away from it.
+than a detour through the queue list first just to click back in.
+
+![The wait screen: "Awaiting SafetyNet Underwriting", with the body "SafetyNet Underwriting is processing the contributions file. We'll update this page once it's done."](./screenshots/bulk-data-review/02-wait-screen.png)
+
+If she navigates away, back to her own worklist, say, to check on something else, the submission
+is still there, findable, tagged **Waiting**, never lost from view. That's the same underlying
+join-gateway wait/poll mechanism the licensing demo's own "send to insurer" step uses; it just
+now lands you on the useful screen by default instead of an extra click away from it.
+
+![The caseworker worklist showing one row, "Submit an NJF contributions file", at stage "Awaiting SafetyNet Underwriting", tagged "Waiting", with a View link](./screenshots/bulk-data-review/03-worklist-waiting.png)
 
 ## Act 2: only the rows that need attention
 
@@ -55,13 +60,21 @@ SafetyNet Underwriting, a genuinely separate ASP.NET app, running on its own por
 nothing about Wayfinder's internals, validates the file for real and sends back the same five
 rows, each with a matched member ID and (for two of them) an error or warning.
 
-![The error card and the warning card, side by side](./screenshots/bulk-data-review/02-error-and-warning-cards.png)
+![The Review contributions file page: a Summary tile group reading 1 row with errors, 1 with warnings, 3 accepted, above a "Rows needing attention" list](./screenshots/bulk-data-review/04-review-summary.png)
 
 The review screen shows a summary (1 error, 1 warning, 3 accepted) and then **only the rows that
 need attention**, as cards. This is the whole point: in a real file with two thousand rows, the
 other 1,998 clean ones are never sent to the browser at all. The card for Cara Delgado's row
 (`NJF-003`) was fetched by the browser itself, after the page loaded, from a small REST endpoint,
 not baked into the page's own HTML.
+
+![Cara Delgado's row card (NJF-003), tagged "Error" in red, its editable fields, and a red error message that the tier "Bogus" is unrecognised](./screenshots/bulk-data-review/05-error-card.png)
+
+The two rows that came back flagged read differently on purpose: a red edge and an **Error** tag
+for Cara Delgado's non-existent tier, an amber edge and a **Warning** tag for Dev Patel's
+out-of-band contribution. That distinction is about to matter.
+
+![Dev Patel's row card (NJF-004), tagged "Warning" in amber, with an amber message that the £55.00 contribution is outside the expected band for a Performer](./screenshots/bulk-data-review/06-warning-card.png)
 
 Notice, too, that there's no **Accept and finish** button anywhere on this page. That's not a
 disabled button with an explanation, it simply isn't offered. One row still has a genuine error,
@@ -72,10 +85,12 @@ exist yet, the same way a route can be withheld anywhere else in Wayfinder.
 
 Priya fixes the tier on Cara Delgado's card directly, types "Recreational" over "Bogus". There's
 no "Save" button to click: the correction **autosaves**, shortly after she stops typing, and the
-card's own status line tells her so ("Saved for resubmission", not just "Saved": nothing here
-validates the correction itself, only resubmitting through SafetyNet Underwriting does, and the
-wording says so). That's a small request scoped to this one row; the other four rows, and the file
-sitting behind them, are untouched.
+card's own status line tells her so ("Pending resubmission", deliberately not "Saved": nothing
+here validates the correction itself, only resubmitting through SafetyNet Underwriting does, and
+the wording says so). That's a small request scoped to this one row; the other four rows, and the
+file sitting behind them, are untouched.
+
+![Cara Delgado's card with "Recreational" now typed into the Membership tier field, the original error message still shown, and a green "Pending resubmission" status line](./screenshots/bulk-data-review/07-correction-autosaved.png)
 
 This matters more than it looks: an earlier version of this screen needed an explicit save click,
 which meant a second edit made right after saving once could be silently left out of the file that
@@ -99,10 +114,12 @@ appears, the same `contributionsErrorCount = 0` rule from Act 2, now satisfied. 
 warnings don't. SafetyNet Underwriting isn't wrong to keep flagging Dev Patel's contribution,
 it's just not the kind of thing that should stop Priya finishing her month-end submission.
 
+![The review page after resubmission: the Summary now reads 0 rows with errors, only Dev Patel's warning card remains, and "Accept and finish" sits next to "Resubmit corrected file" at the foot of the page](./screenshots/bulk-data-review/08-review-after-resubmit.png)
+
 But clicking it doesn't finish straight away. With a warning still on record, that same button
 leads somewhere new first:
 
-![Confirm before finishing, with the warning count on record](./screenshots/bulk-data-review/03-confirm-before-finishing.png)
+![The "Confirm before finishing" page: a summary of 1 row with warnings and 4 accepted, with "Yes, accept with warnings" and "Back to review" buttons](./screenshots/bulk-data-review/09-confirm-before-finishing.png)
 
 An explicit **"Yes, accept with warnings"**: not a silent nod. This screen only exists because
 there's genuinely something to confirm: a file with zero warnings never sees it at all, "Accept
@@ -113,6 +130,8 @@ anything already ingested.
 Confirming lands on a plain confirmation page: **Contributions file accepted**: with the warning
 still on record, exactly as it should be.
 
+![The "Contributions file accepted" confirmation page: "SafetyNet Underwriting has confirmed cover for every member in this file. No further action is needed for this cycle."](./screenshots/bulk-data-review/10-file-accepted.png)
+
 ## Act 5: none of this is hidden in host code
 
 Everything Acts 1–4 just showed, the review stage, the two-route "Accept and finish", the
@@ -122,24 +141,28 @@ this side of it too.
 
 ### The canvas
 
-![The review stage and its two "Accept and finish" routes, on the canvas](./screenshots/bulk-data-review/04-editor-canvas.png)
+![The njf-contributions blueprint on the editor canvas: upload, a split out to SafetyNet Underwriting, the "Awaiting SafetyNet Underwriting" join, the "Review contributions file" stage, and the routes down to accept and "Confirm before finishing"](./screenshots/bulk-data-review/11-editor-canvas.png)
 
 This is the whole `njf-contributions` blueprint, the same "boxes and arrows" view every other
-Wayfinder service gets. The two routes both named `accept-with-warnings` in this close-up are the
-two halves of the pattern Act 4 showed: from the review stage, one route goes straight to
-`accept` (visible only once every count is genuinely zero) and one goes to a small
-**"Confirm before finishing"** stage instead (visible only once there's an error-free file with a
-warning still on it), both sharing the same on-screen label, "Accept and finish", so Priya only
-ever sees one button regardless of which path is actually live. Nothing about this needed a change
-to Wayfinder's own engine, it's two ordinary routes, gated by two ordinary, mutually exclusive
-conditions, the same declarative mechanism every route in every Wayfinder blueprint already uses.
+Wayfinder service gets.
+
+![A close-up of the review stage's outgoing routes: two routes both labelled "accept-with-warnings", one to the accept gateway and one to the "Confirm before finishing" stage, plus a "back-to-review" route](./screenshots/bulk-data-review/12-editor-review-routes.png)
+
+The two routes both named `accept-with-warnings` in this close-up are the two halves of the
+pattern Act 4 showed: from the review stage, one route goes straight to `accept` (visible only
+once every count is genuinely zero) and one goes to a small **"Confirm before finishing"** stage
+instead (visible only once there's an error-free file with a warning still on it), both sharing
+the same on-screen label, "Accept and finish", so Priya only ever sees one button regardless of
+which path is actually live. Nothing about this needed a change to Wayfinder's own engine, it's
+two ordinary routes, gated by two ordinary, mutually exclusive conditions, the same declarative
+mechanism every route in every Wayfinder blueprint already uses.
 
 ### The properties panel
 
 Selecting the review stage opens its own properties panel, and scrolling down reaches the one
 action that does the real work here, **"Ingest a bulk dataset"**:
 
-![The bulk-dataset-ingest action's column schema, being authored](./screenshots/bulk-data-review/05-editor-columns-properties.png)
+![The properties panel for the review stage's bulk-dataset-ingest action, scrolled to the Columns list: one column entry's key, title, value kind, format and Role (a "RowKey" dropdown), then the next entry beginning (key "memberName")](./screenshots/bulk-data-review/13-editor-columns-properties.png)
 
 This is the single place a bulk dataset's *shape* gets authored, one entry per CSV column, each
 with a key (the literal CSV header it binds to), a title (what the review card shows), a value

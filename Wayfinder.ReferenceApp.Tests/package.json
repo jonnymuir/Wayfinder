@@ -9,7 +9,8 @@
     "test:playwright:live": "playwright test -c playwright.live.config.ts --reporter=line",
     "demo:record:overview": "playwright test -c playwright.demo.config.ts tests/demo/wayfinder-overview-demo.spec.ts --reporter=line",
     "demo:record:bulk-data-review": "playwright test -c playwright.demo.config.ts tests/demo/bulk-data-review-demo.spec.ts --reporter=line",
-    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test calculations-editor.spec.ts --workers=1"
+    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test calculations-editor.spec.ts --workers=1",
+    "docs:screenshots:bulk-data-review": "CAPTURE_DOC_SCREENSHOTS=1 playwright test -c playwright.live.config.ts bulk-data-review-screenshots-live.spec.ts --reporter=line"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

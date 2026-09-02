@@ -28,6 +28,23 @@ frame while the automation underneath keeps working, so every take is verified a
 timestamp, which is the source data for adding a voiced-over track later without re-timing
 anything by hand.
 
+### Walkthrough screenshots
+
+[`bulk-data-review-walkthrough.md`](./bulk-data-review-walkthrough.md) embeds still screenshots
+under `screenshots/bulk-data-review/`. They are **not** frames cut from the video (those carry the
+narration bar) but clean `page.screenshot()` captures, each taken as the side effect of a real
+assertion on the same screen, by `Wayfinder.ReferenceApp.Tests/tests/bulk-data-review-screenshots-live.spec.ts`.
+Regenerate them after a real UI change with:
+
+```
+cd Wayfinder.ReferenceApp.Tests && npm run docs:screenshots:bulk-data-review
+```
+
+That spec is skipped unless `CAPTURE_DOC_SCREENSHOTS` is set (the npm script sets it), so the
+normal live-suite run never boots a second AppHost or rewrites the committed images. Act 5's
+editor screens also need `Wayfinder.Editor.Client`'s compiled bundle on disk
+(`npm run build` in `Wayfinder.Editor.Client`).
+
 ## Why these exist
 
 A recording is the cheapest way to find the things assertions don't think to ask about. This

@@ -247,4 +247,27 @@ test.describe('Service blueprint editor', () => {
     await expect(page.locator('[data-wayfinder-validation-errors]')).toContainText('0 errors');
     await expect(page.locator('[data-wayfinder-save]')).toBeEnabled();
   });
+
+  // Regression: njf-contributions.json's review and confirm-warnings stages both render a
+  // stat-group Summary, but the njf-team queue's capability declaration
+  // (ReferenceActors.NjfTeamComponentTypes) once omitted "stat-group" — so opening this seed in
+  // the editor reported two blocking queue-capability errors and blocked Save, even though the
+  // host renders the component fine at runtime. Only the editor surface runs
+  // ValidateQueueCapabilities against the reference app's real provider; the seed file loads
+  // straight through IServiceBlueprintStore, which never validates. See
+  // docs/demos/bulk-data-review-walkthrough.md Act 5.
+  test('the njf-contributions seed opens in the editor with no blocking validation errors', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.caseworker);
+
+    await page.goto('/service-blueprint-editor?serviceBlueprint=njf-contributions');
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute('blueprint-key', 'njf-contributions', {
+      timeout: 15_000,
+    });
+
+    await page.getByRole('tab', { name: 'Validation' }).click();
+    await expect(page.locator('[data-wayfinder-validation-rail]')).toBeVisible();
+    // Advisory "service-sourced field" warnings are expected and don't block; blocking errors must be zero.
+    await expect(page.locator('[data-wayfinder-validation-errors]')).toContainText('0 errors');
+    await expect(page.locator('[data-wayfinder-save]')).toBeEnabled();
+  });
 });
