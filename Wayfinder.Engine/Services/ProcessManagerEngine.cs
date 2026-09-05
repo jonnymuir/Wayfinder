@@ -582,6 +582,17 @@ public class ProcessManagerEngine : IProcessManager
         return BuildEnvelope(savedUpdated, definition, accessProfile, userId);
     }
 
+    /// <inheritdoc cref="IProcessManager.TryGetAccessibleInstance"/>
+    public ServiceRequest? TryGetAccessibleInstance(string instanceId, string tenantId, string userId, ActorProfile accessProfile)
+    {
+        if (!_instanceStore.TryGet(instanceId, out var instance))
+        {
+            return null;
+        }
+
+        return CanAccessInstance(instance, tenantId, userId, accessProfile) ? instance : null;
+    }
+
     public IEnumerable<ServiceRequest> GetAllInstances() => _instanceStore.GetAll();
 
     public ServiceRequestListEnvelope GetInstances(string tenantId, string userId)
@@ -1226,6 +1237,7 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     public QueueWorkListEnvelope GetQueueWorkItems(
+        string tenantId,
         string userId,
         ActorProfile accessProfile,
         IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
@@ -1243,6 +1255,7 @@ public class ProcessManagerEngine : IProcessManager
         var effectivePageSize = Math.Clamp(pageSize, 1, 100);
 
         var matched = _instanceStore.GetAll()
+            .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
             .SelectMany(instance =>
             {
                 if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))

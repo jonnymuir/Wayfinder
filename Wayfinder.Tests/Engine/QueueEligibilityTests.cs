@@ -181,11 +181,11 @@ public class QueueEligibilityTests
         var eligible = ProfileWith("njf-review");
         var started = engine.GetCurrent("queue-eligibility-test", TenantId, UserId, eligible);
 
-        var eligibleView = engine.GetQueueWorkItems(UserId, eligible);
+        var eligibleView = engine.GetQueueWorkItems(TenantId, UserId, eligible);
         eligibleView.Items.Should().Contain(i => i.InstanceId == started.InstanceId);
 
         var ineligible = ProfileWith("unrelated-capability");
-        var ineligibleView = engine.GetQueueWorkItems(UserId, ineligible);
+        var ineligibleView = engine.GetQueueWorkItems(TenantId, UserId, ineligible);
         ineligibleView.Items.Should().NotContain(i => i.InstanceId == started.InstanceId);
     }
 }

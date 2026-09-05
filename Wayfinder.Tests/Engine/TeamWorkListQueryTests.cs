@@ -88,7 +88,7 @@ public class TeamWorkListQueryTests
         var unpicked = engine.GetCurrent(DefinitionKey, TenantId, "alice", ReviewersProfile);
         var toBePicked = engine.GetCurrent(DefinitionKey, TenantId, "bob", ReviewersProfile);
         // Two distinct instances since requestPolicy is "multiple" and each userId starts its own.
-        var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == toBePicked.InstanceId);
+        var item = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Single(i => i.InstanceId == toBePicked.InstanceId);
         engine.PickupWorkItem(toBePicked.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
 
         var teamView = engine.GetTeamWorkItems(TenantId, "reviewers", ReviewersProfile).Items;

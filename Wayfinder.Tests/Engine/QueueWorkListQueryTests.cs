@@ -163,6 +163,29 @@ public class QueueWorkListQueryTests
     }
 
     [Fact]
+    public void GetQueueWorkItems_NeverSurfacesAnotherTenantsInstance_EvenWithIdenticalQueueAndProfile()
+    {
+        // SECURITY REGRESSION: GetQueueWorkItems used to take no tenantId at all, relying
+        // entirely on the host's own ActorProfile queue-key resolution to keep tenants apart —
+        // which offered no protection at all once two tenants happened to use the same queue
+        // actor name (a real, plausible collision: this fixture's own "caseworker" queue name is
+        // literally the reference app's own documented convention). Same blueprint, same queue,
+        // same ActorProfile shape, different tenant: tenant A's caseworker must never see
+        // tenant B's row.
+        const string otherTenantId = "other-tenant";
+        var engine = BuildEngine();
+        var ownInstanceId = StartActionable(engine);
+
+        var otherStarted = engine.GetCurrent(DefinitionKey, otherTenantId, UserId, CaseworkerProfile);
+        engine.PickupWorkItem(otherStarted.InstanceId, RequestCursor.PrimaryCursorId, otherTenantId, UserId, CaseworkerProfile);
+
+        var items = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile).Items;
+
+        items.Select(i => i.InstanceId).Should().BeEquivalentTo([ownInstanceId]);
+        items.Should().NotContain(i => i.InstanceId == otherStarted.InstanceId);
+    }
+
+    [Fact]
     public void Default_ReproducesTodaysExactBehaviour_ActionableAndWaitingOnly_NoDoneNoOrphan()
     {
         var engine = BuildEngine();
@@ -171,7 +194,7 @@ public class QueueWorkListQueryTests
         CreateDone(engine);
         CreateOrphan(engine);
 
-        var items = engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items;
+        var items = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile).Items;
 
         items.Select(i => i.InstanceId).Should().BeEquivalentTo([actionableId, waitingId]);
         items.Single(i => i.InstanceId == actionableId).Status.Should().Be(QueueWorkItemStatus.Actionable);
@@ -187,7 +210,7 @@ public class QueueWorkListQueryTests
         StartActionable(engine);
         var doneId = CreateDone(engine);
 
-        var items = engine.GetQueueWorkItems(UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Done]).Items;
+        var items = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Done]).Items;
 
         var doneItem = items.Should().ContainSingle().Subject;
         doneItem.InstanceId.Should().Be(doneId);
@@ -203,7 +226,7 @@ public class QueueWorkListQueryTests
         CreateWaiting(engine);
         CreateDone(engine);
 
-        var items = engine.GetQueueWorkItems(UserId, CaseworkerProfile, statuses: []).Items;
+        var items = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, statuses: []).Items;
 
         items.Should().BeEmpty("an explicit, non-null empty status set must be respected literally, unlike null (engine default)");
     }
@@ -218,7 +241,7 @@ public class QueueWorkListQueryTests
         CreateOrphan(engine);
 
         var items = engine.GetQueueWorkItems(
-            UserId, CaseworkerProfile,
+            TenantId, UserId, CaseworkerProfile,
             statuses: [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting, QueueWorkItemStatus.Done]).Items;
 
         items.Select(i => i.InstanceId).Should().BeEquivalentTo([actionableId, waitingId, doneId]);
@@ -243,7 +266,7 @@ public class QueueWorkListQueryTests
                      new[] { QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting, QueueWorkItemStatus.Done },
                  })
         {
-            engine.GetQueueWorkItems(UserId, CaseworkerProfile, statuses: statuses).Items
+            engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, statuses: statuses).Items
                 .Should().NotContain(i => i.InstanceId == orphanId);
         }
     }
@@ -256,7 +279,7 @@ public class QueueWorkListQueryTests
         var second = StartActionable(engine);
         var expectedOrder = new[] { first, second }.OrderBy(id => id, StringComparer.Ordinal).ToArray();
 
-        var items = engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items;
+        var items = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile).Items;
 
         items.Select(i => i.InstanceId).Should().Equal(expectedOrder);
     }
@@ -269,8 +292,8 @@ public class QueueWorkListQueryTests
         Thread.Sleep(15);
         var newer = StartActionable(engine);
 
-        var newestFirst = engine.GetQueueWorkItems(UserId, CaseworkerProfile, sort: QueueWorkListSort.CreatedAtNewestFirst).Items;
-        var oldestFirst = engine.GetQueueWorkItems(UserId, CaseworkerProfile, sort: QueueWorkListSort.CreatedAtOldestFirst).Items;
+        var newestFirst = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, sort: QueueWorkListSort.CreatedAtNewestFirst).Items;
+        var oldestFirst = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, sort: QueueWorkListSort.CreatedAtOldestFirst).Items;
 
         newestFirst.Select(i => i.InstanceId).Should().Equal(newer, older);
         oldestFirst.Select(i => i.InstanceId).Should().Equal(older, newer);
@@ -291,11 +314,11 @@ public class QueueWorkListQueryTests
         var afterSplit = engine.Advance(toBump.InstanceId, TenantId, UserId, CaseworkerProfile, "go-wait", toBumpPickedUp.StateVersion, null);
 
         var newestFirst = engine.GetQueueWorkItems(
-            UserId, CaseworkerProfile,
+            TenantId, UserId, CaseworkerProfile,
             statuses: [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting],
             sort: QueueWorkListSort.UpdatedAtNewestFirst).Items;
         var oldestFirst = engine.GetQueueWorkItems(
-            UserId, CaseworkerProfile,
+            TenantId, UserId, CaseworkerProfile,
             statuses: [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Waiting],
             sort: QueueWorkListSort.UpdatedAtOldestFirst).Items;
 
@@ -310,23 +333,23 @@ public class QueueWorkListQueryTests
         var actionableId = StartActionable(engine);
         var doneWithName = CreateDone(engine, new Dictionary<string, object?> { ["applicantName"] = "Alice Example" });
 
-        engine.GetQueueWorkItems(UserId, CaseworkerProfile, searchText: actionableId[..8]).Items
+        engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, searchText: actionableId[..8]).Items
             .Should().ContainSingle(i => i.InstanceId == actionableId);
 
-        engine.GetQueueWorkItems(UserId, CaseworkerProfile, searchText: "queue query").Items
+        engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, searchText: "queue query").Items
             .Should().Contain(i => i.InstanceId == actionableId, "BlueprintDisplayName is 'Queue Query Test'");
 
-        engine.GetQueueWorkItems(UserId, CaseworkerProfile, searchText: "START").Items
+        engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, searchText: "START").Items
             .Should().Contain(i => i.InstanceId == actionableId, "StateDisplayName match must be case-insensitive");
 
-        engine.GetQueueWorkItems(UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Done], searchText: "alice").Items
+        engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Done], searchText: "alice").Items
             .Should().ContainSingle(i => i.InstanceId == doneWithName, "a FieldValues value must be searchable too");
 
-        engine.GetQueueWorkItems(UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Done], searchText: "bob").Items
+        engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Done], searchText: "bob").Items
             .Should().BeEmpty("no match anywhere should return nothing");
 
-        engine.GetQueueWorkItems(UserId, CaseworkerProfile, searchText: "   ").Items.Count
-            .Should().Be(engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items.Count, "blank search text is a no-op");
+        engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, searchText: "   ").Items.Count
+            .Should().Be(engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile).Items.Count, "blank search text is a no-op");
     }
 
     [Fact]
@@ -335,9 +358,9 @@ public class QueueWorkListQueryTests
         var engine = BuildEngine();
         var ids = Enumerable.Range(0, 5).Select(_ => StartActionable(engine)).ToArray();
 
-        var page0 = engine.GetQueueWorkItems(UserId, CaseworkerProfile, pageIndex: 0, pageSize: 2);
-        var page1 = engine.GetQueueWorkItems(UserId, CaseworkerProfile, pageIndex: 1, pageSize: 2);
-        var page2 = engine.GetQueueWorkItems(UserId, CaseworkerProfile, pageIndex: 2, pageSize: 2);
+        var page0 = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, pageIndex: 0, pageSize: 2);
+        var page1 = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, pageIndex: 1, pageSize: 2);
+        var page2 = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, pageIndex: 2, pageSize: 2);
 
         page0.TotalMatchingCount.Should().Be(5);
         page1.TotalMatchingCount.Should().Be(5);
@@ -345,7 +368,7 @@ public class QueueWorkListQueryTests
         page1.Items.Should().HaveCount(2);
         page2.Items.Should().HaveCount(1);
 
-        var page0Again = engine.GetQueueWorkItems(UserId, CaseworkerProfile, pageIndex: 0, pageSize: 2);
+        var page0Again = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile, pageIndex: 0, pageSize: 2);
         page0Again.Items.Select(i => i.InstanceId).Should().Equal(page0.Items.Select(i => i.InstanceId),
             "repeated calls with no state change must return identical pages — the InstanceId tiebreak makes this deterministic");
 
@@ -488,7 +511,7 @@ public class QueueWorkListQueryTests
             // — a caseworker who has already unchecked "Waiting" still needs a genuinely-resolved
             // item to promote itself into view the moment it resolves, not stay hidden.
             var beforeResolution = engine.GetQueueWorkItems(
-                UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Actionable]).Items;
+                TenantId, UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Actionable]).Items;
             beforeResolution.Should().NotContain(i => i.InstanceId == afterSplit.InstanceId);
 
             client.OnCheckStatus = (_, _) => new SupportSystemOutcome { OutcomeKey = "approved", ResultPayload = new JsonObject() };
@@ -498,7 +521,7 @@ public class QueueWorkListQueryTests
             // docs/guides/work-allocation.md), so a genuinely-resolved-but-not-yet-picked-up row
             // is Unassigned, not Actionable, even though it must still promote itself into view.
             var afterResolution = engine.GetQueueWorkItems(
-                UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Unassigned]).Items;
+                TenantId, UserId, CaseworkerProfile, statuses: [QueueWorkItemStatus.Actionable, QueueWorkItemStatus.Unassigned]).Items;
 
             var resolved = afterResolution.Should().ContainSingle(i => i.InstanceId == afterSplit.InstanceId).Subject;
             resolved.StageKey.Should().Be("approved");

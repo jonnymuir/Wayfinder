@@ -10,6 +10,15 @@ namespace Wayfinder.Models.ServiceDesign.SupportSystems;
 /// A host registers its own support systems once, at startup — see
 /// docs/guides/support-systems.md for the full picture.
 /// </summary>
+/// <remarks>
+/// This registry is process-wide, not per-tenant: every blueprint definition served by a single
+/// process draws from the same support-system catalog, deliberately mirroring blueprint
+/// definitions themselves being a shared catalog rather than a per-tenant one (see
+/// <c>Wayfinder.Umbraco</c>'s blueprint store). A multi-tenant host that needs two tenants to see
+/// genuinely different support-system catalogs in one process needs a different, explicitly
+/// tenant-keyed mechanism — this registry's freeze-on-first-read design is intentionally
+/// incompatible with per-tenant reconfiguration, not an oversight.
+/// </remarks>
 public static class SupportSystemRegistry
 {
     private static readonly object Lock = new();

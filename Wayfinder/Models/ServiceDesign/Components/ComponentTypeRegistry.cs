@@ -20,6 +20,12 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 /// <see cref="Component"/> that doesn't include a type registered too late, which would be a far
 /// more confusing failure than a clear startup-time exception.
 /// </summary>
+/// <remarks>
+/// Process-wide, not per-tenant, by design — mirrors <see cref="SupportSystems.SupportSystemRegistry"/>'s
+/// own remarks on the same point. Every blueprint served by a single process draws from the same
+/// component-type catalog, consistent with blueprint definitions themselves being a shared,
+/// process-wide catalog rather than a per-tenant one.
+/// </remarks>
 public static class ComponentTypeRegistry
 {
     private static readonly object Lock = new();

@@ -249,7 +249,7 @@ public class JugglingLicenceStageValidationTests
         // row before returning, the same way a real caseworker would have to before anything is
         // offered. Not what this test class is actually about (see ShowWhen's own remarks above),
         // so kept out of the two callers' own assertions.
-        var item = engine.GetQueueWorkItems(UserId, CaseworkerProfile).Items.Single(i => i.InstanceId == started.InstanceId);
+        var item = engine.GetQueueWorkItems(TenantId, UserId, CaseworkerProfile).Items.Single(i => i.InstanceId == started.InstanceId);
         var pickedUp = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, UserId, CaseworkerProfile);
 
         return (engine, started.InstanceId, pickedUp.StateVersion);

@@ -62,7 +62,14 @@ public interface IProcessManager
     IReadOnlyList<string> ClaimInstances(string tenantId, string fromUserId, string toUserId);
 
     /// <summary>
-    /// The caseworker worklist. <paramref name="userId"/> is who's asking — a cursor picked up by
+    /// The caseworker worklist. <paramref name="tenantId"/> scopes every returned row to that
+    /// tenant — added so this method carries the same tenant filter <see cref="GetTeamWorkItems"/>
+    /// already does, rather than leaving tenant separation entirely to queue-key naming never
+    /// colliding across tenants in a host's own <c>ActorProfile</c> resolution (a real cross-tenant
+    /// worklist leak this method used to allow if two tenants happened to use the same queue actor
+    /// name). Like every other <c>tenantId</c> parameter on this interface, the engine trusts the
+    /// value it's given — the host is still responsible for resolving the correct tenant for the
+    /// calling request. <paramref name="userId"/> is who's asking — a cursor picked up by
     /// someone else is hidden from this call entirely (see <see cref="PickupWorkItem"/> and
     /// docs/guides/work-allocation.md). <paramref name="statuses"/> defaults (when
     /// <see langword="null"/>) to <c>{Actionable, Waiting}</c> — today's exact view; pass an
@@ -71,6 +78,7 @@ public interface IProcessManager
     /// across instance id, blueprint/stage display name, and every raw field value.
     /// </summary>
     QueueWorkListEnvelope GetQueueWorkItems(
+        string tenantId,
         string userId,
         ActorProfile accessProfile,
         IReadOnlyCollection<QueueWorkItemStatus>? statuses = null,
@@ -188,6 +196,27 @@ public interface IProcessManager
     /// </summary>
     QueueWorkItem? PickupNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile);
 
+    /// <summary>
+    /// Looks up one specific instance and returns it only if <paramref name="userId"/>/
+    /// <paramref name="accessProfile"/> can access it under <paramref name="tenantId"/> — the same
+    /// check <see cref="GetCurrent(string,string,string,ActorProfile,string,string)"/>/
+    /// <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>
+    /// already apply internally. Returns <see langword="null"/> for both "doesn't exist" and
+    /// "exists but not accessible" — deliberately not distinguishing the two to the caller, the
+    /// same non-disclosure every other instance-scoped method on this interface already gives. A
+    /// host reading one instance's own data outside the normal <c>GetCurrent</c>/<c>Advance</c>
+    /// flow (a file-attachment download is the reference case) should use this, never
+    /// <see cref="GetAllInstances"/> — that method applies no access check at all and returns
+    /// every tenant's instances.
+    /// </summary>
+    ServiceRequest? TryGetAccessibleInstance(string instanceId, string tenantId, string userId, ActorProfile accessProfile);
+
+    /// <summary>
+    /// Every instance across every tenant, with no access check applied at all. Not scoped by
+    /// tenant or actor — a host reading one specific instance's own data (e.g. a file-attachment
+    /// download) must use <see cref="TryGetAccessibleInstance"/> instead, never this. Intended for
+    /// genuine cross-tenant admin tooling only.
+    /// </summary>
     IEnumerable<ServiceRequest> GetAllInstances();
 
     IEnumerable<ServiceBlueprint> GetAllDefinitions();
