@@ -34,7 +34,7 @@ substantive changes.
 | `Wayfinder.Engine` | `Wayfinder.Engine` | The authoritative in-process `IProcessManager`: queue routing, gateway evaluation, instance persistence, support-systems, bulk data. |
 | `Wayfinder.Engine.Api` | `Wayfinder.Engine.Api` | `MapServiceBlueprintAuthoringApi()`: REST authoring surface over `ServiceBlueprintAuthoringService`. |
 | `Wayfinder.Engine.Mcp` | `Wayfinder.Engine.Mcp` | `MapServiceBlueprintAuthoringMcp()`: the same authoring operations as MCP-over-HTTP. Uses `ModelContextProtocol.AspNetCore`. |
-| `Wayfinder.Engine.Http` / `.Journey` / `.Worklist` | *(not packed individually, internal helpers)* | HTTP glue (`StageFileUploads`), single-actor journey surface, caseworker worklist surface. |
+| `Wayfinder.Engine.Http` / `.Journey` / `.Worklist` | `Wayfinder.Engine.Http` / `.Journey` / `.Worklist` (each packed and published individually) | HTTP glue (`StageFileUploads`), single-actor journey surface, caseworker worklist surface. |
 | `Wayfinder.Rendering.GovUk` | `Wayfinder.Rendering.GovUk` | Real GOV.UK Design System rendering (vendored `govuk-frontend`), the component/field catalog, calc-driven live components. |
 | `Wayfinder.Editor` / `Wayfinder.Editor.Http` | `Wayfinder.Editor` | The compiled service-blueprint editor web component + its host-side REST glue. TS source in `Wayfinder.Editor.Client`. |
 | `Wayfinder.ReferenceApp` + `Wayfinder.AppHost` | *(never ships)* | Self-contained Aspire host wiring every package, the reference for how little a real host needs. |

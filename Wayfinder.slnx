@@ -11,6 +11,7 @@
   <Project Path="Wayfinder.ReferenceApp/Wayfinder.ReferenceApp.csproj" />
   <Project Path="Wayfinder.Rendering.GovUk/Wayfinder.Rendering.GovUk.csproj" />
   <Project Path="Wayfinder.ServiceDefaults/Wayfinder.ServiceDefaults.csproj" />
+  <Project Path="SafetyNetUnderwriting/SafetyNetUnderwriting.csproj" />
   <Project Path="Wayfinder.Tests/Wayfinder.Tests.csproj" />
   <Project Path="Wayfinder/Wayfinder.csproj" />
 </Solution>
