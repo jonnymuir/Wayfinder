@@ -145,6 +145,62 @@ public class ServiceBlueprintAuthoringServiceServiceFieldTests
     }
 
     [Fact]
+    public void FieldThatReferencesAnUnresolvedServiceField_IsUnverifiedNotAnError()
+    {
+        // Regression: validation used to only downgrade the diagnostic for the unresolved
+        // service field itself — a SECOND field whose own formula reads it (directly, or through
+        // a dotted member access on it) failed evaluation for the same underlying reason, but got
+        // reported as a genuine CALC_FIELD_ERROR instead of the same "unverified" Warning. That's
+        // exactly as unverifiable as the root field, not a real authoring mistake.
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "service-field-transitive-test",
+            DisplayName = "Test",
+            InitialStage = "review",
+            Calculations = new ServiceBlueprintCalculationSet
+            {
+                Fields = new Dictionary<string, ServiceBlueprintCalculationField>
+                {
+                    ["member"] = new() { Source = "service" },
+                    ["ageNextYear"] = new() { Expr = "member.age + 1" },
+                },
+            },
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "review",
+                    DisplayName = "Review",
+                    QueueKey = "caseworker",
+                    Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes", Default = "" }],
+                    Routes = [new ServiceBlueprintRouteDefinition { Id = "review--accept", Target = "to-done", Trigger = "accept" }],
+                },
+                new StageDefinition { StageKey = "done", DisplayName = "Done", QueueKey = "caseworker" },
+            ],
+            Gateways =
+            [
+                new ServiceBlueprintGatewayDefinition
+                {
+                    Key = "to-done",
+                    DisplayName = "Continue to done",
+                    GatewayType = "Split",
+                    QueueKey = "caseworker",
+                    Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
+                },
+            ],
+        };
+
+        var outcome = Service.Validate(blueprint);
+
+        outcome.Diagnostics.Should().Contain(d =>
+            d.Code == "CALC_SERVICE_FIELD_UNVERIFIED" && d.Path == "calculations.fields.member");
+        outcome.Diagnostics.Should().Contain(d =>
+            d.Code == "CALC_FIELD_UNVERIFIED" && d.Path == "calculations.fields.ageNextYear");
+        outcome.Diagnostics.Should().NotContain(d => d.Severity == ServiceBlueprintDiagnosticSeverity.Error);
+        outcome.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
     public void ServiceField_WithUnknownValueKind_IsAnError()
     {
         var outcome = Service.Validate(Blueprint(
