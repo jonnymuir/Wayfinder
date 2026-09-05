@@ -129,7 +129,10 @@ public sealed class ServiceBlueprintAuthoringService(
 
         var (staticServiceInputs, unresolvedServiceFields) =
             BuildStaticServiceInputs(blueprint.Calculations, mockServiceInputs);
-        var gaps = new StaticScopeGaps(numericInputsWithoutDefault, unresolvedServiceFields);
+        var gaps = new StaticScopeGaps(
+            numericInputsWithoutDefault,
+            unresolvedServiceFields,
+            ComputeTaintedFieldNames(blueprint.Calculations, numericInputsWithoutDefault, unresolvedServiceFields));
 
         foreach (var name in unresolvedServiceFields)
         {
@@ -159,7 +162,7 @@ public sealed class ServiceBlueprintAuthoringService(
                     ? ("CALC_FIELD_ERROR", "CALC_FIELD_UNVERIFIED", $"calculations.fields.{fieldOrSeries.Name}")
                     : ("CALC_SERIES_ERROR", "CALC_SERIES_UNVERIFIED", $"calculations.series.{fieldOrSeries.Name}");
                 diagnostics.Add(ClassifyEvalDiagnostic(
-                    errorCode, unverifiedCode, path, fieldOrSeries.Message, gaps));
+                    errorCode, unverifiedCode, path, fieldOrSeries.Message, gaps, subjectName: fieldOrSeries.Name));
             }
 
             var mergedScope = new Dictionary<string, object?>(scope, StringComparer.Ordinal);
@@ -317,11 +320,86 @@ public sealed class ServiceBlueprintAuthoringService(
     /// Field names that static validation has no real value for, so an expression that references
     /// one is expected to fail evaluation — <see cref="ClassifyEvalDiagnostic"/> reports that as
     /// "unverified" (a Warning) rather than an error, with a message tailored to why. See
-    /// <see cref="Validate"/> where this is built.
+    /// <see cref="Validate"/> where this is built. <see cref="TaintedFieldNames"/> is the
+    /// transitive closure of every other calculated field/series whose own expression references
+    /// one of these gaps (directly or through another tainted field) — evaluating one of those was
+    /// always going to fail too, so it gets the same "unverified" treatment as the root cause,
+    /// whether or not its own failure message happens to name the root cause (see
+    /// <see cref="ComputeTaintedFieldNames"/>).
     /// </summary>
     private readonly record struct StaticScopeGaps(
         IReadOnlySet<string> NumericInputsWithoutDefault,
-        IReadOnlySet<string> UnresolvedServiceFields);
+        IReadOnlySet<string> UnresolvedServiceFields,
+        IReadOnlySet<string> TaintedFieldNames);
+
+    private static readonly Regex WordPattern = new(@"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Fixed-point closure: starting from the genuinely-unresolvable root names (an unresolved
+    /// service field, a numeric input with no default), repeatedly scans every other declared
+    /// calculated field/series' own expression text for a token whose root segment (the part
+    /// before the first '.', since a dotted reference like <c>member.age</c> is a member access on
+    /// the root <c>member</c>) is already known-tainted, adding its name to the set until nothing
+    /// new is found. A field that references a tainted field, directly or transitively, was always
+    /// going to fail evaluation too — that is expected, not an authoring mistake.
+    /// </summary>
+    private static IReadOnlySet<string> ComputeTaintedFieldNames(
+        ServiceBlueprintCalculationSet? calculations,
+        IReadOnlySet<string> numericInputsWithoutDefault,
+        IReadOnlySet<string> unresolvedServiceFields)
+    {
+        var tainted = new HashSet<string>(numericInputsWithoutDefault, StringComparer.Ordinal);
+        tainted.UnionWith(unresolvedServiceFields);
+
+        if (calculations is null)
+        {
+            return tainted;
+        }
+
+        bool changed;
+        do
+        {
+            changed = false;
+
+            foreach (var (name, field) in calculations.Fields)
+            {
+                if (tainted.Contains(name)) continue;
+                if (field.Expr is not null && ExpressionReferencesTainted(field.Expr, tainted))
+                {
+                    tainted.Add(name);
+                    changed = true;
+                }
+            }
+
+            foreach (var (name, series) in calculations.Series ?? new Dictionary<string, ServiceBlueprintCalculationSeries>())
+            {
+                if (tainted.Contains(name)) continue;
+                if (ExpressionReferencesTainted(series.From, tainted)
+                    || ExpressionReferencesTainted(series.To, tainted)
+                    || series.Values.Values.Any(expr => ExpressionReferencesTainted(expr, tainted)))
+                {
+                    tainted.Add(name);
+                    changed = true;
+                }
+            }
+        } while (changed);
+
+        return tainted;
+    }
+
+    private static bool ExpressionReferencesTainted(string expression, IReadOnlySet<string> tainted)
+    {
+        foreach (Match match in WordPattern.Matches(expression))
+        {
+            var root = match.Value.Split('.')[0];
+            if (tainted.Contains(root))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Builds the <c>source: "service"</c> values static validation evaluates against, and the set
@@ -486,20 +564,41 @@ public sealed class ServiceBlueprintAuthoringService(
     /// unresolvable, and referencing one is expected to fail static evaluation rather than being
     /// an authoring mistake: a numeric input with no declared default (0 is a real value, not a
     /// safe stand-in), and a <c>source: "service"</c> field with no <c>valueKind</c>/<c>default</c>
-    /// to stand in for the host's value. Downgrade exactly those to a Warning with a message
-    /// pointing at the fix; anything else genuinely is an error.
+    /// to stand in for the host's value. A third case covers every field/series that itself
+    /// transitively depends on one of those two (<see cref="StaticScopeGaps.TaintedFieldNames"/>) —
+    /// <paramref name="subjectName"/> is that field/series' own name, when the diagnostic being
+    /// classified is about one (the calc-field/series pass; <see langword="null"/> for a
+    /// showWhen/route/stage-validation expression, which has no field name of its own). Downgrade
+    /// all three cases to a Warning with a message pointing at the fix; anything else genuinely is
+    /// an error.
     /// </summary>
     private static ServiceBlueprintDiagnostic ClassifyEvalDiagnostic(
         string errorCode,
         string unverifiedCode,
         string path,
         string message,
-        StaticScopeGaps gaps)
+        StaticScopeGaps gaps,
+        string? subjectName = null)
     {
+        if (subjectName is not null && gaps.TaintedFieldNames.Contains(subjectName)
+            && !gaps.NumericInputsWithoutDefault.Contains(subjectName)
+            && !gaps.UnresolvedServiceFields.Contains(subjectName))
+        {
+            return new ServiceBlueprintDiagnostic(
+                unverifiedCode,
+                path,
+                $"{message} '{subjectName}' itself depends (directly or through another field) on a " +
+                "service field or numeric input static validation has no real value for, so this expression " +
+                "can't be verified statically either. Declare the underlying field's valueKind/default, pass " +
+                "mockServiceInputs, or use simulate_service_blueprint.",
+                ServiceBlueprintDiagnosticSeverity.Warning);
+        }
+
         var match = UnknownNamePattern.Match(message);
         var name = match.Success ? match.Groups[1].Value : null;
+        var root = name?.Split('.')[0];
 
-        if (name is not null && gaps.NumericInputsWithoutDefault.Contains(name))
+        if (name is not null && (gaps.NumericInputsWithoutDefault.Contains(name) || gaps.NumericInputsWithoutDefault.Contains(root!)))
         {
             return new ServiceBlueprintDiagnostic(
                 unverifiedCode,
@@ -512,7 +611,7 @@ public sealed class ServiceBlueprintAuthoringService(
                 ServiceBlueprintDiagnosticSeverity.Warning);
         }
 
-        if (name is not null && gaps.UnresolvedServiceFields.Contains(name))
+        if (name is not null && (gaps.UnresolvedServiceFields.Contains(name) || gaps.UnresolvedServiceFields.Contains(root!)))
         {
             return new ServiceBlueprintDiagnostic(
                 unverifiedCode,
@@ -521,6 +620,18 @@ public sealed class ServiceBlueprintAuthoringService(
                 "validate to stand in for the host's value, so this expression can't be verified statically. " +
                 "Declare its valueKind (a \"number\" also needs a \"default\"), pass mockServiceInputs, or use " +
                 "simulate_service_blueprint.",
+                ServiceBlueprintDiagnosticSeverity.Warning);
+        }
+
+        if (name is not null && gaps.TaintedFieldNames.Contains(root!))
+        {
+            return new ServiceBlueprintDiagnostic(
+                unverifiedCode,
+                path,
+                $"{message} '{name}' itself depends (directly or through another field) on a service field " +
+                "or numeric input static validation has no real value for, so this expression can't be " +
+                "verified statically either. Declare the underlying field's valueKind/default, pass " +
+                "mockServiceInputs, or use simulate_service_blueprint.",
                 ServiceBlueprintDiagnosticSeverity.Warning);
         }
 
