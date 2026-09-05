@@ -27,6 +27,80 @@ Umbraco-based or otherwise, layers its own tenancy, auth, and rendering opinions
 [`Wayfinder.Umbraco`](https://github.com/jonnymuir/Wayfinder.Umbraco) is the Umbraco-hosted
 implementation Prism itself uses.
 
+## How it fits together
+
+```mermaid
+graph LR
+  WF["Wayfinder<br/>core engine<br/>(this repo)"] --> WFU["Wayfinder.Umbraco<br/>CMS binding"]
+  WFU --> PRISM["Umbraco Prism<br/>multi-tenant host<br/>(OIDC, branding)"]
+```
+
+- **`Wayfinder`** (this repo) is the framework-agnostic core: the domain model, the calculation
+  engine, and the state-machine engine. No Umbraco, no hosting assumptions.
+- **[`Wayfinder.Umbraco`](https://github.com/jonnymuir/Wayfinder.Umbraco)** is the Umbraco host:
+  a DB-backed store, Block Grid blocks, an authoring UI, and GOV.UK rendering.
+- **[Umbraco Prism](https://github.com/jonnymuir/Umbraco.Prism)** is the reference consumer for
+  multi-tenancy and branding — `UmbracoPrism.Core` carries no service-design opinion of its own.
+
+## Quickstart
+
+```bash
+dotnet add package Wayfinder.Engine
+```
+
+Seed a blueprint (a JSON file — see
+[`docs/guides/reference-service-blueprint-contract.md`](docs/guides/reference-service-blueprint-contract.md)
+for the full schema):
+
+```json
+// blueprints/apply-for-a-licence.json
+{
+  "definitionKey": "apply-for-a-licence",
+  "displayName": "Apply for a licence",
+  "version": 1,
+  "initialStage": "start",
+  "requestPolicy": "single",
+  "queues": [ { "key": "citizen", "displayName": "Citizen", "actor": "citizen" } ],
+  "stages": [
+    {
+      "stageKey": "start",
+      "displayName": "Your details",
+      "queueKey": "citizen",
+      "components": [ { "type": "text", "fieldKey": "fullName", "label": "Full name", "required": true } ],
+      "routes": [ { "id": "start--submit--done", "target": "done", "trigger": "submit" } ]
+    },
+    { "stageKey": "done", "displayName": "Application submitted", "queueKey": "citizen", "components": [ { "type": "panel", "heading": "Application complete" } ] }
+  ]
+}
+```
+
+Register the engine and round-trip an instance:
+
+```csharp
+using Wayfinder.Engine.Extensions;
+
+builder.Services.AddProcessManager("blueprints"); // folder containing the JSON above
+```
+
+```csharp
+using Wayfinder.Models.ServiceDesign;
+
+var envelope = processManager.GetCurrent(
+    blueprintKey: "apply-for-a-licence", tenantId: "default", userId: "user-1",
+    accessProfile: ActorProfile.UnrestrictedOwner);
+// envelope.ResponseState == "render" — envelope.Render.Components has the "Your details" fields
+
+var advanced = processManager.Advance(
+    instanceId: envelope.InstanceId, tenantId: "default", userId: "user-1",
+    accessProfile: ActorProfile.UnrestrictedOwner, action: "submit", expectedStateVersion: envelope.StateVersion,
+    fieldValues: new Dictionary<string, object?> { ["fullName"] = "Ada Lovelace" });
+// advanced.Render.StateDisplayName == "Application submitted"
+```
+
+That's the whole engine surface a host needs: `GetCurrent` to render the current step, `Advance`
+to submit it. [`Wayfinder.Umbraco`](https://github.com/jonnymuir/Wayfinder.Umbraco) wraps exactly
+these two calls behind a Block Grid block; see its own README for the CMS-hosted version.
+
 ## See it running
 
 `Wayfinder.AppHost` + `Wayfinder.ReferenceApp` is a small, self-contained .NET Aspire host in
@@ -41,12 +115,30 @@ real host does differently.
 
 ## Packages
 
+**Core**
+
 | Package | Purpose |
 |---|---|
 | `Wayfinder` | Core domain models (`ServiceBlueprint`, `ServiceRequestResponseEnvelope`, etc.), the declarative calculation engine, and the sanitizer interface. Zero framework dependency. |
-| `Wayfinder.Engine` | The service blueprint state-machine engine: queue routing, gateway evaluation, request persistence. |
+| `Wayfinder.Engine` | The service blueprint state-machine engine: queue routing, gateway evaluation, request persistence, support-systems, bulk data. |
+
+**Surfaces** — HTTP glue a host maps into its own pipeline
+
+| Package | Purpose |
+|---|---|
 | `Wayfinder.Engine.Api` | REST toolkit (`MapServiceBlueprintAuthoringApi()`) exposing service blueprint authoring (list/read/validate/save/simulate) over HTTP for any ASP.NET Core host. |
 | `Wayfinder.Engine.Mcp` | MCP-over-HTTP toolkit (`MapServiceBlueprintAuthoringMcp()`): the same authoring surface as MCP tools for AI agents. |
+| `Wayfinder.Engine.Http` | Stage file-upload HTTP glue (`StageFileUploads`) and the inbound webhook support-system callback (`MapWebhookSupportSystemCallbacks`). |
+| `Wayfinder.Engine.Journey` | The single-actor citizen journey surface — a minimal host wraps `GetCurrent`/`Advance` behind real routes with almost no code of its own. |
+| `Wayfinder.Engine.Worklist` | The caseworker worklist surface — pickup/putback/paging over `IProcessManager.GetQueueWorkItems`, as HTTP endpoints. |
+
+**Rendering & Editor**
+
+| Package | Purpose |
+|---|---|
+| `Wayfinder.Rendering.GovUk` | Real GOV.UK Design System rendering (vendored `govuk-frontend`), the built-in component/field catalog, and calculation-driven live components. |
+| `Wayfinder.Editor` | The compiled visual service-blueprint editor web component, ready to embed in a host's own admin UI. |
+| `Wayfinder.Editor.Http` | The editor's host-side REST glue (load/save a blueprint from the editor's own UI). |
 
 ## The service blueprint model
 
