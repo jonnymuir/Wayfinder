@@ -14,6 +14,12 @@ using CsvHelper.Configuration;
 /// </summary>
 public static class ContributionsValidation
 {
+    // "C" alone formats using CultureInfo.CurrentCulture — under invariant globalization
+    // (the default on a Linux container/CI runner with no ICU data), that's the invariant
+    // culture, whose currency symbol is "¤", not "£". This demo is GBP-only, so the culture
+    // is pinned explicitly rather than left to whatever happens to be current.
+    private static readonly CultureInfo Gbp = CultureInfo.GetCultureInfo("en-GB");
+
     public static readonly string[] Columns =
         ["memberRef", "memberName", "tier", "fireEndorsement", "under18", "dob", "monthlyContribution",
          "safetyNetMemberId", "errorText", "warningText"];
@@ -98,7 +104,7 @@ public static class ContributionsValidation
         var fireEndorsement = string.Equals(row["fireEndorsement"], "Y", StringComparison.OrdinalIgnoreCase);
         if (fireEndorsement && hasKnownTier && hasContribution && contribution < rates.FireFloor)
         {
-            errors.Add($"Fire endorsement requires a minimum contribution of {rates.FireFloor:C} for {tier}.");
+            errors.Add($"Fire endorsement requires a minimum contribution of {rates.FireFloor.ToString("C", Gbp)} for {tier}.");
         }
 
         var under18 = string.Equals(row["under18"], "Y", StringComparison.OrdinalIgnoreCase);
@@ -134,7 +140,7 @@ public static class ContributionsValidation
             var upperBand = rates.Standard * 1.5m;
             if (contribution < lowerBand || contribution > upperBand)
             {
-                warnings.Add($"Contribution {contribution:C} is outside the expected {lowerBand:C}–{upperBand:C} band for {tier} — check this isn't a data entry error.");
+                warnings.Add($"Contribution {contribution.ToString("C", Gbp)} is outside the expected {lowerBand.ToString("C", Gbp)}–{upperBand.ToString("C", Gbp)} band for {tier} — check this isn't a data entry error.");
             }
         }
 
