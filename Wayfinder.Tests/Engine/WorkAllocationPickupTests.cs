@@ -137,11 +137,11 @@ public class WorkAllocationPickupTests
         var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
         pickedUp.ResponseState.Should().Be("render");
 
-        var aliceView = engine.GetQueueWorkItems("alice", SharedQueueProfile).Items.Should()
+        var aliceView = engine.GetQueueWorkItems(TenantId, "alice", SharedQueueProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         aliceView.PickupState.Should().Be(QueueWorkItemPickupState.PickedUpByMe);
 
-        engine.GetQueueWorkItems("bob", SharedQueueProfile).Items.Should()
+        engine.GetQueueWorkItems(TenantId, "bob", SharedQueueProfile).Items.Should()
             .NotContain(i => i.InstanceId == started.InstanceId, "picked up by alice — hidden entirely from bob, not just non-actionable");
 
         var bobDirectView = engine.GetCurrent(DefinitionKey, TenantId, "bob", SharedQueueProfile, started.InstanceId);
@@ -185,7 +185,7 @@ public class WorkAllocationPickupTests
         var putBack = engine.PutbackWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, "alice", SharedQueueProfile);
 
         putBack.ResponseState.Should().Be("render");
-        var bobView = engine.GetQueueWorkItems("bob", SharedQueueProfile).Items.Should()
+        var bobView = engine.GetQueueWorkItems(TenantId, "bob", SharedQueueProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         bobView.PickupState.Should().Be(QueueWorkItemPickupState.NotPickedUp);
 
@@ -221,10 +221,10 @@ public class WorkAllocationPickupTests
         var advanced = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "continue", pickedUp.StateVersion, null);
         advanced.Render!.StateDisplayName.Should().Be("Middle");
 
-        var bobView = engine.GetQueueWorkItems("bob", SharedQueueProfile).Items;
+        var bobView = engine.GetQueueWorkItems(TenantId, "bob", SharedQueueProfile).Items;
         bobView.Should().NotContain(i => i.InstanceId == started.InstanceId, "the pickup must still be in effect after the plain hop");
 
-        var aliceView = engine.GetQueueWorkItems("alice", SharedQueueProfile).Items.Should()
+        var aliceView = engine.GetQueueWorkItems(TenantId, "alice", SharedQueueProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         aliceView.PickupState.Should().Be(QueueWorkItemPickupState.PickedUpByMe);
         aliceView.StageKey.Should().Be("middle");
@@ -240,7 +240,7 @@ public class WorkAllocationPickupTests
         var jumped = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "change:middle", pickedUp.StateVersion, null);
         jumped.Render!.StateDisplayName.Should().Be("Middle");
 
-        engine.GetQueueWorkItems("bob", SharedQueueProfile).Items
+        engine.GetQueueWorkItems(TenantId, "bob", SharedQueueProfile).Items
             .Should().NotContain(i => i.InstanceId == started.InstanceId, "the pickup must still be in effect after the change-link jump");
     }
 
@@ -256,7 +256,7 @@ public class WorkAllocationPickupTests
 
         // A brand-new RequestCursor was minted for the join wait — the pickup doesn't survive the
         // Split crossing, so bob can see it again (this is the deliberate design, not a bug).
-        var bobView = engine.GetQueueWorkItems("bob", SharedQueueProfile).Items.Should()
+        var bobView = engine.GetQueueWorkItems(TenantId, "bob", SharedQueueProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         bobView.PickupState.Should().BeNull("a Waiting row has nothing to pick up");
     }
@@ -279,7 +279,7 @@ public class WorkAllocationPickupTests
 
         // "automation" declares no AssignmentPolicy — pickup is still mandatory (see
         // docs/guides/work-allocation.md), same as any other shared queue.
-        var automationItem = engine.GetQueueWorkItems("system", AutomationProfile).Items.Single(i => i.InstanceId == afterSplit.InstanceId);
+        var automationItem = engine.GetQueueWorkItems(TenantId, "system", AutomationProfile).Items.Single(i => i.InstanceId == afterSplit.InstanceId);
         var automationPickedUp = engine.PickupWorkItem(afterSplit.InstanceId, automationItem.CursorId, TenantId, "system", AutomationProfile);
 
         // The release moves the instance's primary visible position into the CASEWORKER queue's
@@ -296,7 +296,7 @@ public class WorkAllocationPickupTests
         caseworkerView.Render!.StateDisplayName.Should().Be("Approved");
 
         // "Approved" is itself a bare panel (Done, per QueueWorkItemStatus) — request it explicitly.
-        var bobView = engine.GetQueueWorkItems("bob", SharedQueueProfile, statuses: [QueueWorkItemStatus.Done]).Items.Should()
+        var bobView = engine.GetQueueWorkItems(TenantId, "bob", SharedQueueProfile, statuses: [QueueWorkItemStatus.Done]).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         bobView.PickupState.Should().BeNull("a Done row has nothing to pick up — no stale pickup carried forward either way");
     }
@@ -310,7 +310,7 @@ public class WorkAllocationPickupTests
         var afterSplit = engine.Advance(started.InstanceId, TenantId, "alice", SharedQueueProfile, "go-wait", pickedUp.StateVersion, null);
 
         // The join gateway's own cursor id — fetch it from the queue list first.
-        var waitingItem = engine.GetQueueWorkItems("alice", SharedQueueProfile).Items.Single(i => i.InstanceId == afterSplit.InstanceId);
+        var waitingItem = engine.GetQueueWorkItems(TenantId, "alice", SharedQueueProfile).Items.Single(i => i.InstanceId == afterSplit.InstanceId);
         var realAttempt = engine.PickupWorkItem(afterSplit.InstanceId, waitingItem.CursorId, TenantId, "alice", SharedQueueProfile);
 
         realAttempt.ResponseState.Should().Be("error");
@@ -327,7 +327,7 @@ public class WorkAllocationPickupTests
         var afterDone = engine.Advance(afterMiddle.InstanceId, TenantId, "alice", SharedQueueProfile, "finish", afterMiddle.StateVersion, null);
         afterDone.ResponseState.Should().Be("complete");
 
-        var doneItem = engine.GetQueueWorkItems("alice", SharedQueueProfile, statuses: [QueueWorkItemStatus.Done]).Items
+        var doneItem = engine.GetQueueWorkItems(TenantId, "alice", SharedQueueProfile, statuses: [QueueWorkItemStatus.Done]).Items
             .Single(i => i.InstanceId == started.InstanceId);
 
         var pickupAttempt = engine.PickupWorkItem(started.InstanceId, doneItem.CursorId, TenantId, "alice", SharedQueueProfile);

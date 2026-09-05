@@ -46,13 +46,14 @@ public static class WorklistExtensions
             string[]? status, string? sort, string? q, int? page, int? pageSize, string? statusFilterApplied) =>
         {
             var options = optionsAccessor.Value;
+            var tenantId = options.ResolveTenantId!(ctx);
             var userId = options.ResolveUserId(ctx);
             var accessProfile = options.ResolveAccessProfile!(ctx);
 
             var (statuses, selectedStatuses, parsedSort, pageIndex, size) =
                 ParseWorklistQuery(status, sort, page, pageSize, statusFilterApplied, options.DefaultPageSize);
 
-            var envelope = engine.GetQueueWorkItems(userId, accessProfile, statuses, parsedSort, q, pageIndex, size);
+            var envelope = engine.GetQueueWorkItems(tenantId, userId, accessProfile, statuses, parsedSort, q, pageIndex, size);
 
             var body = RenderWorklistBody(
                 prefix, prefix, options.WorklistPageTitle, envelope, selectedStatuses, parsedSort, q, pageIndex, size,
@@ -177,9 +178,15 @@ public static class WorklistExtensions
         // read its filename — see GovUkStageJourney.WithFileDownloadUrls, which already builds
         // exactly this URL for every file-upload field on the item page above.
         group.MapGet("/{blueprintKey}/{instanceId}/files/{fieldKey}", async (
-            string blueprintKey, string instanceId, string fieldKey, IProcessManager engine, IServiceRequestFileStorage fileStorage) =>
+            HttpContext ctx, string blueprintKey, string instanceId, string fieldKey,
+            IProcessManager engine, IServiceRequestFileStorage fileStorage, IOptions<WorklistOptions> optionsAccessor) =>
         {
-            var rawValues = engine.GetAllInstances().FirstOrDefault(request => request.InstanceId == instanceId)?.FieldValues;
+            var options = optionsAccessor.Value;
+            var tenantId = options.ResolveTenantId!(ctx);
+            var userId = options.ResolveUserId(ctx);
+            var accessProfile = options.ResolveAccessProfile!(ctx);
+
+            var rawValues = engine.TryGetAccessibleInstance(instanceId, tenantId, userId, accessProfile)?.FieldValues;
             var reference = rawValues is null ? null : ServiceRequestFileReference.FromFieldValue(rawValues.GetValueOrDefault(fieldKey));
             if (reference is null)
             {

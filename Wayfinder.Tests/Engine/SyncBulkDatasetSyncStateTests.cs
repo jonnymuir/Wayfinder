@@ -163,7 +163,7 @@ public class SyncBulkDatasetSyncStateTests
         // A Split gateway always fans out to fresh, unpicked cursors (see ProcessManagerEngine's
         // HandleSplitGatewayAdvance) — crossing into "review" doesn't carry alice's pickup of
         // "upload" forward, so it must be picked up again before it's actionable.
-        var reviewItem = engine.GetQueueWorkItems("alice", Profile).Items.Single(i => i.InstanceId == atReview.InstanceId);
+        var reviewItem = engine.GetQueueWorkItems(TenantId, "alice", Profile).Items.Single(i => i.InstanceId == atReview.InstanceId);
         atReview = engine.PickupWorkItem(atReview.InstanceId, reviewItem.CursorId, TenantId, "alice", Profile);
 
         var instance = engine.GetAllInstances().Single(i => i.InstanceId == started.InstanceId);

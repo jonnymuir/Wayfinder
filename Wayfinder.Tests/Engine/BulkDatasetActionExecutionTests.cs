@@ -304,7 +304,7 @@ public class BulkDatasetActionExecutionTests
 
             // The Split/Join round trip always fans into a fresh, unpicked cursor on arrival at
             // "review" — must be picked up again before "resubmit" is actionable.
-            var reviewItem = engine.GetQueueWorkItems(UserId, OperationsProfile).Items.Single(i => i.InstanceId == resolved.InstanceId);
+            var reviewItem = engine.GetQueueWorkItems(TenantId, UserId, OperationsProfile).Items.Single(i => i.InstanceId == resolved.InstanceId);
             var reviewPickedUp = engine.PickupWorkItem(resolved.InstanceId, reviewItem.CursorId, TenantId, UserId, OperationsProfile);
 
             var afterResubmit = engine.Advance(

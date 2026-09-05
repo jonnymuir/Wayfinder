@@ -175,7 +175,7 @@ public class TeamAssignmentTests
         // docs/guides/work-allocation.md), same as any other shared queue. The Split gateway that
         // fanned out into this cursor always mints a fresh, real cursor id (never PrimaryCursorId),
         // so it has to be resolved via the worklist rather than assumed.
-        var automationItem = engine.GetQueueWorkItems("system", AutomationProfile).Items.Single(i => i.InstanceId == instanceId);
+        var automationItem = engine.GetQueueWorkItems(TenantId, "system", AutomationProfile).Items.Single(i => i.InstanceId == instanceId);
         var automationPickedUp = engine.PickupWorkItem(instanceId, automationItem.CursorId, TenantId, "system", AutomationProfile);
 
         // AutomationProfile has nothing left to see once the join releases into ops-team — same
@@ -194,10 +194,10 @@ public class TeamAssignmentTests
         // Zero-cursor, pre-first-gateway state — established immediately, not deferred to pickup.
         started.ResponseState.Should().Be("render");
 
-        engine.GetQueueWorkItems("sam", OpsProfile).Items.Should()
+        engine.GetQueueWorkItems(TenantId, "sam", OpsProfile).Items.Should()
             .NotContain(i => i.InstanceId == started.InstanceId, "assigned to priya the moment she started it — invisible to a teammate who didn't");
 
-        var priyaView = engine.GetQueueWorkItems("priya", OpsProfile).Items.Should()
+        var priyaView = engine.GetQueueWorkItems(TenantId, "priya", OpsProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         priyaView.Status.Should().Be(QueueWorkItemStatus.Actionable);
 
@@ -219,7 +219,7 @@ public class TeamAssignmentTests
         pickupAttempt.ResponseState.Should().Be("error");
         pickupAttempt.Problems.Should().Contain(p => p.Code == "PICKUP_NOT_AVAILABLE");
 
-        var priyaView = engine.GetQueueWorkItems("priya", OpsProfile).Items.Single(i => i.InstanceId == started.InstanceId);
+        var priyaView = engine.GetQueueWorkItems(TenantId, "priya", OpsProfile).Items.Single(i => i.InstanceId == started.InstanceId);
         priyaView.PickupState.Should().BeNull("already owned the moment it exists — nothing to pick up or put back");
     }
 
@@ -237,7 +237,7 @@ public class TeamAssignmentTests
         var afterResubmit = ReachReview(engine, started.InstanceId, atReview.StateVersion, "resubmit");
         afterResubmit.Render!.StateDisplayName.Should().Be("Review");
 
-        engine.GetQueueWorkItems("sam", OpsProfile).Items.Should()
+        engine.GetQueueWorkItems(TenantId, "sam", OpsProfile).Items.Should()
             .NotContain(i => i.InstanceId == started.InstanceId, "still priya's — the round trip through automation must not have reset it");
 
         var samStillCannotAct = engine.Advance(
@@ -264,13 +264,13 @@ public class TeamAssignmentTests
         escalated.ResponseState.Should().Be("error");
         escalated.Problems.Should().Contain(p => p.Code == "ACCESS_DENIED");
 
-        var chrisView = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Should()
+        var chrisView = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         chrisView.Status.Should().Be(QueueWorkItemStatus.Unassigned, "a team-tray row nobody has picked up yet");
         chrisView.AvailableActions.Should().BeEmpty();
         chrisView.PickupState.Should().Be(QueueWorkItemPickupState.NotPickedUp);
 
-        engine.GetQueueWorkItems("someone-else", ReviewQueueViewerNotOnTeamProfile).Items.Should()
+        engine.GetQueueWorkItems(TenantId, "someone-else", ReviewQueueViewerNotOnTeamProfile).Items.Should()
             .NotContain(i => i.InstanceId == started.InstanceId, "can view/act in the queue but isn't on the owning team — a genuinely different gate from queue eligibility");
     }
 
@@ -282,14 +282,14 @@ public class TeamAssignmentTests
         var atReview = ReachReview(engine, started.InstanceId, started.StateVersion, "submit");
         engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
 
-        var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
+        var item = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
         var pickedUp = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
         pickedUp.ResponseState.Should().Be("render");
 
-        engine.GetQueueWorkItems("jordan", ReviewersProfile).Items.Should()
+        engine.GetQueueWorkItems(TenantId, "jordan", ReviewersProfile).Items.Should()
             .NotContain(i => i.InstanceId == started.InstanceId, "picked up by chris — hidden entirely from every other team member");
 
-        var chrisView = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Should()
+        var chrisView = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         chrisView.Status.Should().Be(QueueWorkItemStatus.Actionable);
         chrisView.PickupState.Should().Be(QueueWorkItemPickupState.PickedUpByMe);
@@ -303,7 +303,7 @@ public class TeamAssignmentTests
         var atReview = ReachReview(engine, started.InstanceId, started.StateVersion, "submit");
         engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
 
-        var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
+        var item = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
         engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
 
         var jordanPickup = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "jordan", ReviewersProfile);
@@ -322,7 +322,7 @@ public class TeamAssignmentTests
         // "someone-else" can't see the row at all (proven by the previous test) — resolve the
         // cursor id via a real team member instead, the same way an attacker who'd guessed/leaked a
         // cursor id would have to, to prove even a *known* cursor id is still rejected.
-        var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
+        var item = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
 
         var pickupAttempt = engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "someone-else", ReviewQueueViewerNotOnTeamProfile);
         pickupAttempt.ResponseState.Should().Be("error");
@@ -337,13 +337,13 @@ public class TeamAssignmentTests
         var atReview = ReachReview(engine, started.InstanceId, started.StateVersion, "submit");
         engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
 
-        var item = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
+        var item = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Single(i => i.InstanceId == started.InstanceId);
         engine.PickupWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
 
         var putBack = engine.PutbackWorkItem(started.InstanceId, item.CursorId, TenantId, "chris", ReviewersProfile);
         putBack.ResponseState.Should().Be("render");
 
-        var jordanView = engine.GetQueueWorkItems("jordan", ReviewersProfile).Items.Should()
+        var jordanView = engine.GetQueueWorkItems(TenantId, "jordan", ReviewersProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         jordanView.Status.Should().Be(QueueWorkItemStatus.Unassigned);
         jordanView.PickupState.Should().Be(QueueWorkItemPickupState.NotPickedUp);
@@ -361,7 +361,7 @@ public class TeamAssignmentTests
         // her ownership, and must land in the team-tray's own default (unassigned) state.
         engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
 
-        var chrisView = engine.GetQueueWorkItems("chris", ReviewersProfile).Items.Should()
+        var chrisView = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;
         chrisView.Status.Should().Be(QueueWorkItemStatus.Unassigned, "the queue boundary resets assignment to the new queue's own policy, not priya's prior ownership");
     }

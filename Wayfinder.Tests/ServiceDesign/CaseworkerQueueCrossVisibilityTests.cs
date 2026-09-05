@@ -104,7 +104,7 @@ public class CaseworkerQueueCrossVisibilityTests
         StartJugglingLicenceAtUnderReview(engine);
         var njfInstance = engine.GetCurrent("njf-contributions", TenantId, PriyaUserId, PriyaProfile);
 
-        var caseyView = engine.GetQueueWorkItems(CaseyUserId, CaseyProfile).Items;
+        var caseyView = engine.GetQueueWorkItems(TenantId, CaseyUserId, CaseyProfile).Items;
 
         caseyView.Select(i => i.BlueprintKey).Should().Contain("juggling-licence");
         caseyView.Should().NotContain(i => i.BlueprintKey == "njf-contributions",
@@ -118,7 +118,7 @@ public class CaseworkerQueueCrossVisibilityTests
         StartJugglingLicenceAtUnderReview(engine);
         engine.GetCurrent("njf-contributions", TenantId, PriyaUserId, PriyaProfile);
 
-        var priyaView = engine.GetQueueWorkItems(PriyaUserId, PriyaProfile).Items;
+        var priyaView = engine.GetQueueWorkItems(TenantId, PriyaUserId, PriyaProfile).Items;
 
         priyaView.Select(i => i.BlueprintKey).Should().Contain("njf-contributions");
         priyaView.Should().NotContain(i => i.BlueprintKey == "juggling-licence",
