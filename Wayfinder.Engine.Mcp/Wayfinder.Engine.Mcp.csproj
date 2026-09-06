@@ -9,7 +9,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Mcp</PackageId>
     <Title>Wayfinder Blueprint Authoring MCP</Title>
-    <Version>0.9.1</Version>
+    <Version>0.9.2</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>ASP.NET Core MCP-over-HTTP endpoint mapping that exposes Wayfinder service blueprint authoring (list/read/validate/save/simulate) as MCP tools — a single MapServiceBlueprintAuthoringMcp() call any host adds to its own pipeline, alongside MapServiceBlueprintAuthoringApi(), inheriting its own auth.</Description>

@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Api</PackageId>
     <Title>Wayfinder Blueprint Authoring API</Title>
-    <Version>0.9.1</Version>
+    <Version>0.9.2</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>ASP.NET Core minimal-API endpoint mapping that exposes Wayfinder service blueprint authoring (list/read/validate/save/simulate) as HTTP endpoints — a single MapServiceBlueprintAuthoringApi() call any host adds to its own pipeline, inheriting its own auth.</Description>

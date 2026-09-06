@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine</PackageId>
     <Title>Wayfinder Engine</Title>
-    <Version>0.9.1</Version>
+    <Version>0.9.2</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>Umbraco/Umbraco.Cms-independent GDS-style blueprint state-machine engine (queue routing, gateway evaluation, instance persistence). Reusable by any .NET host building its own blueprint-driven business app; Umbraco Prism is one such consumer, not a dependency.</Description>
