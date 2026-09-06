@@ -28,10 +28,13 @@ public static class SupportSystemCallbacks
     /// </summary>
     /// <param name="sharedSecret">
     /// The secret the caller must present in the <c>X-Webhook-Secret</c> header (compared in
-    /// fixed time). <b>Required in practice</b> — when null, the endpoint logs a warning and
-    /// accepts any caller, which is acceptable only when the route is unreachable from outside a
-    /// trusted network. The <c>invocationId</c> is an unguessable 128-bit token, but it can appear
-    /// in logs and run history, so it is defence-in-depth, not the gate.
+    /// fixed time). <b>Required in practice</b> — when null, the endpoint enforces the documented
+    /// "trusted network" fallback for real rather than as an aspiration: it accepts only a caller
+    /// whose <see cref="System.Net.IPAddress.IsLoopback"/> remote address is true (rejecting
+    /// everyone else with 403), which is what a local/demo host actually needs, not "any caller
+    /// that reaches it". Set a real secret for anything reachable from outside loopback. The
+    /// <c>invocationId</c> is an unguessable 128-bit token, but it can appear in logs and run
+    /// history, so it is defence-in-depth, not the gate either way.
     /// </param>
     public static RouteHandlerBuilder MapWebhookSupportSystemCallbacks(
         this IEndpointRouteBuilder endpoints,
@@ -65,8 +68,8 @@ public static class SupportSystemCallbacks
         {
             logger.LogWarning(
                 "Support-system callback route {Path}/{{invocationId}} is mapped with NO shared secret — " +
-                "any caller that reaches it can resolve a pending invocation. Acceptable only on a trusted " +
-                "network.", basePath);
+                "restricting it to loopback callers only. Set a real secret for anything reachable from " +
+                "outside loopback.", basePath);
         }
 
         return endpoints.MapPost($"{basePath}/{{invocationId}}", (
@@ -82,6 +85,14 @@ public static class SupportSystemCallbacks
                         invocationId);
                     return Results.Unauthorized();
                 }
+            }
+            else if (request.HttpContext.Connection.RemoteIpAddress is not { } remoteIp || !System.Net.IPAddress.IsLoopback(remoteIp))
+            {
+                logger.LogWarning(
+                    "Rejected support-system callback for invocation {InvocationId}: no shared secret is " +
+                    "configured and the caller ({RemoteIp}) is not loopback.",
+                    invocationId, request.HttpContext.Connection.RemoteIpAddress);
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
             }
 
             if (string.IsNullOrWhiteSpace(payload.OutcomeKey))

@@ -7,12 +7,12 @@
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Api</PackageId>
-    <Title>Umbraco Prism Blueprint Authoring API</Title>
+    <Title>Wayfinder Blueprint Authoring API</Title>
     <Version>0.9.1</Version>
     <Authors>Jonny Muir</Authors>
-    <Company>Umbraco Prism</Company>
-    <Description>ASP.NET Core minimal-API endpoint mapping that exposes Umbraco Prism service blueprint authoring (list/read/validate/save/simulate) as HTTP endpoints — a single MapPrismServiceBlueprintAuthoringApi() call any host adds to its own pipeline, inheriting its own auth.</Description>
-    <PackageTags>Blueprint;WebApi;Umbraco-Prism</PackageTags>
+    <Company>Wayfinder</Company>
+    <Description>ASP.NET Core minimal-API endpoint mapping that exposes Wayfinder service blueprint authoring (list/read/validate/save/simulate) as HTTP endpoints — a single MapServiceBlueprintAuthoringApi() call any host adds to its own pipeline, inheriting its own auth.</Description>
+    <PackageTags>Blueprint;WebApi;GDS;Wayfinder</PackageTags>
     <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

@@ -8,12 +8,12 @@
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Mcp</PackageId>
-    <Title>Umbraco Prism Blueprint Authoring MCP</Title>
+    <Title>Wayfinder Blueprint Authoring MCP</Title>
     <Version>0.9.1</Version>
     <Authors>Jonny Muir</Authors>
-    <Company>Umbraco Prism</Company>
-    <Description>ASP.NET Core MCP-over-HTTP endpoint mapping that exposes Umbraco Prism service blueprint authoring (list/read/validate/save/simulate) as MCP tools — a single MapPrismServiceBlueprintAuthoringMcp() call any host adds to its own pipeline, alongside MapPrismServiceBlueprintAuthoringApi(), inheriting its own auth.</Description>
-    <PackageTags>Blueprint;MCP;Model-Context-Protocol;Umbraco-Prism</PackageTags>
+    <Company>Wayfinder</Company>
+    <Description>ASP.NET Core MCP-over-HTTP endpoint mapping that exposes Wayfinder service blueprint authoring (list/read/validate/save/simulate) as MCP tools — a single MapServiceBlueprintAuthoringMcp() call any host adds to its own pipeline, alongside MapServiceBlueprintAuthoringApi(), inheriting its own auth.</Description>
+    <PackageTags>Blueprint;MCP;Model-Context-Protocol;GDS;Wayfinder</PackageTags>
     <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

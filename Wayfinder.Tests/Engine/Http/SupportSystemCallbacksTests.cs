@@ -167,7 +167,13 @@ public class SupportSystemCallbacksTests
         return (engine, client.LastInvocationId!);
     }
 
-    private static HttpClient Server(ProcessManagerEngine engine, string? secret)
+    /// <param name="remoteIp">
+    /// <see cref="System.Net.IPAddress.Loopback"/> by default — <c>TestServer</c>'s in-memory
+    /// transport sets no <c>RemoteIpAddress</c> of its own, so this middleware stands in for a
+    /// real socket's peer address, letting tests simulate both a genuine loopback caller and one
+    /// that isn't.
+    /// </param>
+    private static HttpClient Server(ProcessManagerEngine engine, string? secret, System.Net.IPAddress? remoteIp = null)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(web => web
@@ -175,6 +181,11 @@ public class SupportSystemCallbacksTests
                 .ConfigureServices(s => { s.AddLogging(); s.AddRouting(); })
                 .Configure(app =>
                 {
+                    app.Use(async (context, next) =>
+                    {
+                        context.Connection.RemoteIpAddress = remoteIp ?? System.Net.IPAddress.Loopback;
+                        await next();
+                    });
                     app.UseRouting();
                     app.UseEndpoints(e => e.MapWebhookSupportSystemCallbacks(engine, sharedSecret: secret));
                 }))
@@ -258,15 +269,29 @@ public class SupportSystemCallbacksTests
     }
 
     [Fact]
-    public async Task WithNoSharedSecretConfigured_TheEndpointStillFunctions_ForATrustedNetworkHost()
+    public async Task WithNoSharedSecretConfigured_TheEndpointStillFunctions_ForALoopbackCaller()
     {
         var (engine, invocationId) = BuildWaitingEngine();
-        var http = Server(engine, secret: null);
+        var http = Server(engine, secret: null, remoteIp: System.Net.IPAddress.Loopback);
 
         var response = await http.PostAsJsonAsync(
             $"/wayfinder/support-systems/callbacks/{invocationId}", new { outcomeKey = "accredited" });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task WithNoSharedSecretConfigured_ANonLoopbackCaller_Returns403_AndDoesNotResolveTheInvocation()
+    {
+        var (engine, invocationId) = BuildWaitingEngine();
+        var http = Server(engine, secret: null, remoteIp: System.Net.IPAddress.Parse("203.0.113.7"));
+
+        var response = await http.PostAsJsonAsync(
+            $"/wayfinder/support-systems/callbacks/{invocationId}", new { outcomeKey = "accredited" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
+            "with no shared secret configured, only a genuine loopback caller may resolve an invocation — " +
+            "the old behaviour ('any caller that reaches it') is exactly the gap this closes");
     }
 
     [Fact]
