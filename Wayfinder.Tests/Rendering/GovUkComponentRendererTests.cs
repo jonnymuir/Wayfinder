@@ -301,6 +301,27 @@ public class GovUkComponentRendererTests
     }
 
     [Fact]
+    public void RenderComponent_BulkDataReview_EmitsTheAntiforgeryTokenAttribute_OnlyWhenAHostSuppliesOne()
+    {
+        var withToken = RenderComponentOnly(new ComponentRenderPayload
+        {
+            Type = "bulk-data-review",
+            DatasetId = "abc123",
+            BulkDatasetApiUrl = "/umbraco/wayfinder-stage/njf/inst-1/bulk-datasets/abc123",
+            BulkDatasetAntiforgeryToken = "CfDJ8-token-value",
+        });
+        Assert.Contains("data-wayfinder-bulk-review-antiforgery-token=\"CfDJ8-token-value\"", withToken);
+
+        var withoutToken = RenderComponentOnly(new ComponentRenderPayload
+        {
+            Type = "bulk-data-review",
+            DatasetId = "abc123",
+            BulkDatasetApiUrl = "/x/bulk-datasets/abc123",
+        });
+        Assert.DoesNotContain("antiforgery-token", withoutToken);
+    }
+
+    [Fact]
     public void RenderComponent_WrapsShowWhenComponentsWithHiddenAttribute()
     {
         var html = RenderComponentOnly(new ComponentRenderPayload

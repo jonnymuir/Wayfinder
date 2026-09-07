@@ -86,7 +86,8 @@ public static class GovUkStageJourney
     /// </summary>
     public static ServiceRequestResponseEnvelope WithBulkDatasetApiUrls(
         this ServiceRequestResponseEnvelope envelope,
-        string apiUrlPrefix)
+        string apiUrlPrefix,
+        string? antiforgeryToken = null)
     {
         if (envelope.Render is null)
         {
@@ -95,7 +96,11 @@ public static class GovUkStageJourney
 
         var components = envelope.Render.Components
             .Select(component => component.Type == "bulk-data-review" && !string.IsNullOrEmpty(component.DatasetId)
-                ? component with { BulkDatasetApiUrl = $"{apiUrlPrefix}/{Uri.EscapeDataString(component.DatasetId)}" }
+                ? component with
+                {
+                    BulkDatasetApiUrl = $"{apiUrlPrefix}/{Uri.EscapeDataString(component.DatasetId)}",
+                    BulkDatasetAntiforgeryToken = antiforgeryToken,
+                }
                 : component)
             .ToArray();
 
