@@ -43,10 +43,10 @@ jobs:
           - language: javascript-typescript
             build-mode: none
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -68,7 +68,7 @@ jobs:
       # asset, so the .NET build depends on it existing on disk).
       - name: Setup Node
         if: matrix.language == 'csharp'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'npm'
@@ -83,7 +83,7 @@ jobs:
 
       - name: Setup .NET
         if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -92,7 +92,7 @@ jobs:
         run: dotnet build Wayfinder.slnx -c Release
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
 
@@ -102,10 +102,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -123,8 +123,8 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
@@ -137,7 +137,7 @@ jobs:
       security-events: write
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # advanced-security defaults to true: uploads SARIF to the Security tab and does
       # NOT fail the job on findings — advisory-only, matching CodeQL's phase-1 posture.
       - uses: zizmorcore/zizmor-action@v0.6.3
