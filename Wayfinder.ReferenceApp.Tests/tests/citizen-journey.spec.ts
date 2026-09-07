@@ -263,10 +263,26 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
     await loginAs(page, DEMO_USERS.applicant);
     await expect(page.getByRole('heading', { name: 'Your details' })).toBeVisible();
     const stateVersion = await page.locator('input[name="stateVersion"]').inputValue();
+    // The reference app opts the /apply journey into .ValidateWayfinderAntiforgery(), so a
+    // browser-bypassing POST still has to carry the token the rendered form was issued — the
+    // steps below assert server-side *field* validation, not a way around CSRF.
+    const antiforgeryToken = await page.locator('input[name="__RequestVerificationToken"]').inputValue();
+
+    await test.step('a token-less scripted POST is rejected before it reaches the handler', async () => {
+      const response = await page.request.post('/apply', {
+        form: { action: 'continue', stateVersion, 'field:applicantName': 'Alex Applicant' },
+      });
+      expect(response.status()).toBe(400);
+    });
 
     await test.step('a missing required field is rejected server-side, not just client-side', async () => {
       const response = await page.request.post('/apply', {
-        form: { action: 'continue', stateVersion, 'field:applicantEmail': 'alex@example.test' },
+        form: {
+          action: 'continue',
+          stateVersion,
+          '__RequestVerificationToken': antiforgeryToken,
+          'field:applicantEmail': 'alex@example.test',
+        },
       });
       expect(response.ok()).toBeTruthy();
       const body = await response.text();
@@ -286,6 +302,7 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
         form: {
           action: 'continue',
           stateVersion,
+          '__RequestVerificationToken': antiforgeryToken,
           'field:applicantName': 'Alex Applicant',
           'field:applicantEmail': 'not-an-email-address',
         },
