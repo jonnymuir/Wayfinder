@@ -4,6 +4,6 @@
   "private": true,
   "description": "Source of the real GOV.UK Design System (govuk-frontend) static assets vendored into wwwroot/govuk-frontend — not a lookalike stylesheet. Every host that references Wayfinder.Rendering.GovUk gets the exact govuk-frontend build its generated markup targets, as a static web asset, with no separate npm install of their own.",
   "dependencies": {
-    "govuk-frontend": "6.4.0"
+    "govuk-frontend": "6.5.0"
   }
 }
