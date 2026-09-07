@@ -322,6 +322,24 @@ public class GovUkComponentRendererTests
     }
 
     [Fact]
+    public void RenderForm_EmitsTheAntiforgeryHiddenInput_OnlyWhenAHostSuppliesAToken()
+    {
+        var step = new StepContent
+        {
+            StepType = "question",
+            StateDisplayName = "Your details",
+            Components = [new ComponentRenderPayload { Type = "fieldset", Fields = [] }],
+            AvailableActions = [],
+        };
+
+        var withToken = Renderer.RenderForm(step, [], "/test", 0, antiforgeryToken: "CfDJ8-abc_123");
+        Assert.Contains("<input type=\"hidden\" name=\"__RequestVerificationToken\" value=\"CfDJ8-abc_123\" />", withToken);
+
+        var withoutToken = Renderer.RenderForm(step, [], "/test", 0);
+        Assert.DoesNotContain("__RequestVerificationToken", withoutToken);
+    }
+
+    [Fact]
     public void RenderComponent_WrapsShowWhenComponentsWithHiddenAttribute()
     {
         var html = RenderComponentOnly(new ComponentRenderPayload

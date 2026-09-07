@@ -57,6 +57,13 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Caseworker", policy => policy.RequireRole(DemoUsers.CaseworkerRole));
 });
 
+// The Wayfinder journey/worklist/bulk-data surfaces below are reached from a browser carrying
+// this host's ambient auth cookie, so their state-changing POSTs need CSRF protection. The
+// packages don't assume it — this host opts in with .ValidateWayfinderAntiforgery() on each
+// group (see Wayfinder.Engine.Http's WayfinderAntiforgery), which needs these services plus
+// app.UseAntiforgery() below.
+builder.Services.AddAntiforgery();
+
 // ── Wayfinder wiring: the seed blueprint is a plain JSON file on disk (service-blueprints/) —
 // the same FilesystemServiceBlueprintStore any real host uses, loaded once at startup. Runtime
 // *instance* state stays in-memory (see InMemoryRuntimeServiceBlueprintSourceStore's remarks),
@@ -174,6 +181,10 @@ app.UseGovUkFrontendAssets();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Must sit after UseAuthentication/UseAuthorization and before the endpoints that call
+// .ValidateWayfinderAntiforgery() — see the AddAntiforgery() note above.
+app.UseAntiforgery();
+
 app.MapGet("/service-blueprint-editor", (HttpRequest request) =>
 {
     var key = request.Query["serviceBlueprint"].ToString();
@@ -289,8 +300,8 @@ app.MapPost("/account/logout", async (HttpContext ctx) =>
 // AddJourney() registration above — a second, independent citizen-queue demo (slider/stat-group/
 // chart-driven interactive modelling) fans out into the same backstage queue below as the first,
 // since ActorProfile/queue access is keyed by queue name, not blueprint key.
-app.MapJourney("/apply", JugglingLicenceDefinitionKey, "Apply for a juggling licence", "Apply for another licence").RequireAuthorization("Applicant");
-app.MapJourney("/premium", InsuranceModellerDefinitionKey, "Model your performance insurance premium", "Model another premium").RequireAuthorization("Applicant");
+app.MapJourney("/apply", JugglingLicenceDefinitionKey, "Apply for a juggling licence", "Apply for another licence").RequireAuthorization("Applicant").ValidateWayfinderAntiforgery();
+app.MapJourney("/premium", InsuranceModellerDefinitionKey, "Model your performance insurance premium", "Model another premium").RequireAuthorization("Applicant").ValidateWayfinderAntiforgery();
 
 // ── Backstage: the caseworker's review queue ─────────────────────────────────────────────
 
@@ -299,8 +310,8 @@ var caseworkerGroup = app.MapGroup("/caseworker").RequireAuthorization("Casework
 // The default worklist surface (list/item/advance/pickup/putback/file-download) plus bulk-data-review's
 // own REST endpoints — see Wayfinder.Engine.Worklist's own README. Everything else under
 // /caseworker (just the NJF "start new" entry point below) stays hand-wired here.
-app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
-app.MapBulkDatasetReview(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
+app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker").ValidateWayfinderAntiforgery();
+app.MapBulkDatasetReview(prefix: "/caseworker/queue").RequireAuthorization("Caseworker").ValidateWayfinderAntiforgery();
 
 // njf-contributions has no citizen frontstage to originate an instance from (see
 // docs/guides/bulk-data-review.md — the NJF's own operations staff are the only actor), so it

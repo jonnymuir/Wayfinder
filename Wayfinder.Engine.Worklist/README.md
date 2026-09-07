@@ -20,8 +20,17 @@ builder.Services.AddWorklist(options =>
 
 // ...
 
-app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
+app.MapWorklist(prefix: "/caseworker/queue")
+   .RequireAuthorization("Caseworker")
+   .ValidateWayfinderAntiforgery();   // if these routes are cookie-authenticated — see below
 ```
+
+If a host authenticates this surface with an ambient browser cookie, chain
+`.ValidateWayfinderAntiforgery()` (from `Wayfinder.Engine.Http`) onto the group and register
+`builder.Services.AddAntiforgery()` + `app.UseAntiforgery()`. The pickup/putback/advance forms
+this package renders then carry a hidden `__RequestVerificationToken` automatically. See
+[`Wayfinder.Engine.Http`](../Wayfinder.Engine.Http)'s README § CSRF. A bearer-token host needs
+none of this.
 
 `MapWorklist` maps five routes under `prefix`, all genuinely relative to it, every link, form
 action, and redirect inside the package is built from the `prefix` a host passes in, never
