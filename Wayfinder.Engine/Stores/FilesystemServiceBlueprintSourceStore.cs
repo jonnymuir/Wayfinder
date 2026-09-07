@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Engine.Abstractions;
 
@@ -20,9 +21,22 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
     // UPDATE ... WHERE Version = @expectedVersion instead of a lock at all.
     private readonly SemaphoreSlim _saveLock = new(1, 1);
 
-    private string ResolveSafePath(string fileName)
+    // A definition key is turned straight into a filename, so it must be a plain slug —
+    // letters, digits, '-' and '_', starting and ending alphanumeric. This allowlist is
+    // what makes an externally-supplied key safe to put in a path at all; the
+    // base-directory containment check below is kept as a defence-in-depth second barrier.
+    private static readonly Regex DefinitionKeyPattern =
+        new("^[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?$", RegexOptions.Compiled);
+
+    private string ResolveSafePath(string definitionKey)
     {
-        var combined = Path.Combine(basePath, fileName);
+        if (definitionKey is null || !DefinitionKeyPattern.IsMatch(definitionKey))
+        {
+            throw new InvalidOperationException(
+                $"Invalid blueprint definition key '{definitionKey}'. A key must be a slug of letters, digits, '-' and '_'.");
+        }
+
+        var combined = Path.Combine(basePath, definitionKey + ".json");
         var resolved = Path.GetFullPath(combined);
         var baseFull = Path.GetFullPath(basePath);
         if (!resolved.StartsWith(baseFull + Path.DirectorySeparatorChar, StringComparison.Ordinal)
@@ -61,7 +75,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
 
     public async Task<ServiceBlueprint?> LoadAsync(string definitionKey, CancellationToken ct = default)
     {
-        var path = ResolveSafePath($"{definitionKey}.json");
+        var path = ResolveSafePath(definitionKey);
         if (!File.Exists(path))
             return null;
 
@@ -78,7 +92,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
             var currentVersion = current?.Version ?? 0;
             if (currentVersion != expectedVersion)
             {
-                var existingPath = ResolveSafePath($"{blueprint.DefinitionKey}.json");
+                var existingPath = ResolveSafePath(blueprint.DefinitionKey);
                 return new ServiceBlueprintSaveResult(Saved: false, CurrentVersion: currentVersion, Location: existingPath);
             }
 
@@ -86,7 +100,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
             var newVersion = expectedVersion + 1;
             var toSave = blueprint with { Version = newVersion };
 
-            var path = ResolveSafePath($"{blueprint.DefinitionKey}.json");
+            var path = ResolveSafePath(blueprint.DefinitionKey);
             await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
             await JsonSerializer.SerializeAsync(stream, toSave, ServiceBlueprintJson.WriteOptions, ct);
             return new ServiceBlueprintSaveResult(Saved: true, CurrentVersion: newVersion, Location: path);
@@ -99,7 +113,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
 
     public Task<bool> DeleteAsync(string definitionKey, CancellationToken ct = default)
     {
-        var path = ResolveSafePath($"{definitionKey}.json");
+        var path = ResolveSafePath(definitionKey);
         if (!File.Exists(path))
         {
             return Task.FromResult(false);

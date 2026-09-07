@@ -57,7 +57,8 @@ public static class WorklistExtensions
 
             var body = RenderWorklistBody(
                 prefix, prefix, options.WorklistPageTitle, envelope, selectedStatuses, parsedSort, q, pageIndex, size,
-                RenderTeamNav(prefix, ctx, options, currentTeamId: null));
+                RenderTeamNav(prefix, ctx, options, currentTeamId: null),
+                WayfinderAntiforgery.MintRequestVerificationToken(ctx));
 
             return Results.Content(options.RenderPage!(options.WorklistPageTitle, body, ctx), "text/html");
         });
@@ -82,7 +83,8 @@ public static class WorklistExtensions
             var teamPrefix = $"{prefix}/team/{Uri.EscapeDataString(teamId)}";
             var body = RenderWorklistBody(
                 teamPrefix, prefix, options.TeamWorklistPageTitle, envelope, selectedStatuses, parsedSort, q, pageIndex, size,
-                RenderTeamNav(prefix, ctx, options, currentTeamId: teamId));
+                RenderTeamNav(prefix, ctx, options, currentTeamId: teamId),
+                WayfinderAntiforgery.MintRequestVerificationToken(ctx));
 
             return Results.Content(options.RenderPage!(options.TeamWorklistPageTitle, body, ctx), "text/html");
         });
@@ -122,12 +124,13 @@ public static class WorklistExtensions
             var userId = options.ResolveUserId(ctx);
             var envelope = engine.GetCurrent(
                 blueprintKey, options.ResolveTenantId!(ctx), userId, options.ResolveAccessProfile!(ctx), instanceId);
+            var antiforgeryToken = WayfinderAntiforgery.MintRequestVerificationToken(ctx);
             envelope = envelope.WithFileDownloadUrls($"{prefix}/{blueprintKey}/{instanceId}/files");
-            envelope = envelope.WithBulkDatasetApiUrls($"{prefix}/{blueprintKey}/{instanceId}/bulk-datasets");
+            envelope = envelope.WithBulkDatasetApiUrls($"{prefix}/{blueprintKey}/{instanceId}/bulk-datasets", antiforgeryToken);
             return Results.Content(
                 options.RenderPage!(
                     options.ReviewPageTitle,
-                    renderer.RenderJourneyBody(envelope, $"{prefix}/{blueprintKey}/{instanceId}/advance"),
+                    renderer.RenderJourneyBody(envelope, $"{prefix}/{blueprintKey}/{instanceId}/advance", antiforgeryToken),
                     ctx),
                 "text/html");
         });
@@ -144,6 +147,7 @@ public static class WorklistExtensions
             var current = engine.GetCurrent(blueprintKey, tenantId, userId, profile, instanceId);
 
             var form = await ctx.Request.ReadFormAsync();
+            var antiforgeryToken = WayfinderAntiforgery.MintRequestVerificationToken(ctx);
             var action = form["action"].ToString();
             var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
             var fieldValues = GovUkStageJourney.CoerceFieldValues(form, current.Render);
@@ -152,7 +156,7 @@ public static class WorklistExtensions
             if (fileErrors.Count > 0)
             {
                 return Results.Content(
-                    options.RenderPage!(options.ReviewPageTitle, renderer.RenderJourneyBody(current with { Problems = fileErrors }, $"{prefix}/{blueprintKey}/{instanceId}/advance"), ctx), "text/html");
+                    options.RenderPage!(options.ReviewPageTitle, renderer.RenderJourneyBody(current with { Problems = fileErrors }, $"{prefix}/{blueprintKey}/{instanceId}/advance", antiforgeryToken), ctx), "text/html");
             }
 
             var result = engine.Advance(instanceId, tenantId, userId, profile, action, stateVersion, fieldValues);
@@ -160,7 +164,7 @@ public static class WorklistExtensions
             if (result.Problems.Count > 0 && result.Render is not null)
             {
                 return Results.Content(
-                    options.RenderPage!(options.ReviewPageTitle, renderer.RenderJourneyBody(result, $"{prefix}/{blueprintKey}/{instanceId}/advance"), ctx), "text/html");
+                    options.RenderPage!(options.ReviewPageTitle, renderer.RenderJourneyBody(result, $"{prefix}/{blueprintKey}/{instanceId}/advance", antiforgeryToken), ctx), "text/html");
             }
 
             // PRG, but back to whichever place actually has the caseworker's next move: advancing
@@ -309,7 +313,8 @@ public static class WorklistExtensions
         string? q,
         int pageIndex,
         int size,
-        string teamNav)
+        string teamNav,
+        string? antiforgeryToken = null)
     {
         var esc = GovUk.Esc;
 
@@ -403,7 +408,7 @@ public static class WorklistExtensions
                   </td>
                   <td class="govuk-table__cell">{esc(item.InstanceId[..Math.Min(8, item.InstanceId.Length)])}…</td>
                   <td class="govuk-table__cell"><a class="govuk-link" href="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">{(item.Status == QueueWorkItemStatus.Actionable ? "Review" : "View")}</a></td>
-                  <td class="govuk-table__cell">{RenderPickupPutbackControl(item, itemUrlPrefix, listUrl)}</td>
+                  <td class="govuk-table__cell">{RenderPickupPutbackControl(item, itemUrlPrefix, listUrl, antiforgeryToken)}</td>
                 </tr>
                 """));
 
@@ -459,18 +464,18 @@ public static class WorklistExtensions
     /// zero-margin button that reads as visually cramped/overlapping, not two distinct controls; the
     /// button gets its own top margin back to compensate, found live.
     /// </summary>
-    private static string RenderPickupPutbackControl(QueueWorkItem item, string itemUrlPrefix, string returnTo) => item.PickupState switch
+    private static string RenderPickupPutbackControl(QueueWorkItem item, string itemUrlPrefix, string returnTo, string? antiforgeryToken) => item.PickupState switch
     {
         QueueWorkItemPickupState.NotPickedUp => $"""
             <form method="post" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/pickup?cursorId={Uri.EscapeDataString(item.CursorId)}">
-              <input type="hidden" name="returnTo" value="{GovUk.Esc(returnTo)}">
+              <input type="hidden" name="returnTo" value="{GovUk.Esc(returnTo)}">{(string.IsNullOrEmpty(antiforgeryToken) ? "" : $"""<input type="hidden" name="__RequestVerificationToken" value="{GovUk.Esc(antiforgeryToken)}">""")}
               <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Pick up</button>
             </form>
             """,
         QueueWorkItemPickupState.PickedUpByMe => $"""
             <strong class="govuk-tag">With you</strong>
             <form method="post" class="govuk-!-margin-top-2" action="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}/putback?cursorId={Uri.EscapeDataString(item.CursorId)}">
-              <input type="hidden" name="returnTo" value="{GovUk.Esc(returnTo)}">
+              <input type="hidden" name="returnTo" value="{GovUk.Esc(returnTo)}">{(string.IsNullOrEmpty(antiforgeryToken) ? "" : $"""<input type="hidden" name="__RequestVerificationToken" value="{GovUk.Esc(antiforgeryToken)}">""")}
               <button class="govuk-button govuk-button--secondary govuk-!-margin-0" data-module="govuk-button">Put back</button>
             </form>
             """,

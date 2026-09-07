@@ -119,6 +119,17 @@ function applyActionBarUpdate(html) {
 function initBulkReview(root) {
   const apiBase = root.getAttribute('data-wayfinder-bulk-review-api');
   const pageSize = Number(root.getAttribute('data-wayfinder-bulk-review-page-size')) || 20;
+
+  // A host that protects the mutating endpoints (POST /correct, POST /revert) with ASP.NET
+  // antiforgery renders its request token into this attribute; every mutating fetch below then
+  // sends it as the RequestVerificationToken header. A host that doesn't (e.g. an anonymous
+  // citizen journey with no antiforgery on these routes) simply omits the attribute and the
+  // header is never added — same "host supplies it, this package uses it" shape as the api base.
+  const requestVerificationToken = root.getAttribute('data-wayfinder-bulk-review-antiforgery-token');
+  const mutatingHeaders = (extra) => ({
+    ...(requestVerificationToken ? { RequestVerificationToken: requestVerificationToken } : {}),
+    ...(extra || {}),
+  });
   // Per-service vocabulary (see BulkDataReviewComponent's own remarks) — GovUkComponents.RenderBulkDataReview
   // has already resolved these to concrete strings (never blank), so no fallback logic is needed
   // here too.
@@ -331,7 +342,7 @@ function initBulkReview(root) {
         .then(() => fetch(`${apiBase}/rows/${encodeURIComponent(row.rowKey)}/correct`, {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: mutatingHeaders({ 'Content-Type': 'application/json', Accept: 'application/json' }),
           body: JSON.stringify(values),
         }))
         .then((response) => {
@@ -461,7 +472,7 @@ function initBulkReview(root) {
       // it's then immediately reverted along with every other pending change, rather than being
       // silently dropped un-recorded.
       flushAll()
-        .then(() => fetch(`${apiBase}/revert`, { method: 'POST', credentials: 'same-origin' }))
+        .then(() => fetch(`${apiBase}/revert`, { method: 'POST', credentials: 'same-origin', headers: mutatingHeaders() }))
         .then((response) => (response.ok ? response.text() : null))
         .then((html) => {
           closeRevertPanel();

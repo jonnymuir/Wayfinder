@@ -1,0 +1,37 @@
+name: Security
+
+# SAST + supply-chain checks. The implementation lives in jonnymuir/ci-security so the
+# same jobs run identically here, in Wayfinder.Umbraco, in Umbraco.Prism, and in any
+# consuming app (NckExchange). See that repo's README.
+#
+# Local knobs that stay in this repo:
+#   * .github/allowed-advisories.txt — accepted High/Critical NuGet advisories (empty).
+#   * .github/dependabot.yml         — version-update schedule (Dependabot reads only
+#                                      the file in this repo).
+#
+# CodeQL "default setup" is disabled for this repo — advanced setup runs from the
+# reusable workflow and the two cannot coexist.
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 3 * * 1'   # Mondays 03:00 UTC — re-scan against newly published advisories
+  workflow_dispatch:
+
+jobs:
+  security:
+    # Pinned to a hash (zizmor blanket policy); Dependabot's github-actions ecosystem
+    # keeps this current, so ci-security changes arrive as a reviewed bump, not silently.
+    uses: jonnymuir/ci-security/.github/workflows/dotnet-security.yml@94561c2274456c1461a78592afeba9a0e2174989 # v1
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      pull-requests: write
+    with:
+      solution: Wayfinder.slnx
+      # Wayfinder.Editor packs Wayfinder.Editor.Client's dist as a static web asset, so
+      # that bundle must exist before the C# build CodeQL analyses.
+      node-build: '["Wayfinder.Editor.Client"]'

@@ -17,9 +17,20 @@ builder.Services.AddJourney(options =>
 
 // ...
 
-app.MapJourney("/apply", "my-blueprint-key", "Apply for a thing").RequireAuthorization("Applicant");
-app.MapJourney("/premium", "another-blueprint-key", "Model a premium").RequireAuthorization("Applicant");
+app.MapJourney("/apply", "my-blueprint-key", "Apply for a thing")
+   .RequireAuthorization("Applicant")
+   .ValidateWayfinderAntiforgery();   // if this journey is cookie-authenticated — see below
+app.MapJourney("/premium", "another-blueprint-key", "Model a premium")
+   .RequireAuthorization("Applicant")
+   .ValidateWayfinderAntiforgery();
 ```
+
+If a host authenticates the journey with an ambient browser cookie, chain
+`.ValidateWayfinderAntiforgery()` (from `Wayfinder.Engine.Http`) onto the group and register
+`builder.Services.AddAntiforgery()` + `app.UseAntiforgery()`. The stage form this package renders
+then carries a hidden `__RequestVerificationToken` automatically, and the `POST {prefix}` handler
+rejects a submission without it. See [`Wayfinder.Engine.Http`](../Wayfinder.Engine.Http)'s
+README § CSRF. A bearer-token host needs none of this.
 
 `AddJourney` is called once, the tenant/actor/page-chrome resolution is normally the same across
 every journey a host maps. `MapJourney` is called once per blueprint a host wants a self-service
