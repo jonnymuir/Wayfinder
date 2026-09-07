@@ -1,0 +1,60 @@
+# Dependabot version updates. Security updates (the ones that open PRs for a known CVE)
+# are enabled separately in repo settings and don't need an entry here — this file is
+# only the routine "keep dependencies current" schedule.
+#
+# Everything is weekly and grouped so a quiet week produces at most one PR per ecosystem
+# rather than a dozen. nuget.org is the only feed (see NuGet.config); there is no GitHub
+# Packages source to configure.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      dotnet:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Three independent npm projects, each with its own lockfile.
+  - package-ecosystem: npm
+    directory: "/Wayfinder.Editor.Client"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      editor-client:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: "/Wayfinder.Rendering.GovUk"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      rendering-govuk:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: "/Wayfinder.ReferenceApp.Tests"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      referenceapp-tests:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
