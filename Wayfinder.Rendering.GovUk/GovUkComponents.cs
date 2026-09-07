@@ -338,6 +338,12 @@ public static class GovUkComponents
         var apiUrl = GovUk.Esc(component.BulkDatasetApiUrl);
         var pageSize = component.PageSize ?? 20;
 
+        // Only when the host protects /correct + /revert with antiforgery — the client sends it
+        // back as the RequestVerificationToken header. Omitted entirely otherwise.
+        var antiforgeryAttr = string.IsNullOrEmpty(component.BulkDatasetAntiforgeryToken)
+            ? ""
+            : $""" data-wayfinder-bulk-review-antiforgery-token="{GovUk.Esc(component.BulkDatasetAntiforgeryToken)}" """;
+
         // Every one of these three is genuinely per-service vocabulary (see
         // BulkDataReviewComponent's own remarks) — resolved to a concrete default exactly once,
         // here, so neither this markup nor the client JS that reads it back off these data
@@ -348,7 +354,7 @@ public static class GovUkComponents
 
         return $"""
             {heading}
-            <div class="wayfinder-bulk-review" data-wayfinder-bulk-review data-wayfinder-bulk-review-api="{apiUrl}" data-wayfinder-bulk-review-page-size="{pageSize}" data-wayfinder-bulk-review-synced-label="{GovUk.Esc(syncedLabel)}" data-wayfinder-bulk-review-pending-label="{GovUk.Esc(pendingLabel)}" data-wayfinder-bulk-review-since-label="{GovUk.Esc(sinceLabel)}">
+            <div class="wayfinder-bulk-review" data-wayfinder-bulk-review data-wayfinder-bulk-review-api="{apiUrl}"{antiforgeryAttr} data-wayfinder-bulk-review-page-size="{pageSize}" data-wayfinder-bulk-review-synced-label="{GovUk.Esc(syncedLabel)}" data-wayfinder-bulk-review-pending-label="{GovUk.Esc(pendingLabel)}" data-wayfinder-bulk-review-since-label="{GovUk.Esc(sinceLabel)}">
               <noscript>
                 <p class="govuk-body">Turn on JavaScript to review rows individually, or <a class="govuk-link" href="{apiUrl}/download">download the full file</a> to review it another way.</p>
               </noscript>

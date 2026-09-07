@@ -69,6 +69,32 @@ public class GovUkStageJourneyTests
     }
 
     [Fact]
+    public void RenderJourneyBody_EmitsTheAntiforgeryHiddenInput_WhenAHostSuppliesAToken()
+    {
+        var renderer = new GovUkComponentRenderer();
+        var envelope = Envelope(Step("question", "Your details",
+            new ComponentRenderPayload { Type = "fieldset", Fields = [] }));
+
+        var body = renderer.RenderJourneyBody(envelope, "/advance", antiforgeryToken: "CfDJ8-abc_123");
+
+        body.Should().Contain("""<input type="hidden" name="__RequestVerificationToken" value="CfDJ8-abc_123" />""",
+            "a host that opted into .ValidateWayfinderAntiforgery() needs the token posted back with the form");
+    }
+
+    [Fact]
+    public void RenderJourneyBody_OmitsTheAntiforgeryHiddenInput_WhenNoTokenIsSupplied()
+    {
+        var renderer = new GovUkComponentRenderer();
+        var envelope = Envelope(Step("question", "Your details",
+            new ComponentRenderPayload { Type = "fieldset", Fields = [] }));
+
+        var body = renderer.RenderJourneyBody(envelope, "/advance");
+
+        body.Should().NotContain("__RequestVerificationToken",
+            "a bearer-authenticated host pays nothing and its forms carry no token field");
+    }
+
+    [Fact]
     public void WithFileDownloadUrls_OnlyStampsAUrl_OnAFileUploadFieldWithARealValue()
     {
         var envelope = Envelope(Step("question", "Upload",
@@ -102,6 +128,19 @@ public class GovUkStageJourneyTests
 
         result.Render!.Components[0].BulkDatasetApiUrl.Should().Be("/caseworker/queue/njf-contributions/instance-1/bulk-datasets/dataset-1");
         result.Render.Components[1].BulkDatasetApiUrl.Should().BeNull("nothing ingested yet keeps rendering its own placeholder, not a link to a 404");
+        result.Render.Components[0].BulkDatasetAntiforgeryToken.Should().BeNull("no token was supplied");
+    }
+
+    [Fact]
+    public void WithBulkDatasetApiUrls_StampsTheAntiforgeryToken_WhenAHostSuppliesOne()
+    {
+        var envelope = Envelope(Step("question", "Review",
+            new ComponentRenderPayload { Type = "bulk-data-review", DatasetId = "dataset-1" }));
+
+        var result = envelope.WithBulkDatasetApiUrls(
+            "/umbraco/wayfinder-stage/njf/instance-1/bulk-datasets", antiforgeryToken: "CfDJ8-token");
+
+        result.Render!.Components[0].BulkDatasetAntiforgeryToken.Should().Be("CfDJ8-token");
     }
 
     private static IFormCollection Form(params (string Key, string Value)[] entries) =>

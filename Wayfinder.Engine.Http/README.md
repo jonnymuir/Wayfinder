@@ -27,3 +27,31 @@ writes the resulting `ServiceRequestFileReference` into `fieldValues`. A field w
 this time round is left untouched entirely, so the engine's own merge preserves whatever reference
 (if any) the instance already has stored. Returns one `ServiceRequestProblem` per rejected file,
 empty means every posted file was accepted, or none were posted at all.
+
+## CSRF: `WayfinderAntiforgery`
+
+The `MapJourney`/`MapWorklist`/`MapBulkDatasetReview` route surfaces ship with no auth or
+antiforgery opinion of their own. A host that authenticates them with an **ambient browser
+cookie** must add CSRF protection, or a cross-site form/`fetch` can advance someone else's
+application or pick up a caseworker's item. A host that authenticates them with a **bearer
+token** (no ambient cookie) does not — CSRF does not apply there.
+
+```csharp
+builder.Services.AddAntiforgery();
+// ...
+app.UseAntiforgery();               // after UseAuthentication / UseAuthorization
+// ...
+app.MapWorklist(prefix: "/caseworker/queue")
+   .RequireAuthorization("Caseworker")
+   .ValidateWayfinderAntiforgery();
+```
+
+`ValidateWayfinderAntiforgery()` adds an endpoint filter that validates the ASP.NET antiforgery
+token on every non-safe (`POST`/`PUT`/`PATCH`/`DELETE`) request to the group, returning `400`
+when it is missing or invalid. The GET handlers in the journey/worklist packages then mint a
+request token via `WayfinderAntiforgery.MintRequestVerificationToken(HttpContext)` and render it
+— into each form as a hidden `__RequestVerificationToken` input, and into the bulk-data-review
+component as `data-wayfinder-bulk-review-antiforgery-token` (its client sends the token back as a
+`RequestVerificationToken` header). A host that never calls `ValidateWayfinderAntiforgery()` pays
+nothing: `MintRequestVerificationToken` returns `null` when antiforgery services are absent, and
+the forms carry no token field.

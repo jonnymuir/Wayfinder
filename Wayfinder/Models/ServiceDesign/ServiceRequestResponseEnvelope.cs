@@ -177,6 +177,14 @@ public record ComponentRenderPayload
     /// post-processing step fills it in.
     /// </summary>
     public string? BulkDatasetApiUrl { get; init; }
+    /// <summary>
+    /// Optional ASP.NET antiforgery request token a host renders into the markup when its
+    /// <c>/correct</c> and <c>/revert</c> POST endpoints require CSRF validation — the client
+    /// script sends it as the <c>RequestVerificationToken</c> header. Null for a host that does
+    /// not protect those routes (e.g. an anonymous citizen journey), and the client then sends
+    /// no such header.
+    /// </summary>
+    public string? BulkDatasetAntiforgeryToken { get; init; }
     /// <summary>Raw passthrough of <c>BulkDataReviewComponent.SyncedLabel</c> — null/empty means
     /// the renderer applies its own default ("Synced"). See docs/guides/bulk-data-review.md.</summary>
     public string? SyncedLabel { get; init; }

@@ -23,8 +23,9 @@ consumer. [`Wayfinder.Umbraco`](https://github.com/jonnymuir/Wayfinder.Umbraco) 
 Umbraco-hosted implementation. All three repos publish to nuget.org only, with no GitHub
 Packages feed.
 
-Solo developer project. Work directly on `main` for trivial fixes; feature branches + PRs for
-substantive changes.
+Solo developer project, but every change reaches `main` through a pull request. `main` is
+protected — required status checks, no admin bypass — and stays green at all times. No direct
+pushes.
 
 ## Projects
 
@@ -144,8 +145,10 @@ this project gives behavioural testing.
 
 ### Branch policy
 
-Feature branches + PRs for substantive changes: `{type}/{kebab-slug}`. Direct commits to `main`
-for trivial fixes only.
+Every change goes through a feature branch + PR: `{type}/{kebab-slug}`. `main` is protected
+(required checks, branch must be current before merge, no admin bypass) — there are no direct
+commits to `main`, however trivial. An emergency merge means deliberately, and visibly,
+disabling protection.
 
 ### Commit conventions
 

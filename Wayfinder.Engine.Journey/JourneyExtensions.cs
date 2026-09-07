@@ -57,7 +57,7 @@ public static class JourneyExtensions
             var options = optionsAccessor.Value;
             var envelope = engine.GetCurrent(
                 blueprintKey, options.ResolveTenantId!(ctx), options.ResolveUserId(ctx), options.ResolveAccessProfile!(ctx));
-            var body = renderer.RenderJourneyBody(envelope, prefix);
+            var body = renderer.RenderJourneyBody(envelope, prefix, WayfinderAntiforgery.MintRequestVerificationToken(ctx));
             if (envelope.ResponseState == "complete")
             {
                 body += $"""<p class="govuk-body"><a class="govuk-link" href="{prefix}/new">{GovUk.Esc(startNewLabel)}</a></p>""";
@@ -88,6 +88,7 @@ public static class JourneyExtensions
             var current = engine.GetCurrent(blueprintKey, tenantId, userId, profile);
 
             var form = await ctx.Request.ReadFormAsync();
+            var antiforgeryToken = WayfinderAntiforgery.MintRequestVerificationToken(ctx);
             var action = form["action"].ToString();
             var stateVersion = int.TryParse(form["stateVersion"], out var version) ? version : current.StateVersion;
             var fieldValues = GovUkStageJourney.CoerceFieldValues(form, current.Render);
@@ -96,7 +97,7 @@ public static class JourneyExtensions
             if (fileErrors.Count > 0)
             {
                 return Results.Content(
-                    options.RenderPage!(pageTitle, renderer.RenderJourneyBody(current with { Problems = fileErrors }, prefix), ctx), "text/html");
+                    options.RenderPage!(pageTitle, renderer.RenderJourneyBody(current with { Problems = fileErrors }, prefix, antiforgeryToken), ctx), "text/html");
             }
 
             var result = engine.Advance(current.InstanceId, tenantId, userId, profile, action, stateVersion, fieldValues);
@@ -108,7 +109,7 @@ public static class JourneyExtensions
             if (result.Problems.Count > 0 && result.Render is not null)
             {
                 return Results.Content(
-                    options.RenderPage!(pageTitle, renderer.RenderJourneyBody(result, prefix), ctx), "text/html");
+                    options.RenderPage!(pageTitle, renderer.RenderJourneyBody(result, prefix, antiforgeryToken), ctx), "text/html");
             }
 
             // Redirect rather than render the result directly (POST-redirect-GET): rendering at the

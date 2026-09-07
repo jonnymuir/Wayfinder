@@ -101,7 +101,8 @@ public sealed class GovUkComponentRenderer
         StepContent render,
         IReadOnlyList<ServiceRequestProblem> problems,
         string formAction,
-        int stateVersion)
+        int stateVersion,
+        string? antiforgeryToken = null)
     {
         var errors = BuildErrorLookup(problems);
         var sb = new StringBuilder();
@@ -124,6 +125,12 @@ public sealed class GovUkComponentRenderer
         // simpler than detecting it, and file-free submissions work identically either way.
         sb.Append($"<form method=\"post\" action=\"{GovUk.Esc(formAction)}\" enctype=\"multipart/form-data\">");
         sb.Append($"<input type=\"hidden\" name=\"stateVersion\" value=\"{stateVersion}\" />");
+        // Present only when the host protects the advance route with antiforgery (see
+        // WayfinderAntiforgery.MintRequestVerificationToken) — otherwise omitted entirely.
+        if (!string.IsNullOrEmpty(antiforgeryToken))
+        {
+            sb.Append($"<input type=\"hidden\" name=\"__RequestVerificationToken\" value=\"{GovUk.Esc(antiforgeryToken)}\" />");
+        }
 
         foreach (var component in render.Components)
         {
