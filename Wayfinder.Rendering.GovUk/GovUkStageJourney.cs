@@ -20,7 +20,11 @@ public static class GovUkStageJourney
     /// renders its own <c>&lt;h1&gt;</c>, and a second heading here would be a duplicate the real
     /// GOV.UK panel component isn't designed to sit under) plus its form body.
     /// </summary>
-    public static string RenderJourneyBody(this GovUkComponentRenderer renderer, ServiceRequestResponseEnvelope envelope, string formAction)
+    public static string RenderJourneyBody(
+        this GovUkComponentRenderer renderer,
+        ServiceRequestResponseEnvelope envelope,
+        string formAction,
+        string? antiforgeryToken = null)
     {
         var esc = GovUk.Esc;
         if (envelope.Render is null)
@@ -33,7 +37,7 @@ public static class GovUkStageJourney
             ? ""
             : $"""<h1 class="govuk-heading-xl">{esc(envelope.Render.StateDisplayName)}</h1>""";
 
-        return $"{heading}{renderer.RenderForm(envelope.Render, envelope.Problems, formAction, envelope.StateVersion)}";
+        return $"{heading}{renderer.RenderForm(envelope.Render, envelope.Problems, formAction, envelope.StateVersion, antiforgeryToken)}";
     }
 
     /// <summary>
