@@ -87,7 +87,10 @@ function sanitiseServiceBlueprintSaveErrorLine(value: string): string | null {
   if (
     STACK_TRACE_LINE.test(line)
     || /\.cs:\s*line\s*\d+/i.test(line)
-    || /\(.+:\d+:\d+\)$/.test(line)
+    // `(file:line:col)` at end of a JS stack frame. `[^()]+` (not `.+`) so the match is a
+    // single linear scan from the last '(' — no polynomial backtracking on pathological
+    // input like many unbalanced '(' (js/polynomial-redos).
+    || /\([^()]+:\d+:\d+\)$/.test(line)
   ) {
     return null;
   }
