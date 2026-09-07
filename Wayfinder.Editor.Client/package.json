@@ -52,7 +52,7 @@
     "@storybook/test-runner": "^0.21.0",
     "@storybook/testing-library": "0.2.2",
     "@storybook/web-components": "^8.6.18",
-    "@storybook/web-components-vite": "^8.6.18",
+    "@storybook/web-components-vite": "^10.5.10",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "axe-playwright": "^2.1.0",
