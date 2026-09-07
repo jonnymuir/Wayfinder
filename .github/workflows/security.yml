@@ -1,173 +1,35 @@
 name: Security
 
-# Static analysis (SAST) and supply-chain checks, kept separate from ci.yml so the two
-# can evolve and be required independently. Phase 1 of the security-testing plan:
+# SAST + supply-chain checks. The implementation lives in jonnymuir/ci-security so the
+# same jobs run identically here, in Wayfinder.Umbraco, in Umbraco.Prism, and in any
+# consuming app (NckExchange). See that repo's README.
 #
-#   * CodeQL ....................... advisory for now — findings land in the Security tab,
-#                                    they do NOT fail this workflow yet (see security-all).
-#   * Vulnerable NuGet packages .... BLOCKING — High/Critical fails unless the advisory id
-#                                    is in .github/allowed-advisories.txt.
-#   * Dependency review ............ BLOCKING on PRs — a PR may not introduce a new
-#                                    High+ vulnerable dependency.
-#   * Zizmor ...................... advisory — GitHub Actions SAST on these workflow files.
+# Local knobs that stay in this repo:
+#   * .github/allowed-advisories.txt — accepted High/Critical NuGet advisories (empty).
+#   * .github/dependabot.yml         — version-update schedule (Dependabot reads only
+#                                      the file in this repo).
 #
-# CodeQL runs here via "advanced setup"; the repo's earlier "default setup" must stay
-# disabled or the two configurations conflict.
+# CodeQL "default setup" is disabled for this repo — advanced setup runs from the
+# reusable workflow and the two cannot coexist.
 
 on:
-  workflow_dispatch:
   pull_request:
   push:
     branches: [ main ]
   schedule:
-    # Mondays 03:00 UTC — re-scan unchanged code against newly published advisories.
-    - cron: '0 3 * * 1'
-
-permissions:
-  contents: read
+    - cron: '0 3 * * 1'   # Mondays 03:00 UTC — re-scan against newly published advisories
+  workflow_dispatch:
 
 jobs:
-  codeql:
-    name: CodeQL (${{ matrix.language }})
-    runs-on: ubuntu-latest
+  security:
+    uses: jonnymuir/ci-security/.github/workflows/dotnet-security.yml@v1
     permissions:
       contents: read
       security-events: write
       actions: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: csharp
-            build-mode: manual
-          - language: javascript-typescript
-            build-mode: none
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
-          queries: security-extended
-          # Vendored / generated / third-party code CodeQL should not attribute to us.
-          config: |
-            paths-ignore:
-              - '**/bin'
-              - '**/obj'
-              - '**/node_modules'
-              - '**/wwwroot/dist'
-              - '**/wwwroot/lib'
-              - 'Wayfinder.Rendering.GovUk/**/govuk-frontend/**'
-              - 'assets'
-
-      # csharp is build-mode: manual — reproduce ci.yml's real build so CodeQL analyses the
-      # same compilation. Autobuild can't know the service-blueprint-editor bundle has to be
-      # built first (Wayfinder.Editor packs Wayfinder.Editor.Client's dist as a static web
-      # asset, so the .NET build depends on it existing on disk).
-      - name: Setup Node
-        if: matrix.language == 'csharp'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: Wayfinder.Editor.Client/package-lock.json
-
-      - name: Build editor client bundle
-        if: matrix.language == 'csharp'
-        working-directory: Wayfinder.Editor.Client
-        run: |
-          npm ci
-          npm run build
-
-      - name: Setup .NET
-        if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Build
-        if: matrix.language == 'csharp'
-        run: dotnet build Wayfinder.slnx -c Release
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:${{ matrix.language }}"
-
-  vulnerable-nuget:
-    name: Vulnerable NuGet packages
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore
-        run: dotnet restore Wayfinder.slnx
-
-      - name: Scan
-        run: bash .github/scripts/check-vulnerable-packages.sh Wayfinder.slnx
-
-  dependency-review:
-    name: Dependency review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
       pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          comment-summary-in-pr: on-failure
-
-  zizmor:
-    name: Zizmor (Actions SAST)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-    steps:
-      - uses: actions/checkout@v4
-      # advanced-security defaults to true: uploads SARIF to the Security tab and does
-      # NOT fail the job on findings — advisory-only, matching CodeQL's phase-1 posture.
-      - uses: zizmorcore/zizmor-action@v0.6.3
-
-  # One status check for branch protection to require. Blocks on the supply-chain gates;
-  # CodeQL and Zizmor are advisory in phase 1 and only reported here, not enforced.
-  security-all:
-    name: security-all
-    runs-on: ubuntu-latest
-    needs: [codeql, vulnerable-nuget, dependency-review, zizmor]
-    if: always()
-    steps:
-      - name: Decide
-        env:
-          CODEQL: ${{ needs.codeql.result }}
-          VULN: ${{ needs.vulnerable-nuget.result }}
-          DEPREVIEW: ${{ needs.dependency-review.result }}
-          ZIZMOR: ${{ needs.zizmor.result }}
-        run: |
-          echo "codeql:            $CODEQL   (advisory — not enforced in phase 1)"
-          echo "vulnerable-nuget:  $VULN     (blocking)"
-          echo "dependency-review: $DEPREVIEW (blocking on PRs; skipped otherwise)"
-          echo "zizmor:            $ZIZMOR   (advisory — not enforced in phase 1)"
-
-          if [[ "$VULN" != "success" ]]; then
-            echo "::error::vulnerable-nuget did not pass"
-            exit 1
-          fi
-          case "$DEPREVIEW" in
-            success|skipped) ;;
-            *) echo "::error::dependency-review did not pass"; exit 1 ;;
-          esac
-          echo "Security gate passed."
+    with:
+      solution: Wayfinder.slnx
+      # Wayfinder.Editor packs Wayfinder.Editor.Client's dist as a static web asset, so
+      # that bundle must exist before the C# build CodeQL analyses.
+      node-build: '["Wayfinder.Editor.Client"]'
