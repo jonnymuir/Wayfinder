@@ -36,10 +36,12 @@ jobs:
             fi
           done
 
-      # No npm cache here on purpose: a release workflow must not reuse a cache a PR
-      # could have poisoned (zizmor cache-poisoning). The extra cold install is cheap.
+      # No `cache:` input here on purpose — a release workflow must not restore a cache a
+      # PR could have poisoned. With no cache configured there is nothing for
+      # cache-poisoning to exploit, so the residual zizmor hit on setup-node is a false
+      # positive.
       - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 # zizmor: ignore[cache-poisoning]
         with:
           node-version: '20'
 
