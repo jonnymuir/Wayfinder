@@ -5,6 +5,10 @@
 # Everything is weekly and grouped so a quiet week produces at most one PR per ecosystem
 # rather than a dozen. nuget.org is the only feed (see NuGet.config); there is no GitHub
 # Packages source to configure.
+#
+# `cooldown` holds a newly published version back for 7 days before Dependabot will
+# propose it, so a poisoned release has a window to be spotted and yanked before it
+# reaches a PR here (supply-chain hardening; flagged by zizmor's dependabot-cooldown).
 version: 2
 updates:
   - package-ecosystem: nuget
@@ -12,6 +16,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       dotnet:
@@ -23,6 +29,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -33,6 +41,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       editor-client:
@@ -44,6 +54,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     groups:
       rendering-govuk:
         patterns: ["*"]
@@ -54,6 +66,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7
     groups:
       referenceapp-tests:
         patterns: ["*"]
