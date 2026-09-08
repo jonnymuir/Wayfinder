@@ -11,6 +11,11 @@ export default defineConfig({
   plugins: [storybookTest({ configDir: '.storybook' })],
   test: {
     name: 'storybook',
+    // Browser-mode story tests are more timing-sensitive than the former jest-based
+    // @storybook/test-runner (which retried internally) — the graph-canvas stories in
+    // particular wait on React Flow's async `data-wayfinder-graph-ready` signal, which is
+    // slow under headless WebKit in CI. One retry absorbs that without masking a regression.
+    retry: 1,
     browser: {
       enabled: true,
       provider: playwright(),
