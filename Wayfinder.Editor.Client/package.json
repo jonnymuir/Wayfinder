@@ -11,10 +11,6 @@
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "test-storybook": "test-storybook --url http://localhost:6006",
-    "test-storybook:all": "test-storybook --url http://localhost:6006 --browsers chromium firefox webkit",
-    "test-storybook:ci": "start-server-and-test \"storybook dev -p 6006 --ci\" http://127.0.0.1:6006 test-storybook",
-    "test-storybook:ci:all": "start-server-and-test \"storybook dev -p 6006 --ci\" http://127.0.0.1:6006 \"npm run test-storybook:all\"",
     "test:playwright": "playwright test",
     "test:playwright:service-blueprint-graph-visual": "playwright test tests/service-blueprint-editor/service-blueprint-graph-visual.spec.ts --reporter=line",
     "test:playwright:ui": "playwright test --ui",
@@ -27,7 +23,8 @@
     "test:service-blueprint-validation": "node scripts/run-service-blueprint-validation-tests.mjs",
     "test:server-diagnostic-location": "node scripts/run-server-diagnostic-location-tests.mjs",
     "test:canonical-json": "node scripts/run-canonical-json-tests.mjs",
-    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts support-system-action-editor.spec.ts service-blueprint-editor-validation.spec.ts service-blueprint-editor-definition-tab.spec.ts service-blueprint-editor-help.spec.ts"
+    "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts support-system-action-editor.spec.ts service-blueprint-editor-validation.spec.ts service-blueprint-editor-definition-tab.spec.ts service-blueprint-editor-help.spec.ts",
+    "test-storybook": "vitest run"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -45,21 +42,18 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.46.1",
-    "@storybook/addon-a11y": "^8.6.18",
-    "@storybook/addon-essentials": "^8.6.18",
-    "@storybook/addon-interactions": "^8.6.18",
-    "@storybook/test": "^8.6.18",
-    "@storybook/test-runner": "^0.21.0",
-    "@storybook/testing-library": "0.2.2",
-    "@storybook/web-components": "^8.6.18",
-    "@storybook/web-components-vite": "^8.6.18",
+    "@storybook/addon-a11y": "^10.6.0",
+    "@storybook/addon-docs": "^10.6.0",
+    "@storybook/addon-vitest": "^10.6.0",
+    "@storybook/web-components-vite": "^10.6.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "axe-playwright": "^2.1.0",
+    "@vitest/browser-playwright": "^4.1.11",
     "bootstrap-icons": "^1.13.1",
-    "start-server-and-test": "^2.0.4",
-    "storybook": "^8.6.18",
+    "playwright": "^1.62.1",
+    "storybook": "^10.6.0",
     "typescript": "~5.9.3",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^4.1.11"
   }
 }

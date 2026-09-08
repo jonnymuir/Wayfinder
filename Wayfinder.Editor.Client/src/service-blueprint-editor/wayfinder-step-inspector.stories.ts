@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/web-components';
-import { expect } from '@storybook/test';
+import type { Meta, StoryObj } from '@storybook/web-components-vite';
+import { expect } from 'storybook/test';
 import './wayfinder-step-inspector.js';
 import type { WayfinderStepInspectorElement } from './wayfinder-step-inspector.js';
 import { STUB_ACTION_CATALOG, STUB_SERVICE_BLUEPRINT } from './types.js';
