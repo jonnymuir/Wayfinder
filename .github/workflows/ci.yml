@@ -106,7 +106,7 @@ jobs:
 
       - name: Storybook interaction/a11y tests
         working-directory: Wayfinder.Editor.Client
-        run: npm run test-storybook:ci:all
+        run: npm run test-storybook
 
       # The rest of tests/service-blueprint-editor/ (canvas drag, pixel-perfect arrow
       # endpoints, undo/redo timing) is pixel- and timing-sensitive and isn't part of

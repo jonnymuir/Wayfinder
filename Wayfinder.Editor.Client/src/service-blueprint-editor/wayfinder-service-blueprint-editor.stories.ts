@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/web-components';
-import { expect, waitFor } from '@storybook/test';
+import type { Meta, StoryObj } from '@storybook/web-components-vite';
+import { expect, waitFor } from 'storybook/test';
 import './wayfinder-service-blueprint-editor.js';
 import type { WayfinderServiceBlueprintEditorElement } from './wayfinder-service-blueprint-editor.js';
 import { PLANNING_SERVICE_BLUEPRINT, LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT, cloneAuthoredServiceBlueprint } from './fixtures/index.js';

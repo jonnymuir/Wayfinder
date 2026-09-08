@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/web-components';
-import { expect } from '@storybook/test';
+import type { Meta, StoryObj } from '@storybook/web-components-vite';
+import { expect } from 'storybook/test';
 import './wayfinder-calculations-editor.js';
 import type { WayfinderCalculationsEditorElement } from './wayfinder-calculations-editor.js';
 import type { AuthoredServiceBlueprint, ComponentDescriptor } from './types.js';

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/web-components';
+import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import './wayfinder-service-blueprint-editor-shell.js';
 import type { WayfinderServiceBlueprintEditorShellElement } from './wayfinder-service-blueprint-editor-shell.js';
 import { PAYMENT_DEMO_SERVICE_BLUEPRINT, PLANNING_SERVICE_BLUEPRINT, cloneAuthoredServiceBlueprint } from './fixtures/index.js';
