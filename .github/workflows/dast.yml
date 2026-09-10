@@ -1,0 +1,39 @@
+name: DAST
+
+# Dynamic scan — OWASP ZAP baseline (passive rules only, non-destructive) against a
+# running Wayfinder.ReferenceApp. Implementation lives in jonnymuir/ci-security so the
+# same scan runs identically across the estate. Catches runtime issues SAST can't:
+# missing/mis-set security headers, cookie flags, cache-control, info disclosure.
+#
+# Separate from security.yml because it boots an app (different execution model).
+#
+# Posture: ADVISORY — .zap/rules.tsv is the triage staging ground, `fail-action: false`.
+# When the report is clean of un-IGNOREd findings, flip `fail-action: true` here and add
+# the `DAST baseline` check-run to the branch ruleset.
+#
+# Phase 3a: unauthenticated scan of the reference app in the Development environment.
+# Later phases add authenticated scanning, a Production-env leg, and the Umbraco hosts.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'   # nightly 04:00 UTC (SAST runs Mondays 03:00)
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  baseline:
+    # SHA-pinned (zizmor blanket policy); Dependabot's github-actions ecosystem keeps
+    # this current, so ci-security changes arrive as a reviewed bump.
+    uses: jonnymuir/ci-security/.github/workflows/dast-baseline.yml@b04501237e602d3012742cb6a1096ca507a58cab # v1
+    permissions:
+      contents: read
+    with:
+      boot-command: dotnet run --project Wayfinder.ReferenceApp --urls http://127.0.0.1:8080
+      target-url: http://127.0.0.1:8080
+      health-path: /account/login
+      # Wayfinder.Editor packs Wayfinder.Editor.Client's dist as a static web asset the
+      # host serves — it must exist before the reference app boots.
+      node-build: '["Wayfinder.Editor.Client"]'
+      # rules-file-path defaults to .zap/rules.tsv
+      # fail-action defaults to false (advisory) — flip once .zap/rules.tsv is tuned

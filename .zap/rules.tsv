@@ -1,0 +1,16 @@
+# OWASP ZAP baseline scan rules for the DAST job (.github/workflows/dast.yml).
+#
+# Tab-separated: <alertId>	<action>	<url-regex>	<optional note>
+#   action = IGNORE  — accepted / not applicable, never fails the scan
+#            WARN     — reported, does not fail the scan (default for anything not listed)
+#            FAIL     — reported and fails the scan
+#   url-regex — leave as a single "*" to apply to every URL
+#
+# The scan is ADVISORY for now (fail-action: false in dast.yml) — this file is the
+# staging ground: as each finding from the nightly report is judged, add an IGNORE
+# line with a note, or fix it. Once the report is clean of un-IGNOREd findings,
+# flip fail-action to true and add the "DAST baseline" check-run to the ruleset.
+#
+# alert IDs: https://www.zaproxy.org/docs/alerts/
+#
+# (no rules yet — every finding is reported as WARN)
