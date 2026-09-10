@@ -163,6 +163,50 @@ builder.Services.AddWorklist(options =>
 
 var app = builder.Build();
 
+// Security response headers — first in the pipeline so they cover static assets too. A real host
+// would centralise this (its own middleware, a CDN, a gateway); the reference app carries it
+// inline to show the minimum a Wayfinder host should set, and so the estate's DAST baseline
+// (OWASP ZAP, see .github/workflows/dast.yml) scans a representative target.
+//
+// CSP is tuned to exactly what the rendered pages need:
+//   - script-src: 'self' for the vendored govuk-frontend / wayfinder JS under /_content/…, plus
+//     the sha256 of GOV.UK Frontend's inline "js-enabled" bootstrap in PageShell.cs. No
+//     'unsafe-inline', no 'unsafe-eval' — the editor bundle is a plain ES module with neither.
+//   - style-src: 'unsafe-inline' is required — PageShell.cs has two inline style="…" attributes
+//     on the signed-in nav, and the editor's @xyflow/react canvas injects <style> at runtime.
+//   - img-src data:: the editor's service-blueprint-editor.html uses a data: SVG favicon.
+// No HSTS: this reference host is plain HTTP in Development. A TLS-terminated deployment adds
+// app.UseHsts() + Strict-Transport-Security. COEP is deliberately omitted — it would block the
+// cross-origin-isolation-free loading of the _content/* static web assets.
+const string contentSecurityPolicy =
+    "default-src 'self'; " +
+    "script-src 'self' 'sha256-GUQ5ad8JK5KmEWmROf3LZd9ge94daqNvd8xy9YS1iDw='; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data:; " +
+    "font-src 'self'; " +
+    "connect-src 'self'; " +
+    "form-action 'self'; " +
+    "frame-ancestors 'none'; " +
+    "base-uri 'self'; " +
+    "object-src 'none'";
+
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["Content-Security-Policy"] = contentSecurityPolicy;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers["Cross-Origin-Opener-Policy"] = "same-origin";
+    headers["Cross-Origin-Resource-Policy"] = "same-origin";
+    headers["Permissions-Policy"] =
+        "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), " +
+        "fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), " +
+        "midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), " +
+        "screen-wake-lock=(), sync-xhr=(), usb=(), xr-spatial-tracking=()";
+    await next();
+});
+
 app.MapDefaultEndpoints();
 
 // This app's own wwwroot — just its favicon/manifest branding now. The real govuk-frontend
