@@ -4,13 +4,52 @@
 #   action = IGNORE  — accepted / not applicable, never fails the scan
 #            WARN     — reported, does not fail the scan (default for anything not listed)
 #            FAIL     — reported and fails the scan
-#   url-regex — leave as a single "*" to apply to every URL
+#   url-regex — omit (empty 3rd column) to apply to every URL; otherwise a Python
+#               regex matched against the finding's URL
 #
-# The scan is ADVISORY for now (fail-action: false in dast.yml) — this file is the
-# staging ground: as each finding from the nightly report is judged, add an IGNORE
-# line with a note, or fix it. Once the report is clean of un-IGNOREd findings,
-# flip fail-action to true and add the "DAST baseline" check-run to the ruleset.
+# Posture: BLOCKING (fail-action: true in dast.yml) — every finding below has been
+# judged and accepted; a NEW un-IGNOREd WARN/FAIL now fails the scan. Re-triage this
+# file whenever a new phase widens the scan (authenticated pages, the Umbraco hosts).
 #
 # alert IDs: https://www.zaproxy.org/docs/alerts/
 #
-# (no rules yet — every finding is reported as WARN)
+# --- Triaged from the 2026-09-10 unauthenticated baseline of Wayfinder.ReferenceApp ---
+
+# Absence of Anti-CSRF Tokens — the unauthenticated login form only. A pre-auth login
+# form has no session to protect with a synchroniser token; every POST form behind auth
+# carries __RequestVerificationToken via Wayfinder.Engine.Http's WayfinderAntiforgery.
+# The Phase 3c authenticated scan MUST retune this — it must NOT inherit a blanket IGNORE.
+10202	IGNORE		unauthenticated login form; authenticated forms carry __RequestVerificationToken
+
+# CSP style-src 'unsafe-inline' — required: @xyflow/react (the editor canvas) injects
+# <style> elements at runtime, so no nonce or hash can cover them. script-src has NO
+# 'unsafe-inline' and NO 'unsafe-eval'. Revisit if the editor drops React Flow, or if
+# dast.yml starts serving a per-route CSP (strict on the GOV.UK pages, relaxed on /editor).
+10055	IGNORE		@xyflow/react injects runtime <style>; script-src stays strict
+
+# Cross-Origin-Embedder-Policy missing — COEP: require-corp would block the cross-origin
+# _content/* static web assets and the data: SVG favicon. This host does not adopt
+# cross-origin isolation (no SharedArrayBuffer / high-res timers).
+90004	IGNORE		COEP require-corp would break _content/* static web assets
+
+# Private IP Disclosure in the favicon — "10.02.68.86" is ZAP mis-reading SVG path /
+# coordinate data as an IPv4. There is no IP address in the file.
+2	IGNORE	.*/assets/images/favicon\.svg	SVG path data mis-parsed as an IPv4
+
+# Timestamp Disclosure (Unix) in vendored GOV.UK Frontend CSS — "1904761905" is a numeric
+# literal in the minified stylesheet, not a timestamp. Third-party vendored asset.
+10096	IGNORE	.*/govuk-frontend/govuk-frontend\.min\.css	numeric literal in minified vendored CSS
+
+# Suspicious Comments in the vendored / authored rendering JS — matches on plain English
+# words ("from", "where", "user") inside genuine prose code comments. No secrets, no
+# security-relevant TODO markers.
+10027	IGNORE	.*/_content/Wayfinder\.Rendering\.GovUk/js/.*	prose words in genuine code comments
+
+# Authentication Request Identified — informational; ZAP noting the login POST carries a
+# "password" field. That is the login form working as intended.
+10111	IGNORE	.*/account/login	informational: this is the login form
+
+# Non-Storable / Storable-and-Cacheable Content — informational cache-control notes: the
+# 302 on "/" and cacheable immutable static web assets. Correct behaviour. Revisit for
+# sensitive authenticated responses under the Phase 3c scan.
+10049	IGNORE		informational cache-control notes on a redirect + static assets

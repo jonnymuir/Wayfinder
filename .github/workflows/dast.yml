@@ -7,9 +7,10 @@ name: DAST
 #
 # Separate from security.yml because it boots an app (different execution model).
 #
-# Posture: ADVISORY — .zap/rules.tsv is the triage staging ground, `fail-action: false`.
-# When the report is clean of un-IGNOREd findings, flip `fail-action: true` here and add
-# the `DAST baseline` check-run to the branch ruleset.
+# Posture: BLOCKING — every finding from the first unauthenticated baseline is triaged in
+# .zap/rules.tsv (accepted ones marked IGNORE), so `fail-action: true` and the `DAST
+# baseline` check-run is required in the branch ruleset. A new un-IGNOREd finding fails.
+# Re-triage .zap/rules.tsv when a later phase widens the scan (authenticated pages, hosts).
 #
 # Phase 3a: unauthenticated scan of the reference app in the Development environment.
 # Later phases add authenticated scanning, a Production-env leg, and the Umbraco hosts.
@@ -36,4 +37,4 @@ jobs:
       # host serves — it must exist before the reference app boots.
       node-build: '["Wayfinder.Editor.Client"]'
       # rules-file-path defaults to .zap/rules.tsv
-      # fail-action defaults to false (advisory) — flip once .zap/rules.tsv is tuned
+      fail-action: true
