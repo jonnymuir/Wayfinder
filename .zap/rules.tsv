@@ -27,10 +27,13 @@
 # dast.yml starts serving a per-route CSP (strict on the GOV.UK pages, relaxed on /editor).
 10055	IGNORE		@xyflow/react injects runtime <style>; script-src stays strict
 
-# Cross-Origin-Embedder-Policy missing — COEP: require-corp would block the cross-origin
-# _content/* static web assets and the data: SVG favicon. This host does not adopt
-# cross-origin isolation (no SharedArrayBuffer / high-res timers).
-90004	IGNORE		COEP require-corp would break _content/* static web assets
+# Cross-Origin-Embedder-Policy missing — COEP: require-corp exists only to enable
+# cross-origin isolation (SharedArrayBuffer, high-resolution timers), which this host
+# does not use. On its own it does nothing (isolation also needs COOP: same-origin,
+# which the middleware does set). Enabling it would just impose a strict opt-in gate on
+# every present and future subresource for no security benefit. Not a vulnerability —
+# ZAP flags the header's absence generically.
+90004	IGNORE		COEP only matters for cross-origin isolation, which this host does not use
 
 # Private IP Disclosure in the favicon — "10.02.68.86" is ZAP mis-reading SVG path /
 # coordinate data as an IPv4. There is no IP address in the file.
