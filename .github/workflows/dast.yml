@@ -12,10 +12,14 @@ name: DAST
 # baseline` check-run is required in the branch ruleset. A new un-IGNOREd finding fails.
 # Re-triage .zap/rules.tsv when a later phase widens the scan (authenticated pages, hosts).
 #
+# Runs on every pull_request (so the required check reports pre-merge, like CodeQL/zizmor),
+# on push to main, nightly, and on demand.
+#
 # Phase 3a: unauthenticated scan of the reference app in the Development environment.
 # Later phases add authenticated scanning, a Production-env leg, and the Umbraco hosts.
 
 on:
+  pull_request:
   schedule:
     - cron: '0 4 * * *'   # nightly 04:00 UTC (SAST runs Mondays 03:00)
   push:
