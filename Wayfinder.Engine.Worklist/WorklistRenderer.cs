@@ -75,6 +75,14 @@ public static class WorklistRenderer
     /// not a rendered hidden-input tag — <see cref="RenderPickupPutbackControl"/> builds that tag
     /// itself. <c>null</c>/empty omits the field (a host validating antiforgery a different way).
     /// </param>
+    /// <param name="emptyStateMessage">
+    /// Shown in place of the table body when nothing matches the current filters. Defaults to this
+    /// package's own vocabulary; a host whose domain model uses a different noun for a work item
+    /// (Wayfinder.Umbraco's worklist block passes "No service requests match the current filters",
+    /// matching its own <c>ServiceRequestWorklistService</c>) supplies its own — found live: adopting
+    /// this renderer silently changed that host's displayed copy until a consumer's own Playwright
+    /// suite (pinned on the old wording) caught it.
+    /// </param>
     public static string RenderWorklistBody(
         string listUrl,
         string itemUrlPrefix,
@@ -86,7 +94,8 @@ public static class WorklistRenderer
         int pageIndex,
         int size,
         string teamNav = "",
-        string? antiforgeryToken = null)
+        string? antiforgeryToken = null,
+        string emptyStateMessage = "No applications match the current filters")
     {
         var esc = GovUk.Esc;
 
@@ -164,7 +173,7 @@ public static class WorklistRenderer
         };
 
         var rows = envelope.Items.Count == 0
-            ? """<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="5">No applications match the current filters</td></tr>"""
+            ? $"""<tr class="govuk-table__row"><td class="govuk-table__cell" colspan="5">{esc(emptyStateMessage)}</td></tr>"""
             // A waiting item (this caseworker's own cursor parked at a join gateway, waiting on
             // another queue) has nothing to act on yet, but must stay visible and reachable. A
             // done item is genuinely finished, and an unassigned team-tray row hasn't been picked
