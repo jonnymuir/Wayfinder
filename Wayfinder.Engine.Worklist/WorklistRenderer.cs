@@ -14,6 +14,13 @@ namespace Wayfinder.Engine.Worklist;
 /// </summary>
 public static class WorklistRenderer
 {
+    // The exact SVG govuk-frontend's own pagination/template.njk macro emits for the prev/next
+    // arrows — copied, not redrawn, so this stays pixel-identical to the real component.
+    private const string PaginationPrevIcon =
+        """<svg class="govuk-pagination__icon govuk-pagination__icon--prev" xmlns="http://www.w3.org/2000/svg" height="13" width="15" aria-hidden="true" focusable="false" viewBox="0 0 15 13"><path d="m6.5938-0.0078125-6.7266 6.7266 6.7441 6.4062 1.377-1.449-4.1856-3.9768h12.896v-2h-12.984l4.2931-4.293-1.414-1.414z"></path></svg>""";
+    private const string PaginationNextIcon =
+        """<svg class="govuk-pagination__icon govuk-pagination__icon--next" xmlns="http://www.w3.org/2000/svg" height="13" width="15" aria-hidden="true" focusable="false" viewBox="0 0 15 13"><path d="m8.107-0.0078125-1.4136 1.414 4.2926 4.293h-12.986v2h12.896l-4.1855 3.9766 1.377 1.4492 6.7441-6.4062-6.7246-6.7266z"></path></svg>""";
+
     /// <summary>
     /// Parses a worklist page's own filter/sort/search/pagination query-string parameters into the
     /// engine call + rendering inputs <see cref="RenderWorklistBody"/> needs. A plain HTML checkbox
@@ -112,7 +119,7 @@ public static class WorklistRenderer
 
         // Preserves every other current filter/sort/search choice — only `page` varies — so
         // paging never silently resets a caseworker's status/sort/search selection.
-        string PageLink(int targetPageIndex, string label)
+        string PageHref(int targetPageIndex)
         {
             var query = string.Join("&", selectedStatuses.Select(s => $"status={Uri.EscapeDataString(s.ToString())}")
                 .Append($"sort={Uri.EscapeDataString(parsedSort.ToString())}")
@@ -121,7 +128,7 @@ public static class WorklistRenderer
                 .Append($"pageSize={size}")
                 .Append("statusFilterApplied=1")
                 .Where(part => part is not null));
-            return $"""<a class="govuk-link" href="{listUrl}?{query}">{label}</a>""";
+            return $"{listUrl}?{query}";
         }
 
         var filterForm = $"""
@@ -193,15 +200,41 @@ public static class WorklistRenderer
                 </tr>
                 """));
 
+        // The real GOV.UK Pagination component, "block" variant (previous/next only — no page-
+        // number list, since a worklist doesn't know its own total page count up front any more
+        // meaningfully than "keep clicking Next"). Matches the govuk-frontend template.njk macro
+        // exactly, including omitting a direction's whole <div> rather than rendering it disabled
+        // when there's no page that way — see Wayfinder.Rendering.GovUk's own bulk-data-review
+        // pagination for the same pattern already used elsewhere in this codebase.
         var hasNextPage = (pageIndex + 1) * size < envelope.TotalMatchingCount;
+        var prevLink = pageIndex > 0
+            ? $"""
+            <div class="govuk-pagination__prev">
+              <a class="govuk-link govuk-pagination__link" href="{PageHref(pageIndex - 1)}" rel="prev">
+                {PaginationPrevIcon}
+                <span class="govuk-pagination__link-title govuk-pagination__link-title--decorated">Previous<span class="govuk-visually-hidden"> page</span></span>
+              </a>
+            </div>
+            """
+            : "";
+        var nextLink = hasNextPage
+            ? $"""
+            <div class="govuk-pagination__next">
+              <a class="govuk-link govuk-pagination__link" href="{PageHref(pageIndex + 1)}" rel="next">
+                <span class="govuk-pagination__link-title govuk-pagination__link-title--decorated">Next<span class="govuk-visually-hidden"> page</span></span>
+                {PaginationNextIcon}
+              </a>
+            </div>
+            """
+            : "";
         var pagination = envelope.TotalMatchingCount == 0
             ? ""
             : $"""
-            <nav class="govuk-!-margin-top-4">
-              {(pageIndex > 0 ? PageLink(pageIndex - 1, "Previous") : """<span class="govuk-body">Previous</span>""")}
-              <span class="govuk-body">Page {pageIndex + 1} — showing {envelope.Items.Count} of {envelope.TotalMatchingCount}</span>
-              {(hasNextPage ? PageLink(pageIndex + 1, "Next") : """<span class="govuk-body">Next</span>""")}
+            <nav class="govuk-pagination govuk-pagination--block govuk-!-margin-top-4" aria-label="Worklist pages">
+              {prevLink}
+              {nextLink}
             </nav>
+            <p class="govuk-body">Page {pageIndex + 1} — showing {envelope.Items.Count} of {envelope.TotalMatchingCount}</p>
             """;
 
         var heading = string.IsNullOrEmpty(pageTitle) ? "" : $"""<h1 class="govuk-heading-xl">{esc(pageTitle)}</h1>""";
