@@ -7,16 +7,23 @@ name: DAST
 #
 # Separate from security.yml because it boots an app (different execution model).
 #
-# Posture: BLOCKING — every finding from the first unauthenticated baseline is triaged in
-# .zap/rules.tsv (accepted ones marked IGNORE), so `fail-action: true` and the `DAST
-# baseline` check-run is required in the branch ruleset. A new un-IGNOREd finding fails.
-# Re-triage .zap/rules.tsv when a later phase widens the scan (authenticated pages, hosts).
+# Posture: BLOCKING — both legs. Every finding from each one's first scan is triaged in
+# .zap/rules.tsv (accepted ones marked IGNORE), so `fail-action: true` on both and both
+# check-runs (`baseline / DAST baseline`, `authenticated-baseline / DAST baseline`) are
+# required in the branch ruleset. A new un-IGNOREd finding fails. Re-triage .zap/rules.tsv
+# when a later phase widens either scan.
+#
+# The `authenticated-baseline` leg (Phase 3c) scans as a signed-in caseworker via cookie
+# replay (see ci-security's login-command), reaching pages the unauthenticated spider never
+# finds (the worklist, bulk-data review, ...) — 39 URLs vs. the unauthenticated leg's much
+# smaller surface on its own first run.
 #
 # Runs on every pull_request (so the required check reports pre-merge, like CodeQL/zizmor),
 # on push to main, nightly, and on demand.
 #
 # Phase 3a: unauthenticated scan of the reference app in the Development environment.
-# Later phases add authenticated scanning, a Production-env leg, and the Umbraco hosts.
+# Phase 3c: the authenticated leg below. Later phases add a Production-env leg and the
+# Umbraco hosts (Wayfinder.Umbraco has its own dast.yml, mirroring this one).
 
 on:
   pull_request:
@@ -30,7 +37,7 @@ jobs:
   baseline:
     # SHA-pinned (zizmor blanket policy); Dependabot's github-actions ecosystem keeps
     # this current, so ci-security changes arrive as a reviewed bump.
-    uses: jonnymuir/ci-security/.github/workflows/dast-baseline.yml@b04501237e602d3012742cb6a1096ca507a58cab # v1
+    uses: jonnymuir/ci-security/.github/workflows/dast-baseline.yml@2f3bd71dbd7de04d80d6bd50cb4a8727e0730967 # v1
     permissions:
       contents: read
     with:
@@ -42,3 +49,36 @@ jobs:
       node-build: '["Wayfinder.Editor.Client"]'
       # rules-file-path defaults to .zap/rules.tsv
       fail-action: true
+
+  authenticated-baseline:
+    uses: jonnymuir/ci-security/.github/workflows/dast-baseline.yml@2f3bd71dbd7de04d80d6bd50cb4a8727e0730967 # v1
+    permissions:
+      contents: read
+    with:
+      boot-command: dotnet run --project Wayfinder.ReferenceApp --urls http://127.0.0.1:8080
+      target-url: http://127.0.0.1:8080
+      health-path: /account/login
+      node-build: '["Wayfinder.Editor.Client"]'
+      # Signs in as the demo caseworker persona (the broader of the two demo roles) via the
+      # reference app's own /account/login POST — see Wayfinder.ReferenceApp/Services/
+      # DemoUsers.cs. Cookie replay, not a ZAP-scripted login (see ci-security's own
+      # login-command doc): a baseline scan is passive-only, so no active-auth mechanism
+      # is needed.
+      login-command: |
+        set -euo pipefail
+        jar="$RUNNER_TEMP/zap-login-jar.txt"
+        curl -sS -c "$jar" -o /dev/null http://127.0.0.1:8080/account/login
+        curl -sS -c "$jar" -b "$jar" -o /dev/null -L \
+          --data-urlencode "email=caseworker@example.test" \
+          --data-urlencode "password=wayfinder-demo" \
+          http://127.0.0.1:8080/account/login
+        # curl's Netscape jar prefixes an HttpOnly cookie's line with "#HttpOnly_" on the
+        # domain field — ASP.NET Core's own cookie-auth cookie is HttpOnly by default, so a
+        # naive "skip lines starting with #" filter silently drops exactly the cookie this
+        # needs. Strip that prefix first, then the normal comment/field filter applies.
+        # No space after each ";" (RFC 6265 cookie-pairs don't require one, and most parsers
+        # accept both) — found live: a literal space inside the -z value's replacement=...
+        # confuses zap-baseline.py's own re-splitting of that string before it reaches ZAP.
+        awk -F'\t' '/^#HttpOnly_/ { sub(/^#HttpOnly_/, ""); } !/^#/ && NF==7 { printf "%s=%s;", $6, $7 }' "$jar" | sed 's/;$//' > "$RUNNER_TEMP/zap-auth-cookie.txt"
+      fail-action: true
+      artifact-name: zap-authenticated-baseline-report
