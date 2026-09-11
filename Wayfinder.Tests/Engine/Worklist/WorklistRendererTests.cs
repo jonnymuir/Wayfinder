@@ -43,7 +43,7 @@ public class WorklistRendererTests
     }
 
     [Fact]
-    public void Pagination_and_its_page_links_carry_govuk_body_and_govuk_link()
+    public void Pagination_is_the_real_govuk_pagination_block_component_with_a_separate_page_status_paragraph()
     {
         var envelope = new QueueWorkListEnvelope { Items = [ActionableItem], TotalMatchingCount = 45 };
 
@@ -52,11 +52,37 @@ public class WorklistRendererTests
             [QueueWorkItemStatus.Actionable], QueueWorkListSort.Default,
             q: null, pageIndex: 1, size: 20);
 
-        // The exact regression this guards: a bare <span>/<a> with no govuk-* class falls back to
-        // the browser's serif default — see PR fixing Wayfinder.Umbraco's own worklist block.
-        html.Should().Contain("""<span class="govuk-body">Page 2 — showing 1 of 45</span>""");
-        html.Should().MatchRegex("""<a class="govuk-link" href="[^"]*">Previous</a>""");
-        html.Should().MatchRegex("""<a class="govuk-link" href="[^"]*">Next</a>""");
+        // The real GOV.UK Pagination component (block variant), not a hand-rolled prev/next
+        // string — the exact regression this guards: the previous hand-rolled version squashed
+        // "Previous"/the page-status text/"Next" onto one line with no separating markup at all.
+        html.Should().Contain("""<nav class="govuk-pagination govuk-pagination--block govuk-!-margin-top-4" aria-label="Worklist pages">""");
+        html.Should().Contain("""<div class="govuk-pagination__prev">""");
+        html.Should().Contain("""<div class="govuk-pagination__next">""");
+        html.Should().MatchRegex("""<a class="govuk-link govuk-pagination__link" href="[^"]*" rel="prev">""");
+        html.Should().MatchRegex("""<a class="govuk-link govuk-pagination__link" href="[^"]*" rel="next">""");
+        html.Should().Contain("""<p class="govuk-body">Page 2 — showing 1 of 45</p>""");
+    }
+
+    [Fact]
+    public void Pagination_omits_the_prev_link_entirely_on_the_first_page_and_the_next_link_on_the_last()
+    {
+        // Matches govuk-frontend's own template.njk: a direction with no href is omitted whole,
+        // not rendered as a disabled-looking link — see that macro's `{%- if previous and previous.href %}`.
+        var firstPage = WorklistRenderer.RenderWorklistBody(
+            "/worklist", "/worklist", "My work",
+            new QueueWorkListEnvelope { Items = [ActionableItem], TotalMatchingCount = 45 },
+            [QueueWorkItemStatus.Actionable], QueueWorkListSort.Default,
+            q: null, pageIndex: 0, size: 20);
+        firstPage.Should().NotContain("govuk-pagination__prev");
+        firstPage.Should().Contain("govuk-pagination__next");
+
+        var lastPage = WorklistRenderer.RenderWorklistBody(
+            "/worklist", "/worklist", "My work",
+            new QueueWorkListEnvelope { Items = [ActionableItem], TotalMatchingCount = 45 },
+            [QueueWorkItemStatus.Actionable], QueueWorkListSort.Default,
+            q: null, pageIndex: 2, size: 20);
+        lastPage.Should().Contain("govuk-pagination__prev");
+        lastPage.Should().NotContain("govuk-pagination__next");
     }
 
     [Fact]
