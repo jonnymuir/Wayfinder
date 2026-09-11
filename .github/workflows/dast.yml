@@ -37,7 +37,7 @@ jobs:
   baseline:
     # SHA-pinned (zizmor blanket policy); Dependabot's github-actions ecosystem keeps
     # this current, so ci-security changes arrive as a reviewed bump.
-    uses: jonnymuir/ci-security/.github/workflows/dast-baseline.yml@b1702ac59bd0915f7c00489734325798e3a861c6 # v1
+    uses: jonnymuir/ci-security/.github/workflows/dast-baseline.yml@2f3bd71dbd7de04d80d6bd50cb4a8727e0730967 # v1
     permissions:
       contents: read
     with:
@@ -51,7 +51,7 @@ jobs:
       fail-action: true
 
   authenticated-baseline:
-    uses: jonnymuir/ci-security/.github/workflows/dast-baseline.yml@b1702ac59bd0915f7c00489734325798e3a861c6 # v1
+    uses: jonnymuir/ci-security/.github/workflows/dast-baseline.yml@2f3bd71dbd7de04d80d6bd50cb4a8727e0730967 # v1
     permissions:
       contents: read
     with:
