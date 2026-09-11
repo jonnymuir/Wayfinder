@@ -8,7 +8,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Worklist</PackageId>
     <Title>Wayfinder Engine Worklist</Title>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
     <Description>A default, optional caseworker worklist surface — server-rendered GOV.UK markup for the filter/sort/search/paginated list (see docs/guides/queue-worklist-filtering.md), an item review page, advance, and per-cursor pickup/putback (see docs/guides/work-allocation.md). A host wires it up with AddWorklist()/MapWorklist(prefix), supplying only tenant/actor resolution and its own page chrome — or, for a host whose own routing model doesn't fit a mounted route group, calls WorklistRenderer's rendering functions directly and supplies its own routes.</Description>

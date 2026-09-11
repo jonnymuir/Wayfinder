@@ -74,6 +74,24 @@ public class WorklistRendererTests
     }
 
     [Fact]
+    public void A_host_can_override_the_empty_state_message_with_its_own_vocabulary()
+    {
+        // Regression: adopting this renderer silently changed Wayfinder.Umbraco's displayed
+        // "no results" copy from its own "service requests" wording to this package's default
+        // "applications" wording — caught by a downstream consumer's Playwright suite, not here.
+        var envelope = new QueueWorkListEnvelope { Items = [], TotalMatchingCount = 0 };
+
+        var html = WorklistRenderer.RenderWorklistBody(
+            "/worklist", "/worklist", "My work", envelope,
+            [QueueWorkItemStatus.Actionable], QueueWorkListSort.Default,
+            q: null, pageIndex: 0, size: 20,
+            emptyStateMessage: "No service requests match the current filters");
+
+        html.Should().Contain("No service requests match the current filters");
+        html.Should().NotContain("No applications match the current filters");
+    }
+
+    [Fact]
     public void A_null_page_title_omits_the_heading_entirely()
     {
         // For a host embedding this in a page that already has its own heading — an Umbraco Block
