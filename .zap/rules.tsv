@@ -57,3 +57,16 @@
 # 302 on "/" and cacheable immutable static web assets. Correct behaviour. Revisit for
 # sensitive authenticated responses under the Phase 3c scan.
 10049	IGNORE		informational cache-control notes on a redirect + static assets
+
+# --- Triaged from the 2026-09-11 authenticated (Phase 3c) baseline, signed in as the demo
+#     caseworker — 39 URLs reached vs. the unauthenticated scan's much smaller surface. ---
+
+# User Controllable HTML Element Attribute (Potential XSS) — the caseworker queue's search
+# box reflects ?q= back into its <input value="…">. Verified: WorklistRenderer.cs renders
+# it via esc(q ?? ""), which is GovUk.Esc → WebUtility.HtmlEncode — ZAP's heuristic can't
+# see server-side escaping, it just flags "user input landed in an attribute". Genuinely
+# escaped, not a vulnerability.
+10031	IGNORE	.*/caseworker/queue.*	q is HTML-encoded via GovUk.Esc (WebUtility.HtmlEncode) before landing in value="…"
+
+# Modern Web Application — informational; ZAP noting the service blueprint editor is a SPA.
+10109	IGNORE	.*/service-blueprint-editor\.html.*	informational: the editor is a SPA

@@ -7,16 +7,16 @@ name: DAST
 #
 # Separate from security.yml because it boots an app (different execution model).
 #
-# Posture: BLOCKING for the unauthenticated leg (`baseline`) — every finding from the first
-# scan is triaged in .zap/rules.tsv (accepted ones marked IGNORE), so `fail-action: true` and
-# the `baseline / DAST baseline` check-run is required in the branch ruleset. A new
-# un-IGNOREd finding fails. Re-triage .zap/rules.tsv when a later phase widens the scan.
+# Posture: BLOCKING — both legs. Every finding from each one's first scan is triaged in
+# .zap/rules.tsv (accepted ones marked IGNORE), so `fail-action: true` on both and both
+# check-runs (`baseline / DAST baseline`, `authenticated-baseline / DAST baseline`) are
+# required in the branch ruleset. A new un-IGNOREd finding fails. Re-triage .zap/rules.tsv
+# when a later phase widens either scan.
 #
-# The `authenticated-baseline` leg (Phase 3c) is ADVISORY for now (`fail-action: false`) —
-# same "advisory then required" rollout the unauthenticated leg itself followed. It scans as
-# a signed-in caseworker via cookie replay (see ci-security's login-command), reaching pages
-# the unauthenticated spider never finds (the worklist, bulk-data review, ...). Flip it to
-# blocking and add its check-run to the ruleset once its own first-run findings are triaged.
+# The `authenticated-baseline` leg (Phase 3c) scans as a signed-in caseworker via cookie
+# replay (see ci-security's login-command), reaching pages the unauthenticated spider never
+# finds (the worklist, bulk-data review, ...) — 39 URLs vs. the unauthenticated leg's much
+# smaller surface on its own first run.
 #
 # Runs on every pull_request (so the required check reports pre-merge, like CodeQL/zizmor),
 # on push to main, nightly, and on demand.
@@ -80,7 +80,5 @@ jobs:
         # accept both) — found live: a literal space inside the -z value's replacement=...
         # confuses zap-baseline.py's own re-splitting of that string before it reaches ZAP.
         awk -F'\t' '/^#HttpOnly_/ { sub(/^#HttpOnly_/, ""); } !/^#/ && NF==7 { printf "%s=%s;", $6, $7 }' "$jar" | sed 's/;$//' > "$RUNNER_TEMP/zap-auth-cookie.txt"
-      # Advisory until this leg's own first-run findings are triaged into .zap/rules.tsv —
-      # see this file's own header comment.
-      fail-action: false
+      fail-action: true
       artifact-name: zap-authenticated-baseline-report
