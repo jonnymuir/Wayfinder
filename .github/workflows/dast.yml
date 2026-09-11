@@ -76,7 +76,10 @@ jobs:
         # domain field — ASP.NET Core's own cookie-auth cookie is HttpOnly by default, so a
         # naive "skip lines starting with #" filter silently drops exactly the cookie this
         # needs. Strip that prefix first, then the normal comment/field filter applies.
-        awk -F'\t' '/^#HttpOnly_/ { sub(/^#HttpOnly_/, ""); } !/^#/ && NF==7 { printf "%s=%s; ", $6, $7 }' "$jar" | sed 's/; $//' > "$RUNNER_TEMP/zap-auth-cookie.txt"
+        # No space after each ";" (RFC 6265 cookie-pairs don't require one, and most parsers
+        # accept both) — found live: a literal space inside the -z value's replacement=...
+        # confuses zap-baseline.py's own re-splitting of that string before it reaches ZAP.
+        awk -F'\t' '/^#HttpOnly_/ { sub(/^#HttpOnly_/, ""); } !/^#/ && NF==7 { printf "%s=%s;", $6, $7 }' "$jar" | sed 's/;$//' > "$RUNNER_TEMP/zap-auth-cookie.txt"
       # Advisory until this leg's own first-run findings are triaged into .zap/rules.tsv —
       # see this file's own header comment.
       fail-action: false
