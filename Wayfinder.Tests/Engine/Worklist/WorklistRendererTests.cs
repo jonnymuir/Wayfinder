@@ -103,6 +103,22 @@ public class WorklistRendererTests
     }
 
     [Fact]
+    public void The_review_link_carries_listUrl_as_a_returnTo_query_parameter()
+    {
+        // A host whose item-detail route can't render inline (it 302s back into a CMS page
+        // render instead — see Wayfinder.Umbraco's WayfinderWorklistSurfaceController) needs to
+        // know where "back to worklist" goes; this is a real bug found live, not a hypothetical.
+        var envelope = new QueueWorkListEnvelope { Items = [ActionableItem], TotalMatchingCount = 1 };
+
+        var html = WorklistRenderer.RenderWorklistBody(
+            "/caseworker-queue", "/worklist", "My work", envelope,
+            [QueueWorkItemStatus.Actionable], QueueWorkListSort.Default,
+            q: null, pageIndex: 0, size: 20);
+
+        html.Should().Contain($"""href="/worklist/licence/{ActionableItem.InstanceId}?returnTo=%2Fcaseworker-queue">Review</a>""");
+    }
+
+    [Fact]
     public void Pickup_control_carries_govuk_button_and_the_antiforgery_token_when_supplied()
     {
         var html = WorklistRenderer.RenderPickupPutbackControl(
