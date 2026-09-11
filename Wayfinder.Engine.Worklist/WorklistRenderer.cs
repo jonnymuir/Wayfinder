@@ -74,7 +74,7 @@ public static class WorklistRenderer
     public static string RenderWorklistBody(
         string listUrl,
         string itemUrlPrefix,
-        string pageTitle,
+        string? pageTitle,
         QueueWorkListEnvelope envelope,
         IReadOnlyCollection<QueueWorkItemStatus> selectedStatuses,
         QueueWorkListSort parsedSort,
@@ -191,8 +191,10 @@ public static class WorklistRenderer
             </nav>
             """;
 
+        var heading = string.IsNullOrEmpty(pageTitle) ? "" : $"""<h1 class="govuk-heading-xl">{esc(pageTitle)}</h1>""";
+
         return $"""
-            <h1 class="govuk-heading-xl">{esc(pageTitle)}</h1>
+            {heading}
             {teamNav}
             {filterForm}
             <table class="govuk-table">

@@ -74,6 +74,21 @@ public class WorklistRendererTests
     }
 
     [Fact]
+    public void A_null_page_title_omits_the_heading_entirely()
+    {
+        // For a host embedding this in a page that already has its own heading — an Umbraco Block
+        // Grid component, say — RenderWorklistBody must not impose a second, duplicate <h1>.
+        var envelope = new QueueWorkListEnvelope { Items = [], TotalMatchingCount = 0 };
+
+        var html = WorklistRenderer.RenderWorklistBody(
+            "/worklist", "/worklist", pageTitle: null, envelope,
+            [QueueWorkItemStatus.Actionable], QueueWorkListSort.Default,
+            q: null, pageIndex: 0, size: 20);
+
+        html.Should().NotContain("<h1");
+    }
+
+    [Fact]
     public void Status_tags_use_the_real_govuk_tag_classes()
     {
         var waiting = ActionableItem with { Status = QueueWorkItemStatus.Waiting, PickupState = null };
