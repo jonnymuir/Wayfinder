@@ -72,7 +72,11 @@ jobs:
           --data-urlencode "email=caseworker@example.test" \
           --data-urlencode "password=wayfinder-demo" \
           http://127.0.0.1:8080/account/login
-        awk -F'\t' '!/^#/ && NF==7 {printf "%s=%s; ", $6, $7}' "$jar" | sed 's/; $//' > "$RUNNER_TEMP/zap-auth-cookie.txt"
+        # curl's Netscape jar prefixes an HttpOnly cookie's line with "#HttpOnly_" on the
+        # domain field — ASP.NET Core's own cookie-auth cookie is HttpOnly by default, so a
+        # naive "skip lines starting with #" filter silently drops exactly the cookie this
+        # needs. Strip that prefix first, then the normal comment/field filter applies.
+        awk -F'\t' '/^#HttpOnly_/ { sub(/^#HttpOnly_/, ""); } !/^#/ && NF==7 { printf "%s=%s; ", $6, $7 }' "$jar" | sed 's/; $//' > "$RUNNER_TEMP/zap-auth-cookie.txt"
       # Advisory until this leg's own first-run findings are triaged into .zap/rules.tsv —
       # see this file's own header comment.
       fail-action: false
