@@ -18,8 +18,9 @@
 # Absence of Anti-CSRF Tokens — the unauthenticated login form only. A pre-auth login
 # form has no session to protect with a synchroniser token; every POST form behind auth
 # carries __RequestVerificationToken via Wayfinder.Engine.Http's WayfinderAntiforgery.
-# The Phase 3c authenticated scan MUST retune this — it must NOT inherit a blanket IGNORE.
-10202	IGNORE		unauthenticated login form; authenticated forms carry __RequestVerificationToken
+# Scoped (Phase 3c, authenticated scan): a blanket IGNORE here would have silently hidden
+# a real finding on an authenticated form.
+10202	IGNORE	.*/account/login	unauthenticated login form
 
 # CSP style-src 'unsafe-inline' — required: @xyflow/react (the editor canvas) injects
 # <style> elements at runtime, so no nonce or hash can cover them. script-src has NO
