@@ -3,8 +3,9 @@
 A default, optional caseworker worklist surface, server-rendered GOV.UK markup for the
 filter/sort/search/paginated queue list (see docs/guides/queue-worklist-filtering.md), an item
 review page, advance, and per-cursor pickup/putback (see docs/guides/work-allocation.md). A host
-wires it up once, or ignores this package entirely and hand-writes the same routes itself, as
-`Wayfinder.ReferenceApp` originally did.
+wires it up once with `AddWorklist()`/`MapWorklist(prefix)` — or, for a host whose own routing
+model doesn't fit a mounted route group (an Umbraco Block Grid component, say), calls
+`WorklistRenderer`'s rendering functions directly and supplies its own routes.
 
 ## Usage
 
@@ -42,6 +43,31 @@ hardcoded, so a host can mount this at any path it likes:
 - `POST {prefix}/{blueprintKey}/{instanceId}/advance`
 - `POST {prefix}/{blueprintKey}/{instanceId}/pickup?cursorId=...`
 - `POST {prefix}/{blueprintKey}/{instanceId}/putback?cursorId=...`
+
+## Using `WorklistRenderer` directly
+
+A host whose own routing model doesn't fit `MapWorklist`'s mounted route group — Umbraco's Block
+Grid, for instance, where a "worklist" is one component embedded in an editor-composed page rather
+than a standalone route tree — calls the same rendering functions `MapWorklist` itself uses,
+supplying its own URLs and antiforgery token instead of a `prefix`:
+
+```csharp
+var (statuses, selectedStatuses, sort, pageIndex, size) = WorklistRenderer.ParseWorklistQuery(
+    status: Request.Query["status"], sort: Request.Query["sort"], page: ..., pageSize: ...,
+    statusFilterApplied: Request.Query["statusFilterApplied"], defaultPageSize: 20);
+
+var envelope = processManager.GetQueueWorkItems(tenantId, userId, accessProfile, statuses, sort, q, pageIndex, size);
+
+var body = WorklistRenderer.RenderWorklistBody(
+    listUrl: myListUrl, itemUrlPrefix: myItemUrlPrefix, pageTitle: null, // null: the host's own page already has a heading
+    envelope, selectedStatuses, sort, q, pageIndex, size,
+    antiforgeryToken: myAntiforgery.GetAndStoreTokens(HttpContext).RequestToken);
+```
+
+`itemUrlPrefix` still has to resolve `{itemUrlPrefix}/{blueprintKey}/{instanceId}/pickup?cursorId=...`
+/ `.../putback?...` to a real pickup/putback endpoint of the host's own, reading the `returnTo`
+hidden field `RenderPickupPutbackControl` posts alongside `cursorId` — see `Wayfinder.Umbraco`'s
+own worklist Block Grid component for a real, non-`MapWorklist` consumer.
 
 ## What's deliberately left out
 
