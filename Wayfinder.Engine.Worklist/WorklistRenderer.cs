@@ -60,7 +60,11 @@ public static class WorklistRenderer
     /// <param name="itemUrlPrefix">
     /// Prefix item review/pickup/putback links and form actions are built from. Always the same
     /// value regardless of which list view rendered the row (a team view's rows still link to the
-    /// worklist's own item pages).
+    /// worklist's own item pages). The review/view link also carries <paramref name="listUrl"/> as
+    /// a <c>returnTo</c> query parameter — a host whose item-detail route can't render inline (no
+    /// GET body of its own, e.g. one that 302s back into a CMS page render) reads it to know where
+    /// "back to worklist" goes; a host that renders the item directly at that route (this package's
+    /// own <see cref="WorklistExtensions.MapWorklist"/>) simply ignores the extra parameter.
     /// </param>
     /// <param name="teamNav">
     /// Pre-rendered "My work" / per-team nav markup, or <c>""</c> for a host with no team concept
@@ -175,7 +179,7 @@ public static class WorklistRenderer
                     {StatusTag(item.Status)}
                   </td>
                   <td class="govuk-table__cell">{esc(item.InstanceId[..Math.Min(8, item.InstanceId.Length)])}…</td>
-                  <td class="govuk-table__cell"><a class="govuk-link" href="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}">{(item.Status == QueueWorkItemStatus.Actionable ? "Review" : "View")}</a></td>
+                  <td class="govuk-table__cell"><a class="govuk-link" href="{itemUrlPrefix}/{Uri.EscapeDataString(item.BlueprintKey)}/{Uri.EscapeDataString(item.InstanceId)}?returnTo={Uri.EscapeDataString(listUrl)}">{(item.Status == QueueWorkItemStatus.Actionable ? "Review" : "View")}</a></td>
                   <td class="govuk-table__cell">{RenderPickupPutbackControl(item, itemUrlPrefix, listUrl, antiforgeryToken)}</td>
                 </tr>
                 """));
