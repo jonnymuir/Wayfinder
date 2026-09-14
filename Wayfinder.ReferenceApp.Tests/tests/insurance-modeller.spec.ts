@@ -106,6 +106,25 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     await expect(page.locator('#performancesPerYear')).toBeFocused();
   });
 
+  test('the chart\'s legend swatches show their real colour, not blank', async ({ page }) => {
+    // Found live (Umbraco.Prism's Money Modeller demo, same wayfinder-live-form.js): the bars
+    // themselves already got real colour via a safe element.style.* write, but rebuildChart
+    // never touched the legend at all — it stayed entirely server-rendered, carrying the exact
+    // same literal style="background:..." a strict CSP with no unsafe-inline blocks outright.
+    await loginAs(page, DEMO_USERS.applicant);
+    await page.goto('/premium');
+
+    const swatches = page.locator('.wayfinder-chart__swatch');
+    const count = await swatches.count();
+    expect(count).toBeGreaterThan(0);
+
+    for (let i = 0; i < count; i += 1) {
+      const backgroundColor = await swatches.nth(i).evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+      expect(backgroundColor).not.toBe('');
+    }
+  });
+
   test('recalculation is genuinely local — zero network requests, no server-side calc runs at all', async ({ page }) => {
     await loginAs(page, DEMO_USERS.applicant);
     await page.goto('/premium');
