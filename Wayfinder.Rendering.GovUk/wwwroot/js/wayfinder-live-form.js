@@ -215,6 +215,20 @@ function rebuildChart(figure, series) {
     color: band.color ?? palette[index % palette.length],
   }));
 
+  // The legend itself is server-rendered once and never otherwise touched by this function —
+  // its swatches carry the same literal style="background:..." a strict CSP with no
+  // unsafe-inline blocks. Unlike the bars below, nothing was ever repainting them through a
+  // safe element.style.* write. Found live (Umbraco.Prism's Money Modeller demo): the bars
+  // themselves had real colour, but every legend swatch next to them stayed blank.
+  const legendItems = figure.querySelectorAll('.wayfinder-chart__legend-item');
+  legendItems.forEach((item, index) => {
+    const swatch = item.querySelector('.wayfinder-chart__swatch');
+    const color = bands[index]?.color;
+    if (swatch && color) {
+      swatch.style.background = color;
+    }
+  });
+
   const numeric = rows.map((row) => ({
     x: row[config.x] instanceof Dec ? row[config.x].toNumber() : 0,
     values: bands.map((band) => (row[band.key] instanceof Dec ? row[band.key].toNumber() : 0)),
