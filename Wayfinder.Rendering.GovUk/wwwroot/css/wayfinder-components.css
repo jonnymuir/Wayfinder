@@ -258,6 +258,20 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+  /* The chart's own accessible data table (RenderChart's own genuinely-accessible fallback,
+     never a substitute for the visual chart) is this class's only current user, and a <table>
+     is the one element this otherwise-standard visually-hidden pattern doesn't actually
+     constrain: default table-layout: auto lets a table render at its own content-driven
+     intrinsic width regardless of an explicit width: 1px, since auto layout prioritises not
+     truncating cell content over honouring a specified width. The table stays genuinely
+     invisible (clip + 1px box) either way, but position: absolute doesn't remove it from
+     contributing to an ancestor's scrollable overflow — found live, on Umbraco.Prism's mobile
+     shell: a many-row chart table rendering at its full ~500px content width silently made the
+     whole page horizontally scrollable, well past a ~390px phone viewport, with nothing visibly
+     wrong to explain it (the table itself is invisible by design). table-layout: fixed makes the
+     table actually honour the explicit width instead.
+  */
+  table-layout: fixed;
 }
 
 .wayfinder-bulk-review__summary {

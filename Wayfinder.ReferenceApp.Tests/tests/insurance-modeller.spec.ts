@@ -125,6 +125,21 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     }
   });
 
+  test('the page does not scroll horizontally on a narrow viewport', async ({ page }) => {
+    // Found live, on Umbraco.Prism's mobile shell: the chart's own visually-hidden accessible
+    // data table rendered at its full content-driven width (a <table> is the one element
+    // wayfinder-visually-hidden's explicit width: 1px doesn't actually constrain under default
+    // table-layout: auto), making the whole page horizontally scrollable on a phone-width
+    // viewport — despite the table itself being genuinely invisible by design, so nothing
+    // visible pointed at the cause.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAs(page, DEMO_USERS.applicant);
+    await modelPremium(page);
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
   test('recalculation is genuinely local — zero network requests, no server-side calc runs at all', async ({ page }) => {
     await loginAs(page, DEMO_USERS.applicant);
     await page.goto('/premium');
