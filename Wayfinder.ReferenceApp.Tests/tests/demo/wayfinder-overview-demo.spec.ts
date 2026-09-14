@@ -2,9 +2,10 @@ import { test, expect, type Browser, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { LiveAppHost } from '../support/live-app-host';
-import { beat, clearBeat, showSlate, clearSlate, moveNarrationTo, startNarrationTimeline, getNarrationTimeline } from './support/narration';
-import { humanClick, humanCheck, humanType, humanMoveTo } from './support/human-interactions';
-import { qrCodeDataUri } from './support/qr';
+import {
+  beat, clearBeat, showSlate, clearSlate, moveNarrationTo, startNarrationTimeline, getNarrationTimeline,
+  humanClick, humanCheck, humanType, humanMoveTo, qrCodeDataUri
+} from 'wayfinder-demo-recording-kit';
 
 /**
  * A narrated, single-take walkthrough of Wayfinder itself, for a viewer who has never seen it

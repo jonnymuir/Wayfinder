@@ -3,8 +3,10 @@ import { mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { LiveAppHost } from '../support/live-app-host';
-import { beat, clearBeat, showSlate, clearSlate, moveNarrationTo, startNarrationTimeline, getNarrationTimeline } from './support/narration';
-import { humanClick, humanType, humanMoveTo } from './support/human-interactions';
+import {
+  beat, clearBeat, showSlate, clearSlate, moveNarrationTo, startNarrationTimeline, getNarrationTimeline,
+  humanClick, humanType, humanMoveTo
+} from 'wayfinder-demo-recording-kit';
 
 /**
  * A narrated, single-take walkthrough of bulk data review (see docs/guides/bulk-data-review.md
