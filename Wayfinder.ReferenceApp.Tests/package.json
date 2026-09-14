@@ -15,8 +15,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.46.1",
-    "@types/qrcode-generator": "^1.0.6",
     "axe-core": "^4.13.0",
-    "qrcode-generator": "^2.0.4"
+    "wayfinder-demo-recording-kit": "github:jonnymuir/wayfinder-demo-recording-kit#v1.0.0"
   }
 }
