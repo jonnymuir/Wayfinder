@@ -2550,6 +2550,22 @@ public class ProcessManagerEngine : IProcessManager
         null => null,
         decimal d => JsonValue.Create(d),
         bool b => JsonValue.Create(b),
+        // Any other plain CLR numeric type a host's own serviceInputsResolver might reasonably
+        // return (e.g. a plain `int Age` on its own member-record type, not pre-cast to
+        // decimal) — found live: without these, an int fell through to the string.ToString()
+        // case below and silently produced a JSON *string* ("47") instead of a JSON number
+        // (47) in the embedded [data-wayfinder-live-model] payload. The client's own
+        // toScope/calculation engine (UmbracoPrism.Client) only type-converts genuine JSON
+        // numbers into evaluator Dec values, so every expression referencing the field (e.g.
+        // "max(55, member.age + 1)") threw "Expected a number but got '47'" — which silently
+        // aborted the client-side live-form's entire re-evaluation, leaving whatever the
+        // server happened to render (a chart's bars/legend included) stuck uncorrected.
+        int i => JsonValue.Create((decimal)i),
+        long l => JsonValue.Create((decimal)l),
+        short s => JsonValue.Create((decimal)s),
+        byte by => JsonValue.Create((decimal)by),
+        double db => JsonValue.Create((decimal)db),
+        float f => JsonValue.Create((decimal)f),
         string text => JsonValue.Create(text),
         IReadOnlyDictionary<string, object?> map => new JsonObject(
             map.Select(pair => new KeyValuePair<string, JsonNode?>(pair.Key, ScopeValueToJson(pair.Value)))),
