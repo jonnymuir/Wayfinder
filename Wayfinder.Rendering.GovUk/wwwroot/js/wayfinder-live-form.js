@@ -188,6 +188,14 @@ function boot() {
       update();
     }
   });
+
+  // One script-driven paint on load, same path as every later update() — charts and stat cards
+  // are otherwise left showing whatever the server rendered, including any literal style="..."
+  // attribute a strict style-src CSP (no unsafe-inline) silently drops (confirmed live,
+  // Umbraco.Prism's TestSite: "style-src 'self'"). element.style.* writes aren't restricted by
+  // that directive, so running update() once here gives every bound element a real first paint
+  // under any CSP, not just after the visitor's first interaction.
+  update();
 }
 
 function rebuildChart(figure, series) {

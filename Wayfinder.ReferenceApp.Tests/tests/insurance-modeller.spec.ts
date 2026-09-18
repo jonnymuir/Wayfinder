@@ -125,6 +125,50 @@ test.describe('Insurance premium modeller: model, request, review', () => {
     }
   });
 
+  test('the chart bars paint on first load under a strict style-src CSP with no unsafe-inline', async ({ page }) => {
+    // This reference app's own CSP deliberately allows 'unsafe-inline' for style-src (see
+    // Program.cs's own comment on contentSecurityPolicy), so the legend-swatch test above can't
+    // actually catch a CSP-only failure — under this app's own permissive CSP, the server's raw
+    // style="..." attributes always apply regardless of whether any script ever touches them.
+    // A stricter host (Umbraco.Prism's TestSite: "style-src 'self'", no unsafe-inline, no nonce)
+    // silently drops every one of those literal style attributes — confirmed live via the
+    // browser's own console: "Applying inline style violates the following Content Security
+    // Policy directive 'style-src 'self''...". The legend fix (see the test above) already
+    // repaints itself via a safe element.style.* write inside rebuildChart(), which CSP doesn't
+    // restrict — but rebuildChart() is only ever reached from update(), and boot() never calls
+    // update() itself, so the chart *bars* still depend entirely on the CSP-blocked
+    // server-rendered attribute for their first paint, same failure class as the legend had.
+    // Reproduce that here by stripping 'unsafe-inline' from this response's own style-src, the
+    // same class of CSP the affected host actually sends.
+    await page.route('**/premium', async (route) => {
+      if (route.request().resourceType() !== 'document') {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const headers = { ...response.headers() };
+      if (headers['content-security-policy']) {
+        headers['content-security-policy'] = headers['content-security-policy'].replace(
+          "style-src 'self' 'unsafe-inline'",
+          "style-src 'self'"
+        );
+      }
+      await route.fulfill({ response, headers, body: await response.body() });
+    });
+
+    await loginAs(page, DEMO_USERS.applicant);
+    await page.goto('/premium');
+
+    // .style.height is the parsed CSSOM value — populated only when a real stylesheet rule or a
+    // script-driven element.style.* write set it. A CSP-blocked HTML style="..." attribute never
+    // reaches the CSSOM at all, so this stays "" even though getAttribute('style') still shows
+    // the (inert) server-rendered text — exactly the distinction that caught this bug live.
+    const firstSegment = page.locator('.wayfinder-chart__bar > div').first();
+    await expect(firstSegment).toBeAttached();
+    const height = await firstSegment.evaluate((el) => (el as HTMLElement).style.height);
+    expect(height, 'the bar segment must get its height from a script-driven write, not a CSP-blocked inline attribute').not.toBe('');
+  });
+
   test('the page does not scroll horizontally on a narrow viewport', async ({ page }) => {
     // Found live, on Umbraco.Prism's mobile shell: the chart's own visually-hidden accessible
     // data table rendered at its full content-driven width (a <table> is the one element

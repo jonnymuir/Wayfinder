@@ -119,10 +119,9 @@ public static class GovUkStageJourney
     /// </summary>
     public static Dictionary<string, object?> CoerceFieldValues(IFormCollection form, StepContent? render)
     {
-        var fieldValues = new Dictionary<string, object?>();
         if (render is null)
         {
-            return fieldValues;
+            return new Dictionary<string, object?>();
         }
 
         // Only components that actually render editable controls. A summary-list is always a
@@ -142,6 +141,29 @@ public static class GovUkStageJourney
             .Where(component => component.Type != "summary-list")
             .SelectMany(component => component.Fields)
             .ToDictionary(field => field.FieldKey, field => field.FieldType, StringComparer.Ordinal);
+
+        return CoerceFieldValues(form, fieldsByKey);
+    }
+
+    /// <summary>
+    /// The same coercion as the <see cref="StepContent"/> overload above, for a caller that
+    /// already has its own authoritative field-key/field-type map rather than a full
+    /// <see cref="StepContent"/> render (e.g. a nonce-bound field list resolved independently of
+    /// any one render pass) — <c>fieldsByKey</c> must already exclude anything that must never be
+    /// coerced as though it were posted back (read-only rows, most notably summary-list children;
+    /// see the <see cref="StepContent"/> overload's own remarks on why that matters).
+    ///
+    /// This is this package's <em>only</em> implementation of "posted day/month/year boxes → one
+    /// ISO field value" (via <see cref="GovUk.CombineIsoDate"/>) and of every other field-type
+    /// coercion rule here — a host must call this rather than re-deriving any part of it, the same
+    /// "no duplication of anything the Wayfinder repo already ships" rule as this package's own.
+    /// A hand-rolled second implementation (Wayfinder.Umbraco's own, briefly) silently transposed
+    /// day and month: an unpadded, slash-joined <c>$"{day}/{month}/{year}"</c> parses back
+    /// culture-dependently, unlike <see cref="GovUk.CombineIsoDate"/>'s unambiguous ISO output.
+    /// </summary>
+    public static Dictionary<string, object?> CoerceFieldValues(IFormCollection form, IReadOnlyDictionary<string, string> fieldsByKey)
+    {
+        var fieldValues = new Dictionary<string, object?>();
 
         foreach (var (fieldKey, fieldType) in fieldsByKey)
         {
