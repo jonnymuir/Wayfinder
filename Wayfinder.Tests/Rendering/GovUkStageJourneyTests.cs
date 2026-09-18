@@ -250,6 +250,22 @@ public class GovUkStageJourneyTests
     [Fact]
     public void CoerceFieldValues_NullRender_ReturnsAnEmptyDictionary()
     {
-        GovUkStageJourney.CoerceFieldValues(Form(("field:anything", "x")), null).Should().BeEmpty();
+        GovUkStageJourney.CoerceFieldValues(Form(("field:anything", "x")), (StepContent?)null).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CoerceFieldValues_TheFieldKeyToTypeMapOverload_CombinesADateExactlyLikeTheStepContentOverload()
+    {
+        // This is the seam a host with its own authoritative field list (not a full StepContent)
+        // must call — Wayfinder.Umbraco's ServiceRequestStageService once hand-rolled this exact
+        // concern instead, as an unpadded, slash-joined "{day}/{month}/{year}", which parses back
+        // culture-dependently and silently transposed day and month. Pin the correct behaviour
+        // directly on this overload so no caller ever needs to re-derive it.
+        var fieldsByKey = new Dictionary<string, string> { ["dob"] = "date" };
+        var form = Form(("field:dob-day", "3"), ("field:dob-month", "4"), ("field:dob-year", "1990"));
+
+        var result = GovUkStageJourney.CoerceFieldValues(form, fieldsByKey);
+
+        result["dob"].Should().Be("1990-04-03", "day=3, month=4 must combine as 3 April, not be transposed");
     }
 }
