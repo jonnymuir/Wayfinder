@@ -31,6 +31,32 @@ public interface IProcessManager
     ServiceRequestResponseEnvelope GetCurrentOrStartFresh(
         string blueprintKey, string tenantId, string userId, ActorProfile accessProfile);
 
+    /// <summary>
+    /// The gated entry point a citizen-facing surface must use for an untrusted <c>action:
+    /// "start-new"</c> request (e.g. a "Start again" link's query string) — refuses it unless the
+    /// blueprint declares <c>ServiceBlueprint.AllowManualRestart</c>, falling back to plain ambient
+    /// <c>GetCurrent</c> rather than erroring. See <c>ProcessManagerEngine.GetCurrentOrManualRestart</c>'s
+    /// own remarks; <see cref="GetCurrentOrStartFresh"/> remains the ungated primitive for trusted
+    /// internal callers.
+    ///
+    /// The default implementation here is a plain check against <see cref="GetDefinition"/> —
+    /// provided purely so an existing host-authored <see cref="IProcessManager"/> keeps compiling
+    /// after this method was added (the same reasoning as <c>IServiceRequestStore.TrySaveIfVersionMatches</c>'s
+    /// own default body). <c>ProcessManagerEngine</c> overrides it with a more direct lookup against
+    /// its own already-loaded definitions, plus a diagnostic log line.
+    /// </summary>
+    ServiceRequestResponseEnvelope GetCurrentOrManualRestart(
+        string blueprintKey, string tenantId, string userId, ActorProfile accessProfile)
+    {
+        var definition = GetDefinition(blueprintKey);
+        if (definition is null || !definition.AllowManualRestart)
+        {
+            return GetCurrent(blueprintKey, tenantId, userId, accessProfile);
+        }
+
+        return GetCurrent(blueprintKey, tenantId, userId, accessProfile, action: "start-new");
+    }
+
     ServiceRequestResponseEnvelope Advance(
         string instanceId,
         string tenantId,
