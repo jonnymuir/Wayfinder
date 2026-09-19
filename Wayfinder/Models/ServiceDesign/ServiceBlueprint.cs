@@ -573,26 +573,37 @@ public record ServiceBlueprint
 
                 var hasValueKind = !string.IsNullOrWhiteSpace(field.ValueKind);
                 var hasDefault = !string.IsNullOrWhiteSpace(field.Default);
+                var hasShape = field.Shape is { Count: > 0 };
                 var normalisedKind = field.ValueKind?.Trim().ToLowerInvariant();
 
-                if ((hasValueKind || hasDefault) && !isService)
+                if ((hasValueKind || hasDefault || hasShape) && !isService)
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
                         "CALC_FIELD_VALUE_KIND_WITHOUT_SERVICE",
                         $"calculations.fields.{name}",
-                        $"'{name}' declares {(hasValueKind ? "valueKind" : "default")}, which is only " +
-                        "meaningful with source: \"service\" (an authoring-time aid for a value an external " +
-                        "system supplies). Remove it, or add \"source\": \"service\"."));
+                        $"'{name}' declares {(hasValueKind ? "valueKind" : hasDefault ? "default" : "shape")}, " +
+                        "which is only meaningful with source: \"service\" (an authoring-time aid for a value " +
+                        "an external system supplies). Remove it, or add \"source\": \"service\"."));
                 }
                 else if (isService)
                 {
+                    if (hasValueKind && hasShape)
+                    {
+                        diagnostics.Add(new ServiceBlueprintDiagnostic(
+                            "CALC_FIELD_SHAPE_AND_VALUE_KIND",
+                            $"calculations.fields.{name}",
+                            $"'{name}' declares both valueKind and shape — an object field has no single " +
+                            "scalar kind. Declare one or the other."));
+                    }
+
                     if (hasValueKind && normalisedKind is not ("number" or "string" or "boolean"))
                     {
                         diagnostics.Add(new ServiceBlueprintDiagnostic(
                             "CALC_FIELD_INVALID_VALUE_KIND",
                             $"calculations.fields.{name}",
                             $"'{name}' declares valueKind '{field.ValueKind}'. Expected \"number\", " +
-                            "\"string\" or \"boolean\", or omit it for a value with no scalar kind."));
+                            "\"string\" or \"boolean\", or omit it for a value with no scalar kind " +
+                            "(declare \"shape\" instead for an object)."));
                     }
 
                     if (hasDefault && !hasValueKind)
@@ -620,11 +631,88 @@ public record ServiceBlueprint
                             $"calculations.fields.{name}",
                             $"'{name}' declares valueKind \"boolean\" but its default '{field.Default}' is not true/false."));
                     }
+
+                    if (hasShape)
+                    {
+                        ValidateCalculationFieldShape($"calculations.fields.{name}", field.Shape!, diagnostics);
+                    }
                 }
             }
         }
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// The same structural checks the loop above applies to a top-level <c>source: "service"</c>
+    /// field's own <c>valueKind</c>/<c>default</c> — recursed over a declared <c>shape</c>'s
+    /// properties, since each one is exactly that same shape (a leaf's own valueKind/default, or a
+    /// further nested shape). <paramref name="path"/> mirrors the JSON structure being validated
+    /// (e.g. <c>calculations.fields.member.shape.address.shape.postcode</c>), so a diagnostic
+    /// points at exactly where in a deeply-nested declaration the problem is.
+    /// </summary>
+    private static void ValidateCalculationFieldShape(
+        string path,
+        IReadOnlyDictionary<string, Calculations.ServiceBlueprintCalculationFieldShape> shape,
+        List<ServiceBlueprintDiagnostic> diagnostics)
+    {
+        foreach (var (propertyName, property) in shape)
+        {
+            var propertyPath = $"{path}.shape.{propertyName}";
+            var hasValueKind = !string.IsNullOrWhiteSpace(property.ValueKind);
+            var hasDefault = !string.IsNullOrWhiteSpace(property.Default);
+            var hasNestedShape = property.Shape is { Count: > 0 };
+            var normalisedKind = property.ValueKind?.Trim().ToLowerInvariant();
+
+            if (hasValueKind && hasNestedShape)
+            {
+                diagnostics.Add(new ServiceBlueprintDiagnostic(
+                    "CALC_FIELD_SHAPE_AND_VALUE_KIND",
+                    propertyPath,
+                    $"'{propertyPath}' declares both valueKind and its own nested shape — an object " +
+                    "property has no single scalar kind. Declare one or the other."));
+            }
+
+            if (hasValueKind && normalisedKind is not ("number" or "string" or "boolean"))
+            {
+                diagnostics.Add(new ServiceBlueprintDiagnostic(
+                    "CALC_FIELD_INVALID_VALUE_KIND",
+                    propertyPath,
+                    $"'{propertyPath}' declares valueKind '{property.ValueKind}'. Expected \"number\", " +
+                    "\"string\" or \"boolean\", or omit it for a nested object (declare \"shape\" instead)."));
+            }
+
+            if (hasDefault && !hasValueKind)
+            {
+                diagnostics.Add(new ServiceBlueprintDiagnostic(
+                    "CALC_FIELD_DEFAULT_WITHOUT_VALUE_KIND",
+                    propertyPath,
+                    $"'{propertyPath}' declares a default but no valueKind — validation can't parse the " +
+                    "default without knowing its kind. Add \"valueKind\": \"number\" | \"string\" | \"boolean\"."));
+            }
+            else if (hasDefault && normalisedKind == "number" &&
+                     !decimal.TryParse(property.Default!.Replace("£", "").Replace(",", "").Trim(),
+                         NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+            {
+                diagnostics.Add(new ServiceBlueprintDiagnostic(
+                    "CALC_FIELD_DEFAULT_UNPARSEABLE",
+                    propertyPath,
+                    $"'{propertyPath}' declares valueKind \"number\" but its default '{property.Default}' is not a number."));
+            }
+            else if (hasDefault && normalisedKind == "boolean" &&
+                     !bool.TryParse(property.Default!.Trim(), out _))
+            {
+                diagnostics.Add(new ServiceBlueprintDiagnostic(
+                    "CALC_FIELD_DEFAULT_UNPARSEABLE",
+                    propertyPath,
+                    $"'{propertyPath}' declares valueKind \"boolean\" but its default '{property.Default}' is not true/false."));
+            }
+
+            if (hasNestedShape)
+            {
+                ValidateCalculationFieldShape(propertyPath, property.Shape!, diagnostics);
+            }
+        }
     }
 
     /// <summary>

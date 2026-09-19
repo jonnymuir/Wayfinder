@@ -254,4 +254,337 @@ public class ServiceBlueprintAuthoringServiceServiceFieldTests
         outcome.IsValid.Should().BeTrue();
         outcome.Diagnostics.Should().NotContain(d => d.Code == "CALC_SERVICE_FIELD_UNVERIFIED");
     }
+
+    // ── Shape: declaring the properties of an object-shaped service field ──────────────────────
+
+    [Fact]
+    public void ServiceField_WithShape_ResolvesADottedPathReferenceWithNoWarning()
+    {
+        // The exact real-world scenario Shape exists for: a service field handed back as an
+        // object (a member record) with a dotted-path reference into one of its properties.
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "shape-test",
+            DisplayName = "Test",
+            InitialStage = "review",
+            Calculations = new ServiceBlueprintCalculationSet
+            {
+                Fields = new Dictionary<string, ServiceBlueprintCalculationField>
+                {
+                    ["member"] = new()
+                    {
+                        Source = "service",
+                        Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape>
+                        {
+                            ["tier"] = new() { ValueKind = "string" },
+                        },
+                    },
+                    ["isMember"] = new() { Expr = "member.tier <> ''" },
+                },
+            },
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "review",
+                    DisplayName = "Review",
+                    QueueKey = "caseworker",
+                    Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes", Default = "" }],
+                    Routes = [new ServiceBlueprintRouteDefinition { Id = "review--accept", Target = "to-done", Trigger = "accept", ShowWhen = "isMember" }],
+                },
+                new StageDefinition { StageKey = "done", DisplayName = "Done", QueueKey = "caseworker" },
+            ],
+            Gateways =
+            [
+                new ServiceBlueprintGatewayDefinition
+                {
+                    Key = "to-done",
+                    DisplayName = "Continue to done",
+                    GatewayType = "Split",
+                    QueueKey = "caseworker",
+                    Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
+                },
+            ],
+        };
+
+        var outcome = Service.Validate(blueprint);
+
+        outcome.IsValid.Should().BeTrue();
+        outcome.Diagnostics.Should().NotContain(d => d.Code == "CALC_SERVICE_FIELD_UNVERIFIED");
+        outcome.Diagnostics.Should().NotContain(d => d.Code == "CALC_FIELD_UNVERIFIED");
+        outcome.Diagnostics.Should().NotContain(d => d.Code.StartsWith("ROUTE_SHOW_WHEN_"));
+    }
+
+    [Fact]
+    public void ServiceField_WithNestedShape_ResolvesATwoLevelDottedPath()
+    {
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "shape-nested-test",
+            DisplayName = "Test",
+            InitialStage = "review",
+            Calculations = new ServiceBlueprintCalculationSet
+            {
+                Fields = new Dictionary<string, ServiceBlueprintCalculationField>
+                {
+                    ["member"] = new()
+                    {
+                        Source = "service",
+                        Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape>
+                        {
+                            ["address"] = new()
+                            {
+                                Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape>
+                                {
+                                    ["postcode"] = new() { ValueKind = "string" },
+                                },
+                            },
+                        },
+                    },
+                    ["hasPostcode"] = new() { Expr = "member.address.postcode <> ''" },
+                },
+            },
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "review",
+                    DisplayName = "Review",
+                    QueueKey = "caseworker",
+                    Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes", Default = "" }],
+                    Routes = [new ServiceBlueprintRouteDefinition { Id = "review--accept", Target = "to-done", Trigger = "accept", ShowWhen = "hasPostcode" }],
+                },
+                new StageDefinition { StageKey = "done", DisplayName = "Done", QueueKey = "caseworker" },
+            ],
+            Gateways =
+            [
+                new ServiceBlueprintGatewayDefinition
+                {
+                    Key = "to-done",
+                    DisplayName = "Continue to done",
+                    GatewayType = "Split",
+                    QueueKey = "caseworker",
+                    Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
+                },
+            ],
+        };
+
+        var outcome = Service.Validate(blueprint);
+
+        outcome.IsValid.Should().BeTrue();
+        outcome.Diagnostics.Should().NotContain(d => d.Code == "CALC_SERVICE_FIELD_UNVERIFIED");
+        outcome.Diagnostics.Should().NotContain(d => d.Code == "CALC_FIELD_UNVERIFIED");
+    }
+
+    [Fact]
+    public void ServiceField_WithShapeNumberLeafButNoDefault_StillWarnsForThatLeafOnly()
+    {
+        // Same "0 is a real value, not a safe stand-in" rule a top-level numeric field has —
+        // applies per-leaf too. The OTHER leaf (a string with no default) still resolves fine, so
+        // only a reference through the number leaf should be unverified.
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "shape-number-leaf-test",
+            DisplayName = "Test",
+            InitialStage = "review",
+            Calculations = new ServiceBlueprintCalculationSet
+            {
+                Fields = new Dictionary<string, ServiceBlueprintCalculationField>
+                {
+                    ["member"] = new()
+                    {
+                        Source = "service",
+                        Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape>
+                        {
+                            ["tier"] = new() { ValueKind = "string" },
+                            ["age"] = new() { ValueKind = "number" },
+                        },
+                    },
+                    ["isMember"] = new() { Expr = "member.tier <> ''" },
+                    ["ageNextYear"] = new() { Expr = "member.age + 1" },
+                },
+            },
+            Stages =
+            [
+                new StageDefinition
+                {
+                    StageKey = "review",
+                    DisplayName = "Review",
+                    QueueKey = "caseworker",
+                    Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes", Default = "" }],
+                    Routes = [new ServiceBlueprintRouteDefinition { Id = "review--accept", Target = "to-done", Trigger = "accept", ShowWhen = "isMember" }],
+                },
+                new StageDefinition { StageKey = "done", DisplayName = "Done", QueueKey = "caseworker" },
+            ],
+            Gateways =
+            [
+                new ServiceBlueprintGatewayDefinition
+                {
+                    Key = "to-done",
+                    DisplayName = "Continue to done",
+                    GatewayType = "Split",
+                    QueueKey = "caseworker",
+                    Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
+                },
+            ],
+        };
+
+        var outcome = Service.Validate(blueprint);
+
+        // isMember (through member.tier, a resolved string leaf) evaluates clean.
+        outcome.Diagnostics.Should().NotContain(d => d.Code == "CALC_FIELD_UNVERIFIED" && d.Path == "calculations.fields.isMember");
+        // ageNextYear (through member.age, an unresolved number leaf with no default) is unverified, not an error.
+        outcome.Diagnostics.Should().Contain(d => d.Code == "CALC_FIELD_UNVERIFIED" && d.Path == "calculations.fields.ageNextYear");
+        outcome.Diagnostics.Should().NotContain(d => d.Severity == ServiceBlueprintDiagnosticSeverity.Error);
+        outcome.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shape_OnANonServiceField_IsAnError()
+    {
+        var outcome = Service.Validate(Blueprint(
+            new ServiceBlueprintCalculationField
+            {
+                Expr = "1",
+                Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape> { ["x"] = new() { ValueKind = "string" } },
+            }));
+
+        outcome.Diagnostics.Should().Contain(d => d.Code == "CALC_FIELD_VALUE_KIND_WITHOUT_SERVICE");
+        outcome.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Shape_TogetherWithValueKind_IsAnError()
+    {
+        var outcome = Service.Validate(Blueprint(
+            new ServiceBlueprintCalculationField
+            {
+                Source = "service",
+                ValueKind = "string",
+                Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape> { ["x"] = new() { ValueKind = "string" } },
+            }));
+
+        outcome.Diagnostics.Should().Contain(d => d.Code == "CALC_FIELD_SHAPE_AND_VALUE_KIND" && d.Path == "calculations.fields.flagCount");
+        outcome.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShapeLeaf_WithInvalidValueKind_IsAnErrorAtItsOwnPath()
+    {
+        var outcome = Service.Validate(Blueprint(
+            new ServiceBlueprintCalculationField
+            {
+                Source = "service",
+                Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape> { ["tier"] = new() { ValueKind = "integer" } },
+            }));
+
+        outcome.Diagnostics.Should().Contain(d =>
+            d.Code == "CALC_FIELD_INVALID_VALUE_KIND" && d.Path == "calculations.fields.flagCount.shape.tier");
+        outcome.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShapeLeaf_WithDefaultButNoValueKind_IsAnErrorAtItsOwnPath()
+    {
+        var outcome = Service.Validate(Blueprint(
+            new ServiceBlueprintCalculationField
+            {
+                Source = "service",
+                Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape> { ["tier"] = new() { Default = "Gold" } },
+            }));
+
+        outcome.Diagnostics.Should().Contain(d =>
+            d.Code == "CALC_FIELD_DEFAULT_WITHOUT_VALUE_KIND" && d.Path == "calculations.fields.flagCount.shape.tier");
+        outcome.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ShapeLeaf_WithNumberValueKindButNonNumericDefault_IsAnErrorAtItsOwnPath()
+    {
+        var outcome = Service.Validate(Blueprint(
+            new ServiceBlueprintCalculationField
+            {
+                Source = "service",
+                Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape> { ["age"] = new() { ValueKind = "number", Default = "nope" } },
+            }));
+
+        outcome.Diagnostics.Should().Contain(d =>
+            d.Code == "CALC_FIELD_DEFAULT_UNPARSEABLE" && d.Path == "calculations.fields.flagCount.shape.age");
+        outcome.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NestedShapeLeaf_WithValueKindAndItsOwnNestedShape_IsAnErrorAtItsOwnPath()
+    {
+        var outcome = Service.Validate(Blueprint(
+            new ServiceBlueprintCalculationField
+            {
+                Source = "service",
+                Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape>
+                {
+                    ["address"] = new()
+                    {
+                        ValueKind = "string",
+                        Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape> { ["postcode"] = new() { ValueKind = "string" } },
+                    },
+                },
+            }));
+
+        outcome.Diagnostics.Should().Contain(d =>
+            d.Code == "CALC_FIELD_SHAPE_AND_VALUE_KIND" && d.Path == "calculations.fields.flagCount.shape.address");
+        outcome.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MockServiceInputs_StillOverrideADeclaredShape()
+    {
+        // A mock for the whole "member" field wins over its declared shape entirely, same
+        // precedence a scalar service field's own mock already has.
+        var outcome = Service.Validate(
+            new ServiceBlueprint
+            {
+                DefinitionKey = "shape-mock-test",
+                DisplayName = "Test",
+                InitialStage = "review",
+                Calculations = new ServiceBlueprintCalculationSet
+                {
+                    Fields = new Dictionary<string, ServiceBlueprintCalculationField>
+                    {
+                        ["member"] = new()
+                        {
+                            Source = "service",
+                            Shape = new Dictionary<string, ServiceBlueprintCalculationFieldShape> { ["tier"] = new() { ValueKind = "string" } },
+                        },
+                        ["isMember"] = new() { Expr = "member.tier <> ''" },
+                    },
+                },
+                Stages =
+                [
+                    new StageDefinition
+                    {
+                        StageKey = "review",
+                        DisplayName = "Review",
+                        QueueKey = "caseworker",
+                        Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes", Default = "" }],
+                        Routes = [new ServiceBlueprintRouteDefinition { Id = "review--accept", Target = "to-done", Trigger = "accept", ShowWhen = "isMember" }],
+                    },
+                    new StageDefinition { StageKey = "done", DisplayName = "Done", QueueKey = "caseworker" },
+                ],
+                Gateways =
+                [
+                    new ServiceBlueprintGatewayDefinition
+                    {
+                        Key = "to-done",
+                        DisplayName = "Continue to done",
+                        GatewayType = "Split",
+                        QueueKey = "caseworker",
+                        Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
+                    },
+                ],
+            },
+            new Dictionary<string, object?> { ["member"] = new Dictionary<string, object?> { ["tier"] = "Gold" } });
+
+        outcome.IsValid.Should().BeTrue();
+        outcome.Diagnostics.Should().NotContain(d => d.Code == "CALC_SERVICE_FIELD_UNVERIFIED");
+    }
 }

@@ -395,10 +395,46 @@ optional properties let you close that gap for a scalar value:
   `CalculationException`, not silently papered over.
 
 Omit both for a value with no scalar kind (an object handed back whole, like
-`member` above) — it stays unverifiable, and the Warning is expected. Structural
-mistakes are errors: a `valueKind` outside the three values, a `default` with no
-`valueKind` to parse it, a `default` that doesn't parse, or either property on a
-non-`service` field.
+`member` above) and declare `shape` instead (see below) — a field with neither
+stays unverifiable, and the Warning is expected. Structural mistakes are errors: a
+`valueKind` outside the three values, a `default` with no `valueKind` to parse it,
+a `default` that doesn't parse, or either property (or `shape`) on a non-`service`
+field.
+
+### `shape` (authoring-time only, for object-shaped service fields)
+
+`valueKind` only names a single scalar kind, so it can't describe a service field
+the host hands back as an object with its own properties — `member.tier` on a
+member record, say. `shape` declares those properties instead, each one either a
+scalar leaf (its own `valueKind`/`default`, exactly like a top-level field) or a
+further nested `shape` for a property that is itself an object:
+
+```json
+"member": {
+  "source": "service",
+  "shape": {
+    "tier": { "valueKind": "string" },
+    "age": { "valueKind": "number", "default": "0" },
+    "address": {
+      "shape": { "postcode": { "valueKind": "string" } }
+    }
+  }
+}
+```
+
+With this declared, static validation builds a real placeholder object at
+authoring time, so a dotted-path expression like `member.tier <> ''` or
+`member.address.postcode <> ''` resolves and is checked normally, instead of
+leaving every expression that reads through `member` unverifiable. `valueKind` and
+`shape` are mutually exclusive on the same field/property — an object has no
+single scalar kind, so declaring both is a structural error
+(`CALC_FIELD_SHAPE_AND_VALUE_KIND`).
+
+A property left with neither its own `valueKind`/`default` nor a nested `shape`
+stays unverifiable at exactly that path — `member` above still resolves overall
+(the other properties are fine), but a reference to specifically the undeclared
+one is reported as `CALC_SERVICE_FIELD_SHAPE_LEAF_UNVERIFIED`, the same
+never-blocking Warning treatment an entirely-unresolved top-level field gets.
 
 ## Format hints
 
@@ -437,13 +473,15 @@ service blueprint to discover a broken expression, see
 
 One class of `Unknown name` is downgraded from `Error` to `Warning` rather than
 blocking the save: an expression referencing a `number`-typed input with no
-declared default (see the callout above), or a `source: "service"` field with no
-`valueKind`/`default` to stand in for the host's value (see *Service-sourced
-fields*). Both say plainly that they're a limit of static checking, not a broken
-expression, and name `simulate_service_blueprint` as the way to verify the
-expression with real values instead. Neither ever stops the rest of the
-validation pass: a genuine mistake in another expression in the same service
-blueprint is still reported in the same run.
+declared default (see the callout above), a `source: "service"` field with no
+`valueKind`/`default`/`shape` to stand in for the host's value, or one specific
+property of an otherwise-resolved `shape` with no `valueKind`/`default`/nested
+`shape` of its own (see *Service-sourced fields*). All three say plainly that
+they're a limit of static checking, not a broken expression, and name
+`simulate_service_blueprint` as the way to verify the expression with real values
+instead. None ever stops the rest of the validation pass: a genuine mistake in
+another expression in the same service blueprint is still reported in the same
+run.
 
 ## Worked example: `money-modeller.json`
 
