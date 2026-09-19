@@ -233,6 +233,7 @@ public class ProcessManagerEngine : IProcessManager
                         CorrelationId = existingInstance.InstanceId,
                         ServerTimeUtc = DateTimeOffset.UtcNow,
                         RequestPolicy = "prompt",
+                        AllowManualRestart = definition.AllowManualRestart,
                         Render = new StepContent
                         {
                             StepType = currentStage?.Components.InferStepType() ?? "question",
@@ -303,6 +304,38 @@ public class ProcessManagerEngine : IProcessManager
         }
 
         return GetCurrent(blueprintKey, tenantId, userId, accessProfile);
+    }
+
+    /// <summary>
+    /// The gated entry point a citizen-facing surface must use for an untrusted <c>action:
+    /// "start-new"</c> request (e.g. a "Start again" link's query string, or the "prompt"-policy
+    /// instance picker's own "Start a new request" choice) — refuses it outright unless
+    /// <see cref="ServiceBlueprint.AllowManualRestart"/> is set, falling back to plain ambient
+    /// <c>GetCurrent</c> (never an error — a disallowed or stale <c>?action=start-new</c> link must
+    /// not break the page, it must just not do anything special). Once allowed, this hands off to
+    /// the same raw, unconditional <c>action: "start-new"</c> handling <c>GetCurrent</c> has always
+    /// had — deliberately NOT <see cref="GetCurrentOrStartFresh"/>'s own "never abandon a
+    /// non-terminal instance" restriction, which would silently turn the "prompt" policy's own
+    /// picker choice into a no-op (it exists specifically to let a citizen abandon a genuinely
+    /// in-progress instance when they consciously choose to, having just been shown it exists —
+    /// that terminal-only restriction solves a different problem: an *ambient*, no-explicit-action
+    /// render must never surprise-abandon work nobody asked to abandon). See
+    /// <see cref="ServiceBlueprint.AllowManualRestart"/>'s own remarks for why this needs to be an
+    /// explicit opt-in rather than available to every blueprint by default.
+    /// </summary>
+    public ServiceRequestResponseEnvelope GetCurrentOrManualRestart(
+        string blueprintKey, string tenantId, string userId, ActorProfile accessProfile)
+    {
+        if (!_definitions.TryGetValue(blueprintKey, out var definition) || !definition.AllowManualRestart)
+        {
+            Logger.LogWarning(
+                "Manual restart (action=start-new) requested for blueprint '{Key}', which does not " +
+                "declare allowManualRestart — ignoring and resuming ambient state instead.",
+                blueprintKey);
+            return GetCurrent(blueprintKey, tenantId, userId, accessProfile);
+        }
+
+        return GetCurrent(blueprintKey, tenantId, userId, accessProfile, action: "start-new");
     }
 
     public virtual ServiceRequestResponseEnvelope Advance(
@@ -1824,7 +1857,8 @@ public class ProcessManagerEngine : IProcessManager
             ServerTimeUtc = DateTimeOffset.UtcNow,
             PollAfterMs = waitingComponent?.PollIntervalMs,
             Render = render,
-            RequestPolicy = definition.RequestPolicy
+            RequestPolicy = definition.RequestPolicy,
+            AllowManualRestart = definition.AllowManualRestart
         };
     }
 
@@ -3528,7 +3562,8 @@ public class ProcessManagerEngine : IProcessManager
             ServerTimeUtc = DateTimeOffset.UtcNow,
             PollAfterMs = pollMs,
             Render = render,
-            RequestPolicy = definition.RequestPolicy
+            RequestPolicy = definition.RequestPolicy,
+            AllowManualRestart = definition.AllowManualRestart
         };
     }
 

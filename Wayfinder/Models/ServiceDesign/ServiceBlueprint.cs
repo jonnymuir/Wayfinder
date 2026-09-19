@@ -1301,6 +1301,21 @@ public record ServiceBlueprint
 
     public string RequestPolicy { get; init; } = "single";
 
+    /// <summary>
+    /// Whether a citizen-facing surface may honour an explicit <c>action: "start-new"</c> request
+    /// against this blueprint (e.g. a "Start again" link on a terminal Confirmation stage) —
+    /// defaults to <see langword="false"/>. Unconditionally abandoning whatever instance a visitor
+    /// currently has (even a genuinely in-progress one, e.g. mid-payment or mid-automation-decision)
+    /// is meaningful enough — duplicate submissions, an orphaned in-flight instance nobody ever
+    /// resolves — that a blueprint must opt in explicitly, rather than every blueprint getting it
+    /// for free just because a host surface happens to expose the query-string action. Internal
+    /// engine callers that need a guaranteed-fresh instance regardless of this flag (e.g.
+    /// <see cref="Services.ServiceBlueprintSimulationRunner"/>, or a genuine admin abort/restart
+    /// tool) call <see cref="Abstractions.IProcessManager"/>'s lower-level primitives directly and
+    /// are unaffected — this flag only gates the untrusted, citizen-reachable path.
+    /// </summary>
+    public bool AllowManualRestart { get; init; }
+
     public IReadOnlyList<StageDefinition> Stages { get; init; } = Array.Empty<StageDefinition>();
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

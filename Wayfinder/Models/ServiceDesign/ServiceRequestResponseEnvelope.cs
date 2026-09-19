@@ -52,6 +52,12 @@ public record ServiceRequestResponseEnvelope
     public string? RequestPolicy { get; init; }
 
     /// <summary>
+    /// Mirrors <see cref="Wayfinder.Models.ServiceDesign.ServiceBlueprint.AllowManualRestart"/> —
+    /// whether a citizen-facing "Start again" affordance may be shown/honoured for this instance.
+    /// </summary>
+    public bool AllowManualRestart { get; init; }
+
+    /// <summary>
     /// Gets the list of validation or error problems.
     /// </summary>
     public IReadOnlyList<ServiceRequestProblem> Problems { get; init; } = Array.Empty<ServiceRequestProblem>();
