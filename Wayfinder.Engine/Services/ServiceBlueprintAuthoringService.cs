@@ -120,19 +120,20 @@ public sealed class ServiceBlueprintAuthoringService(
         // error. Two sources:
         //  - numeric input fields with no declared "default": "" / false is a safe placeholder for
         //    a missing string/checkbox, but 0 is a real, meaningful number, not "nothing yet".
-        //  - source: "service" calc fields with neither a mockServiceInput nor enough declared
-        //    shape (valueKind [+ default for a number]) to stand in for the host's real value.
+        //  - source: "service" calc fields with neither a mockServiceInput nor a declared
+        //    valueKind (+ default for a number) or Shape to stand in for the host's real value.
         var numericInputsWithoutDefault = CalculationScopeBuilder.DescribeInputs(blueprint)
             .Where(kvp => kvp.Value.Type == "number" && string.IsNullOrWhiteSpace(kvp.Value.Default))
             .Select(kvp => kvp.Key)
             .ToHashSet(StringComparer.Ordinal);
 
-        var (staticServiceInputs, unresolvedServiceFields) =
+        var (staticServiceInputs, unresolvedServiceFields, unresolvedServiceShapePaths) =
             BuildStaticServiceInputs(blueprint.Calculations, mockServiceInputs);
         var gaps = new StaticScopeGaps(
             numericInputsWithoutDefault,
             unresolvedServiceFields,
-            ComputeTaintedFieldNames(blueprint.Calculations, numericInputsWithoutDefault, unresolvedServiceFields));
+            unresolvedServiceShapePaths,
+            ComputeTaintedFieldNames(blueprint.Calculations, numericInputsWithoutDefault, unresolvedServiceFields, unresolvedServiceShapePaths));
 
         foreach (var name in unresolvedServiceFields)
         {
@@ -142,7 +143,29 @@ public sealed class ServiceBlueprintAuthoringService(
                 $"Field '{name}' is service-sourced and validate has no value to stand in for it, so " +
                 "expressions that read it can't be checked here (they're reported as unverified below, " +
                 "not as errors). Declare \"valueKind\" (\"string\"/\"boolean\" gets a safe placeholder; " +
-                "\"number\" also needs a \"default\"), pass mockServiceInputs, or use simulate_service_blueprint.",
+                "\"number\" also needs a \"default\"), or, for an object the host hands back whole " +
+                "(e.g. a member record), declare \"shape\" instead. Otherwise pass mockServiceInputs, " +
+                "or use simulate_service_blueprint.",
+                ServiceBlueprintDiagnosticSeverity.Warning));
+        }
+
+        // The finer-grained counterpart to the loop above: a field declared via "shape" is itself
+        // resolved (it's in staticServiceInputs as a real, if partial, object), so it never reaches
+        // unresolvedServiceFields — but one of ITS OWN properties can still have neither a
+        // valueKind/default nor its own nested shape, leaving exactly that dotted path
+        // unverifiable. dottedPath here is the JSON structure ("member.address"); JsonShapePath
+        // rewrites it to where that property actually lives ("member.shape.address").
+        foreach (var dottedPath in unresolvedServiceShapePaths)
+        {
+            diagnostics.Add(new ServiceBlueprintDiagnostic(
+                "CALC_SERVICE_FIELD_SHAPE_LEAF_UNVERIFIED",
+                $"calculations.fields.{JsonShapePath(dottedPath)}",
+                $"'{dottedPath}' is a property of a service-sourced field declared via \"shape\" with no " +
+                "\"valueKind\"/\"default\" of its own (and no further nested \"shape\"), so expressions that " +
+                "read it can't be checked here (they're reported as unverified below, not as errors). " +
+                "Declare its valueKind (\"string\"/\"boolean\" gets a safe placeholder; \"number\" also needs " +
+                "a \"default\"), a nested shape if it's itself an object, pass mockServiceInputs, or use " +
+                "simulate_service_blueprint.",
                 ServiceBlueprintDiagnosticSeverity.Warning));
         }
 
@@ -317,8 +340,11 @@ public sealed class ServiceBlueprintAuthoringService(
     }
 
     /// <summary>
-    /// Field names that static validation has no real value for, so an expression that references
-    /// one is expected to fail evaluation — <see cref="ClassifyEvalDiagnostic"/> reports that as
+    /// Field names — and, since <c>shape</c> exists, individual dotted property paths within an
+    /// otherwise-resolved service field's shape (e.g. <c>member.age</c>, when <c>member</c> itself
+    /// resolves but that one property has no <c>valueKind</c>/<c>default</c>/nested <c>shape</c> of
+    /// its own) — that static validation has no real value for, so an expression that references
+    /// one is expected to fail evaluation. <see cref="ClassifyEvalDiagnostic"/> reports that as
     /// "unverified" (a Warning) rather than an error, with a message tailored to why. See
     /// <see cref="Validate"/> where this is built. <see cref="TaintedFieldNames"/> is the
     /// transitive closure of every other calculated field/series whose own expression references
@@ -330,26 +356,30 @@ public sealed class ServiceBlueprintAuthoringService(
     private readonly record struct StaticScopeGaps(
         IReadOnlySet<string> NumericInputsWithoutDefault,
         IReadOnlySet<string> UnresolvedServiceFields,
+        IReadOnlySet<string> UnresolvedServiceShapePaths,
         IReadOnlySet<string> TaintedFieldNames);
 
     private static readonly Regex WordPattern = new(@"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*", RegexOptions.Compiled);
 
     /// <summary>
-    /// Fixed-point closure: starting from the genuinely-unresolvable root names (an unresolved
-    /// service field, a numeric input with no default), repeatedly scans every other declared
-    /// calculated field/series' own expression text for a token whose root segment (the part
-    /// before the first '.', since a dotted reference like <c>member.age</c> is a member access on
-    /// the root <c>member</c>) is already known-tainted, adding its name to the set until nothing
-    /// new is found. A field that references a tainted field, directly or transitively, was always
+    /// Fixed-point closure: starting from the genuinely-unresolvable root names/paths (an
+    /// unresolved service field, an unresolved shape leaf path, a numeric input with no default),
+    /// repeatedly scans every other declared calculated field/series' own expression text for a
+    /// token any PREFIX of which (see <see cref="ContainsAnyPrefix"/> — a dotted reference like
+    /// <c>member.age</c> checks both <c>member</c> and <c>member.age</c>, since either grain can be
+    /// the tainted one) is already known-tainted, adding its name to the set until nothing new is
+    /// found. A field that references a tainted field/path, directly or transitively, was always
     /// going to fail evaluation too — that is expected, not an authoring mistake.
     /// </summary>
     private static IReadOnlySet<string> ComputeTaintedFieldNames(
         ServiceBlueprintCalculationSet? calculations,
         IReadOnlySet<string> numericInputsWithoutDefault,
-        IReadOnlySet<string> unresolvedServiceFields)
+        IReadOnlySet<string> unresolvedServiceFields,
+        IReadOnlySet<string> unresolvedServiceShapePaths)
     {
         var tainted = new HashSet<string>(numericInputsWithoutDefault, StringComparer.Ordinal);
         tainted.UnionWith(unresolvedServiceFields);
+        tainted.UnionWith(unresolvedServiceShapePaths);
 
         if (calculations is null)
         {
@@ -391,8 +421,7 @@ public sealed class ServiceBlueprintAuthoringService(
     {
         foreach (Match match in WordPattern.Matches(expression))
         {
-            var root = match.Value.Split('.')[0];
-            if (tainted.Contains(root))
+            if (ContainsAnyPrefix(tainted, match.Value))
             {
                 return true;
             }
@@ -402,23 +431,63 @@ public sealed class ServiceBlueprintAuthoringService(
     }
 
     /// <summary>
+    /// True if <paramref name="dottedName"/> itself, or any of its dot-separated prefixes (walked
+    /// shortest to longest — "member", then "member.age", then "member.age.foo", ...), is in
+    /// <paramref name="names"/>. A gap can be tracked at either grain: a whole unresolved field
+    /// ("member") or one specific unresolved property within an otherwise-resolved shape
+    /// ("member.age") — a reference to a name at or past either point is equally expected to fail.
+    /// </summary>
+    private static bool ContainsAnyPrefix(IReadOnlySet<string> names, string dottedName)
+    {
+        var segments = dottedName.Split('.');
+        var prefix = segments[0];
+        if (names.Contains(prefix))
+        {
+            return true;
+        }
+
+        for (var i = 1; i < segments.Length; i++)
+        {
+            prefix = $"{prefix}.{segments[i]}";
+            if (names.Contains(prefix))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Rewrites a dotted service-field path ("member.address.postcode") to where that property
+    /// actually lives in the JSON ("member.shape.address.shape.postcode") — every segment past the
+    /// first is nested one level deeper under its own "shape" key.
+    /// </summary>
+    private static string JsonShapePath(string dottedName) => string.Join(".shape.", dottedName.Split('.'));
+
+    /// <summary>
     /// Builds the <c>source: "service"</c> values static validation evaluates against, and the set
     /// of service fields it still has nothing for. Precedence per field: an explicit
     /// <paramref name="mockServiceInputs"/> entry wins; then a declared <c>default</c> parsed per
     /// <c>valueKind</c>; then, for a <c>valueKind</c> of "string"/"boolean" with no default, the
     /// same safe placeholder ("" / false) <see cref="CalculationScopeBuilder"/> already gives an
-    /// unfilled input of that kind. A "number" with no default, or a field with no scalar
-    /// <c>valueKind</c> at all (e.g. an object handed back whole), stays unresolved.
+    /// unfilled input of that kind; then a declared <c>shape</c> (see
+    /// <see cref="ResolveShapePlaceholder"/>) for a field the host hands back as an object rather
+    /// than a scalar — built into a real nested dictionary, the same shape
+    /// <c>CalculationEvaluator.ResolvePath</c> expects at runtime, so a dotted-path expression like
+    /// <c>member.tier</c> resolves against it instead of failing static evaluation. A field with
+    /// none of the above — no mock, no scalar <c>valueKind</c>, no <c>shape</c> — stays unresolved.
     /// </summary>
-    private static (Dictionary<string, object?> Resolved, IReadOnlySet<string> Unresolved) BuildStaticServiceInputs(
+    private static (Dictionary<string, object?> Resolved, IReadOnlySet<string> UnresolvedFields, IReadOnlySet<string> UnresolvedShapePaths) BuildStaticServiceInputs(
         ServiceBlueprintCalculationSet? calculations,
         IReadOnlyDictionary<string, object?>? mockServiceInputs)
     {
         var resolved = new Dictionary<string, object?>(StringComparer.Ordinal);
-        var unresolved = new HashSet<string>(StringComparer.Ordinal);
+        var unresolvedFields = new HashSet<string>(StringComparer.Ordinal);
+        var unresolvedShapePaths = new HashSet<string>(StringComparer.Ordinal);
         if (calculations is null)
         {
-            return (resolved, unresolved);
+            return (resolved, unresolvedFields, unresolvedShapePaths);
         }
 
         foreach (var (name, field) in calculations.Fields)
@@ -434,23 +503,86 @@ public sealed class ServiceBlueprintAuthoringService(
                 continue;
             }
 
-            var kind = field.ValueKind?.Trim().ToLowerInvariant();
-            if (!string.IsNullOrWhiteSpace(field.Default) && kind is "number" or "string" or "boolean")
+            var scalar = ResolveScalarPlaceholder(field.ValueKind, field.Default);
+            if (scalar.Resolved)
             {
-                resolved[name] = CalculationScopeBuilder.CoerceScalar(field.Default!, kind);
+                resolved[name] = scalar.Value;
                 continue;
             }
 
-            if (kind is "string" or "boolean")
+            if (field.Shape is { Count: > 0 })
             {
-                resolved[name] = kind == "boolean" ? false : string.Empty;
+                resolved[name] = ResolveShapePlaceholder(name, field.Shape, unresolvedShapePaths);
                 continue;
             }
 
-            unresolved.Add(name);
+            unresolvedFields.Add(name);
         }
 
-        return (resolved, unresolved);
+        return (resolved, unresolvedFields, unresolvedShapePaths);
+    }
+
+    /// <summary>
+    /// The single-property version of the "declared kind/default → safe placeholder" rule
+    /// <see cref="BuildStaticServiceInputs"/> applies to a top-level service field — factored out
+    /// so <see cref="ResolveShapePlaceholder"/> can apply the exact same precedence to each leaf of
+    /// a declared <see cref="ServiceBlueprintCalculationField.Shape"/> without duplicating it.
+    /// </summary>
+    private static (bool Resolved, object? Value) ResolveScalarPlaceholder(string? valueKind, string? @default)
+    {
+        var kind = valueKind?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(@default) && kind is "number" or "string" or "boolean")
+        {
+            return (true, CalculationScopeBuilder.CoerceScalar(@default!, kind));
+        }
+
+        if (kind is "string" or "boolean")
+        {
+            return (true, kind == "boolean" ? false : string.Empty);
+        }
+
+        return (false, null);
+    }
+
+    /// <summary>
+    /// Recursively builds the placeholder object a declared <c>shape</c> describes — a leaf
+    /// property resolves via <see cref="ResolveScalarPlaceholder"/> exactly like a top-level
+    /// service field would; a property with its own nested <c>shape</c> recurses.
+    /// <paramref name="path"/> is the dotted path to the object being built (e.g. <c>"member"</c>,
+    /// or <c>"member.address"</c> one level down) — a property with neither a scalar kind nor a
+    /// nested shape is omitted from the built object AND its own full dotted path
+    /// (<paramref name="path"/> + "." + the property name) is added to
+    /// <paramref name="unresolvedShapePaths"/>, the same "stays unresolvable" outcome an
+    /// under-declared top-level field has, just at the finer grain of one property rather than the
+    /// whole field — a reference to that specific path still fails evaluation as expected, it just
+    /// doesn't block every OTHER property this same object declares.
+    /// </summary>
+    private static Dictionary<string, object?> ResolveShapePlaceholder(
+        string path,
+        IReadOnlyDictionary<string, ServiceBlueprintCalculationFieldShape> shape,
+        HashSet<string> unresolvedShapePaths)
+    {
+        var placeholder = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var (propertyName, property) in shape)
+        {
+            var propertyPath = $"{path}.{propertyName}";
+            var scalar = ResolveScalarPlaceholder(property.ValueKind, property.Default);
+            if (scalar.Resolved)
+            {
+                placeholder[propertyName] = scalar.Value;
+                continue;
+            }
+
+            if (property.Shape is { Count: > 0 })
+            {
+                placeholder[propertyName] = ResolveShapePlaceholder(propertyPath, property.Shape, unresolvedShapePaths);
+                continue;
+            }
+
+            unresolvedShapePaths.Add(propertyPath);
+        }
+
+        return placeholder;
     }
 
     /// <summary>
@@ -589,8 +721,8 @@ public sealed class ServiceBlueprintAuthoringService(
                 path,
                 $"{message} '{subjectName}' itself depends (directly or through another field) on a " +
                 "service field or numeric input static validation has no real value for, so this expression " +
-                "can't be verified statically either. Declare the underlying field's valueKind/default, pass " +
-                "mockServiceInputs, or use simulate_service_blueprint.",
+                "can't be verified statically either. Declare the underlying field's valueKind/default (or " +
+                "shape, for an object field), pass mockServiceInputs, or use simulate_service_blueprint.",
                 ServiceBlueprintDiagnosticSeverity.Warning);
         }
 
@@ -616,22 +748,41 @@ public sealed class ServiceBlueprintAuthoringService(
             return new ServiceBlueprintDiagnostic(
                 unverifiedCode,
                 path,
-                $"{message} '{name}' is a source: \"service\" field with no \"valueKind\"/\"default\" for " +
-                "validate to stand in for the host's value, so this expression can't be verified statically. " +
-                "Declare its valueKind (a \"number\" also needs a \"default\"), pass mockServiceInputs, or use " +
+                $"{message} '{name}' is a source: \"service\" field with no \"valueKind\"/\"default\"/\"shape\" " +
+                "for validate to stand in for the host's value, so this expression can't be verified " +
+                "statically. Declare its valueKind (a \"number\" also needs a \"default\"), or shape if it's " +
+                "an object, pass mockServiceInputs, or use simulate_service_blueprint.",
+                ServiceBlueprintDiagnosticSeverity.Warning);
+        }
+
+        // A field that resolves overall (it's in staticServiceInputs — see BuildStaticServiceInputs)
+        // via a declared shape, but ONE of its own properties has neither valueKind/default nor a
+        // further nested shape — checked via ContainsAnyPrefix (not just an exact match) because
+        // the failing ResolvePath's own message names the FULL original expression path (e.g.
+        // "member.address.postcode"), which can be longer than the specific unresolved property
+        // ("member.address") when resolution stops partway through a chain.
+        if (name is not null && ContainsAnyPrefix(gaps.UnresolvedServiceShapePaths, name))
+        {
+            return new ServiceBlueprintDiagnostic(
+                unverifiedCode,
+                path,
+                $"{message} '{name}' is a property of a service-sourced field declared via \"shape\" with no " +
+                "\"valueKind\"/\"default\" of its own (and no further nested \"shape\"), so this expression " +
+                "can't be verified statically. Declare its valueKind (a \"number\" also needs a \"default\"), " +
+                "a nested shape if it's itself an object, pass mockServiceInputs, or use " +
                 "simulate_service_blueprint.",
                 ServiceBlueprintDiagnosticSeverity.Warning);
         }
 
-        if (name is not null && gaps.TaintedFieldNames.Contains(root!))
+        if (name is not null && ContainsAnyPrefix(gaps.TaintedFieldNames, name))
         {
             return new ServiceBlueprintDiagnostic(
                 unverifiedCode,
                 path,
                 $"{message} '{name}' itself depends (directly or through another field) on a service field " +
                 "or numeric input static validation has no real value for, so this expression can't be " +
-                "verified statically either. Declare the underlying field's valueKind/default, pass " +
-                "mockServiceInputs, or use simulate_service_blueprint.",
+                "verified statically either. Declare the underlying field's valueKind/default (or shape, " +
+                "for an object field), pass mockServiceInputs, or use simulate_service_blueprint.",
                 ServiceBlueprintDiagnosticSeverity.Warning);
         }
 

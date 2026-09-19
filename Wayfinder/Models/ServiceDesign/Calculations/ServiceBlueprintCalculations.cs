@@ -56,8 +56,9 @@ public sealed record ServiceBlueprintCalculationField
     /// so verify every <c>showWhen</c>/calculation/stage rule that reads it, instead of skipping
     /// those checks. A "number" field additionally needs <see cref="Default"/> (0 is a real value,
     /// not a safe stand-in for "nothing supplied yet"). Omit for a value with no scalar kind (an
-    /// object handed back whole, e.g. a member record) — that stays statically unverifiable.
-    /// Never consulted at runtime; the host's own resolver still supplies the real value.
+    /// object handed back whole, e.g. a member record) and declare <see cref="Shape"/> instead —
+    /// a field with neither stays statically unverifiable. Never consulted at runtime; the host's
+    /// own resolver still supplies the real value.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ValueKind { get; init; }
@@ -71,6 +72,52 @@ public sealed record ServiceBlueprintCalculationField
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Default { get; init; }
+
+    /// <summary>
+    /// Only meaningful with <see cref="Source"/> "service": declares the properties of a
+    /// service-sourced value the host hands back as an object rather than a scalar (a member
+    /// record, an address, anything with its own nested fields) — <see cref="ValueKind"/> alone
+    /// has no way to describe that shape, since it only names a single scalar kind. Each entry is
+    /// itself either a leaf (its own <see cref="ValueKind"/>/<see cref="Default"/>) or another
+    /// nested <see cref="Shape"/>, so this declares arbitrarily deep object graphs the same way
+    /// the field itself would if it were scalar. With a declared shape, static validation builds a
+    /// real placeholder object at authoring time — dotted-path expressions like <c>member.tier</c>
+    /// resolve against it exactly as <c>CalculationEvaluator.ResolvePath</c> resolves them at
+    /// runtime, rather than leaving every expression that reads through this field unverifiable.
+    /// Mutually exclusive with <see cref="ValueKind"/> in practice (an object has no single scalar
+    /// kind) — a field with neither stays unresolvable, same as before this existed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, ServiceBlueprintCalculationFieldShape>? Shape { get; init; }
+}
+
+/// <summary>
+/// One property within a <see cref="ServiceBlueprintCalculationField.Shape"/> declaration — either
+/// a scalar leaf (<see cref="ValueKind"/>, with an optional <see cref="Default"/> exactly like a
+/// top-level service field) or a further nested <see cref="Shape"/> for a property that is itself
+/// an object. Recursive by design: an object-shaped service value can nest arbitrarily deep (e.g.
+/// <c>member.address.postcode</c>), and this mirrors that without a separate type per level.
+/// </summary>
+public sealed record ServiceBlueprintCalculationFieldShape
+{
+    /// <summary>
+    /// The scalar kind of this leaf property — "number", "string" or "boolean". Omit when
+    /// <see cref="Shape"/> is set instead (this property is itself an object, not a scalar).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ValueKind { get; init; }
+
+    /// <summary>
+    /// A stand-in value for this leaf property, parsed per <see cref="ValueKind"/> — same
+    /// precedence and "number needs a default, string/boolean can fall back to a safe placeholder"
+    /// rule as <see cref="ServiceBlueprintCalculationField.Default"/>.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Default { get; init; }
+
+    /// <summary>Nested properties, when this property is itself an object rather than a scalar.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, ServiceBlueprintCalculationFieldShape>? Shape { get; init; }
 }
 
 /// <summary>
