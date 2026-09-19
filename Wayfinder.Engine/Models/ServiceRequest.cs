@@ -89,4 +89,24 @@ public record ServiceRequest
     /// simulation runner) can read raw calculated values without duplicating evaluation.
     /// </summary>
     public CalculationResult? LastCalculationResult { get; init; }
+
+    /// <summary>
+    /// Set by admin tooling (<c>IProcessManager.AbortInstance</c>) to soft-terminate an instance
+    /// that's stuck or otherwise needs stopping — never deleted, so it stays visible to an admin
+    /// search and keeps its audit trail (<see cref="AbortedAt"/>/<see cref="AbortedReason"/>/
+    /// <see cref="AbortedByUserId"/>). Distinct from a genuinely completed instance (a terminal
+    /// stage reached through normal routing) — both are "done", but only this one was stopped from
+    /// outside the blueprint's own flow. Every render/advance path continues to treat an aborted
+    /// instance exactly as it already treats a terminal one (see <c>IsTerminalInstance</c>) —
+    /// aborting adds no new engine-enforced behaviour beyond that, only the audit trail and admin
+    /// search visibility a plain delete would have destroyed.
+    /// </summary>
+    public bool IsAborted { get; init; }
+
+    public DateTimeOffset? AbortedAt { get; init; }
+
+    public string? AbortedReason { get; init; }
+
+    /// <summary>The admin user id that performed the abort — audit trail, never used for access control.</summary>
+    public string? AbortedByUserId { get; init; }
 }

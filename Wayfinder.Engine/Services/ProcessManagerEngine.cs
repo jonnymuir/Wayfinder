@@ -380,6 +380,11 @@ public class ProcessManagerEngine : IProcessManager
                 "VERSION_MISMATCH");
         }
 
+        if (instance.IsAborted)
+        {
+            return AbortedInstanceEnvelope(instance);
+        }
+
         if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
         {
             return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
@@ -627,6 +632,117 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     public IEnumerable<ServiceRequest> GetAllInstances() => _instanceStore.GetAll();
+
+    /// <inheritdoc cref="IProcessManager.SearchInstancesForAdmin"/>
+    public ServiceRequestAdminListEnvelope SearchInstancesForAdmin(ServiceRequestAdminQuery query)
+    {
+        query ??= new ServiceRequestAdminQuery();
+        var effectivePageIndex = Math.Max(query.PageIndex, 0);
+        var effectivePageSize = Math.Clamp(query.PageSize, 1, 100);
+
+        var matched = _instanceStore.GetAll()
+            .Where(instance => query.IncludeAborted || !instance.IsAborted)
+            .Where(instance => query.BlueprintKey is null
+                || string.Equals(instance.BlueprintKey, query.BlueprintKey, StringComparison.Ordinal))
+            .Where(instance => query.TenantId is null
+                || string.Equals(instance.TenantId, query.TenantId, StringComparison.Ordinal))
+            .Select(instance => ToAdminSummary(instance))
+            .Where(summary => MatchesAdminSearch(summary, query.SearchText))
+            .ToArray();
+
+        var ordered = ApplyAdminSort(matched, query.Sort);
+        var page = ordered.Skip(effectivePageIndex * effectivePageSize).Take(effectivePageSize).ToArray();
+
+        return new ServiceRequestAdminListEnvelope
+        {
+            Items = page,
+            PageIndex = effectivePageIndex,
+            PageSize = effectivePageSize,
+            TotalMatchingCount = ordered.Count
+        };
+    }
+
+    private ServiceRequestAdminSummary ToAdminSummary(ServiceRequest instance)
+    {
+        _definitions.TryGetValue(instance.BlueprintKey, out var definition);
+        var stage = definition?.Stages.FirstOrDefault(s => s.StageKey == instance.CurrentStage);
+        var stepType = stage?.Components.InferStepType() ?? "question";
+
+        return new ServiceRequestAdminSummary
+        {
+            InstanceId = instance.InstanceId,
+            BlueprintKey = instance.BlueprintKey,
+            BlueprintDisplayName = definition?.DisplayName ?? instance.BlueprintKey,
+            TenantId = instance.TenantId,
+            UserId = instance.UserId,
+            CurrentStage = instance.CurrentStage,
+            CurrentStateDisplayName = stage?.DisplayName ?? instance.CurrentStage,
+            IsCompleted = stepType == "confirmation",
+            IsAborted = instance.IsAborted,
+            AbortedAt = instance.AbortedAt,
+            AbortedReason = instance.AbortedReason,
+            AbortedByUserId = instance.AbortedByUserId,
+            CreatedAt = instance.CreatedAt,
+            UpdatedAt = instance.UpdatedAt
+        };
+    }
+
+    private static bool MatchesAdminSearch(ServiceRequestAdminSummary summary, string? searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            return true;
+        }
+
+        bool Contains(string? haystack) =>
+            !string.IsNullOrEmpty(haystack) && haystack.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+
+        return Contains(summary.InstanceId)
+            || Contains(summary.BlueprintDisplayName)
+            || Contains(summary.CurrentStateDisplayName)
+            || Contains(summary.UserId);
+    }
+
+    private static IReadOnlyList<ServiceRequestAdminSummary> ApplyAdminSort(
+        IReadOnlyList<ServiceRequestAdminSummary> items, ServiceRequestAdminSort sort) => sort switch
+    {
+        ServiceRequestAdminSort.UpdatedAtNewestFirst => items
+            .OrderByDescending(i => i.UpdatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToArray(),
+        ServiceRequestAdminSort.CreatedAtOldestFirst => items
+            .OrderBy(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToArray(),
+        ServiceRequestAdminSort.CreatedAtNewestFirst => items
+            .OrderByDescending(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToArray(),
+        _ => items
+            .OrderBy(i => i.UpdatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToArray(),
+    };
+
+    /// <inheritdoc cref="IProcessManager.AbortInstance"/>
+    public bool AbortInstance(string instanceId, string reason, string abortedByUserId)
+    {
+        if (!_instanceStore.TryGet(instanceId, out var instance))
+        {
+            return false;
+        }
+
+        if (instance.IsAborted)
+        {
+            return true;
+        }
+
+        var aborted = instance with
+        {
+            IsAborted = true,
+            AbortedAt = DateTimeOffset.UtcNow,
+            AbortedReason = reason,
+            AbortedByUserId = abortedByUserId,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        _instanceStore.Save(aborted);
+        Logger.LogInformation(
+            "Instance {Id} aborted by {AbortedBy}: {Reason}", instanceId, abortedByUserId, reason);
+        return true;
+    }
 
     public ServiceRequestListEnvelope GetInstances(string tenantId, string userId)
     {
@@ -1777,6 +1893,11 @@ public class ProcessManagerEngine : IProcessManager
         ActorProfile accessProfile,
         string userId)
     {
+        if (instance.IsAborted)
+        {
+            return AbortedInstanceEnvelope(instance);
+        }
+
         var workItems = FindAccessibleWorkItems(instance, definition, accessProfile, userId);
         var visibleItem = workItems.FirstOrDefault();
 
@@ -2411,6 +2532,33 @@ public class ProcessManagerEngine : IProcessManager
             CorrelationId = Guid.NewGuid().ToString(),
             ServerTimeUtc = DateTimeOffset.UtcNow,
             Problems = [new ServiceRequestProblem { FieldKey = string.Empty, Message = message, Code = code }]
+        };
+
+    /// <summary>
+    /// The uniform response for any render or advance attempt against an instance an admin has
+    /// stopped (<see cref="ServiceRequest.IsAborted"/>) — reuses the existing "error" response
+    /// shape every host already renders, rather than a new <c>ResponseState</c> value a host would
+    /// need new handling for. Carries the real <c>InstanceId</c> (unlike <see cref="ErrorEnvelope"/>,
+    /// which never does) so a host can still log/link back to exactly which instance this was.
+    /// </summary>
+    protected static ServiceRequestResponseEnvelope AbortedInstanceEnvelope(ServiceRequest instance) =>
+        new()
+        {
+            InstanceId = instance.InstanceId,
+            ResponseState = "error",
+            StateVersion = instance.StateVersion,
+            CorrelationId = instance.InstanceId,
+            ServerTimeUtc = DateTimeOffset.UtcNow,
+            Problems =
+            [
+                new ServiceRequestProblem
+                {
+                    FieldKey = string.Empty,
+                    Message = "This service request was stopped by an administrator" +
+                        (string.IsNullOrWhiteSpace(instance.AbortedReason) ? "." : $": {instance.AbortedReason}"),
+                    Code = "INSTANCE_ABORTED"
+                }
+            ]
         };
 
     private ServiceRequestResponseEnvelope CreateAndRegisterNewInstance(
@@ -4315,6 +4463,11 @@ public class ProcessManagerEngine : IProcessManager
     /// </summary>
     private bool IsTerminalInstance(ServiceRequest instance, ServiceBlueprint definition, ActorProfile accessProfile)
     {
+        if (instance.IsAborted)
+        {
+            return true;
+        }
+
         var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile).FirstOrDefault();
         return visibleItem is not null && IsTerminalWorkItem(visibleItem, definition);
     }
