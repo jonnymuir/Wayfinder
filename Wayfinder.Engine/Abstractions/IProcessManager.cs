@@ -245,6 +245,26 @@ public interface IProcessManager
     /// </summary>
     IEnumerable<ServiceRequest> GetAllInstances();
 
+    /// <summary>
+    /// Filtered, searched and paged cross-tenant admin view over every stored instance — the same
+    /// "genuine admin tooling only" scope as <see cref="GetAllInstances"/>, but with the filtering,
+    /// free-text search and staleness-first sort a real "what's stuck?" admin surface needs instead
+    /// of a bare enumerable. Aborted instances (<see cref="ServiceRequest.IsAborted"/>) are excluded
+    /// unless <see cref="ServiceRequestAdminQuery.IncludeAborted"/> is set.
+    /// </summary>
+    ServiceRequestAdminListEnvelope SearchInstancesForAdmin(ServiceRequestAdminQuery query);
+
+    /// <summary>
+    /// Soft-terminates an instance for admin tooling: marks it <see cref="ServiceRequest.IsAborted"/>
+    /// with an audit trail (<paramref name="reason"/>, <paramref name="abortedByUserId"/>, a
+    /// timestamp) rather than deleting it — every render/advance attempt against it afterwards
+    /// returns the same uniform "stopped by an administrator" error response instead of its normal
+    /// content. Idempotent: aborting an already-aborted instance is a no-op success (the original
+    /// abort's own reason/timestamp/actor are left untouched). Returns <see langword="false"/> only
+    /// when <paramref name="instanceId"/> doesn't exist at all.
+    /// </summary>
+    bool AbortInstance(string instanceId, string reason, string abortedByUserId);
+
     IEnumerable<ServiceBlueprint> GetAllDefinitions();
 
     ServiceBlueprint? GetDefinition(string key);
