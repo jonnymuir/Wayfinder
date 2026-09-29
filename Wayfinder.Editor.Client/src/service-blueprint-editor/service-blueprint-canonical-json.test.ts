@@ -1,5 +1,5 @@
 import { serializeAuthoredServiceBlueprint, authoredServiceBlueprintJsonEquals } from './service-blueprint-canonical-json.js';
-import type { AuthoredServiceBlueprint } from './types.js';
+import { hydrateServiceBlueprintDefinition, type AuthoredServiceBlueprint } from './types.js';
 
 let failures = 0;
 
@@ -137,6 +137,19 @@ export function run(): number {
     const json = serializeAuthoredServiceBlueprint(blueprint);
     const parsed = JSON.parse(json);
     check('a stage with no validations omits the key entirely', !('validations' in parsed.stages[0]));
+  }
+
+  {
+    const loaded = hydrateServiceBlueprintDefinition(
+      JSON.parse(JSON.stringify(minimalBlueprint({ allowManualRestart: true }))) as AuthoredServiceBlueprint
+    );
+    const parsed = JSON.parse(serializeAuthoredServiceBlueprint(loaded));
+    check('allowManualRestart survives a load and save round trip', parsed.allowManualRestart === true, JSON.stringify(parsed.allowManualRestart));
+  }
+
+  {
+    const parsed = JSON.parse(serializeAuthoredServiceBlueprint(minimalBlueprint()));
+    check('a blueprint that has not opted in to manual restart omits the key', !('allowManualRestart' in parsed));
   }
 
   return failures;
