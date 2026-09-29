@@ -14,6 +14,7 @@ export interface AuthoredServiceBlueprint {
   version: number;
   initialStage: string;
   requestPolicy: string;
+  allowManualRestart?: boolean;
   description?: string;
   schemaVersion?: string;
   queues?: QueueDefinition[];
@@ -421,6 +422,7 @@ export function hydrateServiceBlueprintDefinition<T extends AuthoredServiceBluep
     version: typeof root.version === 'number' ? root.version : 1,
     initialStage: firstString(root.initialStage) ?? normalisedStates[0]?.stateKey ?? '',
     requestPolicy: typeof root.requestPolicy === 'string' ? root.requestPolicy : 'single',
+    allowManualRestart: root.allowManualRestart === true ? true : undefined,
     description: firstString(root.description, metadata.description, root.authorNote),
     schemaVersion: firstString(root.schemaVersion, metadata.schemaVersion),
     queues: rawQueues,
