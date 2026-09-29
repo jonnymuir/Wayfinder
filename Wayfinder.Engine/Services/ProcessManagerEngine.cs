@@ -3397,6 +3397,13 @@ public class ProcessManagerEngine : IProcessManager
     /// called when there's no saved value yet (see <see cref="BuildInputPayload"/>'s value
     /// chain), so a visitor's own submitted choice always overrides this — it's a default, not
     /// a lock.
+    /// <para>
+    /// A name the display overlay doesn't hold is then looked up in the full calculation scope,
+    /// which is where a <c>source: "service"</c> value the host supplied lives (those never reach
+    /// the display overlay). A dotted name such as <c>user.email</c> walks into an object-valued
+    /// service field. A path that stops short of a scalar resolves to nothing rather than to an
+    /// object's text.
+    /// </para>
     /// </summary>
     private static string? ResolveDefaultFrom(InputComponent input, CalculationRenderContext? calc)
     {
@@ -3405,9 +3412,32 @@ public class ProcessManagerEngine : IProcessManager
             return null;
         }
 
-        return calc.DisplayValues.TryGetValue(input.DefaultFrom, out var value)
-            ? value?.ToString()
+        if (calc.DisplayValues.TryGetValue(input.DefaultFrom, out var value))
+        {
+            return value?.ToString();
+        }
+
+        return TryReadScopePath(calc.Scope, input.DefaultFrom, out var scoped)
+            ? FormatCalculatedValue(scoped, format: null)
             : null;
+    }
+
+    private static bool TryReadScopePath(IReadOnlyDictionary<string, object?> scope, string path, out object? value)
+    {
+        object? current = scope;
+        foreach (var segment in path.Split('.'))
+        {
+            if (current is IReadOnlyDictionary<string, object?> map && map.TryGetValue(segment, out current))
+            {
+                continue;
+            }
+
+            value = null;
+            return false;
+        }
+
+        value = current;
+        return current is not IReadOnlyDictionary<string, object?>;
     }
 
     // ─── Gateway helpers ──────────────────────────────────────────────────────

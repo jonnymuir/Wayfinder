@@ -1173,7 +1173,10 @@ public record ServiceBlueprint
                         "hidden. Fix the fieldKey, or remove conditionalOn."));
                 }
 
-                if (!string.IsNullOrWhiteSpace(input.DefaultFrom) && !calculatedFieldNames.Contains(input.DefaultFrom))
+                // A dotted name (user.email) reads into an object-valued service field, so only its
+                // first segment has to be a declared calculation field.
+                if (!string.IsNullOrWhiteSpace(input.DefaultFrom)
+                    && !calculatedFieldNames.Contains(input.DefaultFrom.Split('.')[0]))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
                         "COMPONENT_UNKNOWN_DEFAULT_FROM",
