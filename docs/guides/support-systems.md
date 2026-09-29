@@ -167,7 +167,7 @@ and a keyed `WebhookSupportSystemClient`:
     "key": "njf-coaching-standards",
     "displayName": "NJF Coaching Standards",
     "endpoint": {
-      "url": "https://your-host/umbraco/automate/webhook/<automation-guid>",
+      "url": "https://your-host/automate/webhook/<automation-guid>",
       "auth": { "type": "hmac-sha256", "secretRef": "NJF_STANDARDS_SIGNING_KEY" },
       "callbackSecretRef": "NJF_STANDARDS_CALLBACK_SECRET"
     },
@@ -203,6 +203,45 @@ and a keyed `WebhookSupportSystemClient`:
 - **Scalar inputs only.** A `file-upload`-backed input throws. That needs a bespoke client that
   reads bytes via `IServiceRequestFileStorage` (see `SafetyNetUnderwritingClient` in
   `Wayfinder.ReferenceApp`).
+- **Webhook completion only.** The outcome always arrives through the callback (see
+  [Delivering the outcome](#delivering-the-outcome)). A capability declared with `Poll` in
+  configuration never resolves, because the configured client has no status URL to ask. Use a
+  bespoke `ISupportSystemClient` for a poll or poll-and-webhook capability.
+- The endpoint must answer with a 2xx status. Automate answers `202`. An unreachable endpoint or
+  a non-2xx answer means the invocation is never created and the stage never enters its wait.
+
+### Where the endpoint URL comes from
+
+Wayfinder does not discover the URL. `endpoint.url` is the address of the system being called, so
+whoever owns that system decides it, and the configuration entry is written to match.
+
+| Receiving system | Where the URL comes from |
+|---|---|
+| An Umbraco Automate automation on the same site | `https://<host>/automate/webhook/<automationId>`. The `automationId` is the ID of the automation whose trigger is `umbracoAutomate.webhook`. When the host creates that automation in code, it chooses the ID and writes the same value into the URL (the reference app's `AutomateCoachingStandardsSeeder` does exactly this, with a comment that the two must match). When the automation is built in the backoffice, copy the ID from it. |
+| Zapier, Make, n8n, Power Automate | The "catch webhook" URL the tool generates for the flow. |
+| Your own service | Whatever route you publish for it. It must accept a `POST` of the JSON envelope above and answer 2xx. |
+
+Everything else in the entry is a contract this host defines, not something read from the
+receiver:
+
+- **`key`, `displayName`, `description`:** free choices. `key` is what blueprints reference.
+- **Capability `key` and `inputs`:** the names the receiver reads from the POSTed
+  `inputs` object. A blueprint action maps each input key to a blueprint field
+  (`params.inputs`).
+- **`outcomes`:** the closed set of answers the receiver may send back. Each outgoing route of
+  the calling stage must use one of them as its trigger, and validation rejects a route that does
+  not.
+- **`auth`:** the receiver must be configured to verify the same credential the host sends. For
+  `hmac-sha256` that is the same signing key on both sides, each resolved from its own
+  configuration under the name given in `secretRef`.
+- **`callbackSecretRef`:** the secret the receiver presents when it calls back into
+  `/wayfinder/support-systems/callbacks/{invocationId}`. It is only needed for a receiver that
+  calls back over HTTP. An Automate automation on the same host resolves the outcome in-process
+  instead (the reference app's `ResolveSupportSystemOutcomeAction`).
+
+The host and port in the URL are part of the configuration. A URL that names `localhost` and a
+fixed port works on one machine only, so take the base address from configuration in any
+environment that is not a single developer machine.
 
 Call `AddConfiguredSupportSystems` at host startup (it registers descriptors synchronously, so
 before the engine reads any blueprint); it is a no-op when the section is absent and idempotent.

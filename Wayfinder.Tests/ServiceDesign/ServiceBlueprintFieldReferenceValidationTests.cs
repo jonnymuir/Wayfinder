@@ -128,6 +128,42 @@ public class ServiceBlueprintFieldReferenceValidationTests
     }
 
     [Fact]
+    public void DefaultFrom_DottedPathIntoADeclaredServiceField_ProducesNoDiagnostic()
+    {
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "test",
+            DisplayName = "Test",
+            InitialStage = "only",
+            Calculations = new ServiceBlueprintCalculationSet
+            {
+                Fields = new Dictionary<string, ServiceBlueprintCalculationField> { ["user"] = new() { Source = "service" } },
+            },
+            Stages = [Stage("only", new TextInputComponent { FieldKey = "petName", Label = "Pet's name", DefaultFrom = "user.name" })],
+        };
+
+        blueprint.ValidateFieldReferences().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DefaultFrom_DottedPathIntoAnUndeclaredRoot_ProducesUnknownDefaultFromDiagnostic()
+    {
+        var blueprint = new ServiceBlueprint
+        {
+            DefinitionKey = "test",
+            DisplayName = "Test",
+            InitialStage = "only",
+            Calculations = new ServiceBlueprintCalculationSet
+            {
+                Fields = new Dictionary<string, ServiceBlueprintCalculationField> { ["user"] = new() { Source = "service" } },
+            },
+            Stages = [Stage("only", new TextInputComponent { FieldKey = "petName", Label = "Pet's name", DefaultFrom = "member.name" })],
+        };
+
+        blueprint.ValidateFieldReferences().Should().ContainSingle(d => d.Code == "COMPONENT_UNKNOWN_DEFAULT_FROM");
+    }
+
+    [Fact]
     public void DefaultFrom_PointingAtANonExistentCalculationField_ProducesUnknownDefaultFromDiagnostic()
     {
         var blueprint = new ServiceBlueprint

@@ -436,6 +436,33 @@ stays unverifiable at exactly that path — `member` above still resolves overal
 one is reported as `CALC_SERVICE_FIELD_SHAPE_LEAF_UNVERIFIED`, the same
 never-blocking Warning treatment an entirely-unresolved top-level field gets.
 
+### Pre-filling an input from a service value (`defaultFrom`)
+
+An input component's `defaultFrom` names a calculation-scope value to use as its initial value
+when nothing has been saved for it yet. It can name a calculated field, a scalar
+`source: "service"` field, or a dotted path into an object-valued service field:
+
+```json
+"calculations": {
+  "fields": {
+    "user": {
+      "source": "service",
+      "shape": { "name": { "valueKind": "string" }, "email": { "valueKind": "string" } }
+    }
+  }
+},
+"components": [
+  { "type": "text",  "fieldKey": "applicantName",  "label": "Full name",     "defaultFrom": "user.name" },
+  { "type": "email", "fieldKey": "applicantEmail", "label": "Email address", "defaultFrom": "user.email" }
+]
+```
+
+Nothing in the blueprint is code: the host supplies the service value, and the blueprint decides
+which fields it pre-fills. A saved value always wins, so it is a default and never a lock. When
+the name does not resolve (no such property, or a path that ends at an object rather than a
+scalar) the input falls back to its static `default`. Validation requires only the first
+segment of the name to be a declared `calculations.fields` entry.
+
 ## Format hints
 
 A field may declare `"format": "gbp"` to tell the *rendering* layer (not the
