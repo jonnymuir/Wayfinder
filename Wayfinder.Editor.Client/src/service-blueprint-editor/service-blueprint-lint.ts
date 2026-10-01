@@ -25,6 +25,8 @@ const ALLOWED_GATEWAY_KINDS = new Set(['Split', 'Join']);
 interface ReferenceLintContext {
   siblingFieldKeys: Set<string>;
   calculationFieldNames: Set<string>;
+  /** Property names declared in a service field's `shape`, by field name. */
+  calculationShapes: Map<string, Set<string>>;
   stageKeys: Set<string>;
 }
 
@@ -163,12 +165,23 @@ function lintComponentProperties(
             line: findLine(source, `"${value}"`),
           });
         }
-        if (property.format === 'calculation-ref' && !refs.calculationFieldNames.has(value)) {
-          issues.push({
-            message: `"${property.title}" at "${propertyPath}" is "${value}", which is not a name declared in this blueprint's calculations.fields — it would never resolve.`,
-            pathHint: propertyPath,
-            line: findLine(source, `"${value}"`),
-          });
+        if (property.format === 'calculation-ref') {
+          // A dotted name (user.email) reads into an object-valued field: the first segment must be
+          // a declared calculation field, and where that field declares a shape, the property too.
+          const [root, member] = value.split('.');
+          if (!refs.calculationFieldNames.has(root)) {
+            issues.push({
+              message: `"${property.title}" at "${propertyPath}" is "${value}", which is not a name declared in this blueprint's calculations.fields — it would never resolve.`,
+              pathHint: propertyPath,
+              line: findLine(source, `"${value}"`),
+            });
+          } else if (member !== undefined && refs.calculationShapes.get(root)?.has(member) === false) {
+            issues.push({
+              message: `"${property.title}" at "${propertyPath}" is "${value}", but calculations.fields.${root}.shape declares no "${member}" property — it would never resolve.`,
+              pathHint: propertyPath,
+              line: findLine(source, `"${value}"`),
+            });
+          }
         }
         if (property.format === 'stage-ref' && !refs.stageKeys.has(value)) {
           issues.push({
@@ -464,11 +477,18 @@ export function lintAuthoredServiceBlueprintDocument(
 
   lintCalculations(root, source, componentCatalog, issues);
 
-  const calculationFieldNames = new Set(
+  const calculationFields: Record<string, unknown> =
     root.calculations && typeof root.calculations === 'object'
-      ? Object.keys((root.calculations as Record<string, unknown>).fields ?? {})
-      : []
-  );
+      ? ((root.calculations as Record<string, unknown>).fields as Record<string, unknown> | undefined) ?? {}
+      : {};
+  const calculationFieldNames = new Set(Object.keys(calculationFields));
+  const calculationShapes = new Map<string, Set<string>>();
+  for (const [name, field] of Object.entries(calculationFields)) {
+    const shape = (field as { shape?: unknown } | null)?.shape;
+    if (shape && typeof shape === 'object' && !Array.isArray(shape)) {
+      calculationShapes.set(name, new Set(Object.keys(shape)));
+    }
+  }
   const stageKeys = new Set(
     Array.isArray(root.stages)
       ? root.stages
@@ -541,6 +561,7 @@ export function lintAuthoredServiceBlueprintDocument(
         lintComponentTree(state.components, componentCatalog, source, `stages[${index}].components`, issues, {
           siblingFieldKeys,
           calculationFieldNames,
+          calculationShapes,
           stageKeys,
         });
       }

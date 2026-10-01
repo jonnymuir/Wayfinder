@@ -219,6 +219,30 @@ export function run(): number {
   }
 
   {
+    const userBlueprint = (defaultFrom: string) => ({
+      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      calculations: { fields: { user: { source: 'service', shape: { name: { valueKind: 'string' } } } } },
+      stages: [{
+        stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question',
+        components: [{ type: 'text', fieldKey: 'name', label: 'Name', defaultFrom }],
+      }],
+    });
+    const lint = (defaultFrom: string) => {
+      const parsed = userBlueprint(defaultFrom);
+      return lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    };
+    check('lint: a dotted defaultFrom into a declared service-field shape is accepted',
+      !lint('user.name').some(issue => issue.pathHint?.includes('defaultFrom')),
+      JSON.stringify(lint('user.name')));
+    check('lint: a dotted defaultFrom naming a property the shape does not declare is flagged',
+      lint('user.nmae').some(issue => issue.pathHint?.includes('defaultFrom') && issue.message.includes('"nmae"')),
+      JSON.stringify(lint('user.nmae')));
+    check('lint: a dotted defaultFrom on an undeclared root is flagged',
+      lint('person.name').some(issue => issue.pathHint?.includes('defaultFrom')),
+      JSON.stringify(lint('person.name')));
+  }
+
+  {
     const parsed = {
       definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'first', queues: [], gateways: [],
       stages: [
