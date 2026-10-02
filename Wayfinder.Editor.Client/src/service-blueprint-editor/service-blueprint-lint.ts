@@ -620,6 +620,7 @@ export function coerceParsedAuthoredServiceBlueprint(parsed: unknown): AuthoredS
     version: typeof root.version === 'number' ? root.version : 1,
     initialStage: String(root.initialStage ?? ''),
     requestPolicy: String(root.requestPolicy ?? 'single'),
+    allowManualRestart: root.allowManualRestart === true ? true : undefined,
     description: typeof root.description === 'string' ? root.description : undefined,
     schemaVersion: typeof root.schemaVersion === 'string' ? root.schemaVersion : undefined,
     queues: Array.isArray(root.queues) ? (root.queues as AuthoredServiceBlueprint['queues']) : [],
