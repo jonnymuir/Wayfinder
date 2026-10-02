@@ -118,6 +118,12 @@ jobs:
         working-directory: Wayfinder.Editor.Client
         run: npm run test:no-legacy-shapes
 
+      # CodeQL cannot see this class here (fetch responses are not modelled as untrusted, and an
+      # escape helper that round-trips through the DOM hides the data flow): see the script's header.
+      - name: No unmarked HTML sinks built from data
+        working-directory: Wayfinder.Editor.Client
+        run: npm run test:no-unsafe-html-sinks
+
       - name: Install Playwright browsers
         working-directory: Wayfinder.Editor.Client
         run: npx playwright install --with-deps
