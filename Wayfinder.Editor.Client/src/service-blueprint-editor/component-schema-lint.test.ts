@@ -1,6 +1,7 @@
 import type { ComponentDescriptor } from './types.js';
 import { generateComponentJsonSchema } from './component-json-schema.js';
-import { lintAuthoredServiceBlueprintDocument } from './service-blueprint-lint.js';
+import { coerceParsedAuthoredServiceBlueprint, lintAuthoredServiceBlueprintDocument } from './service-blueprint-lint.js';
+import { serializeAuthoredServiceBlueprint } from './service-blueprint-canonical-json.js';
 
 const CATALOG: ComponentDescriptor[] = [
   {
@@ -216,6 +217,16 @@ export function run(): number {
     check('lint: a defaultFrom not matching a calculations.fields name is flagged',
       issues.some(issue => issue.pathHint?.includes('defaultFrom') && issue.message.includes('"suggestdName"')),
       JSON.stringify(issues));
+  }
+
+  {
+    const applied = coerceParsedAuthoredServiceBlueprint({ ...minimalBlueprint([]), allowManualRestart: true });
+    check('a Definition-tab edit that sets allowManualRestart true is kept when applied and saved',
+      JSON.parse(serializeAuthoredServiceBlueprint(applied)).allowManualRestart === true,
+      serializeAuthoredServiceBlueprint(applied));
+    const notOptedIn = coerceParsedAuthoredServiceBlueprint(minimalBlueprint([]));
+    check('a Definition-tab edit that omits allowManualRestart saves without it',
+      !('allowManualRestart' in JSON.parse(serializeAuthoredServiceBlueprint(notOptedIn))));
   }
 
   {
