@@ -152,5 +152,26 @@ export function run(): number {
     check('a blueprint that has not opted in to manual restart omits the key', !('allowManualRestart' in parsed));
   }
 
+  {
+    const handoff = { id: 'a-to-b', fromState: 'a', toState: 'b', label: 'A to B', actorChange: 'caseworker' };
+    const loaded = hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(minimalBlueprint({
+      authoredServiceBlueprintId: '2c1b6f1e-0000-4000-8000-000000000001',
+      handoffs: [handoff],
+      tags: { demo: 'x' },
+    }))) as AuthoredServiceBlueprint);
+    const parsed = JSON.parse(serializeAuthoredServiceBlueprint(loaded));
+    check('tags survive a load and save round trip', parsed.tags?.demo === 'x', JSON.stringify(parsed.tags));
+    check('handoffs survive a load and save round trip',
+      parsed.handoffs?.length === 1 && Object.entries(handoff).every(([key, value]) => parsed.handoffs[0][key] === value), JSON.stringify(parsed.handoffs));
+    check('authoredServiceBlueprintId survives a load and save round trip',
+      parsed.authoredServiceBlueprintId === '2c1b6f1e-0000-4000-8000-000000000001', JSON.stringify(parsed.authoredServiceBlueprintId));
+  }
+
+  {
+    const parsed = JSON.parse(serializeAuthoredServiceBlueprint(minimalBlueprint()));
+    check('a blueprint with no tags, handoffs or id omits those keys',
+      !('tags' in parsed) && !('handoffs' in parsed) && !('authoredServiceBlueprintId' in parsed), JSON.stringify(parsed));
+  }
+
   return failures;
 }

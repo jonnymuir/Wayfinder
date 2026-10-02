@@ -803,9 +803,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     const isJoin = gateway.kind === 'Join';
     const indices = binding?.relatedTransitionIndices ?? [];
     const routeNoun = isJoin ? 'Incoming routes' : 'Outgoing routes';
-    const sourceStageLabel = gateway.source
-      ? this._stageLabel(gateway.source)
-      : gateway.displayName;
+    const sourceStageLabel = gateway.displayName;
 
     return html`
       <section class="inspector-section" aria-labelledby="section-gateway-routes">
@@ -1214,7 +1212,6 @@ export class WayfinderStepInspectorElement extends LitElement {
       ? deriveGatewayBindings(this.serviceBlueprint).find(candidate => candidate.gateway.key === gateway.key) ?? null
       : null;
     const queueOptionsId = `gateway-queue-options-${gateway.key}`;
-    const waiting = gateway.waiting;
     const isJoin = gateway.kind === 'Join';
 
     return html`
@@ -1347,7 +1344,7 @@ export class WayfinderStepInspectorElement extends LitElement {
                     <textarea
                       class="field-control field-textarea"
                       data-wayfinder-gateway-waiting-content
-                      .value=${waiting?.content ?? ''}
+                      .value=${gateway.waitingContent ?? ''}
                       placeholder="Explain what users in this queue are waiting for, for example: Your application is under review by the planning team."
                       @change=${this._updateJoinWaitingContent}
                     ></textarea>
@@ -1365,7 +1362,7 @@ export class WayfinderStepInspectorElement extends LitElement {
                       class="field-control"
                       data-wayfinder-gateway-waiting-seconds
                       min="0"
-                      .value=${String(waiting?.expectedWaitSeconds ?? '')}
+                      .value=${String(gateway.waitingExpectedSeconds ?? '')}
                       placeholder="3600"
                       @change=${this._updateJoinWaitingExpectedSeconds}
                     />
@@ -1376,20 +1373,20 @@ export class WayfinderStepInspectorElement extends LitElement {
                       <input
                         type="checkbox"
                         data-wayfinder-gateway-waiting-allow-defer
-                        ?checked=${waiting?.allowDefer ?? false}
+                        ?checked=${gateway.waitingAllowDefer ?? false}
                         @change=${this._updateJoinWaitingAllowDefer}
                       />
                       <span>Users in this queue can defer the wait</span>
                     </label>
                   </div>
-                  ${waiting?.allowDefer
+                  ${gateway.waitingAllowDefer
                     ? html`
                         <label class="field-block">
                           <span class="field-label">Defer message</span>
                           <input
                             class="field-control"
                             data-wayfinder-gateway-waiting-defer-message
-                            .value=${waiting.deferMessage ?? ''}
+                            .value=${gateway.waitingDeferMessage ?? ''}
                             placeholder="You can return to this step when the other team has finished."
                             @change=${this._updateJoinWaitingDeferMessage}
                           />

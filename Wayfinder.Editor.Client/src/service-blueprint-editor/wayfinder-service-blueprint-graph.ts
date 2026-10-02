@@ -233,7 +233,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
 
     const stages = this.serviceBlueprint?.stages ?? [];
     const transitions = flattenRoutes(this.serviceBlueprint);
-    const gateways = this.serviceBlueprint?.metadata?.gateways ?? [];
+    const gateways = this.serviceBlueprint?.gateways ?? [];
 
     if (this._selectedStageKey && !stages.some(stage => stage.stateKey === this._selectedStageKey)) {
       this._selectedStageKey = null;
@@ -633,7 +633,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   }
 
   private _selectGateway(gatewayKey: string, options?: { openInspector?: boolean }) {
-    const gateway = this.serviceBlueprint?.metadata?.gateways?.find(candidate => candidate.key === gatewayKey);
+    const gateway = this.serviceBlueprint?.gateways?.find(candidate => candidate.key === gatewayKey);
     if (!gateway) {
       return;
     }
@@ -717,7 +717,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
 
   private _labelForStage(stageKey: string): string {
     return this.serviceBlueprint?.stages.find(stage => stage.stateKey === stageKey)?.displayName
-      ?? this.serviceBlueprint?.metadata?.gateways?.find(gateway => gateway.key === stageKey)?.displayName
+      ?? this.serviceBlueprint?.gateways?.find(gateway => gateway.key === stageKey)?.displayName
       ?? stageKey;
   }
 
@@ -813,7 +813,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     const previewStage = applyQueueToStage({
       stateKey: '',
       displayName: '',
-      metadata: { stageType: 'Question', actions: [], roleGates: [] },
       roleGates: [],
       actions: [],
       components: [],
@@ -951,7 +950,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
 
     const usedKeys = [
       ...this.serviceBlueprint.stages.map(s => s.stateKey),
-      ...(this.serviceBlueprint.metadata?.gateways ?? []).map(g => g.key),
+      ...(this.serviceBlueprint.gateways ?? []).map(g => g.key),
     ];
     if (usedKeys.includes(key)) {
       this._createGatewayDialog = { ...dialog, error: 'Gateway key must be unique across all stages and gateways.' };

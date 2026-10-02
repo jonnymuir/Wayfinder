@@ -246,6 +246,9 @@ export function run(csharpServiceBlueprintSource: string): number {
       gateways: { good: [], bad: {} },
       parameterSchemas: { good: [], bad: {} },
       layout: { good: { nodes: { 'stage:only': { x: 1, y: 2 } } }, bad: [] },
+      authoredServiceBlueprintId: { good: '2c1b6f1e-0000-4000-8000-000000000001', bad: 7 },
+      handoffs: { good: [{ id: 'h', fromState: 'a', toState: 'b', label: 'L' }], bad: {} },
+      tags: { good: { demo: 'x' }, bad: [] },
     };
     for (const key of Object.keys(EDITOR_TOP_LEVEL_FIELDS)) {
       const sample = SAMPLES[key];
@@ -272,9 +275,9 @@ export function run(csharpServiceBlueprintSource: string): number {
       lintAuthoredServiceBlueprintDocument(typo, JSON.stringify(typo), CATALOG).some(issue => issue.pathHint === 'allowManualRestat'));
   }
 
-  // Drift guard against the C# model: a property added to ServiceBlueprint must be either owned
-  // by the editor (EDITOR_TOP_LEVEL_FIELDS) or listed here with its reason. Without this, a new
-  // field is silently dropped by every editor save until someone notices.
+  // Drift guard against the C# model: every property on ServiceBlueprint must be owned by the
+  // editor (EDITOR_TOP_LEVEL_FIELDS). Without this, a new field is silently dropped by every editor
+  // save until someone notices.
   {
     const source = csharpServiceBlueprintSource;
     const start = source.indexOf('public record ServiceBlueprint\n');
@@ -284,13 +287,9 @@ export function run(csharpServiceBlueprintSource: string): number {
       .map(match => match[1][0].toLowerCase() + match[1].slice(1));
     check('the drift guard found the C# ServiceBlueprint properties', serverProperties.includes('allowManualRestart'), JSON.stringify(serverProperties));
 
-    // Known gaps: the editor does not serialise these top-level properties today, so an editor
-    // save drops them. Listing a property here is a decision, not a default; fix the gap and
-    // move it into EDITOR_TOP_LEVEL_FIELDS rather than adding to this list.
-    const SERVER_ONLY_DROPPED_BY_EDITOR_SAVE = ['authoredServiceBlueprintId', 'handoffs', 'tags', 'metadata'];
     for (const property of serverProperties) {
-      check(`C# ServiceBlueprint.${property} is owned by the editor or consciously listed as dropped`,
-        property in EDITOR_TOP_LEVEL_FIELDS || SERVER_ONLY_DROPPED_BY_EDITOR_SAVE.includes(property));
+      check(`C# ServiceBlueprint.${property} is owned by the editor`,
+        property in EDITOR_TOP_LEVEL_FIELDS);
     }
     // parameterSchemas has no C# property, so the server drops it when it deserialises a save.
     const EDITOR_ONLY = ['parameterSchemas'];

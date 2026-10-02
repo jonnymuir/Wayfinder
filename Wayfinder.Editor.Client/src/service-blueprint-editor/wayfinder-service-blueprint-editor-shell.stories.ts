@@ -38,29 +38,32 @@ function buildServiceBlueprint(seed: ServiceBlueprintSeed): AuthoredServiceBluep
     };
   });
 
-  const builtStages = stages;
+  const gatewayKeyFor = (stageKey: string) => `route-from-${stageKey}`;
+  const builtStages = stages.map((stage, index) => ({
+    ...stage,
+    routes: index < stages.length - 1
+      ? [{ id: `${stage.stateKey}--route--${gatewayKeyFor(stage.stateKey)}`, target: gatewayKeyFor(stage.stateKey), trigger: 'route' }]
+      : [],
+  }));
   return {
     ...serviceBlueprint,
     definitionKey: seed.definitionKey,
     displayName: seed.displayName,
     initialStage: builtStages[0]?.stateKey ?? serviceBlueprint.initialStage,
     stages: builtStages,
-    transitions: builtStages.slice(0, -1).flatMap((stage, index) => {
-      const gatewayKey = `route-from-${stage.stateKey}`;
+    gateways: builtStages.slice(0, -1).map((stage, index) => {
       const targetKey = builtStages[index + 1].stateKey;
-      return [
-        { fromState: stage.stateKey, toState: gatewayKey, action: 'route' },
-        { fromState: gatewayKey, toState: targetKey, action: seed.transitionActions[index] ?? 'continue' },
-      ];
+      const trigger = seed.transitionActions[index] ?? 'continue';
+      return {
+        key: gatewayKeyFor(stage.stateKey),
+        displayName: `Route from ${stage.displayName}`,
+        gatewayType: 'Split' as const,
+        queueKey: stage.queueKey ?? 'public',
+        actor: stage.actor,
+        roleGates: [],
+        routes: [{ id: `${gatewayKeyFor(stage.stateKey)}--${trigger}--${targetKey}`, target: targetKey, trigger }],
+      };
     }),
-    metadata: { gateways: builtStages.slice(0, -1).map(stage => ({
-      key: `route-from-${stage.stateKey}`,
-      displayName: `Route from ${stage.displayName}`,
-      gatewayType: 'Split' as const,
-      queueKey: stage.metadata?.queueKey ?? 'public',
-      actor: stage.metadata?.actor,
-      roleGates: [],
-    })) },
   } as unknown as AuthoredServiceBlueprint;
 }
 

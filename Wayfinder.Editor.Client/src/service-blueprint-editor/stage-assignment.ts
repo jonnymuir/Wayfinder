@@ -1,5 +1,5 @@
 import type { AuthoredGateway, AuthoredStage, AuthoredServiceBlueprint } from './types.js';
-import { gatewayRoleGates, stageActor, stageRoleGates, serviceBlueprintGateways, serviceBlueprintQueues, withStageAssignment } from './types.js';
+import { gatewayRoleGates, serviceBlueprintGateways, serviceBlueprintQueues, withStageAssignment } from './types.js';
 
 export type StageSurface = 'front-stage' | 'back-stage';
 export interface QueueDefinition {
@@ -26,12 +26,12 @@ export function humaniseAssignmentLabel(value: string): string {
 }
 
 export function stageSurface(stage: QueueAssignedNode): StageSurface {
-  const roleGates = 'metadata' in stage ? stageRoleGates(stage) : gatewayRoleGates(stage);
+  const roleGates = gatewayRoleGates(stage);
   if (roleGates.length > 0) {
     return 'back-stage';
   }
 
-  const actor = normaliseQueueKey('metadata' in stage ? stageActor(stage) : stage.actor);
+  const actor = normaliseQueueKey(stage.actor);
   if (!actor) {
     return 'front-stage';
   }
@@ -50,21 +50,17 @@ export function stageSurface(stage: QueueAssignedNode): StageSurface {
 }
 
 export function stageQueueKey(stage: QueueAssignedNode): string {
-  const explicitQueue = normaliseQueueKey(
-    'metadata' in stage
-      ? (stage as AuthoredStage).queueKey ?? stage.metadata?.queueKey ?? stage.metadata?.queueName
-      : (stage as AuthoredGateway).queueKey
-  );
+  const explicitQueue = normaliseQueueKey(stage.queueKey);
   if (explicitQueue) {
     return explicitQueue;
   }
 
-  const gatedRole = ('metadata' in stage ? stageRoleGates(stage) : gatewayRoleGates(stage)).find(value => value.trim());
+  const gatedRole = (gatewayRoleGates(stage)).find(value => value.trim());
   if (gatedRole) {
     return normaliseQueueKey(gatedRole);
   }
 
-  const actor = normaliseQueueKey('metadata' in stage ? stageActor(stage) : stage.actor);
+  const actor = normaliseQueueKey(stage.actor);
   if (actor) {
     return actor;
   }
@@ -83,14 +79,7 @@ export function stageQueueLabel(
     return configuredQueue.displayName.trim();
   }
 
-  const serviceBlueprintQueue = serviceBlueprintQueues(serviceBlueprint).find(queue => normaliseQueueKey(queue.key || queue.queueName) === normalised);
-  if (serviceBlueprintQueue?.queueName) {
-    const matchingQueue = availableQueues.find(queue => normaliseQueueKey(queue.queueName) === normaliseQueueKey(serviceBlueprintQueue.queueName));
-    if (matchingQueue?.displayName?.trim()) {
-      return matchingQueue.displayName.trim();
-    }
-  }
-
+  const serviceBlueprintQueue = serviceBlueprintQueues(serviceBlueprint).find(queue => normaliseQueueKey(queue.key) === normalised);
   return serviceBlueprintQueue?.displayName?.trim() || humaniseAssignmentLabel(normalised);
 }
 
@@ -132,7 +121,7 @@ export function applyQueueToStage(stage: AuthoredStage, queueKey: string): Autho
 }
 
 export function serviceBlueprintQueueOptions(
-  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'queues' | 'stages' | 'gateways' | 'metadata'> | null | undefined,
+  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'queues' | 'stages' | 'gateways'> | null | undefined,
   availableQueues: ReadonlyArray<QueueDefinition> = []
 ): string[] {
   const queueKeys = new Set<string>();
@@ -145,7 +134,7 @@ export function serviceBlueprintQueueOptions(
   });
 
   serviceBlueprintQueues(serviceBlueprint).forEach(queue => {
-    const key = normaliseQueueKey(queue.key || queue.queueName);
+    const key = normaliseQueueKey(queue.key);
     if (key) {
       queueKeys.add(key);
     }

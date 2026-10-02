@@ -17,15 +17,17 @@ export interface AuthoredServiceBlueprint {
   allowManualRestart?: boolean;
   description?: string;
   schemaVersion?: string;
+  /** Carried through unchanged: the runtime never reads it, but an authored blueprint's identity must survive a save. */
+  authoredServiceBlueprintId?: string;
   queues?: QueueDefinition[];
   stages: AuthoredStage[];
   gateways?: AuthoredGateway[];
   calculations?: ServiceBlueprintCalculationsBlock;
   parameterSchemas?: AuthoredParameterSchema[];
   layout?: ServiceBlueprintLayoutBlock;
-  metadata?: ServiceBlueprintDefinitionMetadata;
-  transitions?: AuthoredTransition[];
-  authorNote?: string;
+  /** Carried through unchanged (the runtime never reads these), so an editor save does not discard authored data. */
+  handoffs?: ServiceBlueprintHandoffDefinition[];
+  tags?: Record<string, string>;
 }
 
 /**
@@ -61,15 +63,6 @@ export interface ServiceBlueprintCalculationsBlock {
   series?: Record<string, { over: string; from: string; to: string; values: Record<string, string> }>;
 }
 
-export interface ServiceBlueprintDefinitionMetadata {
-  authoredServiceBlueprintId?: string;
-  description?: string;
-  schemaVersion?: string;
-  gateways?: AuthoredGateway[];
-  handoffs?: ServiceBlueprintHandoffDefinition[];
-  tags?: Record<string, string>;
-}
-
 export interface QueueDefinition {
   key: string;
   displayName: string;
@@ -77,7 +70,6 @@ export interface QueueDefinition {
   actor?: string;
   roleGates?: string[];
   tags?: Record<string, string>;
-  queueName?: string;
 }
 
 export interface ServiceBlueprintHandoffDefinition {
@@ -104,7 +96,6 @@ export interface AuthoredStage {
   actions?: AuthoredAction[];
   roleGates?: string[];
   editorComment?: string;
-  metadata?: ServiceBlueprintStateMetadata;
   /** Curated icon-set key (see graph/node-icons.ts). Falls back to a kind-based default when unset. */
   icon?: string;
   /**
@@ -128,20 +119,8 @@ export interface AuthoredStageValidation {
   message: string;
 }
 
-export interface ServiceBlueprintStateMetadata {
-  description?: string;
-  stageType?: StageKind;
-  actor?: string;
-  queueKey?: string;
-  queueName?: string;
-  roleGates?: string[];
-  actions?: AuthoredAction[];
-  editorComment?: string;
-  waiting?: WaitingMetadata;
-}
-
 // ---------------------------------------------------------------------------
-// Gateways / transitions
+// Gateways
 // ---------------------------------------------------------------------------
 
 export interface AuthoredGateway {
@@ -161,36 +140,8 @@ export interface AuthoredGateway {
   waitingAllowDefer?: boolean;
   waitingDeferMessage?: string;
   requiredIncomingQueues?: string[];
-  gatewayKey?: string;
-  queueName?: string;
-  source?: string;
-  waiting?: WaitingMetadata;
   /** Curated icon-set key (see graph/node-icons.ts). Falls back to a kind-based default when unset. */
   icon?: string;
-}
-
-export interface AuthoredTransition {
-  fromState: string;
-  toState: string;
-  action: string;
-  requiresRole?: string;
-  metadata?: ServiceBlueprintTransitionMetadata;
-  target?: string;
-  trigger?: string;
-  condition?: string;
-  actions?: AuthoredAction[];
-  editorComment?: string;
-}
-
-export interface ServiceBlueprintTransitionMetadata {
-  conditions?: ServiceBlueprintConditionDefinition[];
-  actions?: AuthoredAction[];
-}
-
-export interface ServiceBlueprintConditionDefinition {
-  kind: string;
-  expression: string;
-  description?: string;
 }
 
 // Closed union — mirrors the C# StageKind enum exactly.
@@ -286,75 +237,44 @@ export function serviceBlueprintStages(serviceBlueprint: Pick<AuthoredServiceBlu
   return serviceBlueprint?.stages ?? [];
 }
 
-export function serviceBlueprintTransitions(
-  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'stages' | 'gateways'> | null | undefined
-): AuthoredTransition[] {
-  return buildLegacyTransitions(serviceBlueprint);
-}
-
-export function serviceBlueprintMetadata(
-  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'metadata'> | null | undefined
-): ServiceBlueprintDefinitionMetadata | undefined {
-  return serviceBlueprint?.metadata;
-}
-
 export function serviceBlueprintGateways(
-  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'gateways'> | Pick<AuthoredServiceBlueprint, 'metadata'> | null | undefined
+  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'gateways'> | null | undefined
 ): AuthoredGateway[] {
-  return (serviceBlueprint as AuthoredServiceBlueprint | null | undefined)?.gateways
-    ?? (serviceBlueprint as AuthoredServiceBlueprint | null | undefined)?.metadata?.gateways
-    ?? [];
+  return serviceBlueprint?.gateways ?? [];
 }
 
 export function serviceBlueprintQueues(
   serviceBlueprint: Pick<AuthoredServiceBlueprint, 'queues'> | null | undefined
 ): QueueDefinition[] {
-  return (serviceBlueprint as AuthoredServiceBlueprint | null | undefined)?.queues ?? [];
+  return serviceBlueprint?.queues ?? [];
 }
 
-export function stageActions(stage: Pick<AuthoredStage, 'actions' | 'metadata'>): AuthoredAction[] {
-  return stage.actions ?? stage.metadata?.actions ?? [];
+export function stageActions(stage: Pick<AuthoredStage, 'actions'>): AuthoredAction[] {
+  return stage.actions ?? [];
 }
 
-export function stageRoleGates(stage: Pick<AuthoredStage, 'roleGates' | 'metadata'>): string[] {
-  return stage.roleGates ?? stage.metadata?.roleGates ?? [];
+export function stageRoleGates(stage: Pick<AuthoredStage, 'roleGates'>): string[] {
+  return stage.roleGates ?? [];
 }
 
-export function stageLane(stage: Pick<AuthoredStage, 'queueKey' | 'metadata'>): string | undefined {
-  return stage.queueKey ?? stage.metadata?.queueKey ?? stage.metadata?.queueName;
+export function stageLane(stage: Pick<AuthoredStage, 'queueKey'>): string | undefined {
+  return stage.queueKey;
 }
 
-export function stageActor(stage: Pick<AuthoredStage, 'actor' | 'metadata'>): string | undefined {
-  return stage.actor ?? stage.metadata?.actor;
+export function stageActor(stage: Pick<AuthoredStage, 'actor'>): string | undefined {
+  return stage.actor;
 }
 
-export function stageKind(stage: Pick<AuthoredStage, 'kind' | 'metadata'>): StageKind {
-  return stage.kind ?? stage.metadata?.stageType ?? 'Question';
+export function stageKind(stage: Pick<AuthoredStage, 'kind'>): StageKind {
+  return stage.kind ?? 'Question';
 }
 
-export function stageDescription(stage: Pick<AuthoredStage, 'description' | 'metadata'>): string | undefined {
-  return stage.description ?? stage.metadata?.description;
+export function stageDescription(stage: Pick<AuthoredStage, 'description'>): string | undefined {
+  return stage.description;
 }
 
-export function stageEditorComment(stage: Pick<AuthoredStage, 'editorComment' | 'metadata'>): string | undefined {
-  return stage.editorComment ?? stage.metadata?.editorComment;
-}
-
-export function stageWaiting(stage: Pick<AuthoredStage, 'metadata'>): WaitingMetadata | undefined {
-  return stage.metadata?.waiting;
-}
-
-export function withStageMetadata(stage: AuthoredStage, metadata: ServiceBlueprintStateMetadata): AuthoredStage {
-  return hydrateStage({
-    ...stage,
-    description: metadata.description ?? stage.description,
-    kind: metadata.stageType ?? stage.kind,
-    actor: metadata.actor ?? stage.actor,
-    queueKey: metadata.queueKey ?? metadata.queueName ?? stage.queueKey,
-    actions: metadata.actions ?? stage.actions,
-    roleGates: metadata.roleGates ?? stage.roleGates,
-    editorComment: metadata.editorComment ?? stage.editorComment,
-  });
+export function stageEditorComment(stage: Pick<AuthoredStage, 'editorComment'>): string | undefined {
+  return stage.editorComment;
 }
 
 export function withStageKind(stage: AuthoredStage, nextKind: StageKind): AuthoredStage {
@@ -386,69 +306,46 @@ export function gatewayRoleGates(gateway: Pick<AuthoredGateway, 'roleGates'>): s
   return gateway.roleGates ?? [];
 }
 
-export function transitionActions(transition: Pick<AuthoredTransition, 'metadata' | 'actions'>): AuthoredAction[] {
-  return transition.actions ?? transition.metadata?.actions ?? [];
-}
-
-function defineCompatGetter(target: object, key: string, getter: () => unknown) {
-  if (Object.prototype.hasOwnProperty.call(target, key)) {
-    return;
-  }
-  Object.defineProperty(target, key, {
-    configurable: true,
-    enumerable: false,
-    get: getter,
-  });
-}
-
+/**
+ * Parses an authored blueprint into the editor's model. There is one wire shape (the C#
+ * ServiceBlueprint's); the only name pairs read are the editor's own internal ones (stateKey/stageKey,
+ * kind/stageType, kind/gatewayType) because this runs again over an already-hydrated blueprint on
+ * every edit. Nothing older than that shape is understood.
+ */
 export function hydrateServiceBlueprintDefinition<T extends AuthoredServiceBlueprint>(serviceBlueprint: T): T {
   const root = serviceBlueprint as unknown as Record<string, unknown>;
-  const metadata = asRecord(root.metadata);
   const rawStates = asArray<Record<string, unknown>>(root.stages);
-  const rawGateways = asArray<Record<string, unknown>>(root.gateways ?? metadata.gateways);
-  const rawTransitions = asArray<Record<string, unknown>>(root.transitions);
-  const rawQueues = dedupeByKey(
+  const rawGateways = asArray<Record<string, unknown>>(root.gateways);
+  const queues = dedupeByKey(
     asArray<Record<string, unknown>>(root.queues)
       .map(normaliseQueueDefinition).filter((queue): queue is QueueDefinition => Boolean(queue)),
     queue => queue.key
   );
-  const queueLookup = buildQueueLookup(rawQueues, rawStates, rawGateways);
-  const normalisedGateways = rawGateways.map(rawGateway => hydrateGateway(normaliseGateway(rawGateway, queueLookup, rawTransitions)));
-  const normalisedStates = rawStates.map(rawStage => hydrateStage(normaliseStage(rawStage, queueLookup, rawTransitions, rawGateways)));
+  const stages = rawStates.map(normaliseStage);
+  const handoffs = asArray<ServiceBlueprintHandoffDefinition>(root.handoffs);
+  const tags = asRecord(root.tags) as Record<string, string>;
 
-  const normalisedServiceBlueprint = {
+  return {
     definitionKey: typeof root.definitionKey === 'string' ? root.definitionKey : '',
     displayName: typeof root.displayName === 'string' ? root.displayName : '',
     version: typeof root.version === 'number' ? root.version : 1,
-    initialStage: firstString(root.initialStage) ?? normalisedStates[0]?.stateKey ?? '',
+    initialStage: firstString(root.initialStage) ?? stages[0]?.stateKey ?? '',
     requestPolicy: typeof root.requestPolicy === 'string' ? root.requestPolicy : 'single',
     allowManualRestart: root.allowManualRestart === true ? true : undefined,
-    description: firstString(root.description, metadata.description, root.authorNote),
-    schemaVersion: firstString(root.schemaVersion, metadata.schemaVersion),
-    queues: rawQueues,
-    stages: normalisedStates,
-    gateways: normalisedGateways,
+    description: firstString(root.description),
+    schemaVersion: firstString(root.schemaVersion),
+    authoredServiceBlueprintId: firstString(root.authoredServiceBlueprintId),
+    queues,
+    stages,
+    gateways: rawGateways.map(normaliseGateway),
     calculations: root.calculations && typeof root.calculations === 'object' && !Array.isArray(root.calculations)
       ? root.calculations as ServiceBlueprintCalculationsBlock
       : undefined,
     parameterSchemas: asArray<AuthoredParameterSchema>(root.parameterSchemas),
     layout: sanitiseLayoutBlock(root.layout),
-  } as AuthoredServiceBlueprint;
-
-  const legacyMetadata: ServiceBlueprintDefinitionMetadata = {
-    authoredServiceBlueprintId: typeof metadata.authoredServiceBlueprintId === 'string' ? metadata.authoredServiceBlueprintId : undefined,
-    handoffs: asArray<ServiceBlueprintHandoffDefinition>(metadata.handoffs),
-    tags: asRecord(metadata.tags) as Record<string, string>,
-  };
-
-  defineCompatGetter(normalisedServiceBlueprint, 'authorNote', () => normalisedServiceBlueprint.description);
-  defineCompatGetter(normalisedServiceBlueprint, 'metadata', () => legacyMetadata);
-  defineCompatGetter(legacyMetadata, 'description', () => normalisedServiceBlueprint.description);
-  defineCompatGetter(legacyMetadata, 'schemaVersion', () => normalisedServiceBlueprint.schemaVersion);
-  defineCompatGetter(legacyMetadata, 'gateways', () => normalisedServiceBlueprint.gateways);
-  defineCompatGetter(normalisedServiceBlueprint, 'transitions', () => buildLegacyTransitions(normalisedServiceBlueprint));
-
-  return normalisedServiceBlueprint as T;
+    handoffs: handoffs.length > 0 ? handoffs : undefined,
+    tags: Object.keys(tags).length > 0 ? tags : undefined,
+  } as T;
 }
 
 function sanitisePositionRecord(value: unknown): Record<string, ServiceBlueprintNodePosition> {
@@ -518,14 +415,13 @@ function dedupeByKey<T>(items: T[], keyFor: (item: T) => string): T[] {
 }
 
 function normaliseQueueDefinition(rawQueue: Record<string, unknown>): QueueDefinition | null {
-  const key = firstString(rawQueue.key, rawQueue.queueName);
+  const key = firstString(rawQueue.key);
   if (!key) {
     return null;
   }
   return {
     key,
-    queueName: key,
-    displayName: firstString(rawQueue.displayName, rawQueue.title, rawQueue.key, rawQueue.queueName) ?? key,
+    displayName: firstString(rawQueue.displayName) ?? key,
     description: firstString(rawQueue.description),
     actor: firstString(rawQueue.actor),
     roleGates: asStringArray(rawQueue.roleGates),
@@ -533,83 +429,16 @@ function normaliseQueueDefinition(rawQueue: Record<string, unknown>): QueueDefin
   };
 }
 
-function buildQueueLookup(
-  queues: QueueDefinition[],
-  rawStates: Array<Record<string, unknown>>,
-  rawGateways: Array<Record<string, unknown>>
-): Map<string, string> {
-  const lookup = new Map<string, string>();
-  queues.forEach(queue => {
-    lookup.set(queue.key, queue.key);
-    if (queue.queueName) {
-      lookup.set(queue.queueName, queue.key);
-    }
-  });
-
-  const registerQueueKey = (rawNode: Record<string, unknown>) => {
-    const queueKey = firstString(
-      rawNode.queueKey,
-      rawNode.queueName,
-      asRecord(rawNode.metadata).queueKey,
-      asRecord(rawNode.metadata).queueName
-    );
-    if (queueKey) {
-      lookup.set(queueKey, queueKey);
-    }
-  };
-
-  rawStates.forEach(registerQueueKey);
-  rawGateways.forEach(registerQueueKey);
-  return lookup;
-}
-
-function resolveQueueKey(rawNode: Record<string, unknown>, queueLookup: Map<string, string>): string | undefined {
-  const candidates = [
-    rawNode.queueKey,
-    rawNode.queueName,
-    asRecord(rawNode.metadata).queueKey,
-    asRecord(rawNode.metadata).queueName,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return queueLookup.get(candidate.trim()) ?? candidate.trim();
-    }
-  }
-  return undefined;
-}
-
 function routeId(sourceKey: string, trigger: string, targetKey: string) {
   return `${sourceKey || 'unknown'}--${trigger || 'continue'}--${targetKey || 'unknown'}`;
 }
 
-function normaliseLegacyTransitionRoute(
-  sourceKey: string,
-  transition: Record<string, unknown>
-): AuthoredRoute {
-  const trigger = firstString(transition.action, transition.trigger) ?? 'continue';
-  return {
-    id: firstString(transition.id) ?? routeId(sourceKey, trigger, firstString(transition.toState, transition.target) ?? ''),
-    target: firstString(transition.toState, transition.target) ?? '',
-    trigger,
-    // Reads the legacy condition/metadata.conditions shape (this function normalises the old
-    // Transitions-array format specifically) into the modern showWhen field.
-    showWhen: firstString(
-      transition.condition,
-      asRecord(transition.metadata).conditions && Array.isArray(asRecord(transition.metadata).conditions)
-        ? (asRecord(asArray(asRecord(transition.metadata).conditions)[0]).expression as string | undefined)
-        : undefined
-    ),
-    requiresRole: firstString(transition.requiresRole),
-    actions: transitionActions(transition as unknown as AuthoredTransition),
-    editorComment: firstString(transition.editorComment),
-  };
-}
-
 function normaliseRoute(rawRoute: Record<string, unknown>, sourceKey: string): AuthoredRoute {
-  const trigger = firstString(rawRoute.trigger, rawRoute.action) ?? 'continue';
+  const trigger = firstString(rawRoute.trigger) ?? 'continue';
+  const target = firstString(rawRoute.target) ?? '';
   return {
-    id: firstString(rawRoute.id) ?? routeId(sourceKey, trigger, firstString(rawRoute.target, rawRoute.toState) ?? ''),
-    target: firstString(rawRoute.target, rawRoute.toState) ?? '',
+    id: firstString(rawRoute.id) ?? routeId(sourceKey, trigger, target),
+    target,
     trigger,
     label: firstString(rawRoute.label),
     style: firstString(rawRoute.style),
@@ -620,50 +449,23 @@ function normaliseRoute(rawRoute: Record<string, unknown>, sourceKey: string): A
   };
 }
 
-function normaliseStage(
-  rawStage: Record<string, unknown>,
-  queueLookup: Map<string, string>,
-  rawTransitions: Array<Record<string, unknown>>,
-  rawGateways: Array<Record<string, unknown>>
-): AuthoredStage {
-  const metadata = asRecord(rawStage.metadata);
-  const stateKey = firstString(rawStage.stageKey, rawStage.stateKey, rawStage.key) ?? '';
-  const transitionRoutes = rawTransitions
-    .filter(transition => firstString(transition.fromState) === stateKey)
-    .map(transition => normaliseLegacyTransitionRoute(stateKey, transition));
-  const sourcedGatewayRoutes = rawGateways
-    .filter(rawGateway => firstString(rawGateway.source) === stateKey)
-    .map(rawGateway => {
-      const gatewayKey = firstString(rawGateway.key, rawGateway.gatewayKey) ?? '';
-      const firstGatewayRoute = asArray<Record<string, unknown>>(rawGateway.routes)[0];
-      const trigger = firstString(firstGatewayRoute?.trigger, firstGatewayRoute?.action) ?? 'continue';
-      return {
-        id: routeId(stateKey, trigger, gatewayKey),
-        target: gatewayKey,
-        trigger,
-      } satisfies AuthoredRoute;
-    });
-  const routes = dedupeByKey(
-    [
-      ...asArray<Record<string, unknown>>(rawStage.routes).map(route => normaliseRoute(route, stateKey)),
-      ...transitionRoutes,
-      ...sourcedGatewayRoutes,
-    ],
-    route => route.id
-  );
-
+function normaliseStage(rawStage: Record<string, unknown>): AuthoredStage {
+  const stateKey = firstString(rawStage.stageKey, rawStage.stateKey) ?? '';
   return hydrateStage({
     stateKey,
-    displayName: firstString(rawStage.displayName, rawStage.title) ?? stateKey,
+    displayName: firstString(rawStage.displayName) ?? stateKey,
     components: asArray<AuthoredComponent>(rawStage.components),
-    description: firstString(rawStage.description, metadata.description),
-    kind: firstString(rawStage.stageType, rawStage.kind, rawStage.type, metadata.stageType) as StageKind | undefined,
-    actor: firstString(rawStage.actor, metadata.actor),
-    queueKey: resolveQueueKey(rawStage, queueLookup),
-    routes,
-    actions: asArray<AuthoredAction>(rawStage.actions ?? metadata.actions),
-    roleGates: asStringArray(rawStage.roleGates ?? metadata.roleGates),
-    editorComment: firstString(rawStage.editorComment, metadata.editorComment),
+    description: firstString(rawStage.description),
+    kind: firstString(rawStage.stageType, rawStage.kind) as StageKind | undefined,
+    actor: firstString(rawStage.actor),
+    queueKey: firstString(rawStage.queueKey),
+    routes: dedupeByKey(
+      asArray<Record<string, unknown>>(rawStage.routes).map(route => normaliseRoute(route, stateKey)),
+      route => route.id
+    ),
+    actions: asArray<AuthoredAction>(rawStage.actions),
+    roleGates: asStringArray(rawStage.roleGates),
+    editorComment: firstString(rawStage.editorComment),
     icon: firstString(rawStage.icon),
     validations: normaliseStageValidations(rawStage.validations),
   });
@@ -683,63 +485,34 @@ function normaliseStageValidations(value: unknown): AuthoredStageValidation[] {
   }));
 }
 
-function normaliseGateway(
-  rawGateway: Record<string, unknown>,
-  queueLookup: Map<string, string>,
-  rawTransitions: Array<Record<string, unknown>>
-): AuthoredGateway {
-  const key = firstString(rawGateway.key, rawGateway.gatewayKey) ?? '';
-  const metadata = asRecord(rawGateway.metadata);
-  const transitionRoutes = rawTransitions
-    .filter(transition => firstString(transition.fromState) === key)
-    .map(transition => normaliseLegacyTransitionRoute(key, transition));
+function normaliseGateway(rawGateway: Record<string, unknown>): AuthoredGateway {
+  const key = firstString(rawGateway.key) ?? '';
+  const gatewayType = (firstString(rawGateway.gatewayType, rawGateway.kind) as GatewayKind | undefined) ?? 'Split';
   return hydrateGateway({
     key,
-    displayName: firstString(rawGateway.displayName, rawGateway.title) ?? key,
-    description: firstString(rawGateway.description, metadata.description),
-    gatewayType: firstString(rawGateway.gatewayType, rawGateway.kind, rawGateway.type) as GatewayKind ?? 'Split',
-    kind: firstString(rawGateway.kind, rawGateway.gatewayType, rawGateway.type) as GatewayKind ?? 'Split',
-    queueKey: resolveQueueKey(rawGateway, queueLookup),
-    actor: firstString(rawGateway.actor, metadata.actor),
-    roleGates: asStringArray(rawGateway.roleGates ?? metadata.roleGates),
+    displayName: firstString(rawGateway.displayName) ?? key,
+    description: firstString(rawGateway.description),
+    gatewayType,
+    kind: gatewayType,
+    queueKey: firstString(rawGateway.queueKey),
+    actor: firstString(rawGateway.actor),
+    roleGates: asStringArray(rawGateway.roleGates),
     routes: dedupeByKey(
-      [
-        ...asArray<Record<string, unknown>>(rawGateway.routes).map(route => normaliseRoute(route, key)),
-        ...transitionRoutes,
-      ],
+      asArray<Record<string, unknown>>(rawGateway.routes).map(route => normaliseRoute(route, key)),
       route => route.id
     ),
-    waitingContent: firstString(rawGateway.waitingContent, asRecord(rawGateway.waiting).content, asRecord(rawGateway.waitingInfo).content),
-    waitingExpectedSeconds: typeof rawGateway.waitingExpectedSeconds === 'number'
-      ? rawGateway.waitingExpectedSeconds
-      : typeof asRecord(rawGateway.waiting).expectedWaitSeconds === 'number'
-        ? asRecord(rawGateway.waiting).expectedWaitSeconds as number
-        : typeof asRecord(rawGateway.waitingInfo).expectedWaitSeconds === 'number'
-          ? asRecord(rawGateway.waitingInfo).expectedWaitSeconds as number
-          : undefined,
-    waitingPollIntervalMs: typeof rawGateway.waitingPollIntervalMs === 'number'
-      ? rawGateway.waitingPollIntervalMs
-      : typeof asRecord(rawGateway.waiting).pollIntervalMs === 'number'
-        ? asRecord(rawGateway.waiting).pollIntervalMs as number
-        : typeof asRecord(rawGateway.waitingInfo).pollIntervalMs === 'number'
-          ? asRecord(rawGateway.waitingInfo).pollIntervalMs as number
-          : undefined,
-    waitingAllowDefer: typeof rawGateway.waitingAllowDefer === 'boolean'
-      ? rawGateway.waitingAllowDefer
-      : typeof asRecord(rawGateway.waiting).allowDefer === 'boolean'
-        ? asRecord(rawGateway.waiting).allowDefer as boolean
-        : typeof asRecord(rawGateway.waitingInfo).allowDefer === 'boolean'
-          ? asRecord(rawGateway.waitingInfo).allowDefer as boolean
-          : undefined,
-    waitingDeferMessage: firstString(rawGateway.waitingDeferMessage, asRecord(rawGateway.waiting).deferMessage, asRecord(rawGateway.waitingInfo).deferMessage),
-    requiredIncomingQueues: asStringArray(rawGateway.requiredIncomingQueues)
-      .map(queueKey => queueLookup.get(queueKey) ?? queueKey),
+    waitingContent: firstString(rawGateway.waitingContent),
+    waitingExpectedSeconds: typeof rawGateway.waitingExpectedSeconds === 'number' ? rawGateway.waitingExpectedSeconds : undefined,
+    waitingPollIntervalMs: typeof rawGateway.waitingPollIntervalMs === 'number' ? rawGateway.waitingPollIntervalMs : undefined,
+    waitingAllowDefer: typeof rawGateway.waitingAllowDefer === 'boolean' ? rawGateway.waitingAllowDefer : undefined,
+    waitingDeferMessage: firstString(rawGateway.waitingDeferMessage),
+    requiredIncomingQueues: asStringArray(rawGateway.requiredIncomingQueues),
     icon: firstString(rawGateway.icon),
   });
 }
 
 function hydrateStage(stage: AuthoredStage): AuthoredStage {
-  const hydrated = {
+  return {
     ...stage,
     components: stage.components ?? [],
     kind: stage.kind ?? 'Question',
@@ -747,110 +520,26 @@ function hydrateStage(stage: AuthoredStage): AuthoredStage {
     roleGates: stage.roleGates ?? [],
     routes: stage.routes ?? [],
     validations: stage.validations ?? [],
-  } as AuthoredStage;
-
-  defineCompatGetter(hydrated, 'stageKey', () => hydrated.stateKey);
-  defineCompatGetter(hydrated, 'metadata', () => ({
-    description: hydrated.description,
-    stageType: hydrated.kind,
-    actor: hydrated.actor,
-    queueKey: hydrated.queueKey,
-    queueName: hydrated.queueKey,
-    roleGates: hydrated.roleGates,
-    actions: hydrated.actions,
-    editorComment: hydrated.editorComment,
-  } satisfies ServiceBlueprintStateMetadata));
-
-  return hydrated;
+  };
 }
 
 function hydrateGateway(gateway: AuthoredGateway): AuthoredGateway {
-  const hydrated = {
+  return {
     ...gateway,
     gatewayType: gateway.gatewayType ?? gateway.kind ?? 'Split',
     kind: gateway.kind ?? gateway.gatewayType ?? 'Split',
     routes: gateway.routes ?? [],
     roleGates: gateway.roleGates ?? [],
     requiredIncomingQueues: gateway.requiredIncomingQueues ?? [],
-  } as AuthoredGateway;
-
-  defineCompatGetter(hydrated, 'gatewayKey', () => hydrated.key);
-  defineCompatGetter(hydrated, 'queueName', () => hydrated.queueKey);
-  defineCompatGetter(hydrated, 'waiting', () => ({
-    content: hydrated.waitingContent,
-    expectedWaitSeconds: hydrated.waitingExpectedSeconds,
-    pollIntervalMs: hydrated.waitingPollIntervalMs,
-    allowDefer: hydrated.waitingAllowDefer ?? false,
-    deferMessage: hydrated.waitingDeferMessage,
-  } satisfies WaitingMetadata));
-
-  return hydrated;
-}
-
-function buildLegacyTransitions(
-  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'stages' | 'gateways'> | null | undefined
-): AuthoredTransition[] {
-  if (!serviceBlueprint) {
-    return [];
-  }
-
-  const stageTransitions = serviceBlueprint.stages.flatMap(stage =>
-    (stage.routes ?? []).map(route => {
-      const metadata: ServiceBlueprintTransitionMetadata = {
-        conditions: route.showWhen
-          ? [{ kind: 'expression', expression: route.showWhen }]
-          : undefined,
-        actions: route.actions ?? [],
-      };
-      const transition: AuthoredTransition = {
-        fromState: stage.stateKey,
-        toState: route.target,
-        action: route.trigger,
-        requiresRole: route.requiresRole,
-        metadata,
-        condition: route.showWhen,
-        actions: route.actions ?? [],
-        editorComment: route.editorComment,
-      };
-      defineCompatGetter(transition, 'target', () => transition.toState);
-      defineCompatGetter(transition, 'trigger', () => transition.action);
-      return transition;
-    })
-  );
-
-  const gatewayTransitions = (serviceBlueprint.gateways ?? []).flatMap(gateway =>
-    (gateway.routes ?? []).map(route => {
-      const metadata: ServiceBlueprintTransitionMetadata = {
-        conditions: route.showWhen
-          ? [{ kind: 'expression', expression: route.showWhen }]
-          : undefined,
-        actions: route.actions ?? [],
-      };
-      const transition: AuthoredTransition = {
-        fromState: gateway.key,
-        toState: route.target,
-        action: route.trigger,
-        requiresRole: route.requiresRole,
-        metadata,
-        condition: route.showWhen,
-        actions: route.actions ?? [],
-        editorComment: route.editorComment,
-      };
-      defineCompatGetter(transition, 'target', () => transition.toState);
-      defineCompatGetter(transition, 'trigger', () => transition.action);
-      return transition;
-    })
-  );
-
-  return [...stageTransitions, ...gatewayTransitions];
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Route view
 // ---------------------------------------------------------------------------
 //
-// Editor surfaces still render routes as a flattened view. The view is derived
-// from the canonical transition list plus metadata.gateways.
+// Editor surfaces render routes as a flattened view, derived from each stage's and
+// gateway's own routes.
 
 /**
  * Read-only flattening of a transition into a route/editor view.
@@ -1590,177 +1279,257 @@ export const STUB_ACTION_CATALOG: ActionCatalogEntry[] = [
   },
 ];
 
-export const STUB_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition(({
-  definitionKey: 'planning-permission',
-  displayName: 'Planning Permission Application',
-  version: 1,
-  requestPolicy: 'single',
-  initialStage: 'applicant-details',
-  stages: [
+export const STUB_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition({
+  "definitionKey": "planning-permission",
+  "displayName": "Planning Permission Application",
+  "version": 1,
+  "initialStage": "applicant-details",
+  "requestPolicy": "single",
+  "schemaVersion": "1.0",
+  "queues": [],
+  "stages": [
     {
-      stateKey: 'applicant-details',
-      displayName: 'Applicant Details',
-      description: 'Collect applicant details and site context.',
-      kind: 'Question',
-      actor: 'public',
-      actions: [
+      "actions": [
         {
-          type: 'forms.load',
-          timing: 'OnEntry',
-          parameterSchemaKey: 'forms.form-reference',
-          params: { formDefinitionId: 'planning-applicant-details' },
-          summary: 'Load the applicant details form.',
-        },
-        {
-          type: 'notifications.send-email',
-          timing: 'OnEntry',
-          parameterSchemaKey: 'notifications.send-email',
-          params: {
-            templateId: 'planning-started',
-            recipientEmail: 'planning.officers@council.example',
-            subject: 'Planning application started',
+          "type": "forms.load",
+          "parameterSchemaKey": "forms.form-reference",
+          "params": {
+            "formDefinitionId": "planning-applicant-details"
           },
-          summary: 'Send email to Planning Officers',
+          "summary": "Load the applicant details form.",
+          "timing": "OnEntry"
         },
+        {
+          "type": "notifications.send-email",
+          "parameterSchemaKey": "notifications.send-email",
+          "params": {
+            "recipientEmail": "planning.officers@council.example",
+            "subject": "Planning application started",
+            "templateId": "planning-started"
+          },
+          "summary": "Send email to Planning Officers",
+          "timing": "OnEntry"
+        }
       ],
-      components: [],
-      roleGates: [],
-    },
-    {
-      stateKey: 'check-answers',
-      displayName: 'Check Your Answers',
-      description: 'Review the captured answers before submission.',
-      kind: 'CheckAnswers',
-      actor: 'public',
-      actions: [],
-      components: [],
-      roleGates: [],
-    },
-    {
-      stateKey: 'reviewer-assessment',
-      displayName: 'Reviewer Assessment',
-      description: 'Internal assessment and decision making.',
-      kind: 'Question',
-      actor: 'reviewer',
-      actions: [
+      "actor": "public",
+      "components": [],
+      "description": "Collect applicant details and site context.",
+      "displayName": "Applicant Details",
+      "roleGates": [],
+      "routes": [
         {
-          type: 'case.assign',
-          timing: 'OnEntry',
-          parameterSchemaKey: 'case.assign',
-          params: { assigneeType: 'role', assigneeValue: 'reviewer', overwriteExisting: false },
-          summary: 'Assign the case to a reviewer.',
+          "actions": [],
+          "id": "applicant-details--route--route-check-answers",
+          "target": "route-check-answers",
+          "trigger": "route"
         },
         {
-          type: 'forms.request-evidence',
-          timing: 'OnEntry',
-          parameterSchemaKey: 'forms.request-evidence',
-          params: {
-            title: 'Request supporting evidence',
-            helpText: 'Capture any extra evidence the reviewer needs before deciding.',
-            dueDate: '',
-            fields: [
+          "id": "applicant-details--submit--route-check-answers",
+          "target": "route-check-answers",
+          "trigger": "submit"
+        }
+      ],
+      "stageKey": "applicant-details",
+      "stageType": "Question"
+    },
+    {
+      "actions": [],
+      "actor": "public",
+      "components": [],
+      "description": "Review the captured answers before submission.",
+      "displayName": "Check Your Answers",
+      "roleGates": [],
+      "routes": [
+        {
+          "actions": [],
+          "id": "check-answers--route--route-reviewer-assessment",
+          "target": "route-reviewer-assessment",
+          "trigger": "route"
+        },
+        {
+          "id": "check-answers--submit--route-reviewer-assessment",
+          "target": "route-reviewer-assessment",
+          "trigger": "submit"
+        }
+      ],
+      "stageKey": "check-answers",
+      "stageType": "CheckAnswers"
+    },
+    {
+      "actions": [
+        {
+          "type": "case.assign",
+          "parameterSchemaKey": "case.assign",
+          "params": {
+            "assigneeType": "role",
+            "assigneeValue": "reviewer",
+            "overwriteExisting": false
+          },
+          "summary": "Assign the case to a reviewer.",
+          "timing": "OnEntry"
+        },
+        {
+          "type": "forms.request-evidence",
+          "parameterSchemaKey": "forms.request-evidence",
+          "params": {
+            "dueDate": "",
+            "fields": [
               {
-                fieldKey: 'decision-note',
-                label: 'Decision note',
-                type: 'textarea',
-                required: true,
-                hintText: 'Explain why the reviewer is requesting more evidence.',
-                validationPattern: '',
-                defaultValue: '',
-                options: [],
-              },
+                "type": "textarea",
+                "defaultValue": "",
+                "fieldKey": "decision-note",
+                "hintText": "Explain why the reviewer is requesting more evidence.",
+                "label": "Decision note",
+                "options": [],
+                "required": true,
+                "validationPattern": ""
+              }
             ],
+            "helpText": "Capture any extra evidence the reviewer needs before deciding.",
+            "title": "Request supporting evidence"
           },
-          summary: 'Request evidence form: 1 field',
-        },
+          "summary": "Request evidence form: 1 field",
+          "timing": "OnEntry"
+        }
       ],
-      components: [],
-      roleGates: ['reviewer'],
-    },
-    {
-      stateKey: 'confirmation',
-      displayName: 'Application Submitted',
-      description: 'Confirm the application has been submitted.',
-      kind: 'Confirmation',
-      actor: 'public',
-      actions: [],
-      components: [],
-      roleGates: [],
-    },
-  ],
-  transitions: [
-    { fromState: 'applicant-details', toState: 'route-check-answers', action: 'route' },
-    { fromState: 'route-check-answers', toState: 'check-answers', action: 'submit', metadata: { actions: [{ type: 'forms.submit', timing: 'OnTransition', parameterSchemaKey: 'forms.form-reference', params: { formDefinitionId: 'planning-applicant-details' }, summary: 'Submit the applicant details form.' }] } },
-    { fromState: 'check-answers', toState: 'route-reviewer-assessment', action: 'route' },
-    { fromState: 'route-reviewer-assessment', toState: 'reviewer-assessment', action: 'submit' },
-    { fromState: 'reviewer-assessment', toState: 'route-reviewer-decision', action: 'route' },
-    { fromState: 'route-reviewer-decision', toState: 'confirmation', action: 'approve', requiresRole: 'reviewer' },
-    { fromState: 'route-reviewer-decision', toState: 'applicant-details', action: 'reject', requiresRole: 'reviewer' },
-  ],
-  metadata: { schemaVersion: '1.0', gateways: [
-    {
-      key: 'route-check-answers',
-      displayName: 'Route to check answers',
-      gatewayType: 'Split',
-      source: 'applicant-details',
-      queueKey: 'public',
-      roleGates: [],
-      routes: [
+      "actor": "reviewer",
+      "components": [],
+      "description": "Internal assessment and decision making.",
+      "displayName": "Reviewer Assessment",
+      "roleGates": [
+        "reviewer"
+      ],
+      "routes": [
         {
-          id: 'applicant-details--submit--check-answers',
-          target: 'check-answers',
-          trigger: 'submit',
-          actions: [
+          "actions": [],
+          "id": "reviewer-assessment--route--route-reviewer-decision",
+          "target": "route-reviewer-decision",
+          "trigger": "route"
+        },
+        {
+          "id": "reviewer-assessment--approve--route-reviewer-decision",
+          "target": "route-reviewer-decision",
+          "trigger": "approve"
+        }
+      ],
+      "stageKey": "reviewer-assessment",
+      "stageType": "Question"
+    },
+    {
+      "actions": [],
+      "actor": "public",
+      "components": [],
+      "description": "Confirm the application has been submitted.",
+      "displayName": "Application Submitted",
+      "roleGates": [],
+      "routes": [],
+      "stageKey": "confirmation",
+      "stageType": "Confirmation"
+    }
+  ],
+  "gateways": [
+    {
+      "displayName": "Route to check answers",
+      "gatewayType": "Split",
+      "key": "route-check-answers",
+      "queueKey": "public",
+      "requiredIncomingQueues": [],
+      "roleGates": [],
+      "routes": [
+        {
+          "actions": [
             {
-              type: 'forms.submit',
-              timing: 'OnTransition',
-              parameterSchemaKey: 'forms.form-reference',
-              params: { formDefinitionId: 'planning-applicant-details' },
-              summary: 'Submit the applicant details form.',
-            },
+              "type": "forms.submit",
+              "parameterSchemaKey": "forms.form-reference",
+              "params": {
+                "formDefinitionId": "planning-applicant-details"
+              },
+              "summary": "Submit the applicant details form.",
+              "timing": "OnTransition"
+            }
           ],
+          "id": "applicant-details--submit--check-answers",
+          "target": "check-answers",
+          "trigger": "submit"
         },
-      ],
+        {
+          "actions": [
+            {
+              "type": "forms.submit",
+              "parameterSchemaKey": "forms.form-reference",
+              "params": {
+                "formDefinitionId": "planning-applicant-details"
+              },
+              "summary": "Submit the applicant details form.",
+              "timing": "OnTransition"
+            }
+          ],
+          "id": "route-check-answers--submit--check-answers",
+          "target": "check-answers",
+          "trigger": "submit"
+        }
+      ]
     },
     {
-      key: 'route-reviewer-assessment',
-      displayName: 'Route to reviewer assessment',
-      gatewayType: 'Split',
-      source: 'check-answers',
-      queueKey: 'public',
-      roleGates: [],
-      routes: [
+      "displayName": "Route to reviewer assessment",
+      "gatewayType": "Split",
+      "key": "route-reviewer-assessment",
+      "queueKey": "public",
+      "requiredIncomingQueues": [],
+      "roleGates": [],
+      "routes": [
         {
-          id: 'check-answers--submit--reviewer-assessment',
-          target: 'reviewer-assessment',
-          trigger: 'submit',
-          actions: [],
+          "actions": [],
+          "id": "check-answers--submit--reviewer-assessment",
+          "target": "reviewer-assessment",
+          "trigger": "submit"
         },
-      ],
+        {
+          "actions": [],
+          "id": "route-reviewer-assessment--submit--reviewer-assessment",
+          "target": "reviewer-assessment",
+          "trigger": "submit"
+        }
+      ]
     },
     {
-      key: 'route-reviewer-decision',
-      displayName: 'Route from reviewer assessment',
-      gatewayType: 'Split',
-      source: 'reviewer-assessment',
-      queueKey: 'reviewer',
-      roleGates: [],
-      routes: [
+      "displayName": "Route from reviewer assessment",
+      "gatewayType": "Split",
+      "key": "route-reviewer-decision",
+      "queueKey": "reviewer",
+      "requiredIncomingQueues": [],
+      "roleGates": [],
+      "routes": [
         {
-          id: 'reviewer-assessment--approve--confirmation',
-          target: 'confirmation',
-          trigger: 'approve',
-          requiresRole: 'reviewer',
-          actions: [],
+          "actions": [],
+          "id": "reviewer-assessment--approve--confirmation",
+          "requiresRole": "reviewer",
+          "target": "confirmation",
+          "trigger": "approve"
         },
         {
-          id: 'reviewer-assessment--reject--applicant-details',
-          target: 'applicant-details',
-          trigger: 'reject',
-          requiresRole: 'reviewer',
-          actions: [],
+          "actions": [],
+          "id": "reviewer-assessment--reject--applicant-details",
+          "requiresRole": "reviewer",
+          "target": "applicant-details",
+          "trigger": "reject"
         },
-      ],
-    },
+        {
+          "actions": [],
+          "id": "route-reviewer-decision--approve--confirmation",
+          "requiresRole": "reviewer",
+          "target": "confirmation",
+          "trigger": "approve"
+        },
+        {
+          "actions": [],
+          "id": "route-reviewer-decision--reject--applicant-details",
+          "requiresRole": "reviewer",
+          "target": "applicant-details",
+          "trigger": "reject"
+        }
+      ]
+    }
   ],
-  }} as unknown as AuthoredServiceBlueprint));
+  "parameterSchemas": []
+} as unknown as AuthoredServiceBlueprint);

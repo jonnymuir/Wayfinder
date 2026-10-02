@@ -160,18 +160,13 @@ const GATEWAY_ROUTE_SERVICE_BLUEPRINT = {
       roleGates: [],
     },
   ],
-  transitions: [
-    { fromState: 'submitted', toState: 'review-split', action: 'route' },
-    { fromState: 'review-split', toState: 'reviewer-assessment', action: 'route for review', requiresRole: 'reviewer', metadata: { actions: [{ type: 'forms.submit', timing: 'OnTransition' }] } },
-  ],
-  metadata: { gateways: [
+  gateways: [
     {
       key: 'review-split',
       displayName: 'Review split',
       gatewayType: 'Split',
       queueKey: 'public',
       actor: 'public',
-      source: 'submitted',
       roleGates: [],
       routes: [
         {
@@ -188,7 +183,7 @@ const GATEWAY_ROUTE_SERVICE_BLUEPRINT = {
         },
       ],
     },
-  ] },
+  ],
 } as unknown as AuthoredServiceBlueprint;
 
 export const TransitionSelected: Story = {

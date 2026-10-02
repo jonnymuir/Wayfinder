@@ -93,7 +93,6 @@ function makeSimulationBranchServiceBlueprint(): AuthoredServiceBlueprint {
       key: 'review-decision-routes',
       displayName: 'Review decision routes',
       gatewayType: 'Split',
-      source: 'review-decision',
       queueKey: 'reviewer',
       roleGates: [],
       routes: [
@@ -111,7 +110,6 @@ function makeSimulationBranchServiceBlueprint(): AuthoredServiceBlueprint {
       key: 'declaration-routes',
       displayName: 'Declaration routes',
       gatewayType: 'Split',
-      source: 'declaration',
       queueKey: 'applicant',
       roleGates: [],
       routes: [
@@ -122,7 +120,6 @@ function makeSimulationBranchServiceBlueprint(): AuthoredServiceBlueprint {
       key: 'application-form-routes',
       displayName: 'Application form routes',
       gatewayType: 'Split',
-      source: 'application-form',
       queueKey: 'applicant',
       roleGates: [],
       routes: [
@@ -130,6 +127,18 @@ function makeSimulationBranchServiceBlueprint(): AuthoredServiceBlueprint {
       ],
     },
   ];
+  const gatewayFor: Record<string, string> = {
+    'review-decision': 'review-decision-routes',
+    declaration: 'declaration-routes',
+    'application-form': 'application-form-routes',
+  };
+  for (const [stageKey, gatewayKey] of Object.entries(gatewayFor)) {
+    const stage = serviceBlueprint.stages.find(candidate => candidate.stateKey === stageKey);
+    const trigger = (serviceBlueprint.gateways ?? []).find(gateway => gateway.key === gatewayKey)?.routes?.[0]?.trigger ?? 'continue';
+    if (stage) {
+      stage.routes = [{ id: `${stageKey}--${trigger}--${gatewayKey}`, target: gatewayKey, trigger }];
+    }
+  }
   return serviceBlueprint;
 }
 

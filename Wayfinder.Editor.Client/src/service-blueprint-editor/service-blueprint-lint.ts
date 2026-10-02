@@ -448,9 +448,6 @@ function seriesExpr(
   return definition[part] ?? '';
 }
 
-/** Older authored shapes hydrate still reads (metadata.*, transitions, authorNote); accepted, not owned. */
-const LEGACY_ACCEPTED_TOP_LEVEL_KEYS = new Set(['metadata', 'transitions', 'authorNote']);
-
 export function lintAuthoredServiceBlueprintDocument(
   parsed: unknown,
   source: string,
@@ -497,7 +494,7 @@ export function lintAuthoredServiceBlueprintDocument(
   // Properties the editor does not own are discarded on save, so say so rather than let a typo
   // (allowManualRestat) or a field the editor cannot round-trip vanish without a word.
   for (const key of Object.keys(root)) {
-    if (key in EDITOR_TOP_LEVEL_FIELDS || LEGACY_ACCEPTED_TOP_LEVEL_KEYS.has(key)) {
+    if (key in EDITOR_TOP_LEVEL_FIELDS) {
       continue;
     }
     issues.push({
@@ -566,15 +563,7 @@ export function lintAuthoredServiceBlueprintDocument(
         seenStateKeys.add(stateKey);
       }
 
-      const kind = typeof state.stageType === 'string' && state.stageType
-        ? state.stageType
-        : typeof state.stageType === 'string' && state.stageType
-          ? state.stageType
-          : typeof (state.metadata as Record<string, unknown> | undefined)?.stageType === 'string'
-            ? String((state.metadata as Record<string, unknown>).stageType)
-            : typeof (state.metadata as Record<string, unknown> | undefined)?.stageType === 'string'
-              ? String((state.metadata as Record<string, unknown>).stageType)
-              : '';
+      const kind = typeof state.stageType === 'string' ? state.stageType : '';
       if (kind && !ALLOWED_STAGE_KINDS.has(kind)) {
         issues.push({
           message: `State "${stateKey || index}" has unsupported stageType "${kind}". Allowed kinds: ${[...ALLOWED_STAGE_KINDS].join(', ')}.`,
