@@ -1355,9 +1355,6 @@ public record ServiceBlueprint
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ServiceBlueprintLayoutDefinition? Layout { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public ServiceBlueprintMetadata? Metadata { get; init; }
-
 }
 
 public record StageDefinition
@@ -1408,9 +1405,6 @@ public record StageDefinition
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ServiceBlueprintStageValidationRule>? Validations { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public StageMetadata? Metadata { get; init; }
-
     /// <summary>Curated icon-set key (see the client's graph/node-icons.ts). Falls back to a stage-kind default when unset.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Icon { get; init; }
@@ -1458,13 +1452,6 @@ public record QueueDefinition
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Actor { get; init; }
-
-    [JsonIgnore]
-    public string? QueueName
-    {
-        get => string.IsNullOrWhiteSpace(_key) ? null : _key;
-        init => _key = value;
-    }
 
     /// <summary>
     /// Which team/skill capabilities may pick up from or start work in this queue — an any-of list
@@ -1544,36 +1531,6 @@ public record ServiceBlueprintGatewayDefinition
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? RequiredIncomingQueues { get; init; }
 
-    [JsonIgnore]
-    public string? QueueName
-    {
-        get => string.IsNullOrWhiteSpace(_queueKey) ? null : _queueKey;
-        init => _queueKey = value;
-    }
-
-    [JsonIgnore]
-    public string? Source { get; init; }
-
-    [JsonPropertyName("queueName")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? LegacyQueueName
-    {
-        init
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                _queueKey = value;
-            }
-        }
-    }
-
-    [JsonPropertyName("source")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? LegacySource
-    {
-        init => Source = value;
-    }
-
     /// <summary>Curated icon-set key (see the client's graph/node-icons.ts). Falls back to a Split/Join default when unset.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Icon { get; init; }
@@ -1621,25 +1578,6 @@ public record ServiceBlueprintRouteDefinition
     public IReadOnlyList<ActionDefinition>? Actions { get; init; }
 }
 
-public record ServiceBlueprintMetadata
-{
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Guid? AuthoredServiceBlueprintId { get; init; }
-
-    public string? Description { get; init; }
-
-    public string? SchemaVersion { get; init; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<ServiceBlueprintGatewayDefinition>? Gateways { get; init; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyDictionary<string, string>? Tags { get; init; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<HandoffDefinition>? Handoffs { get; init; }
-}
-
 public record HandoffDefinition
 {
     public string Id { get; init; } = "";
@@ -1652,50 +1590,6 @@ public record HandoffDefinition
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ActorChange { get; init; }
-}
-
-public record StageMetadata
-{
-    private string? _queueKey;
-
-    public string? Description { get; init; }
-
-    public string? StageType { get; init; }
-
-    public string? Actor { get; init; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? QueueKey
-    {
-        get => _queueKey;
-        init => _queueKey = value;
-    }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<string>? RoleGates { get; init; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<ActionDefinition>? Actions { get; init; }
-
-    [JsonIgnore]
-    public string? QueueName
-    {
-        get => string.IsNullOrWhiteSpace(_queueKey) ? null : _queueKey;
-        init => _queueKey = value;
-    }
-
-    [JsonPropertyName("queueName")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? LegacyQueueName
-    {
-        init
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                _queueKey = value;
-            }
-        }
-    }
 }
 
 /// <summary>

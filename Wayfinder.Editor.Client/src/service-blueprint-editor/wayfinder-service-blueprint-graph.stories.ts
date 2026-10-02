@@ -32,6 +32,7 @@ const SAME_LANE_FAN_OUT_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = {
       actions: [],
       components: [],
       roleGates: [],
+      routes: [{ id: 'draft--collect-evidence--evidence-route', target: 'evidence-route', trigger: 'collect evidence' }],
     },
     {
       stateKey: 'collect-evidence',
@@ -71,7 +72,6 @@ const SAME_LANE_FAN_OUT_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = {
       gatewayType: 'Split',
       queueKey: 'public',
       actor: 'public',
-      source: 'draft',
       roleGates: [],
       routes: [
         { id: 'r-collect', target: 'collect-evidence', trigger: 'collect evidence', actions: [] },
@@ -377,6 +377,9 @@ function buildLargeServiceBlueprint(): AuthoredServiceBlueprint {
         actions: [],
         components: [],
         roleGates: [],
+        routes: i < stagesPerLane - 1
+          ? [{ id: `${stageKey}--continue--route-from-${stageKey}`, target: `route-from-${stageKey}`, trigger: 'continue' }]
+          : [],
       } as unknown as AuthoredServiceBlueprint['stages'][number]);
       if (i > 0) {
         const prev = `${lane}-step-${i}`;
@@ -386,7 +389,6 @@ function buildLargeServiceBlueprint(): AuthoredServiceBlueprint {
           gatewayType: 'Split',
           queueKey: lane,
           actor: lane,
-          source: prev,
           roleGates: [],
           routes: [{ id: `${prev}--continue--${stageKey}`, target: stageKey, trigger: 'continue', actions: [] }],
         });
@@ -401,8 +403,8 @@ function buildLargeServiceBlueprint(): AuthoredServiceBlueprint {
     requestPolicy: 'multiple',
     initialStage: `${lanes[0]}-step-1`,
     stages: stages,
-    transitions: gateways.flatMap(gateway => gateway.source ? [{ fromState: gateway.source, toState: gateway.key, action: 'route' }, ...((gateway.routes ?? []).map(route => ({ fromState: gateway.key, toState: route.target, action: route.trigger })))] : []),
-    metadata: { schemaVersion: '1.0', gateways },
+    schemaVersion: '1.0',
+    gateways,
   } as unknown as AuthoredServiceBlueprint;
 }
 

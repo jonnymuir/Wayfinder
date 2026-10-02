@@ -96,7 +96,7 @@ export type GraphModel = {
 
 function labelForNodeKey(serviceBlueprint: AuthoredServiceBlueprint | null, key: string): string {
   return serviceBlueprint?.stages.find(stage => stage.stateKey === key)?.displayName
-    ?? serviceBlueprint?.metadata?.gateways?.find(gateway => gateway.key === key)?.displayName
+    ?? serviceBlueprint?.gateways?.find(gateway => gateway.key === key)?.displayName
     ?? key;
 }
 

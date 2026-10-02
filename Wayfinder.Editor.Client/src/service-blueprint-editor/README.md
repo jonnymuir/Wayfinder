@@ -98,7 +98,7 @@ Author-facing copy uses "Definition", JSON is the implementation detail.
   gateway add/edit, route change, undo, redo) re-serializes the serviceBlueprint in
   canonical form (top-level key order: `definitionKey`, `displayName`,
   `version`, `schemaVersion`, `requestPolicy`, `initialStage`, `roles`,
-  `stages`, `gateways`, `transitions`; nested keys alphabetical; 2-space
+  `stages`, `gateways`; nested keys alphabetical; 2-space
   indent) and pushes the new text into the editor.
 * **Definition → Visual sync:** typing is debounced by **250 ms**. On
   settling:
@@ -211,7 +211,7 @@ A typical read-only embed:
 ```html
 <wayfinder-service-blueprint-graph
   read-only
-  service-blueprint-json='{"blueprintKey":"planning","stages":[...],"transitions":[...],"gateways":[...]}'>
+  service-blueprint-json='{"blueprintKey":"planning","stages":[...],"gateways":[...]}'>
 </wayfinder-service-blueprint-graph>
 ```
 

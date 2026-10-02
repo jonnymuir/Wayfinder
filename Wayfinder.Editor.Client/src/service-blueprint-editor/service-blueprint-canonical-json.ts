@@ -23,12 +23,15 @@ export const EDITOR_TOP_LEVEL_FIELDS: Readonly<Record<string, TopLevelFieldKind>
   allowManualRestart: 'boolean',
   description: 'string',
   schemaVersion: 'string',
+  authoredServiceBlueprintId: 'string',
   calculations: 'object',
   queues: 'array',
   stages: 'array',
   gateways: 'array',
   parameterSchemas: 'array',
   layout: 'object',
+  handoffs: 'array',
+  tags: 'object',
 };
 
 export function matchesTopLevelFieldKind(value: unknown, kind: TopLevelFieldKind): boolean {
@@ -118,12 +121,15 @@ function serialisableServiceBlueprint(serviceBlueprint: AuthoredServiceBlueprint
     allowManualRestart: serviceBlueprint.allowManualRestart ? true : undefined,
     description: serviceBlueprint.description,
     schemaVersion: serviceBlueprint.schemaVersion,
+    authoredServiceBlueprintId: serviceBlueprint.authoredServiceBlueprintId,
     queues: serviceBlueprint.queues ?? [],
     stages: serviceBlueprint.stages.map(serialisableState),
     gateways: (serviceBlueprint.gateways ?? []).map(serialisableGateway),
     calculations: serviceBlueprint.calculations,
     parameterSchemas: serviceBlueprint.parameterSchemas,
     layout: serialisableLayout(serviceBlueprint.layout),
+    handoffs: serviceBlueprint.handoffs?.length ? serviceBlueprint.handoffs : undefined,
+    tags: serviceBlueprint.tags && Object.keys(serviceBlueprint.tags).length > 0 ? serviceBlueprint.tags : undefined,
   };
 }
 

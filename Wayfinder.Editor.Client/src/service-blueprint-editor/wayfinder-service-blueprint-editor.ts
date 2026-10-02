@@ -491,7 +491,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     if (selection?.kind === 'gateway') {
-      const exists = serviceBlueprint.metadata?.gateways?.some(gateway => gateway.key === selection.gatewayKey) ?? false;
+      const exists = serviceBlueprint.gateways?.some(gateway => gateway.key === selection.gatewayKey) ?? false;
       this._selection = exists ? { kind: 'gateway', gatewayKey: selection.gatewayKey } : null;
       this._selectedTransitionIndex = null;
       this._expandInspectorForSelection();
@@ -1144,7 +1144,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _handleOutlineGatewaySelected = (e: CustomEvent<{ gatewayKey: string }>) => {
     this._applySelection({ kind: 'gateway', gatewayKey: e.detail.gatewayKey }, this._serviceBlueprint);
     this._actionSelection = null;
-    const gateway = this._serviceBlueprint?.metadata?.gateways?.find(g => g.key === e.detail.gatewayKey);
+    const gateway = this._serviceBlueprint?.gateways?.find(g => g.key === e.detail.gatewayKey);
     if (gateway) {
       this._announceHistory(`Selected gateway ${gateway.displayName}`);
     }
@@ -1246,7 +1246,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._lastAppliedDefinitionCanonical = serializeAuthoredServiceBlueprint(next);
     this._commitServiceBlueprintUpdate(next, this._currentSelection());
     const stageCount = next.stages.length;
-    const gatewayCount = next.metadata?.gateways?.length ?? 0;
+    const gatewayCount = next.gateways?.length ?? 0;
     this._announceDefinition(
       `Definition updated. ${stageCount} ${stageCount === 1 ? 'stage' : 'stages'}, ${gatewayCount} ${gatewayCount === 1 ? 'gateway' : 'gateways'}.`
     );
@@ -2214,7 +2214,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       : html`
                           <p class="panel-subtitle">
                             ${(this._serviceBlueprint?.stages.length ?? 0)} ${(this._serviceBlueprint?.stages.length ?? 0) === 1 ? 'stage' : 'stages'}
-                            ${this._serviceBlueprint?.metadata?.gateways?.length ? ` · ${this._serviceBlueprint.metadata?.gateways.length} gateways` : ''}
+                            ${this._serviceBlueprint?.gateways?.length ? ` · ${this._serviceBlueprint.gateways.length} gateways` : ''}
                           </p>
                         `}
                   </div>

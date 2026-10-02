@@ -17,7 +17,7 @@ import type {
   AuthoredServiceBlueprint,
   AuthoredRoute,
 } from './types.js';
-import { stageActions, stageDescription, stageKind } from './types.js';
+import { stageKind } from './types.js';
 
 export interface ProjectionDiagnostic {
   code: string;
@@ -70,12 +70,6 @@ function projectStage(stage: AuthoredStage, serviceBlueprint: AuthoredServiceBlu
   return {
     ...stage,
     components: projectStageComponents(stage, serviceBlueprint),
-    metadata: {
-      ...(stage.metadata ?? {}),
-      description: stageDescription(stage),
-      stageType: stageKind(stage),
-      actions: stageActions(stage),
-    },
   };
 }
 

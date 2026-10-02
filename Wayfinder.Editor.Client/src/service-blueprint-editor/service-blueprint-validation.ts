@@ -15,7 +15,7 @@ import { collectStageInputFields } from './component-property-references.js';
 import { inScopeInputFieldKeys, tryParseExpression } from './calculation-runtime.js';
 import { computeCalculationDiagnostics, type CalculationDiagnostic } from './calculation-diagnostics.js';
 
-const TERMINAL_STAGE_KINDS = new Set<AuthoredStage['metadata'] extends never ? never : ReturnType<typeof stageKind>>(['Confirmation']);
+const TERMINAL_STAGE_KINDS = new Set<ReturnType<typeof stageKind>>(['Confirmation']);
 
 export type ServiceBlueprintValidationSeverity = 'error' | 'warning';
 

@@ -2334,13 +2334,13 @@ public class ProcessManagerEngine : IProcessManager
             : ResolveQueueName(definition, gateway.QueueKey);
 
     protected static string? GetQueueKey(StageDefinition? stage) =>
-        FirstNonEmpty(stage?.QueueKey, stage?.Metadata?.QueueKey);
+        stage?.QueueKey;
 
     protected static IReadOnlyList<QueueDefinition> GetQueues(ServiceBlueprint definition) =>
         definition.Queues ?? [];
 
     protected static IReadOnlyList<ServiceBlueprintGatewayDefinition> GetGateways(ServiceBlueprint definition) =>
-        definition.Gateways ?? definition.Metadata?.Gateways ?? [];
+        definition.Gateways ?? [];
 
     protected static IReadOnlyList<RouteFile> GetOutgoingTransitions(
         ServiceBlueprint definition,
@@ -2387,61 +2387,7 @@ public class ProcessManagerEngine : IProcessManager
                 .ToArray();
         }
 
-        var sourceGateway = GetGateways(definition)
-            .Where(candidate =>
-                string.Equals(candidate.Source, sourceKey, StringComparison.Ordinal))
-            .OrderBy(candidate => candidate.Key, StringComparer.Ordinal)
-            .ToArray();
-
-        if (sourceGateway.Length == 0)
-        {
-            return [];
-        }
-
-        var transitions = new List<RouteFile>();
-
-        foreach (var candidate in sourceGateway)
-        {
-            var routes = candidate.Routes ?? [];
-            var distinctTriggers = routes
-                .Select(route => route.Trigger)
-                .Where(trigger => !string.IsNullOrWhiteSpace(trigger))
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-
-            var isParallelFork = string.Equals(candidate.GatewayType, "Split", StringComparison.OrdinalIgnoreCase)
-                                 && routes.Count >= 2
-                                 && distinctTriggers.Length == 1;
-
-            if (isParallelFork)
-            {
-                transitions.Add(new RouteFile
-                {
-                    FromState = sourceKey,
-                    ToState = candidate.Key,
-                    Action = distinctTriggers[0]
-                });
-
-                continue;
-            }
-
-            transitions.AddRange(routes.Select(route => new RouteFile
-            {
-                FromState = sourceKey,
-                ToState = route.Target,
-                Action = ResolveTrigger(route.Trigger),
-                Label = route.Label,
-                Style = route.Style,
-                RequiresRole = route.RequiresRole,
-                ShowWhen = route.ShowWhen,
-                Actions = route.Actions
-            }));
-        }
-
-        return transitions
-            .OrderBy(transition => transition.ToState, StringComparer.Ordinal)
-            .ThenBy(transition => transition.Action, StringComparer.Ordinal)
-            .ToArray();
+        return [];
     }
 
 
