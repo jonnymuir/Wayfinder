@@ -140,7 +140,12 @@ this project gives behavioural testing.
    the PR description.
 7. **Define a security regression check for any boundary you touch**: a behavioural test that
    goes red if the isolation or the validation regresses, per the testing rules above.
-8. **Report security findings plainly.** No minimising language: "just a hack", "edge case",
+8. **No unreviewed HTML built from data in browser code.** A dangerous sink (`innerHTML`,
+   `insertAdjacentHTML`, `unsafeHTML`, …) may only take a literal; anything built from data needs an
+   `// html-sink-ok: <reason naming the escaping>` comment, and reading `innerHTML` back as an
+   "escaper" is banned (it does not escape quotes). `npm run test:no-unsafe-html-sinks` enforces it,
+   because CodeQL's JS data flow does not catch this class in this codebase.
+9. **Report security findings plainly.** No minimising language: "just a hack", "edge case",
    "couldn't survive". Name the defect and its impact.
 
 ### Branch policy

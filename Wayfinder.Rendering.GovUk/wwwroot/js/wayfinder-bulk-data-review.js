@@ -90,6 +90,8 @@ function applyActionBarUpdate(html) {
   }
 
   const temp = document.createElement('div');
+  // html-sink-ok: the host's own same-origin action-bar fragment (server-rendered by GovUkComponentRenderer with
+  // HTML-encoding), swapped in for the existing one; it carries no row/cell data.
   temp.innerHTML = html;
   const next = temp.firstElementChild;
   if (!next) {
@@ -223,6 +225,8 @@ function initBulkReview(root) {
         ? `<p class="govuk-body wayfinder-bulk-review__sync-status wayfinder-bulk-review__sync-status--dirty">${escapeHtml(pendingLabel)} — ${escapeHtml(dirtyCount)} row${dirtyCount === 1 ? '' : 's'} changed ${escapeHtml(sinceLabel)}.</p>`
         : `<p class="govuk-body wayfinder-bulk-review__sync-status">${escapeHtml(syncedLabel)} ${escapeHtml(sinceLabel)}.</p>`;
 
+      // html-sink-ok: every interpolated value goes through escapeHtml (text and attribute safe); covered by
+      // test/wayfinder-bulk-data-review.xss.mjs.
       summaryEl.innerHTML = `<p class="govuk-body">${escapeHtml(summary.totalRowCount)} rows in total &mdash; ` +
         `${escapeHtml(summary.errorRowCount)} with errors, ${escapeHtml(summary.warningRowCount)} with warnings, ` +
         `${escapeHtml(summary.acceptedRowCount)} accepted.</p>${syncStatus}`;
@@ -307,6 +311,8 @@ function initBulkReview(root) {
       ? `<p class="govuk-body wayfinder-bulk-review__structural-issue">${escapeHtml(row.structuralIssue)}</p>`
       : '';
 
+    // html-sink-ok: row key, structural issue and every field are escapeHtml'd (text and attribute safe) in
+    // renderField/here, and `tag` is a literal; covered by test/wayfinder-bulk-data-review.xss.mjs.
     card.innerHTML = `
       <div class="wayfinder-bulk-review__card-header">
         <h3 class="govuk-heading-s wayfinder-bulk-review__card-title">${escapeHtml(row.rowKey)}</h3>${tag}
