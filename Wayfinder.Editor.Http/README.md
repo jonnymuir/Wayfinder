@@ -10,11 +10,12 @@ hand-copying that example's expected routes itself.
 ## Usage
 
 ```csharp
-app.MapMockBusinessAppServiceBlueprints(); // defaults to prefix "/mockapp/service-blueprints"
+app.MapMockBusinessAppServiceBlueprints(authorizationPolicy: "BlueprintsAdmin"); // prefix defaults to "/mockapp/service-blueprints"
 ```
 
-Anonymous by default, same reasoning as `Wayfinder.Engine.Api`'s/`Wayfinder.Engine.Mcp`'s own
-mapping calls: a real host chains its own `.RequireAuthorization()` if it wants one. No
+Deny by default, like `Wayfinder.Engine.Api`'s/`Wayfinder.Engine.Mcp`'s own mapping calls: these
+routes can overwrite every blueprint, so they require an authenticated caller (or the policy you
+name) unless the host writes `allowAnonymous: true`. No
 `Add...()`, it needs nothing beyond `ServiceBlueprintAuthoringService`, already registered by the
 `AddServiceBlueprintAuthoring()` call any authoring surface (API/MCP/this) requires.
 

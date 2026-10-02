@@ -236,12 +236,12 @@ app.MapGet("/service-blueprint-editor", (HttpRequest request) =>
     return Results.Redirect($"/service-blueprint-editor.html?serviceBlueprint={Uri.EscapeDataString(target)}");
 });
 
-// Anonymous by design, same convention documented in Wayfinder.Engine.Api/README.md: a real
-// host chains its own .RequireAuthorization() onto these route groups. This reference app
-// demonstrates the auth boundary on the citizen/caseworker screens below instead, which is
-// where it actually matters for a real deployment.
-app.MapServiceBlueprintAuthoringApi();
-app.MapServiceBlueprintAuthoringMcp();
+// Anonymous by design, and spelled out: these surfaces are deny-by-default, so this demo host opts
+// out explicitly (allowAnonymous: true). It is a local, never-shipped reference app whose editor page
+// and Playwright suites call these routes without signing in; it demonstrates the auth boundary on the
+// citizen/caseworker screens below instead. A real host passes authorizationPolicy: "…" and omits this.
+app.MapServiceBlueprintAuthoringApi(allowAnonymous: true);
+app.MapServiceBlueprintAuthoringMcp(allowAnonymous: true);
 
 // The webhook half of support-system outcome delivery — a host's own job, not something
 // Wayfinder.Engine.Api ships (that surface is scoped to blueprint authoring only, not runtime
@@ -269,7 +269,7 @@ app.MapPost("/wayfinder/support-systems/callbacks/{invocationId}", async (
 // MockBusinessAppServiceBlueprintSource example, rather than the
 // `/wayfinder/service-blueprint-authoring/*` routes above. Anonymous, same reasoning as the
 // authoring API/MCP above.
-app.MapMockBusinessAppServiceBlueprints();
+app.MapMockBusinessAppServiceBlueprints(allowAnonymous: true); // same reason as the authoring API above: local demo only
 
 app.MapGet("/", (HttpContext ctx) =>
 {

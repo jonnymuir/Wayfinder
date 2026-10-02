@@ -12,8 +12,10 @@ namespace Wayfinder.Engine.Api;
 
 /// <summary>
 /// Maps the Wayfinder service blueprint authoring toolkit's HTTP surface — list/read/validate/save/simulate —
-/// onto <see cref="ServiceBlueprintAuthoringService"/>. The returned <see cref="RouteGroupBuilder"/> lets
-/// the host chain its own policy, e.g. <c>.RequireAuthorization()</c>; this extension applies none.
+/// onto <see cref="ServiceBlueprintAuthoringService"/>. Deny by default: every route requires an
+/// authenticated caller (or the named <c>authorizationPolicy</c>), and the host must write
+/// <c>allowAnonymous: true</c> to opt out. The returned <see cref="RouteGroupBuilder"/> still lets
+/// the host chain a stricter policy of its own, e.g. <c>.RequireAuthorization("BlueprintsAdmin")</c>.
 /// The host must have already registered <c>ServiceBlueprintAuthoringService</c> (see
 /// <c>AddServiceBlueprintAuthoring()</c>), its own <c>IServiceBlueprintSourceStore</c>, and
 /// <see cref="AddServiceBlueprintAuthoringApi"/> (see its own remarks — required, not optional,
@@ -46,11 +48,39 @@ public static class ServiceBlueprintAuthoringApiExtensions
             options.SerializerOptions.TypeInfoResolver = ComponentTypeRegistry.CreateJsonTypeInfoResolver();
         });
 
+    /// <param name="authorizationPolicy">
+    /// The policy every route requires. Null means the default policy: any authenticated caller. The host
+    /// must have registered authentication and authorization (<c>UseAuthentication</c>/<c>UseAuthorization</c>);
+    /// without them the routes fail closed rather than serving anonymously.
+    /// </param>
+    /// <param name="allowAnonymous">
+    /// Explicit opt-out for a demo or a host that protects these routes another way. Write a reason next to
+    /// the call: this surface can read and overwrite every blueprint.
+    /// </param>
     public static RouteGroupBuilder MapServiceBlueprintAuthoringApi(
         this IEndpointRouteBuilder endpoints,
-        string prefix = "/wayfinder/service-blueprint-authoring")
+        string prefix = "/wayfinder/service-blueprint-authoring",
+        string? authorizationPolicy = null,
+        bool allowAnonymous = false)
     {
+        if (allowAnonymous && authorizationPolicy is not null)
+        {
+            throw new ArgumentException("authorizationPolicy and allowAnonymous: true contradict each other.", nameof(authorizationPolicy));
+        }
+
         var group = endpoints.MapGroup(prefix);
+        if (allowAnonymous)
+        {
+            group.AllowAnonymous();
+        }
+        else if (authorizationPolicy is null)
+        {
+            group.RequireAuthorization();
+        }
+        else
+        {
+            group.RequireAuthorization(authorizationPolicy);
+        }
 
         group.MapGet("/blueprints", async (ServiceBlueprintAuthoringService service, CancellationToken ct) =>
             Results.Ok(await service.ListAsync(ct)));

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Wayfinder.Engine.Services;
 
@@ -28,13 +29,14 @@ public static class SupportSystemCallbacks
     /// </summary>
     /// <param name="sharedSecret">
     /// The secret the caller must present in the <c>X-Webhook-Secret</c> header (compared in
-    /// fixed time). <b>Required in practice</b> — when null, the endpoint enforces the documented
-    /// "trusted network" fallback for real rather than as an aspiration: it accepts only a caller
-    /// whose <see cref="System.Net.IPAddress.IsLoopback"/> remote address is true (rejecting
-    /// everyone else with 403), which is what a local/demo host actually needs, not "any caller
-    /// that reaches it". Set a real secret for anything reachable from outside loopback. The
-    /// <c>invocationId</c> is an unguessable 128-bit token, but it can appear in logs and run
-    /// history, so it is defence-in-depth, not the gate either way.
+    /// fixed time). <b>Required outside the Development environment</b>: mapping the route with no
+    /// secret in any other environment throws, so a deployed host cannot silently expose an
+    /// unauthenticated callback. In Development only, a null secret falls back to accepting just a
+    /// caller whose <see cref="System.Net.IPAddress.IsLoopback"/> remote address is true (everyone
+    /// else gets 403) — a convenience for a local demo, never a deployed-environment trust model:
+    /// behind a same-host reverse proxy every request arrives from loopback, so this fallback would
+    /// admit the whole internet. The <c>invocationId</c> is an unguessable 128-bit token, but it can
+    /// appear in logs and run history, so it is defence-in-depth, not the gate either way.
     /// </param>
     public static RouteHandlerBuilder MapWebhookSupportSystemCallbacks(
         this IEndpointRouteBuilder endpoints,
@@ -66,10 +68,18 @@ public static class SupportSystemCallbacks
 
         if (string.IsNullOrEmpty(sharedSecret))
         {
+            // Gated on the injected IHostEnvironment, never a build-time flag (CLAUDE.md security rule 4).
+            var environment = endpoints.ServiceProvider.GetService<IHostEnvironment>();
+            if (environment is null || !environment.IsDevelopment())
+            {
+                throw new InvalidOperationException(
+                    $"Support-system callback route {basePath}/{{invocationId}} has no shared secret. A secret is " +
+                    "required outside the Development environment; pass sharedSecret to MapWebhookSupportSystemCallbacks.");
+            }
+
             logger.LogWarning(
                 "Support-system callback route {Path}/{{invocationId}} is mapped with NO shared secret — " +
-                "restricting it to loopback callers only. Set a real secret for anything reachable from " +
-                "outside loopback.", basePath);
+                "Development only: restricting it to loopback callers. Set a real secret before deploying.", basePath);
         }
 
         return endpoints.MapPost($"{basePath}/{{invocationId}}", (

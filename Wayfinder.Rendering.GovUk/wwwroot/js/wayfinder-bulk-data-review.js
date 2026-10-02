@@ -17,10 +17,13 @@
 // Shipped as this package's own static web asset
 // (/_content/Wayfinder.Rendering.GovUk/js/wayfinder-bulk-data-review.js).
 
+// Safe in element text AND inside a double- or single-quoted attribute value. The previous version
+// round-tripped through a <div>'s textContent/innerHTML, which escapes < > & but NOT quotes, so a
+// cell value like  x" onfocus="…  broke out of value="…" and injected an event handler.
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
 function escapeHtml(value) {
-  const div = document.createElement('div');
-  div.textContent = value === null || value === undefined ? '' : String(value);
-  return div.innerHTML;
+  return (value === null || value === undefined ? '' : String(value)).replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
 }
 
 // Every button's own name="action" value="..." — the same identifier Advance()'s own trigger

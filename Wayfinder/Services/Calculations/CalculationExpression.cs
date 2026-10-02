@@ -47,6 +47,14 @@ public static class CalculationExpressionParser
 {
     private sealed record Token(string Kind, string Value, int Position);
 
+    // The parser and evaluator are recursive, and a stack overflow cannot be caught in .NET: it ends
+    // the process. A blueprint is untrusted input, so the shape of an expression is bounded before
+    // any recursion starts. Real expressions are a tiny fraction of these (the longest in the
+    // reference blueprints is ~120 characters). Mirrored in wayfinder-calculations.js.
+    public const int MaxExpressionLength = 10_000;
+    public const int MaxTokens = 1_000;
+    public const int MaxNestingDepth = 64;
+
     public static CalcNode Parse(string expression)
     {
         if (string.IsNullOrWhiteSpace(expression))
@@ -54,7 +62,14 @@ public static class CalculationExpressionParser
             throw new CalculationException("Expression is empty.");
         }
 
+        if (expression.Length > MaxExpressionLength)
+        {
+            throw new CalculationException(
+                $"Expression is too long ({expression.Length} characters); the limit is {MaxExpressionLength}.");
+        }
+
         var tokens = Tokenize(expression);
+        EnforceShapeLimits(tokens);
         var index = 0;
         var node = ParseOr(tokens, ref index);
         if (index < tokens.Count)
@@ -146,6 +161,42 @@ public static class CalculationExpressionParser
         }
 
         return tokens;
+    }
+
+    /// <summary>
+    /// Rejects an expression whose token count, parenthesis nesting or run of prefix operators
+    /// (<c>not not …</c>, <c>- - …</c>) would make the recursive parser or evaluator descend too deep.
+    /// Binary operator chains are left-nested, so the token cap bounds their depth too.
+    /// </summary>
+    private static void EnforceShapeLimits(List<Token> tokens)
+    {
+        if (tokens.Count > MaxTokens)
+        {
+            throw new CalculationException(
+                $"Expression is too long ({tokens.Count} tokens); the limit is {MaxTokens}.");
+        }
+
+        var depth = 0;
+        var prefixRun = 0;
+        foreach (var token in tokens)
+        {
+            if (token is { Kind: "op", Value: "(" })
+            {
+                depth++;
+            }
+            else if (token is { Kind: "op", Value: ")" })
+            {
+                depth--;
+            }
+
+            prefixRun = token is { Kind: "op", Value: "-" } or { Kind: "identifier", Value: "not" } ? prefixRun + 1 : 0;
+
+            if (depth > MaxNestingDepth || prefixRun > MaxNestingDepth)
+            {
+                throw new CalculationException(
+                    $"Expression is nested too deeply; the limit is {MaxNestingDepth} levels (at position {token.Position}).");
+            }
+        }
     }
 
     private static CalcNode ParseOr(List<Token> tokens, ref int index)
