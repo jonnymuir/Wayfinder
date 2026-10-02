@@ -1501,7 +1501,7 @@ public class ProcessManagerEngine : IProcessManager
     /// it, for a team's own aggregate dashboard rather than one caller's personal actionability.
     /// <c>AvailableActions</c> reflects whether *anyone* has picked the row up (not whether the
     /// specific caller has) — "Actionable" here means "a teammate is already on this", not "I can
-    /// act on this". See docs/guides/team-assignment.md. Never returns a legacy-queue row (no
+    /// act on this". See docs/guides/team-assignment.md. Never returns a row from a queue without an assignment policy (no
     /// <c>OwningTeamId</c> to match against).
     /// </summary>
     private IReadOnlyList<AccessibleWorkItem> FindTeamWorkItems(
@@ -1793,7 +1793,7 @@ public class ProcessManagerEngine : IProcessManager
     /// hook every <see cref="SaveInstance"/>/<see cref="TrySaveInstanceIfVersionMatches"/> call goes
     /// through — deliberately not threaded into each individual cursor-minting call site (Split
     /// fan-out, Join arrival/release) so a future new mint site can't silently skip establishment.
-    /// A legacy queue (no <see cref="QueueDefinition.AssignmentPolicy"/>) is never touched here —
+    /// A queue without an assignment policy (no <see cref="QueueDefinition.AssignmentPolicy"/>) is never touched here —
     /// see <see cref="RequestCursor.AssignedTo"/> for that case. See docs/guides/team-assignment.md.
     /// </summary>
     private ServiceRequest EstablishQueueAssignmentsIfNeeded(ServiceRequest instance, string actingUserId)
@@ -2080,7 +2080,7 @@ public class ProcessManagerEngine : IProcessManager
             var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
             var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, cursor.QueueKey, cursor.AssignedTo);
 
-            // A row held by someone else — a specific individual on a legacy queue, or a different
+            // A row held by someone else — a specific individual on a queue without an assignment policy, or a different
             // team member on a team-owned one — is hidden entirely, not shown-but-disabled — the
             // same enforcement Advance's own target resolution relies on (see
             // docs/guides/work-allocation.md and docs/guides/team-assignment.md). No userId (an
@@ -2400,7 +2400,7 @@ public class ProcessManagerEngine : IProcessManager
     /// will accept. Splitting these two is what lets an unassigned team-tray row stay visible and
     /// available to pick up (eligible) while still rendering zero action buttons (not yet available) — see
     /// docs/guides/team-assignment.md. <paramref name="AssignmentPolicy"/>/<paramref name="AssignedTeamId"/>
-    /// are null for a legacy queue.
+    /// are null for a queue without an assignment policy.
     /// </summary>
     protected sealed record AccessibleWorkItem(
         string StageKey,
@@ -4425,7 +4425,7 @@ public class ProcessManagerEngine : IProcessManager
 
     /// <summary>
     /// "Terminal" from <paramref name="accessProfile"/>'s own point of view — deliberately not a
-    /// blind read of <see cref="ServiceRequest.CurrentStage"/>, which is a single legacy field
+    /// blind read of <see cref="ServiceRequest.CurrentStage"/>, which is a single field
     /// covering every cursor a multi-queue instance has (see its own remarks:
     /// "reflects the first active stage cursor", not any *particular* one). A caseworker's cursor
     /// waiting at a join gateway is never terminal, no matter what some other queue's cursor

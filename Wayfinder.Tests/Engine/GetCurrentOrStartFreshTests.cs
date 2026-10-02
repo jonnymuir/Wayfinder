@@ -122,7 +122,7 @@ public class GetCurrentOrStartFreshTests
     // automation stage's only component is a bare panel (a perfectly ordinary "please wait, this
     // is processing" screen) — InferStepType() reads that as "confirmation", same as a genuine
     // terminal stage would. Found live: this alone made an in-progress, still-waiting instance
-    // register as terminal, because ServiceRequest.CurrentStage (a single legacy field covering
+    // register as terminal, because ServiceRequest.CurrentStage (a single field covering
     // every cursor) had been set from the automation cursor, not the caseworker's own.
     private const string SplitJoinBlueprintJson = """
         {

@@ -122,7 +122,7 @@ public interface IProcessManager
     /// right now". <paramref name="accessProfile"/> must itself be a member of <paramref name="teamId"/>
     /// (<see cref="ActorProfile.IsTeamMember"/>) — otherwise an empty envelope, the same permissive-
     /// method/host-enforces-the-denial contract already used for tenant scoping elsewhere in this
-    /// interface. Only ever returns rows from a team-owned queue — a legacy queue (no
+    /// interface. Only ever returns rows from a team-owned queue — a queue without an assignment policy (no
     /// <c>AssignmentPolicy</c>) has no team to own it, so never appears here.
     /// </summary>
     QueueWorkListEnvelope GetTeamWorkItems(

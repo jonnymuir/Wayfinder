@@ -131,10 +131,10 @@ public class TeamWorkListQueryTests
     }
 
     [Fact]
-    public void NeverReturnsALegacyQueuesRow()
+    public void NeverReturnsARowFromAQueueWithoutAnAssignmentPolicy()
     {
-        // "reviewers" only ever owns "review-team" in this blueprint — there's no legacy (no
-        // AssignmentPolicy) queue here to accidentally leak in, but assert the team-scoping filter
+        // "reviewers" only ever owns "review-team" in this blueprint — there's no queue without an
+        // AssignmentPolicy here to accidentally leak in, but assert the team-scoping filter
         // itself rather than relying on the blueprint's own shape as the only proof: an unrelated
         // team id genuinely owning nothing returns nothing, not "everything unscoped".
         var engine = BuildEngine();

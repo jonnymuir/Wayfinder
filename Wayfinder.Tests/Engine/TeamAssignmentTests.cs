@@ -12,7 +12,7 @@ namespace Wayfinder.Tests.Engine;
 /// <summary>
 /// Mandatory team-based work assignment (see docs/guides/team-assignment.md) — a queue declaring
 /// <c>QueueDefinition.AssignmentPolicy</c> requires individual assignment before a row is
-/// actionable, unlike a legacy queue's optional pickup (see <c>WorkAllocationPickupTests</c>, which
+/// actionable, unlike optional pickup on a queue without an assignment policy (see <c>WorkAllocationPickupTests</c>, which
 /// this suite is a sibling of, not a replacement for). Two policies exercised here:
 /// "assign-to-initiator" (whoever starts it owns it immediately, no pick-up) and "team-tray"
 /// (arrives owned by the team, visible to every member, actionable only once picked up).
@@ -232,7 +232,7 @@ public class TeamAssignmentTests
         atReview.Render!.StateDisplayName.Should().Be("Review");
 
         // Resubmit — a genuine Split/Join round trip through automation and back into "ops-team",
-        // the same queue key. Under legacy rules this would clear AssignedTo entirely; here it must
+        // the same queue key. Without an assignment policy this would clear AssignedTo entirely; here it must
         // still belong to priya and only priya on the other side.
         var afterResubmit = ReachReview(engine, started.InstanceId, atReview.StateVersion, "resubmit");
         afterResubmit.Render!.StateDisplayName.Should().Be("Review");
