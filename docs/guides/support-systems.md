@@ -264,10 +264,12 @@ outcome is known, the single code path both delivery mechanisms end up calling:
   `ProcessManagerEngine` instance:
 
   ```csharp
-  // sharedSecret is REQUIRED in practice. The callback endpoint denies by default when it is
-  // set (checks X-Webhook-Secret in fixed time). Pass the resolved value of the entry's
-  // endpoint.callbackSecretRef. Omit it only when the route is unreachable from outside a
-  // trusted network (it logs a warning).
+  // sharedSecret is REQUIRED outside the Development environment: mapping the route without one
+  // throws, so a deployed host cannot silently expose an unauthenticated callback. The route
+  // checks X-Webhook-Secret in fixed time; pass the resolved value of the entry's
+  // endpoint.callbackSecretRef. In Development only, omitting it falls back to accepting loopback
+  // callers (it logs a warning). Never rely on that behind a same-host reverse proxy, where every
+  // request arrives from loopback.
   //
   // Pass an accessor, not an instance, when the engine's own construction reads a database (an
   // Umbraco host loads blueprint definitions in its constructor) — resolving it eagerly in

@@ -53,7 +53,7 @@ dotnet test  Wayfinder.slnx -c Release --no-build
 dotnet pack  Wayfinder.slnx -c Release --no-build -o ./artifacts
 
 # TypeScript conformance + editor tests (in Wayfinder.Editor.Client)
-node scripts/run-calculation-runtime-tests.mjs   # C#/TS calc parity against the shared golden fixtures
+node Wayfinder.Rendering.GovUk/test/wayfinder-calculations.conformance.mjs   # JS calc runtime against the shared golden fixtures (the C# side is CalculationGoldenTests)
 npm run test:component-schema
 npx playwright test --reporter=line               # editor Playwright specs
 

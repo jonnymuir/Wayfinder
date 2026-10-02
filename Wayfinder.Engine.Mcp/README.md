@@ -63,9 +63,9 @@ this uses the modern Streamable HTTP transport.
 
 ## Auth
 
-If the host's authoring endpoints require authentication (a real host should add its own,
-see `MapServiceBlueprintAuthoringMcp()`, whose return value chains `.RequireAuthorization()`
-the same way `MapServiceBlueprintAuthoringApi()`'s does), pass credentials at registration:
+`MapServiceBlueprintAuthoringMcp()` is deny-by-default, like `MapServiceBlueprintAuthoringApi()`:
+it requires an authenticated caller, or the policy you name with `authorizationPolicy`, unless the
+host opts out with `allowAnonymous: true`. A client then passes credentials at registration:
 
 ```
 claude mcp add --transport http wayfinder-service-blueprint <url> --header "Authorization: Bearer <token>"

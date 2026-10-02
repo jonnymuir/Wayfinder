@@ -173,9 +173,11 @@ public class SupportSystemCallbacksTests
     /// real socket's peer address, letting tests simulate both a genuine loopback caller and one
     /// that isn't.
     /// </param>
-    private static HttpClient Server(ProcessManagerEngine engine, string? secret, System.Net.IPAddress? remoteIp = null)
+    private static HttpClient Server(
+        ProcessManagerEngine engine, string? secret, System.Net.IPAddress? remoteIp = null, string environment = "Development")
     {
         var host = new HostBuilder()
+            .UseEnvironment(environment)
             .ConfigureWebHost(web => web
                 .UseTestServer()
                 .ConfigureServices(s => { s.AddLogging(); s.AddRouting(); })
@@ -268,8 +270,20 @@ public class SupportSystemCallbacksTests
         engine.GetCurrent(DefinitionKey, TenantId, UserId, Caseworker).Render!.StateDisplayName.Should().Be("Referred");
     }
 
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public void WithNoSharedSecretOutsideDevelopment_MappingTheRouteFailsClosed(string environment)
+    {
+        var (engine, _) = BuildWaitingEngine();
+
+        var act = () => Server(engine, secret: null, environment: environment);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*shared secret*");
+    }
+
     [Fact]
-    public async Task WithNoSharedSecretConfigured_TheEndpointStillFunctions_ForALoopbackCaller()
+    public async Task InDevelopmentWithNoSharedSecret_TheEndpointStillFunctions_ForALoopbackCaller()
     {
         var (engine, invocationId) = BuildWaitingEngine();
         var http = Server(engine, secret: null, remoteIp: System.Net.IPAddress.Loopback);
@@ -281,7 +295,7 @@ public class SupportSystemCallbacksTests
     }
 
     [Fact]
-    public async Task WithNoSharedSecretConfigured_ANonLoopbackCaller_Returns403_AndDoesNotResolveTheInvocation()
+    public async Task InDevelopmentWithNoSharedSecret_ANonLoopbackCaller_Returns403_AndDoesNotResolveTheInvocation()
     {
         var (engine, invocationId) = BuildWaitingEngine();
         var http = Server(engine, secret: null, remoteIp: System.Net.IPAddress.Parse("203.0.113.7"));

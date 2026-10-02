@@ -156,12 +156,51 @@ export function evaluateExpression(expression, scope, set) {
   return evaluateNode(parse(expression), scope, set ?? { fields: {} }, `expression '${expression}'`);
 }
 
+// Bounds the shape of an expression before any recursion starts, so a hostile blueprint cannot
+// exhaust the call stack. Mirrors CalculationExpressionParser in C#, including the messages.
+const MAX_EXPRESSION_LENGTH = 10000;
+const MAX_TOKENS = 1000;
+const MAX_NESTING_DEPTH = 64;
+
+function enforceShapeLimits(tokens) {
+  if (tokens.length > MAX_TOKENS) {
+    throw new CalculationError(`Expression is too long (${tokens.length} tokens); the limit is ${MAX_TOKENS}.`);
+  }
+
+  let depth = 0;
+  let prefixRun = 0;
+  for (const token of tokens) {
+    if (token.kind === 'op' && token.value === '(') {
+      depth++;
+    } else if (token.kind === 'op' && token.value === ')') {
+      depth--;
+    }
+
+    prefixRun = (token.kind === 'op' && token.value === '-') || (token.kind === 'identifier' && token.value === 'not')
+      ? prefixRun + 1
+      : 0;
+
+    if (depth > MAX_NESTING_DEPTH || prefixRun > MAX_NESTING_DEPTH) {
+      throw new CalculationError(
+        `Expression is nested too deeply; the limit is ${MAX_NESTING_DEPTH} levels (at position ${token.position}).`,
+      );
+    }
+  }
+}
+
 function parse(expression) {
   if (!expression || !expression.trim()) {
     throw new CalculationError('Expression is empty.');
   }
 
+  if (expression.length > MAX_EXPRESSION_LENGTH) {
+    throw new CalculationError(
+      `Expression is too long (${expression.length} characters); the limit is ${MAX_EXPRESSION_LENGTH}.`,
+    );
+  }
+
   const tokens = tokenize(expression);
+  enforceShapeLimits(tokens);
   const state = { tokens, index: 0 };
   const node = parseOr(state);
   if (state.index < tokens.length) {

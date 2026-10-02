@@ -38,11 +38,36 @@ public static class ServiceBlueprintAuthoringMcpExtensions
     }
 
     /// <summary>
-    /// Maps the MCP-over-HTTP endpoint. Returns the endpoint conventions so the host can
-    /// chain its own policy, e.g. <c>.RequireAuthorization()</c>; this applies none.
+    /// Maps the MCP-over-HTTP endpoint. Deny by default: it requires an authenticated caller (or the
+    /// named <paramref name="authorizationPolicy"/>), and the host must write <c>allowAnonymous: true</c>
+    /// to opt out; its tools can read and overwrite every blueprint. Returns the endpoint conventions so
+    /// the host can still chain a stricter policy, e.g. <c>.RequireAuthorization("BlueprintsAdmin")</c>.
     /// </summary>
     public static IEndpointConventionBuilder MapServiceBlueprintAuthoringMcp(
         this IEndpointRouteBuilder endpoints,
-        string pattern = "/wayfinder/service-blueprint-authoring/mcp") =>
-        endpoints.MapMcp(pattern);
+        string pattern = "/wayfinder/service-blueprint-authoring/mcp",
+        string? authorizationPolicy = null,
+        bool allowAnonymous = false)
+    {
+        if (allowAnonymous && authorizationPolicy is not null)
+        {
+            throw new ArgumentException("authorizationPolicy and allowAnonymous: true contradict each other.", nameof(authorizationPolicy));
+        }
+
+        var endpoint = endpoints.MapMcp(pattern);
+        if (allowAnonymous)
+        {
+            endpoint.AllowAnonymous();
+        }
+        else if (authorizationPolicy is null)
+        {
+            endpoint.RequireAuthorization();
+        }
+        else
+        {
+            endpoint.RequireAuthorization(authorizationPolicy);
+        }
+
+        return endpoint;
+    }
 }

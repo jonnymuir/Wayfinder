@@ -16,10 +16,35 @@ namespace Wayfinder.Editor.Http;
 /// </summary>
 public static class MockBusinessAppExtensions
 {
+    /// <summary>
+    /// Deny by default, like the REST authoring API this mirrors: every route requires an authenticated
+    /// caller (or the named <paramref name="authorizationPolicy"/>) unless the host writes
+    /// <c>allowAnonymous: true</c>. These routes can overwrite every blueprint.
+    /// </summary>
     public static RouteGroupBuilder MapMockBusinessAppServiceBlueprints(
-        this IEndpointRouteBuilder endpoints, string prefix = "/mockapp/service-blueprints")
+        this IEndpointRouteBuilder endpoints,
+        string prefix = "/mockapp/service-blueprints",
+        string? authorizationPolicy = null,
+        bool allowAnonymous = false)
     {
+        if (allowAnonymous && authorizationPolicy is not null)
+        {
+            throw new ArgumentException("authorizationPolicy and allowAnonymous: true contradict each other.", nameof(authorizationPolicy));
+        }
+
         var group = endpoints.MapGroup(prefix);
+        if (allowAnonymous)
+        {
+            group.AllowAnonymous();
+        }
+        else if (authorizationPolicy is null)
+        {
+            group.RequireAuthorization();
+        }
+        else
+        {
+            group.RequireAuthorization(authorizationPolicy);
+        }
 
         group.MapGet("", async (ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
             Results.Json(await authoring.ListAsync(ct)));

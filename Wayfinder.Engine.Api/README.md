@@ -15,12 +15,15 @@ builder.Services.AddSingleton<IServiceBlueprintSourceStore, YourServiceBlueprint
 builder.Services.AddServiceBlueprintAuthoring(); // Wayfinder.Engine.Extensions
 
 var app = builder.Build();
-app.MapServiceBlueprintAuthoringApi(); // defaults to prefix "/wayfinder/service-blueprint-authoring"
+app.MapServiceBlueprintAuthoringApi(authorizationPolicy: "BlueprintsAdmin"); // prefix defaults to "/wayfinder/service-blueprint-authoring"
 ```
 
-`MapServiceBlueprintAuthoringApi()` returns a `RouteGroupBuilder`, chain
-`.RequireAuthorization()` (or any other ASP.NET Core policy) the same way you would for
-any other endpoint group. This extension applies none itself.
+**Deny by default.** This surface can read and overwrite every blueprint, so every route requires
+an authenticated caller. Pass `authorizationPolicy` to require a named policy (omit it for "any
+authenticated caller"); the host must have called `UseAuthentication()`/`UseAuthorization()`, and
+without them the routes fail closed. A demo or a host that protects the routes another way must say
+so explicitly with `allowAnonymous: true` (and should write why next to the call). The returned
+`RouteGroupBuilder` still lets you chain a stricter policy of your own.
 
 ## Routes
 

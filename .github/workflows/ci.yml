@@ -122,6 +122,11 @@ jobs:
         working-directory: Wayfinder.Editor.Client
         run: npx playwright install --with-deps
 
+      # A real browser is needed: the bug it guards against (attribute injection through an
+      # uploaded dataset's cell values) lives in the browser's own HTML parsing.
+      - name: Bulk-data review escaping (real browser)
+        run: node Wayfinder.Rendering.GovUk/test/wayfinder-bulk-data-review.xss.mjs
+
       - name: Storybook interaction/a11y tests
         working-directory: Wayfinder.Editor.Client
         run: npm run test-storybook

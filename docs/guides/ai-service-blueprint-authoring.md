@@ -83,13 +83,14 @@ builder.Services.AddServiceBlueprintAuthoringMcp();    // registers the MCP serv
 
 var app = builder.Build();
 
-app.MapServiceBlueprintAuthoringApi();   // REST — GET/PUT /wayfinder/service-blueprint-authoring/service-blueprints/*
-app.MapServiceBlueprintAuthoringMcp();   // MCP  — POST   /wayfinder/service-blueprint-authoring/mcp
+app.MapServiceBlueprintAuthoringApi(authorizationPolicy: "BlueprintsAdmin");   // REST — GET/PUT /wayfinder/service-blueprint-authoring/service-blueprints/*
+app.MapServiceBlueprintAuthoringMcp(authorizationPolicy: "BlueprintsAdmin");   // MCP  — POST   /wayfinder/service-blueprint-authoring/mcp
 ```
 
-Both `Map...` calls return a chainable endpoint builder, chain `.RequireAuthorization()`
-(or any other ASP.NET Core policy) the same way you would for any other endpoint. Wayfinder
-doesn't ship an auth story for this surface, the same way it doesn't enforce queue-level
+Both `Map...` calls are deny-by-default: they can read and overwrite every blueprint, so every
+route requires an authenticated caller (or the policy you name), and a host that really wants them
+open must say `allowAnonymous: true` explicitly. Wayfinder doesn't decide *who* your authors are
+(that is your policy), and it doesn't enforce queue-level
 access control for the runtime engine, that's always been the host's responsibility.
 `Wayfinder.ReferenceApp` leaves both unauthenticated intentionally, to prove the boundary
 works without inheriting an authoring policy.
