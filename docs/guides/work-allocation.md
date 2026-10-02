@@ -80,8 +80,8 @@ This applies whether or not the queue declares a `QueueDefinition.AssignmentPoli
   it the instant it exists.
 - A queue declaring **no** `AssignmentPolicy` at all still requires pickup, it's just not scoped
   to any particular team, so any actor already eligible to see the queue may pick a row up. This is
-  the same mandatory-pickup rule as `"team-tray"`, minus the team-membership restriction, not a
-  legacy, optional-pickup mode. Every real blueprint in this reference app either declares
+  the same mandatory-pickup rule as `"team-tray"`, minus the team-membership restriction, not an
+  optional-pickup mode. Every real blueprint in this reference app either declares
   `"team-tray"`/`"assign-to-initiator"` explicitly, or falls into this "no policy, still mandatory"
   bucket, there is no third, opt-out shape.
 

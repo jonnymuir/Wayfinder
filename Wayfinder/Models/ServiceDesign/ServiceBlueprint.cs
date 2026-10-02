@@ -1465,7 +1465,7 @@ public record QueueDefinition
     public IReadOnlyList<string>? RoleGates { get; init; }
 
     /// <summary>
-    /// Null (the default) means legacy: no mandatory-assignment enforcement for this queue —
+    /// Null (the default) means no mandatory-assignment enforcement for this queue —
     /// <c>RequestCursor.AssignedTo</c> governs any optional pickup exactly as it did before this
     /// field existed. <c>"assign-to-initiator"</c>: whoever's action lands work here becomes its
     /// individual owner immediately. <c>"team-tray"</c>: work lands owned by <see cref="OwningTeamId"/>

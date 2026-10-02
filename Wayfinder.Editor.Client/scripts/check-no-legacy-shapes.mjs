@@ -9,6 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
 
 const BANNED = [
+  { name: 'the word "legacy" (say what the thing actually is, or delete it)', pattern: /\blegacy\b/i, exts: ['.ts', '.cs', '.md'] },
   { name: 'compat getter helper', pattern: /defineCompatGetter/, exts: ['.ts'] },
   { name: 'legacy-named normaliser or builder', pattern: /\b(normalise|build)Legacy\w*/, exts: ['.ts'] },
   { name: 'removed editor type (metadata/transition containers)', pattern: /\b(AuthoredTransition|ServiceBlueprintDefinitionMetadata|ServiceBlueprintStateMetadata|ServiceBlueprintTransitionMetadata|ServiceBlueprintConditionDefinition)\b/, exts: ['.ts'] },
@@ -22,6 +23,9 @@ const ROOTS = [
   join(repo, 'Wayfinder.Editor.Client', 'src'),
   join(repo, 'Wayfinder'),
   join(repo, 'Wayfinder.Engine'),
+  join(repo, 'Wayfinder.Rendering.GovUk'),
+  join(repo, 'Wayfinder.Tests'),
+  join(repo, 'docs'),
 ];
 const SKIP_DIRS = new Set(['node_modules', 'bin', 'obj', 'dist']);
 

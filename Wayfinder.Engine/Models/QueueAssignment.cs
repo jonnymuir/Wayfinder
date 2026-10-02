@@ -4,7 +4,7 @@ namespace Wayfinder.Engine.Models;
 /// Durable, per-queue-key ownership record for a team-owned queue (<c>QueueDefinition.AssignmentPolicy</c>
 /// declared) — established once the first time an instance's cursor lands in that queue key, looked
 /// up (not re-derived) on every later cursor computation for the same key, left in place when the
-/// cursor moves elsewhere so re-entry into the same key reuses it. Never used for a legacy queue
+/// cursor moves elsewhere so re-entry into the same key reuses it. Never used for a queue without an assignment policy
 /// (no <c>AssignmentPolicy</c> declared) — see <see cref="RequestCursor.AssignedTo"/> for that case.
 /// See docs/guides/team-assignment.md.
 /// </summary>
