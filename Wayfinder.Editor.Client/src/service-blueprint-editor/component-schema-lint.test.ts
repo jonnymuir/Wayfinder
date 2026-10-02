@@ -299,6 +299,72 @@ export function run(csharpServiceBlueprintSource: string): number {
     }
   }
 
+  // ── nested types: every C# property on a queue, stage, gateway or route survives apply + save ──
+  // Reads the property names from the C# records, so a property added there with no editor handling
+  // (or no sample here) fails the suite. A queue's assignmentPolicy/owningTeamId were silently
+  // stripped by every editor save, turning a team-tray queue into an unassigned one.
+  {
+    const csharpProperties = (record: string): string[] => {
+      const start = csharpServiceBlueprintSource.indexOf(`public record ${record}\n`);
+      const end = csharpServiceBlueprintSource.indexOf('\n}\n', start);
+      const body = csharpServiceBlueprintSource.slice(start, end);
+      return [...body.matchAll(/^\s{4}public [^\n(]*? (\w+)\s*(?:\{ get;|\r?\n\s{4}\{)/gm)]
+        .map(match => match[1][0].toLowerCase() + match[1].slice(1));
+    };
+
+    const route = { id: 'r1', target: 'next', trigger: 'go', label: 'L', style: 'primary', requiresRole: 'reviewer', showWhen: 'a == 1', actions: [{ type: 'forms.submit', timing: 'OnTransition' }] };
+    const SAMPLES: Record<string, Record<string, unknown>> = {
+      QueueDefinition: {
+        key: 'q', displayName: 'Q', description: 'd', actor: 'caseworker', roleGates: ['g'],
+        assignmentPolicy: 'team-tray', owningTeamId: 'team-a', tags: { k: 'v' },
+      },
+      StageDefinition: {
+        stageKey: 'only', displayName: 'Only', description: 'd', stageType: 'Question', actor: 'a', queueKey: 'q',
+        roleGates: ['g'], actions: [{ type: 'forms.submit', timing: 'OnEntry' }], components: [{ type: 'text', fieldKey: 'f', label: 'F' }],
+        routes: [route], validations: [{ code: 'c', rule: 'true', message: 'm' }], icon: 'i',
+      },
+      ServiceBlueprintGatewayDefinition: {
+        key: 'gw', displayName: 'G', description: 'd', gatewayType: 'Join', queueKey: 'q', actor: 'a', roleGates: ['g'],
+        routes: [route], waitingContent: 'w', waitingExpectedSeconds: 5, waitingPollIntervalMs: 1000, waitingAllowDefer: true,
+        waitingDeferMessage: 'later', requiredIncomingQueues: ['q'], icon: 'i',
+      },
+      ServiceBlueprintRouteDefinition: route,
+    };
+    const sorted = (value: unknown): unknown =>
+      Array.isArray(value) ? value.map(sorted)
+        : value && typeof value === 'object'
+          ? Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted((value as Record<string, unknown>)[key])]))
+          : value;
+    const embed = (record: string, value: Record<string, unknown>): Record<string, unknown> => {
+      const blueprint: Record<string, unknown> = { ...minimalBlueprint([]) };
+      if (record === 'QueueDefinition') blueprint.queues = [value];
+      else if (record === 'StageDefinition') blueprint.stages = [value];
+      else if (record === 'ServiceBlueprintGatewayDefinition') blueprint.gateways = [value];
+      else (blueprint.stages as Record<string, unknown>[])[0].routes = [value];
+      return blueprint;
+    };
+    const extract = (record: string, saved: Record<string, any>): Record<string, unknown> => {
+      if (record === 'QueueDefinition') return saved.queues[0];
+      if (record === 'StageDefinition') return saved.stages[0];
+      if (record === 'ServiceBlueprintGatewayDefinition') return saved.gateways[0];
+      return saved.stages[0].routes[0];
+    };
+
+    for (const record of Object.keys(SAMPLES)) {
+      const sample = SAMPLES[record];
+      const properties = csharpProperties(record);
+      check(`the drift guard found the C# ${record} properties`, properties.length > 3, JSON.stringify(properties));
+      const saved = JSON.parse(serializeAuthoredServiceBlueprint(coerceParsedAuthoredServiceBlueprint(embed(record, sample))));
+      const out = extract(record, saved);
+      for (const property of properties) {
+        check(`C# ${record}.${property} has an editor test sample (add one when the model gains a property)`, property in sample);
+        check(`C# ${record}.${property} survives an editor apply and save`,
+          property in out && JSON.stringify(sorted(out[property])) === JSON.stringify(sorted(sample[property])),
+          `${property}: expected ${JSON.stringify(sample[property])}, saved ${JSON.stringify(out[property])}`);
+      }
+    }
+  }
+
   {
     const userBlueprint = (defaultFrom: string) => ({
       definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
