@@ -69,6 +69,9 @@ export interface QueueDefinition {
   description?: string;
   actor?: string;
   roleGates?: string[];
+  /** "team-tray" or "assign-to-initiator"; absent means no assignment policy. See docs/guides/team-assignment.md. */
+  assignmentPolicy?: string;
+  owningTeamId?: string;
   tags?: Record<string, string>;
 }
 
@@ -425,6 +428,8 @@ function normaliseQueueDefinition(rawQueue: Record<string, unknown>): QueueDefin
     description: firstString(rawQueue.description),
     actor: firstString(rawQueue.actor),
     roleGates: asStringArray(rawQueue.roleGates),
+    assignmentPolicy: firstString(rawQueue.assignmentPolicy),
+    owningTeamId: firstString(rawQueue.owningTeamId),
     tags: asRecord(rawQueue.tags) as Record<string, string>,
   };
 }

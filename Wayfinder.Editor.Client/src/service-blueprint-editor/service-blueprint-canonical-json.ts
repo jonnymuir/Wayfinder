@@ -1,4 +1,4 @@
-import type { AuthoredGateway, AuthoredRoute, AuthoredStage, AuthoredStageValidation, AuthoredServiceBlueprint } from './types.js';
+import type { AuthoredGateway, AuthoredRoute, AuthoredStage, AuthoredStageValidation, AuthoredServiceBlueprint, QueueDefinition } from './types.js';
 
 /**
  * Stable, deterministic JSON serialization for the flattened serviceBlueprint definition
@@ -71,6 +71,19 @@ function serialisableStageValidation(rule: AuthoredStageValidation): Record<stri
   };
 }
 
+function serialisableQueue(queue: QueueDefinition): Record<string, unknown> {
+  return {
+    key: queue.key,
+    displayName: queue.displayName,
+    description: queue.description,
+    actor: queue.actor,
+    roleGates: queue.roleGates?.length ? queue.roleGates : undefined,
+    assignmentPolicy: queue.assignmentPolicy,
+    owningTeamId: queue.owningTeamId,
+    tags: queue.tags && Object.keys(queue.tags).length > 0 ? queue.tags : undefined,
+  };
+}
+
 function serialisableState(stage: AuthoredStage): Record<string, unknown> {
   return {
     stageKey: stage.stateKey,
@@ -122,7 +135,7 @@ function serialisableServiceBlueprint(serviceBlueprint: AuthoredServiceBlueprint
     description: serviceBlueprint.description,
     schemaVersion: serviceBlueprint.schemaVersion,
     authoredServiceBlueprintId: serviceBlueprint.authoredServiceBlueprintId,
-    queues: serviceBlueprint.queues ?? [],
+    queues: (serviceBlueprint.queues ?? []).map(serialisableQueue),
     stages: serviceBlueprint.stages.map(serialisableState),
     gateways: (serviceBlueprint.gateways ?? []).map(serialisableGateway),
     calculations: serviceBlueprint.calculations,
