@@ -1,7 +1,7 @@
 import type { ComponentDescriptor } from './types.js';
 import { generateComponentJsonSchema } from './component-json-schema.js';
 import { coerceParsedAuthoredServiceBlueprint, lintAuthoredServiceBlueprintDocument } from './service-blueprint-lint.js';
-import { serializeAuthoredServiceBlueprint } from './service-blueprint-canonical-json.js';
+import { EDITOR_TOP_LEVEL_FIELDS, serializeAuthoredServiceBlueprint } from './service-blueprint-canonical-json.js';
 
 const CATALOG: ComponentDescriptor[] = [
   {
@@ -94,7 +94,7 @@ function check(name: string, condition: boolean, detail?: string) {
   }
 }
 
-export function run(): number {
+export function run(csharpServiceBlueprintSource: string): number {
   failures = 0;
 
   // ── generateComponentJsonSchema ──────────────────────────────────────────
@@ -227,6 +227,77 @@ export function run(): number {
     const notOptedIn = coerceParsedAuthoredServiceBlueprint(minimalBlueprint([]));
     check('a Definition-tab edit that omits allowManualRestart saves without it',
       !('allowManualRestart' in JSON.parse(serializeAuthoredServiceBlueprint(notOptedIn))));
+  }
+
+  // ── top-level fields: every field the editor owns survives apply+save and is type-checked ──
+  {
+    const SAMPLES: Record<string, { good: unknown; bad: unknown }> = {
+      definitionKey: { good: 'k', bad: 7 },
+      displayName: { good: 'D', bad: 7 },
+      version: { good: 3, bad: '3' },
+      initialStage: { good: 'only', bad: 7 },
+      requestPolicy: { good: 'prompt', bad: 7 },
+      allowManualRestart: { good: true, bad: 'true' },
+      description: { good: 'text', bad: 7 },
+      schemaVersion: { good: '1', bad: 7 },
+      calculations: { good: { fields: { a: { expr: '1' } } }, bad: [] },
+      queues: { good: [{ key: 'citizen', actor: 'citizen', displayName: 'Citizen' }], bad: {} },
+      stages: { good: minimalBlueprint([]).stages, bad: {} },
+      gateways: { good: [], bad: {} },
+      parameterSchemas: { good: [], bad: {} },
+      layout: { good: { nodes: { 'stage:only': { x: 1, y: 2 } } }, bad: [] },
+    };
+    for (const key of Object.keys(EDITOR_TOP_LEVEL_FIELDS)) {
+      const sample = SAMPLES[key];
+      check(`top-level "${key}" has a test sample (declare one when adding a field)`, sample !== undefined);
+      if (!sample) continue;
+      const withGood = { ...minimalBlueprint([]), [key]: sample.good };
+      const applied = JSON.parse(serializeAuthoredServiceBlueprint(coerceParsedAuthoredServiceBlueprint(withGood)));
+      check(`top-level "${key}" survives a Definition-tab apply and save`,
+        key in applied && JSON.stringify(applied[key]) !== undefined, JSON.stringify(applied));
+      if (typeof sample.good !== 'object') {
+        check(`top-level "${key}" keeps its value through apply and save`, applied[key] === sample.good, JSON.stringify(applied[key]));
+      }
+      const withBad = { ...minimalBlueprint([]), [key]: sample.bad };
+      const issues = lintAuthoredServiceBlueprintDocument(withBad, JSON.stringify(withBad), CATALOG);
+      check(`top-level "${key}" with the wrong type is reported, not silently dropped`,
+        issues.some(issue => issue.pathHint === key), JSON.stringify(issues));
+      const withGoodIssues = lintAuthoredServiceBlueprintDocument(withGood, JSON.stringify(withGood), CATALOG);
+      check(`top-level "${key}" with the right type raises no issue about it`,
+        !withGoodIssues.some(issue => issue.pathHint === key), JSON.stringify(withGoodIssues));
+    }
+
+    const typo = { ...minimalBlueprint([]), allowManualRestat: true };
+    check('an unrecognised top-level property is reported, since saving would discard it',
+      lintAuthoredServiceBlueprintDocument(typo, JSON.stringify(typo), CATALOG).some(issue => issue.pathHint === 'allowManualRestat'));
+  }
+
+  // Drift guard against the C# model: a property added to ServiceBlueprint must be either owned
+  // by the editor (EDITOR_TOP_LEVEL_FIELDS) or listed here with its reason. Without this, a new
+  // field is silently dropped by every editor save until someone notices.
+  {
+    const source = csharpServiceBlueprintSource;
+    const start = source.indexOf('public record ServiceBlueprint\n');
+    const end = source.indexOf('\npublic ', start + 10);
+    const body = source.slice(start, end < 0 ? undefined : end);
+    const serverProperties = [...body.matchAll(/^\s{4}public [^\n(]*? (\w+)\s*(?:\{ get;|\r?\n\s{4}\{)/gm)]
+      .map(match => match[1][0].toLowerCase() + match[1].slice(1));
+    check('the drift guard found the C# ServiceBlueprint properties', serverProperties.includes('allowManualRestart'), JSON.stringify(serverProperties));
+
+    // Known gaps: the editor does not serialise these top-level properties today, so an editor
+    // save drops them. Listing a property here is a decision, not a default; fix the gap and
+    // move it into EDITOR_TOP_LEVEL_FIELDS rather than adding to this list.
+    const SERVER_ONLY_DROPPED_BY_EDITOR_SAVE = ['authoredServiceBlueprintId', 'handoffs', 'tags', 'metadata'];
+    for (const property of serverProperties) {
+      check(`C# ServiceBlueprint.${property} is owned by the editor or consciously listed as dropped`,
+        property in EDITOR_TOP_LEVEL_FIELDS || SERVER_ONLY_DROPPED_BY_EDITOR_SAVE.includes(property));
+    }
+    // parameterSchemas has no C# property, so the server drops it when it deserialises a save.
+    const EDITOR_ONLY = ['parameterSchemas'];
+    for (const key of Object.keys(EDITOR_TOP_LEVEL_FIELDS)) {
+      check(`editor-owned "${key}" exists on the C# ServiceBlueprint (or is consciously editor-only)`,
+        serverProperties.includes(key) || EDITOR_ONLY.includes(key));
+    }
   }
 
   {
