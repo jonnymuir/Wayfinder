@@ -1,3 +1,4 @@
+import { EDITOR_TOP_LEVEL_FIELDS, matchesTopLevelFieldKind } from './service-blueprint-canonical-json.js';
 import type { AuthoredComponent, AuthoredServiceBlueprint, ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
 import { hydrateServiceBlueprintDefinition } from './types.js';
 import { collectStageInputFields } from './component-property-references.js';
@@ -447,6 +448,9 @@ function seriesExpr(
   return definition[part] ?? '';
 }
 
+/** Older authored shapes hydrate still reads (metadata.*, transitions, authorNote); accepted, not owned. */
+const LEGACY_ACCEPTED_TOP_LEVEL_KEYS = new Set(['metadata', 'transitions', 'authorNote']);
+
 export function lintAuthoredServiceBlueprintDocument(
   parsed: unknown,
   source: string,
@@ -469,6 +473,38 @@ export function lintAuthoredServiceBlueprintDocument(
         line: findLine(source, `"${required}"`),
       });
     }
+  }
+
+  // Typed once from the editor's own field table, so a wrong-typed value (allowManualRestart:
+  // "true") is reported instead of being silently dropped when the definition is applied. Only
+  // reported when the more specific check above has not already flagged the same property.
+  for (const [key, kind] of Object.entries(EDITOR_TOP_LEVEL_FIELDS)) {
+    const value = root[key];
+    if (value === undefined || value === null || matchesTopLevelFieldKind(value, kind)) {
+      continue;
+    }
+    if (issues.some(issue => issue.pathHint === key)) {
+      continue;
+    }
+    const expected = kind === 'boolean' ? 'true or false' : kind === 'array' ? 'an array' : kind === 'object' ? 'an object' : `a ${kind}`;
+    issues.push({
+      message: `"${key}" must be ${expected}, not ${Array.isArray(value) ? 'an array' : typeof value === 'object' ? 'an object' : `a ${typeof value}`}.`,
+      pathHint: key,
+      line: findLine(source, `"${key}"`),
+    });
+  }
+
+  // Properties the editor does not own are discarded on save, so say so rather than let a typo
+  // (allowManualRestat) or a field the editor cannot round-trip vanish without a word.
+  for (const key of Object.keys(root)) {
+    if (key in EDITOR_TOP_LEVEL_FIELDS || LEGACY_ACCEPTED_TOP_LEVEL_KEYS.has(key)) {
+      continue;
+    }
+    issues.push({
+      message: `"${key}" is not a property the editor keeps, so it would be discarded when this definition is saved. Check the spelling.`,
+      pathHint: key,
+      line: findLine(source, `"${key}"`),
+    });
   }
 
   if (!Array.isArray(root.queues)) {
@@ -614,24 +650,20 @@ export function lintAuthoredServiceBlueprintDocument(
 
 export function coerceParsedAuthoredServiceBlueprint(parsed: unknown): AuthoredServiceBlueprint {
   const root = parsed as Record<string, unknown>;
+  // Copied from the field table, not field by field, so a newly declared top-level property cannot
+  // be forgotten here (allowManualRestart was, and was dropped on every Definition-tab apply).
+  const owned = Object.fromEntries(
+    Object.entries(EDITOR_TOP_LEVEL_FIELDS).filter(([key, kind]) => matchesTopLevelFieldKind(root[key], kind)).map(([key]) => [key, root[key]])
+  );
   return hydrateServiceBlueprintDefinition({
-    definitionKey: String(root.definitionKey ?? ''),
-    displayName: String(root.displayName ?? ''),
-    version: typeof root.version === 'number' ? root.version : 1,
-    initialStage: String(root.initialStage ?? ''),
-    requestPolicy: String(root.requestPolicy ?? 'single'),
-    allowManualRestart: root.allowManualRestart === true ? true : undefined,
-    description: typeof root.description === 'string' ? root.description : undefined,
-    schemaVersion: typeof root.schemaVersion === 'string' ? root.schemaVersion : undefined,
-    queues: Array.isArray(root.queues) ? (root.queues as AuthoredServiceBlueprint['queues']) : [],
-    stages: Array.isArray(root.stages) ? (root.stages as AuthoredServiceBlueprint['stages']) : [],
-    gateways: Array.isArray(root.gateways) ? (root.gateways as AuthoredServiceBlueprint['gateways']) : [],
-    calculations: root.calculations
-      ? (root.calculations as AuthoredServiceBlueprint['calculations'])
-      : undefined,
-    parameterSchemas: Array.isArray(root.parameterSchemas)
-      ? (root.parameterSchemas as AuthoredServiceBlueprint['parameterSchemas'])
-      : undefined,
-    layout: root.layout ? (root.layout as AuthoredServiceBlueprint['layout']) : undefined,
-  });
+    definitionKey: '',
+    displayName: '',
+    version: 1,
+    initialStage: '',
+    requestPolicy: 'single',
+    queues: [],
+    stages: [],
+    gateways: [],
+    ...owned,
+  } as unknown as AuthoredServiceBlueprint);
 }

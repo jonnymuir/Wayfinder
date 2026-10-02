@@ -3,6 +3,7 @@
 // service-blueprint-lint.ts's component checks against a small hand-built descriptor catalog
 // defined directly in the test module. Uses Vite in SSR mode so the editor's .js-specifier TS
 // imports resolve without a bundling step, same as run-graph-layout-tests.mjs.
+import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'vite';
@@ -19,7 +20,7 @@ const server = await createServer({
 
 try {
   const mod = await server.ssrLoadModule('/src/service-blueprint-editor/component-schema-lint.test.ts');
-  const failures = mod.run();
+  const failures = mod.run(readFileSync(join(here, '..', '..', 'Wayfinder', 'Models', 'ServiceDesign', 'ServiceBlueprint.cs'), 'utf8'));
   process.exitCode = failures > 0 ? 1 : 0;
 } finally {
   await server.close();

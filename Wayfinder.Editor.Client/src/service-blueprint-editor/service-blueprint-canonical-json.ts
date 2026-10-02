@@ -4,22 +4,45 @@ import type { AuthoredGateway, AuthoredRoute, AuthoredStage, AuthoredStageValida
  * Stable, deterministic JSON serialization for the flattened serviceBlueprint definition
  * used by the Definition tab.
  */
-const TOP_LEVEL_KEY_ORDER: readonly string[] = [
-  'definitionKey',
-  'displayName',
-  'version',
-  'initialStage',
-  'requestPolicy',
-  'allowManualRestart',
-  'description',
-  'schemaVersion',
-  'calculations',
-  'queues',
-  'stages',
-  'gateways',
-  'parameterSchemas',
-  'layout',
-];
+export type TopLevelFieldKind = 'string' | 'number' | 'boolean' | 'array' | 'object';
+
+/**
+ * Every top-level property the editor owns: it is read from a pasted/typed definition, kept
+ * through hydrate, and written back by the serialiser, in this order. This is the one place a new
+ * top-level field is declared; the lint's type checks, the Definition-tab coerce and the canonical
+ * key order all derive from it, and service-blueprint-top-level-fields.test.ts fails if a field here
+ * is dropped anywhere along that path, or if the C# ServiceBlueprint gains a property nobody
+ * has decided about.
+ */
+export const EDITOR_TOP_LEVEL_FIELDS: Readonly<Record<string, TopLevelFieldKind>> = {
+  definitionKey: 'string',
+  displayName: 'string',
+  version: 'number',
+  initialStage: 'string',
+  requestPolicy: 'string',
+  allowManualRestart: 'boolean',
+  description: 'string',
+  schemaVersion: 'string',
+  calculations: 'object',
+  queues: 'array',
+  stages: 'array',
+  gateways: 'array',
+  parameterSchemas: 'array',
+  layout: 'object',
+};
+
+export function matchesTopLevelFieldKind(value: unknown, kind: TopLevelFieldKind): boolean {
+  switch (kind) {
+    case 'array':
+      return Array.isArray(value);
+    case 'object':
+      return typeof value === 'object' && value !== null && !Array.isArray(value);
+    default:
+      return typeof value === kind;
+  }
+}
+
+const TOP_LEVEL_KEY_ORDER: readonly string[] = Object.keys(EDITOR_TOP_LEVEL_FIELDS);
 
 function serialisableRoute(route: AuthoredRoute): Record<string, unknown> {
   return {
