@@ -158,6 +158,11 @@ disabling protection.
 ### Code style
 
 - No speculative abstractions. Solve the problem at hand.
+- **No back-compat shims (YAGNI).** There is one blueprint shape, the C# `ServiceBlueprint`'s.
+  No aliases, fallback reads, compat getters, `legacy`/`metadata` containers or "also accept the
+  old name" branches, in the model, the engine or the editor. Hosts reseed; if a shape changes,
+  change it everywhere and migrate the fixtures. `npm run test:no-legacy-shapes` enforces this in
+  CI, and the field-table drift test fails if the C# model and the editor disagree.
 - Comments only where the *why* is non-obvious; match the density of the surrounding file.
 - Framework-agnostic core: `Wayfinder` and `Wayfinder.Engine` take no dependency on ASP.NET Core
   MVC, Umbraco, or a specific host. Host concerns enter via an interface or a callback the host

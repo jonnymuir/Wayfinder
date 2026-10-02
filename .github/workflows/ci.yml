@@ -105,6 +105,19 @@ jobs:
         working-directory: Wayfinder.Editor.Client
         run: npm run test:server-diagnostic-location && npm run test:service-blueprint-validation
 
+      - name: Canonical JSON round-trip, property references and calculation tests
+        working-directory: Wayfinder.Editor.Client
+        run: >-
+          npm run test:canonical-json &&
+          npm run test:property-references &&
+          npm run test:calculation-runtime &&
+          npm run test:calculation-ordering &&
+          npm run test:calculation-diagnostics
+
+      - name: No legacy blueprint shapes
+        working-directory: Wayfinder.Editor.Client
+        run: npm run test:no-legacy-shapes
+
       - name: Install Playwright browsers
         working-directory: Wayfinder.Editor.Client
         run: npx playwright install --with-deps

@@ -23,6 +23,7 @@
     "test:service-blueprint-validation": "node scripts/run-service-blueprint-validation-tests.mjs",
     "test:server-diagnostic-location": "node scripts/run-server-diagnostic-location-tests.mjs",
     "test:canonical-json": "node scripts/run-canonical-json-tests.mjs",
+    "test:no-legacy-shapes": "node scripts/check-no-legacy-shapes.mjs",
     "docs:screenshots": "CAPTURE_DOC_SCREENSHOTS=1 playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts support-system-action-editor.spec.ts service-blueprint-editor-validation.spec.ts service-blueprint-editor-definition-tab.spec.ts service-blueprint-editor-help.spec.ts",
     "test-storybook": "vitest run"
   },
