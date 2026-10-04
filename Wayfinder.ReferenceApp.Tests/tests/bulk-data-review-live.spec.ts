@@ -165,8 +165,20 @@ test.describe('Bulk data review: real cross-process round trip', () => {
     await row1Card.getByLabel('Monthly contribution').fill('42.00');
     await expect(page.locator('.wayfinder-bulk-review__sync-status')).toContainText('Pending resubmission');
     const currentStateVersion = await page.locator('input[name="stateVersion"]').getAttribute('value');
-    const bypassAttempt = await page.request.post(`${page.url()}/advance`, {
+
+    // First, the CSRF gate: the same post with no antiforgery token never reaches the engine at all.
+    const noToken = await page.request.post(`${page.url()}/advance`, {
       form: { action: 'accept', stateVersion: currentStateVersion ?? '0' },
+    });
+    expect(noToken.status()).toBe(400);
+
+    // Then the guarantee this test is really about: a request that IS valid as far as the transport
+    // is concerned (same session cookie, the page's own antiforgery token, the current stateVersion)
+    // but bypasses the UI. Only the engine's fail-closed trigger resolution can refuse this one.
+    const antiforgeryToken = await page.locator('input[name="__RequestVerificationToken"]').first().getAttribute('value');
+    expect(antiforgeryToken, 'the review page renders its antiforgery token').toBeTruthy();
+    const bypassAttempt = await page.request.post(`${page.url()}/advance`, {
+      form: { action: 'accept', stateVersion: currentStateVersion ?? '0', __RequestVerificationToken: antiforgeryToken! },
     });
     // A rejected Advance() re-renders the same stage rather than a distinct HTTP error status —
     // the real proof is that the instance never actually left "Review contributions file".
