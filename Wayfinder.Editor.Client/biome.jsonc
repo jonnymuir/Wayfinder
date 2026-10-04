@@ -97,7 +97,6 @@
         "src/service-blueprint-editor/graph/graph-model.ts",
         "src/service-blueprint-editor/graph/service-blueprint-graph-layout-block.ts",
         "src/service-blueprint-editor/graph/service-blueprint-graph-layout.ts",
-        "src/service-blueprint-editor/service-blueprint-lint.ts",
         "src/service-blueprint-editor/service-blueprint-validation.ts",
         "src/service-blueprint-editor/wayfinder-service-blueprint-editor.ts",
         "src/service-blueprint-editor/wayfinder-service-blueprint-graph.ts",
