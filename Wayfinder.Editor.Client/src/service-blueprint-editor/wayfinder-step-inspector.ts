@@ -16,6 +16,7 @@ import './wayfinder-stage-action-editor.js';
 import './wayfinder-inline-help.js';
 import './wayfinder-calculation-expression-editor.js';
 import { RouteEditorController } from './inspector/route-editor-controller.js';
+import { RouteListController } from './inspector/route-list-controller.js';
 import { GatewayInspectorController } from './inspector/gateway-inspector-controller.js';
 import { StageInspectorController } from './inspector/stage-inspector-controller.js';
 import type { InspectorContext } from './inspector/inspector-host.js';
@@ -75,8 +76,9 @@ export class WayfinderStepInspectorElement extends LitElement implements Inspect
   @state() private _statusMessage: string | null = null;
 
   private readonly _routes = new RouteEditorController(this);
-  private readonly _stage = new StageInspectorController(this, this._routes);
-  private readonly _gateway = new GatewayInspectorController(this, this._routes);
+  private readonly _routeList = new RouteListController(this, this._routes);
+  private readonly _stage = new StageInspectorController(this, this._routes, this._routeList);
+  private readonly _gateway = new GatewayInspectorController(this, this._routeList);
 
   get selectedStage(): StageDefinition | null {
     if (!this.serviceBlueprint || !this.selectedStageKey) {

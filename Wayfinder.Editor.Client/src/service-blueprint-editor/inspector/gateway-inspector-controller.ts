@@ -1,4 +1,5 @@
 import type { ReactiveController } from 'lit';
+import { stageLabel } from './route-labels.js';
 import { html, nothing } from 'lit';
 import type { ServiceBlueprintGatewayDefinition } from '../types.js';
 import { serviceBlueprintGateways } from '../types.js';
@@ -6,7 +7,7 @@ import { defaultIconForGateway, type NodeIconName } from '../graph/node-icons.js
 import { stageQueueLabel, serviceBlueprintQueueOptions } from '../stage-assignment.js';
 import { deriveGatewayBindings, gatewayQueueKey } from '../gateway-representation.js';
 import type { InspectorHost } from './inspector-host.js';
-import type { RouteEditorController } from './route-editor-controller.js';
+import type { RouteListController } from './route-list-controller.js';
 import { renderIconPicker } from './node-icon-picker.js';
 
 /** The properties panel for a selected gateway: identity, queue, join-waiting behaviour, delete, and its routes. */
@@ -16,7 +17,7 @@ export class GatewayInspectorController implements ReactiveController {
 
   constructor(
     private readonly _host: InspectorHost,
-    private readonly _routes: RouteEditorController
+    private readonly _routeList: RouteListController
   ) {
     _host.addController(this);
   }
@@ -322,7 +323,7 @@ export class GatewayInspectorController implements ReactiveController {
                 ? html`
                   <div class="meta-row">
                     <dt>${isJoin ? 'Merge near' : 'Branches from'}</dt>
-                    <dd>${this._routes.stageLabel(binding.anchorStageKey)}</dd>
+                    <dd>${stageLabel(this._host.serviceBlueprint, binding.anchorStageKey)}</dd>
                   </div>
                 `
                 : nothing
@@ -408,7 +409,7 @@ export class GatewayInspectorController implements ReactiveController {
             : nothing
         }
 
-        ${this._routes.renderGatewayRoutes(gateway, binding)}
+        ${this._routeList.renderGatewayRoutes(gateway, binding)}
 
         <section class="inspector-section" aria-labelledby="gateway-danger-heading">
           <h3 id="gateway-danger-heading" class="section-heading">Actions</h3>
