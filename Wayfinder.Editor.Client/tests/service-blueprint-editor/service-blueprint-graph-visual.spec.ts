@@ -15,7 +15,7 @@ test.describe('ServiceBlueprint graph behavioural rendering', () => {
     const storyEl = page.locator('wayfinder-service-blueprint-graph');
     await expect(storyEl).toBeVisible({ timeout: 10_000 });
     await page.waitForLoadState('networkidle');
-    await storyEl.evaluate(async element => {
+    await storyEl.evaluate(async (element) => {
       await (element as { updateComplete?: Promise<unknown> }).updateComplete;
     });
 
@@ -45,7 +45,7 @@ test.describe('ServiceBlueprint graph behavioural rendering', () => {
     const storyEl = page.locator('wayfinder-service-blueprint-graph');
     await expect(storyEl).toBeVisible({ timeout: 10_000 });
     await page.waitForLoadState('networkidle');
-    await storyEl.evaluate(async element => {
+    await storyEl.evaluate(async (element) => {
       await (element as { updateComplete?: Promise<unknown> }).updateComplete;
     });
 
@@ -76,8 +76,10 @@ test.describe('ServiceBlueprint graph behavioural rendering', () => {
     await page.setViewportSize({ width: 1600, height: 1100 });
     // GATEWAY_WORKFLOW story = LEAVE_REQUEST_STARTER_WORKFLOW = 5 gateways
     // (3 feeder splits + 1 multi-route review split + 1 decision join).
-    await page.goto(storyUrl('service-blueprint-editor-service-blueprint-graph--gateway-representation') ||
-      storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas'));
+    await page.goto(
+      storyUrl('service-blueprint-editor-service-blueprint-graph--gateway-representation') ||
+        storyUrl('service-blueprint-editor-service-blueprint-graph--workspace-canvas')
+    );
     // Fallback covered above — the canonical 5-gateway story id may not be
     // mounted in every storybook configuration; this test still asserts the
     // pill/diamond split is rendered.

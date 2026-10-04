@@ -17,13 +17,7 @@ function extensionFor(distance: number): number {
 }
 
 /** A control point pulled outward from an anchor along its handle's facing direction, plus an optional lateral offset used to fan several curves apart. */
-function anchorControlPoint(
-  anchor: Point,
-  position: Position,
-  extension: number,
-  lateralOffset: number,
-  verticalFlow: boolean
-): Point {
+function anchorControlPoint(anchor: Point, position: Position, extension: number, lateralOffset: number, verticalFlow: boolean): Point {
   const { dx, dy } = DIRECTION_BY_POSITION[position];
   return {
     x: anchor.x + dx * extension + (verticalFlow ? lateralOffset : 0),
@@ -73,9 +67,8 @@ export function buildCurvedWaypointPath(
   targetPosition: Position
 ): string {
   const overallDistance = Math.hypot(target.x - source.x, target.y - source.y);
-  const tangent = overallDistance === 0
-    ? { x: 0, y: 0 }
-    : { x: (target.x - source.x) / overallDistance, y: (target.y - source.y) / overallDistance };
+  const tangent =
+    overallDistance === 0 ? { x: 0, y: 0 } : { x: (target.x - source.x) / overallDistance, y: (target.y - source.y) / overallDistance };
 
   const extension1 = extensionFor(Math.hypot(waypoint.x - source.x, waypoint.y - source.y));
   const c1 = anchorControlPoint(source, sourcePosition, extension1, 0, false);
@@ -85,7 +78,9 @@ export function buildCurvedWaypointPath(
   const c3 = { x: waypoint.x + tangent.x * extension2, y: waypoint.y + tangent.y * extension2 };
   const c4 = anchorControlPoint(target, targetPosition, extension2, 0, false);
 
-  return `M ${source.x},${source.y} `
-    + `C ${c1.x},${c1.y} ${c2.x},${c2.y} ${waypoint.x},${waypoint.y} `
-    + `C ${c3.x},${c3.y} ${c4.x},${c4.y} ${target.x},${target.y}`;
+  return (
+    `M ${source.x},${source.y} ` +
+    `C ${c1.x},${c1.y} ${c2.x},${c2.y} ${waypoint.x},${waypoint.y} ` +
+    `C ${c3.x},${c3.y} ${c4.x},${c4.y} ${target.x},${target.y}`
+  );
 }

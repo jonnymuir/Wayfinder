@@ -38,9 +38,7 @@ async function countStages(page: Page): Promise<number> {
 async function selectedStageKey(page: Page): Promise<string | null> {
   return graphShadow(page).evaluate((el) => {
     const root = (el as HTMLElement).shadowRoot;
-    const selected = root?.querySelector<HTMLElement>(
-      '[data-wayfinder-stage][aria-pressed="true"]',
-    );
+    const selected = root?.querySelector<HTMLElement>('[data-wayfinder-stage][aria-pressed="true"]');
     return selected?.getAttribute('data-wayfinder-stage') ?? null;
   });
 }
@@ -63,9 +61,7 @@ test.describe('ServiceBlueprint editor — add/maintain ergonomics', () => {
 
     await expect
       .poll(async () =>
-        graphShadow(page).evaluate(
-          (el) => !!(el as HTMLElement).shadowRoot?.querySelector('[data-wayfinder-create-stage-dialog]'),
-        ),
+        graphShadow(page).evaluate((el) => !!(el as HTMLElement).shadowRoot?.querySelector('[data-wayfinder-create-stage-dialog]'))
       )
       .toBe(true);
 

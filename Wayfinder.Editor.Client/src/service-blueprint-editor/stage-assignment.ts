@@ -21,7 +21,7 @@ export function humaniseAssignmentLabel(value: string): string {
   return value
     .split(/[-_\s]+/)
     .filter(Boolean)
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 }
 
@@ -44,9 +44,7 @@ export function stageSurface(stage: QueueAssignedNode): StageSurface {
     return 'front-stage';
   }
 
-  return actor.includes('review') || actor.includes('case') || actor.includes('system')
-    ? 'back-stage'
-    : 'front-stage';
+  return actor.includes('review') || actor.includes('case') || actor.includes('system') ? 'back-stage' : 'front-stage';
 }
 
 export function stageQueueKey(stage: QueueAssignedNode): string {
@@ -55,7 +53,7 @@ export function stageQueueKey(stage: QueueAssignedNode): string {
     return explicitQueue;
   }
 
-  const gatedRole = (stage.roleGates ?? []).find(value => value.trim());
+  const gatedRole = (stage.roleGates ?? []).find((value) => value.trim());
   if (gatedRole) {
     return normaliseQueueKey(gatedRole);
   }
@@ -74,12 +72,12 @@ export function stageQueueLabel(
   availableQueues: ReadonlyArray<QueueDefinition> = []
 ): string {
   const normalised = normaliseQueueKey(queueKey);
-  const configuredQueue = availableQueues.find(queue => normaliseQueueKey(queue.queueName) === normalised);
+  const configuredQueue = availableQueues.find((queue) => normaliseQueueKey(queue.queueName) === normalised);
   if (configuredQueue?.displayName?.trim()) {
     return configuredQueue.displayName.trim();
   }
 
-  const serviceBlueprintQueue = serviceBlueprintQueues(serviceBlueprint).find(queue => normaliseQueueKey(queue.key) === normalised);
+  const serviceBlueprintQueue = serviceBlueprintQueues(serviceBlueprint).find((queue) => normaliseQueueKey(queue.key) === normalised);
   return serviceBlueprintQueue?.displayName?.trim() || humaniseAssignmentLabel(normalised);
 }
 
@@ -89,7 +87,7 @@ export function stageQueueDescription(
   availableQueues: ReadonlyArray<QueueDefinition> = []
 ): string {
   const normalised = normaliseQueueKey(queueKey);
-  const configuredQueue = availableQueues.find(queue => normaliseQueueKey(queue.queueName) === normalised);
+  const configuredQueue = availableQueues.find((queue) => normaliseQueueKey(queue.queueName) === normalised);
   if (configuredQueue?.description?.trim()) {
     return configuredQueue.description.trim();
   }
@@ -121,28 +119,28 @@ export function serviceBlueprintQueueOptions(
 ): string[] {
   const queueKeys = new Set<string>();
 
-  availableQueues.forEach(queue => {
+  availableQueues.forEach((queue) => {
     const key = normaliseQueueKey(queue.queueName);
     if (key) {
       queueKeys.add(key);
     }
   });
 
-  serviceBlueprintQueues(serviceBlueprint).forEach(queue => {
+  serviceBlueprintQueues(serviceBlueprint).forEach((queue) => {
     const key = normaliseQueueKey(queue.key);
     if (key) {
       queueKeys.add(key);
     }
   });
 
-  serviceBlueprint?.stages?.forEach(stage => {
+  serviceBlueprint?.stages?.forEach((stage) => {
     const key = stageQueueKey(stage);
     if (key) {
       queueKeys.add(key);
     }
   });
 
-  serviceBlueprintGateways(serviceBlueprint).forEach(gateway => {
+  serviceBlueprintGateways(serviceBlueprint).forEach((gateway) => {
     const key = stageQueueKey(gateway);
     if (key) {
       queueKeys.add(key);

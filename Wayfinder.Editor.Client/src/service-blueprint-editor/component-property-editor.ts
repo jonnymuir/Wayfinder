@@ -74,9 +74,8 @@ export function setAtPath<T>(root: T, path: PropertyPath, value: unknown): T {
     return array as unknown as T;
   }
 
-  const obj: Record<string, unknown> = root && typeof root === 'object' && !Array.isArray(root)
-    ? { ...(root as Record<string, unknown>) }
-    : {};
+  const obj: Record<string, unknown> =
+    root && typeof root === 'object' && !Array.isArray(root) ? { ...(root as Record<string, unknown>) } : {};
   obj[head] = setAtPath(obj[head], rest, value);
   return obj as unknown as T;
 }
@@ -132,7 +131,6 @@ export function blankComponentFor(descriptor: ComponentDescriptor): Record<strin
         base[containment.propertyName] = {};
       }
       break;
-    case 'None':
     default:
       break;
   }
@@ -155,7 +153,7 @@ export function renderComponentPropertyFields(
   const { value, path = [], onChange, idPrefix, references } = options;
 
   return html`
-    ${properties.map(property =>
+    ${properties.map((property) =>
       renderPropertyField(property, getAtPath(value, [property.key]), [...path, property.key], onChange, idPrefix, references)
     )}
   `;
@@ -181,34 +179,42 @@ function renderPropertyField(
         <span class="field-label" id="${fieldId}-legend">${property.title}${property.required ? ' *' : ''}</span>
         ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
         <ul class="property-array-list" aria-labelledby="${fieldId}-legend">
-          ${items.map((item, index) => html`
+          ${items.map(
+            (item, index) => html`
             <li class="property-array-item" data-wayfinder-property-array-item="${fieldId}-${index}">
               <div class="property-array-item-fields">
-                ${itemProperties
-                  ? renderComponentPropertyFields(itemProperties, {
-                      value: item,
-                      path: [...path, index],
-                      onChange,
-                      idPrefix,
-                      references,
-                    })
-                  : renderScalarLikeField(
-                      property.items ?? { key: 'value', title: itemLabel, valueKind: 'String', required: false },
-                      item,
-                      [...path, index],
-                      onChange,
-                      `${fieldId}-${index}`,
-                      references
-                    )}
+                ${
+                  itemProperties
+                    ? renderComponentPropertyFields(itemProperties, {
+                        value: item,
+                        path: [...path, index],
+                        onChange,
+                        idPrefix,
+                        references,
+                      })
+                    : renderScalarLikeField(
+                        property.items ?? { key: 'value', title: itemLabel, valueKind: 'String', required: false },
+                        item,
+                        [...path, index],
+                        onChange,
+                        `${fieldId}-${index}`,
+                        references
+                      )
+                }
               </div>
               <button
                 type="button"
                 class="text-button property-array-remove"
                 aria-label="Remove ${itemLabel} ${index + 1} from ${property.title}"
-                @click=${() => onChange(path, items.filter((_, i) => i !== index))}
+                @click=${() =>
+                  onChange(
+                    path,
+                    items.filter((_, i) => i !== index)
+                  )}
               >Remove</button>
             </li>
-          `)}
+          `
+          )}
         </ul>
         <button
           type="button"
@@ -225,9 +231,11 @@ function renderPropertyField(
       <fieldset class="field-block field-block-full property-object">
         <legend class="field-label">${property.title}${property.required ? ' *' : ''}</legend>
         ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
-        ${property.properties
-          ? renderComponentPropertyFields(property.properties, { value, path, onChange, idPrefix, references })
-          : nothing}
+        ${
+          property.properties
+            ? renderComponentPropertyFields(property.properties, { value, path, onChange, idPrefix, references })
+            : nothing
+        }
       </fieldset>
     `;
   }
@@ -253,25 +261,28 @@ function referenceSelectOptions(
 
   switch (property.format) {
     case 'field-ref':
-      return references.siblingFields.map(field => ({ value: field.fieldKey, label: `${field.label} (${field.fieldKey})` }));
+      return references.siblingFields.map((field) => ({ value: field.fieldKey, label: `${field.label} (${field.fieldKey})` }));
     case 'conditional-value-ref':
       if (references.conditionalTargetKind === 'boolean') {
-        return [{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }];
+        return [
+          { value: 'true', label: 'true' },
+          { value: 'false', label: 'false' },
+        ];
       }
       if (references.conditionalTargetKind === 'options' && references.conditionalTargetOptions) {
-        return references.conditionalTargetOptions.map(option => ({ value: option, label: option }));
+        return references.conditionalTargetOptions.map((option) => ({ value: option, label: option }));
       }
       return undefined;
     case 'own-options-ref':
-      return (references.ownOptions ?? []).map(option => ({ value: option, label: option }));
+      return (references.ownOptions ?? []).map((option) => ({ value: option, label: option }));
     case 'calculation-ref':
-      return references.calculationFieldNames.map(name => ({ value: name, label: name }));
+      return references.calculationFieldNames.map((name) => ({ value: name, label: name }));
     case 'stage-ref':
-      return references.stageOptions.map(stage => ({ value: stage.key, label: stage.label }));
+      return references.stageOptions.map((stage) => ({ value: stage.key, label: stage.label }));
     case 'field-or-calc-ref':
       return [
-        ...references.allFields.map(field => ({ value: field.fieldKey, label: `${field.label} (${field.fieldKey})` })),
-        ...references.calculationFieldNames.map(name => ({ value: name, label: `${name} (calculation)` })),
+        ...references.allFields.map((field) => ({ value: field.fieldKey, label: `${field.label} (${field.fieldKey})` })),
+        ...references.calculationFieldNames.map((name) => ({ value: name, label: `${name} (calculation)` })),
       ];
     default:
       return undefined;
@@ -325,7 +336,7 @@ function renderPatternField(
           }}
         >
           <option value="">-- Choose a preset --</option>
-          ${REGEX_PRESETS.map(preset => html`<option value=${preset.pattern}>${preset.label}</option>`)}
+          ${REGEX_PRESETS.map((preset) => html`<option value=${preset.pattern}>${preset.label}</option>`)}
         </select>
       </label>
       <label class="field-block" for=${testerId}>
@@ -394,9 +405,11 @@ function renderScalarLikeField(
           @change=${(event: Event) => onChange(path, (event.currentTarget as HTMLSelectElement).value)}
         >
           ${!property.required ? html`<option value="" ?selected=${!value}>-- Not set --</option>` : nothing}
-          ${referenceOptions.map(option => html`
+          ${referenceOptions.map(
+            (option) => html`
             <option value=${option.value} ?selected=${String(value ?? '') === option.value}>${option.label}</option>
-          `)}
+          `
+          )}
         </select>
         ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
       </label>
@@ -453,9 +466,11 @@ function renderScalarLikeField(
           @change=${(event: Event) => onChange(path, (event.currentTarget as HTMLSelectElement).value)}
         >
           ${!property.required ? html`<option value="" ?selected=${!value}>-- Not set --</option>` : nothing}
-          ${property.allowedValues?.map(option => html`
+          ${property.allowedValues?.map(
+            (option) => html`
             <option value=${option} ?selected=${String(value ?? '') === option}>${option}</option>
-          `)}
+          `
+          )}
         </select>
         ${property.description ? html`<span class="field-help">${property.description}</span>` : nothing}
       </label>
@@ -475,8 +490,8 @@ function renderScalarLikeField(
           @change=${(event: Event) => {
             const next = (event.currentTarget as HTMLTextAreaElement).value
               .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0);
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0);
             onChange(path, next);
           }}
         ></textarea>

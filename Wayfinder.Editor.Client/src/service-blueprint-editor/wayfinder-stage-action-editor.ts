@@ -59,7 +59,13 @@ const BULK_DATASET_COLUMN_SCHEMA: ComponentPropertyDescriptor = {
     { key: 'key', title: 'Column key', description: 'The literal CSV header this column binds to.', valueKind: 'String', required: true },
     { key: 'title', title: 'Title', description: 'Label shown in the review UI.', valueKind: 'String', required: true },
     { key: 'valueKind', title: 'Value kind', valueKind: 'String', required: true, allowedValues: BULK_DATASET_COLUMN_VALUE_KINDS },
-    { key: 'format', title: 'Format', description: 'Optional semantic hint, e.g. "currency", "date".', valueKind: 'String', required: false },
+    {
+      key: 'format',
+      title: 'Format',
+      description: 'Optional semantic hint, e.g. "currency", "date".',
+      valueKind: 'String',
+      required: false,
+    },
     { key: 'role', title: 'Role', valueKind: 'String', required: true, allowedValues: BULK_DATASET_COLUMN_ROLES },
     { key: 'visible', title: 'Visible', valueKind: 'Boolean', required: false, editor: 'toggle', defaultValue: true },
     { key: 'editable', title: 'Editable (Data role only)', valueKind: 'Boolean', required: false, editor: 'toggle' },
@@ -68,33 +74,75 @@ const BULK_DATASET_COLUMN_SCHEMA: ComponentPropertyDescriptor = {
 
 const BULK_DATASET_INGEST_SCHEMA: ComponentPropertyDescriptor[] = [
   {
-    key: 'sourceFileField', title: 'Source file field', valueKind: 'String', format: 'field-ref', required: true,
+    key: 'sourceFileField',
+    title: 'Source file field',
+    valueKind: 'String',
+    format: 'field-ref',
+    required: true,
     description: 'The file to parse — typically a support-system-call action’s own declared file output.',
   },
   {
-    key: 'datasetIdField', title: 'Dataset id field', valueKind: 'String', required: true,
-    description: 'A new field name the minted dataset id is written into — not a field-ref: this name doesn’t exist yet, ingest creates it. A bulk-dataset-materialize action or a bulk-data-review component binds to it.',
-  },
-  { key: 'errorCountField', title: 'Error count field', valueKind: 'String', required: false, description: 'Optional new field name the error row count is written into.' },
-  { key: 'warningCountField', title: 'Warning count field', valueKind: 'String', required: false, description: 'Optional new field name the warning row count is written into.' },
-  { key: 'acceptedCountField', title: 'Accepted count field', valueKind: 'String', required: false, description: 'Optional new field name the accepted row count is written into.' },
-  {
-    key: 'dirtyCountField', title: 'Dirty count field', valueKind: 'String', required: false,
-    description: 'Optional new field name the number of rows currently edited-since-last-check is written into — 0 right after ingest, kept live as corrections/reverts happen while sitting on this stage. Reference it in a showWhen condition (declared under calculations.fields with source: "service") to block finishing until the file is resubmitted or those edits are discarded — see docs/guides/bulk-data-review.md’s sync-state section.',
+    key: 'datasetIdField',
+    title: 'Dataset id field',
+    valueKind: 'String',
+    required: true,
+    description:
+      'A new field name the minted dataset id is written into — not a field-ref: this name doesn’t exist yet, ingest creates it. A bulk-dataset-materialize action or a bulk-data-review component binds to it.',
   },
   {
-    key: 'columns', title: 'Columns', valueKind: 'Array', required: true, items: BULK_DATASET_COLUMN_SCHEMA,
+    key: 'errorCountField',
+    title: 'Error count field',
+    valueKind: 'String',
+    required: false,
+    description: 'Optional new field name the error row count is written into.',
+  },
+  {
+    key: 'warningCountField',
+    title: 'Warning count field',
+    valueKind: 'String',
+    required: false,
+    description: 'Optional new field name the warning row count is written into.',
+  },
+  {
+    key: 'acceptedCountField',
+    title: 'Accepted count field',
+    valueKind: 'String',
+    required: false,
+    description: 'Optional new field name the accepted row count is written into.',
+  },
+  {
+    key: 'dirtyCountField',
+    title: 'Dirty count field',
+    valueKind: 'String',
+    required: false,
+    description:
+      'Optional new field name the number of rows currently edited-since-last-check is written into — 0 right after ingest, kept live as corrections/reverts happen while sitting on this stage. Reference it in a showWhen condition (declared under calculations.fields with source: "service") to block finishing until the file is resubmitted or those edits are discarded — see docs/guides/bulk-data-review.md’s sync-state section.',
+  },
+  {
+    key: 'columns',
+    title: 'Columns',
+    valueKind: 'Array',
+    required: true,
+    items: BULK_DATASET_COLUMN_SCHEMA,
     description: 'One entry per CSV column — the only place this dataset’s shape is authored. Exactly one column must have role RowKey.',
   },
 ];
 
 const BULK_DATASET_MATERIALIZE_SCHEMA: ComponentPropertyDescriptor[] = [
   {
-    key: 'datasetIdField', title: 'Dataset id field', valueKind: 'String', required: true,
-    description: 'Must match a bulk-dataset-ingest action’s own datasetIdField — not a field-ref picker, since it names a field an ingest action elsewhere declares, not one already captured.',
+    key: 'datasetIdField',
+    title: 'Dataset id field',
+    valueKind: 'String',
+    required: true,
+    description:
+      'Must match a bulk-dataset-ingest action’s own datasetIdField — not a field-ref picker, since it names a field an ingest action elsewhere declares, not one already captured.',
   },
   {
-    key: 'targetFileField', title: 'Target file field', valueKind: 'String', format: 'field-ref', required: true,
+    key: 'targetFileField',
+    title: 'Target file field',
+    valueKind: 'String',
+    format: 'field-ref',
+    required: true,
     description: 'The materialized file is written here — typically the same field the original upload went to.',
   },
 ];
@@ -188,9 +236,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
   }
 
   private get _catalogEntries(): ActionCatalogEntry[] {
-    return this.actionCatalog.filter(entry =>
-      availableContexts(entry, this.target).length > 0
-    );
+    return this.actionCatalog.filter((entry) => availableContexts(entry, this.target).length > 0);
   }
 
   private get _pickerEntries(): ActionCatalogEntry[] {
@@ -200,15 +246,13 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
 
     const query = this._picker.query.trim().toLowerCase();
     return this._catalogEntries
-      .filter(entry => entry.appliesTo.includes(this._picker!.context))
-      .filter(entry => {
+      .filter((entry) => entry.appliesTo.includes(this._picker!.context))
+      .filter((entry) => {
         if (!query) {
           return true;
         }
 
-        return [entry.label, entry.type, entry.summary].some(value =>
-          value.toLowerCase().includes(query)
-        );
+        return [entry.label, entry.type, entry.summary].some((value) => value.toLowerCase().includes(query));
       });
   }
 
@@ -250,9 +294,10 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
       return;
     }
 
-    const firstField = row.querySelector<HTMLElement>(`[data-wayfinder-action-param^="${index}-"], [data-wayfinder-stage-action-timing="${index}"]`)
-      ?? row.querySelector<HTMLElement>('input, select, textarea')
-      ?? row.querySelector<HTMLElement>('button:not([disabled])');
+    const firstField =
+      row.querySelector<HTMLElement>(`[data-wayfinder-action-param^="${index}-"], [data-wayfinder-stage-action-timing="${index}"]`) ??
+      row.querySelector<HTMLElement>('input, select, textarea') ??
+      row.querySelector<HTMLElement>('button:not([disabled])');
     row.scrollIntoView({ block: 'nearest' });
     (firstField ?? row).focus();
   }
@@ -298,9 +343,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
 
   private _openPicker(activator?: HTMLElement | null) {
     const firstContext = this.target === 'transition' ? 'transition' : 'stage.onEntry';
-    const firstEntry = this._catalogEntries.find(entry => entry.appliesTo.includes(firstContext))
-      ?? this._catalogEntries[0]
-      ?? null;
+    const firstEntry = this._catalogEntries.find((entry) => entry.appliesTo.includes(firstContext)) ?? this._catalogEntries[0] ?? null;
     this._dialogReturnTarget = activator ?? null;
     this._picker = {
       query: '',
@@ -320,9 +363,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
       return;
     }
 
-    const entry = this._catalogEntries.find(candidate => candidate.type === this._picker?.selectedType)
-      ?? this._pickerEntries[0]
-      ?? null;
+    const entry = this._catalogEntries.find((candidate) => candidate.type === this._picker?.selectedType) ?? this._pickerEntries[0] ?? null;
     if (!entry) {
       return;
     }
@@ -534,7 +575,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     const root = event.currentTarget as HTMLElement;
     const focusable = Array.from(
       root.querySelectorAll<HTMLElement>('button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])')
-    ).filter(element => !element.hasAttribute('disabled') && element.tabIndex >= 0);
+    ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex >= 0);
     if (focusable.length === 0) {
       return;
     }
@@ -551,11 +592,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     }
   }
 
-  private _renderScalarField(
-    index: number,
-    definition: AuthoredParameterDefinition,
-    validation: ReturnType<typeof validateAction>
-  ) {
+  private _renderScalarField(index: number, definition: AuthoredParameterDefinition, validation: ReturnType<typeof validateAction>) {
     const action = this.actions[index];
     if (!action) {
       return nothing;
@@ -565,7 +602,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     const error = validation.propertyErrors[definition.key];
     const editor = definition.editor ?? (definition.allowedValues?.length ? 'select' : undefined);
 
-    if ((editor === 'toggle') || definition.valueKind === 'Boolean') {
+    if (editor === 'toggle' || definition.valueKind === 'Boolean') {
       return html`
         <label class="field-toggle">
           <input
@@ -606,9 +643,11 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
             data-wayfinder-action-param="${index}-${definition.key}"
             @change=${(event: Event) => this._updateActionParam(index, definition.key, (event.currentTarget as HTMLSelectElement).value)}
           >
-            ${definition.allowedValues?.map(option => html`
+            ${definition.allowedValues?.map(
+              (option) => html`
               <option value=${option} ?selected=${String(value ?? '') === option}>${option}</option>
-            `)}
+            `
+            )}
           </select>
           ${definition.description ? html`<span class="field-help">${definition.description}</span>` : nothing}
           ${error ? html`<span class="field-error">${error}</span>` : nothing}
@@ -664,9 +703,10 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
         <button type="button" class="secondary-button" data-wayfinder-add-form-field="${index}" @click=${() => this._addFormField(index)}>
           Add field
         </button>
-        ${fields.length === 0
-          ? html`<p class="section-empty">No fields configured yet.</p>`
-          : html`
+        ${
+          fields.length === 0
+            ? html`<p class="section-empty">No fields configured yet.</p>`
+            : html`
               <ol class="form-field-list">
                 ${fields.map((field, fieldIndex) => {
                   const fieldErrors = validation.formFieldErrors[fieldIndex] ?? {};
@@ -716,9 +756,11 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                             data-wayfinder-form-field-type="${index}-${fieldIndex}"
                             @change=${(event: Event) => this._updateFormField(index, fieldIndex, { type: (event.currentTarget as HTMLSelectElement).value as ActionFormFieldConfig['type'] })}
                           >
-                            ${ACTION_FORM_FIELD_TYPES.map(option => html`
+                            ${ACTION_FORM_FIELD_TYPES.map(
+                              (option) => html`
                               <option value=${option.value} ?selected=${field.type === option.value}>${option.label}</option>
-                            `)}
+                            `
+                            )}
                           </select>
                           ${fieldErrors.type ? html`<span class="field-error">${fieldErrors.type}</span>` : nothing}
                         </label>
@@ -773,8 +815,9 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                           <span>Required</span>
                         </label>
                       </div>
-                      ${field.type === 'select' || field.type === 'radio'
-                        ? html`
+                      ${
+                        field.type === 'select' || field.type === 'radio'
+                          ? html`
                             <label class="field-block field-block-full">
                               <span class="field-label-row">
                                 <span class="field-label">Options</span>
@@ -792,7 +835,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                                   this._updateFormField(index, fieldIndex, {
                                     options: (event.currentTarget as HTMLTextAreaElement).value
                                       .split('\n')
-                                      .map(option => option.trim())
+                                      .map((option) => option.trim())
                                       .filter(Boolean),
                                   })}
                               ></textarea>
@@ -800,7 +843,8 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                               ${fieldErrors.options ? html`<span class="field-error">${fieldErrors.options}</span>` : nothing}
                             </label>
                           `
-                        : nothing}
+                          : nothing
+                      }
                       <div class="action-buttons">
                         <button type="button" class="icon-button" ?disabled=${fieldIndex === 0} @click=${() => this._moveFormField(index, fieldIndex, -1)}>Move up</button>
                         <button type="button" class="icon-button" ?disabled=${fieldIndex === fields.length - 1} @click=${() => this._moveFormField(index, fieldIndex, 1)}>Move down</button>
@@ -810,7 +854,8 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                   `;
                 })}
               </ol>
-            `}
+            `
+        }
       </div>
     `;
   }
@@ -851,8 +896,8 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     }
 
     const params = this._supportSystemCallParams(action);
-    const supportSystem = this.supportSystemCatalog.find(candidate => candidate.key === params.supportSystemKey) ?? null;
-    const capability = supportSystem?.capabilities.find(candidate => candidate.key === params.capabilityKey) ?? null;
+    const supportSystem = this.supportSystemCatalog.find((candidate) => candidate.key === params.supportSystemKey) ?? null;
+    const capability = supportSystem?.capabilities.find((candidate) => candidate.key === params.capabilityKey) ?? null;
 
     const messages: string[] = [];
     if (this.supportSystemCatalog.length === 0) {
@@ -898,9 +943,11 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
               }}
             >
               <option value="" ?selected=${!params.supportSystemKey}>-- Choose a support system --</option>
-              ${this.supportSystemCatalog.map(candidate => html`
+              ${this.supportSystemCatalog.map(
+                (candidate) => html`
                 <option value=${candidate.key} ?selected=${params.supportSystemKey === candidate.key}>${candidate.displayName}</option>
-              `)}
+              `
+              )}
             </select>
             ${supportSystem?.description ? html`<span class="field-help">${supportSystem.description}</span>` : nothing}
           </label>
@@ -917,15 +964,18 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
               }}
             >
               <option value="" ?selected=${!params.capabilityKey}>-- Choose a capability --</option>
-              ${(supportSystem?.capabilities ?? []).map(candidate => html`
+              ${(supportSystem?.capabilities ?? []).map(
+                (candidate) => html`
                 <option value=${candidate.key} ?selected=${params.capabilityKey === candidate.key}>${candidate.displayName}</option>
-              `)}
+              `
+              )}
             </select>
             ${capability?.description ? html`<span class="field-help">${capability.description}</span>` : nothing}
           </label>
         </div>
-        ${capability
-          ? html`
+        ${
+          capability
+            ? html`
               <fieldset class="field-block field-block-full property-object">
                 <legend class="field-label">Inputs</legend>
                 ${renderComponentPropertyFields(capability.inputs, {
@@ -940,20 +990,23 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
               </fieldset>
               <p class="field-help">
                 Outgoing routes from this stage should trigger on one of this capability's outcomes:
-                ${capability.outcomes.map(outcome => outcome.key).join(', ') || '(none declared)'}.
+                ${capability.outcomes.map((outcome) => outcome.key).join(', ') || '(none declared)'}.
               </p>
             `
-          : nothing}
-        ${messages.length > 0
-          ? html`
+            : nothing
+        }
+        ${
+          messages.length > 0
+            ? html`
               <div class="action-validation" data-wayfinder-action-errors="${index}">
                 <p class="action-validation-title">Fix these action details before saving:</p>
                 <ul>
-                  ${messages.map(message => html`<li>${message}</li>`)}
+                  ${messages.map((message) => html`<li>${message}</li>`)}
                 </ul>
               </div>
             `
-          : nothing}
+            : nothing
+        }
       </div>
     `;
   }
@@ -989,7 +1042,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
       if (columns.length === 0) {
         messages.push('Add at least one column.');
       } else {
-        const rowKeyCount = columns.filter(column => column.role === 'RowKey').length;
+        const rowKeyCount = columns.filter((column) => column.role === 'RowKey').length;
         if (rowKeyCount === 0) {
           messages.push('Exactly one column must have role RowKey — none do yet.');
         } else if (rowKeyCount > 1) {
@@ -1020,16 +1073,18 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
           idPrefix: `bulk-dataset-action-${index}`,
           references,
         })}
-        ${messages.length > 0
-          ? html`
+        ${
+          messages.length > 0
+            ? html`
               <div class="action-validation" data-wayfinder-action-errors="${index}">
                 <p class="action-validation-title">Fix these action details before saving:</p>
                 <ul>
-                  ${messages.map(message => html`<li>${message}</li>`)}
+                  ${messages.map((message) => html`<li>${message}</li>`)}
                 </ul>
               </div>
             `
-          : nothing}
+            : nothing
+        }
       </div>
     `;
   }
@@ -1055,29 +1110,33 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     const entry = this._actionEntry(action);
     const validation = validateAction(entry, action);
     const properties = entry?.paramsSchema.properties ?? [];
-    const formFieldsProperty = properties.find(property => property.key === 'fields');
-    const scalarProperties = properties.filter(property => property.key !== 'fields');
+    const formFieldsProperty = properties.find((property) => property.key === 'fields');
+    const scalarProperties = properties.filter((property) => property.key !== 'fields');
 
     return html`
       <div class="action-parameters">
-        ${scalarProperties.length === 0
-          ? nothing
-          : html`
+        ${
+          scalarProperties.length === 0
+            ? nothing
+            : html`
               <div class="field-grid">
-                ${scalarProperties.map(property => this._renderScalarField(index, property, validation))}
+                ${scalarProperties.map((property) => this._renderScalarField(index, property, validation))}
               </div>
-            `}
+            `
+        }
         ${formFieldsProperty && isFormsBackedAction(entry) ? this._renderFormsEditor(index, validation) : nothing}
-        ${validation.messages.length > 0
-          ? html`
+        ${
+          validation.messages.length > 0
+            ? html`
               <div class="action-validation" data-wayfinder-action-errors="${index}">
                 <p class="action-validation-title">Fix these action details before saving:</p>
                 <ul>
-                  ${validation.messages.map(message => html`<li>${message}</li>`)}
+                  ${validation.messages.map((message) => html`<li>${message}</li>`)}
                 </ul>
               </div>
             `
-          : nothing}
+            : nothing
+        }
       </div>
     `;
   }
@@ -1123,18 +1182,21 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                 data-wayfinder-action-picker-context
                 @change=${(event: Event) => {
                   const context = (event.currentTarget as HTMLSelectElement).value as ActionEditorContext;
-                  const firstEntry = this._catalogEntries.find(entry => entry.appliesTo.includes(context)) ?? null;
+                  const firstEntry = this._catalogEntries.find((entry) => entry.appliesTo.includes(context)) ?? null;
                   this._picker = this._picker ? { ...this._picker, context, selectedType: firstEntry?.type ?? null } : null;
                 }}
               >
-                ${(this.target === 'transition' ? ['transition'] : ['stage.onEntry', 'stage.onExit']).map(context => html`
+                ${(this.target === 'transition' ? ['transition'] : ['stage.onEntry', 'stage.onExit']).map(
+                  (context) => html`
                   <option value=${context} ?selected=${this._picker?.context === context}>${contextLabel(context as ActionEditorContext)}</option>
-                `)}
+                `
+                )}
               </select>
             </label>
           </div>
           <div class="picker-list" role="listbox" aria-label="Available actions">
-            ${this._pickerEntries.map(entry => html`
+            ${this._pickerEntries.map(
+              (entry) => html`
               <button
                 type="button"
                 class=${`picker-option ${this._picker?.selectedType === entry.type ? 'selected' : ''}`}
@@ -1146,9 +1208,13 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                 <span class="picker-option-title">${entry.label}</span>
                 <span class="picker-option-type">${entry.type}</span>
                 <span class="picker-option-summary">${entry.summary}</span>
-                <span class="picker-option-meta">${entry.appliesTo.filter(scope => scope !== 'transition' || this.target === 'transition').map(scope => contextLabel(scope as ActionEditorContext)).join(' · ')}</span>
+                <span class="picker-option-meta">${entry.appliesTo
+                  .filter((scope) => scope !== 'transition' || this.target === 'transition')
+                  .map((scope) => contextLabel(scope as ActionEditorContext))
+                  .join(' · ')}</span>
               </button>
-            `)}
+            `
+            )}
             ${this._pickerEntries.length === 0 ? html`<p class="section-empty">No actions match the current filter.</p>` : nothing}
           </div>
           <div class="dialog-actions">
@@ -1198,18 +1264,21 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
         <div class="section-header-row">
           <div>
             <p class="section-copy">
-              ${this.target === 'stage'
-                ? 'Pick actions by stage context, then configure typed parameters or forms-backed fields.'
-                : 'Pick transition actions and configure their parameters here.'}
+              ${
+                this.target === 'stage'
+                  ? 'Pick actions by stage context, then configure typed parameters or forms-backed fields.'
+                  : 'Pick transition actions and configure their parameters here.'
+              }
             </p>
           </div>
           <button type="button" class="secondary-button" data-wayfinder-open-action-picker @click=${(event: Event) => this._openPicker(event.currentTarget as HTMLElement)}>
             Add action
           </button>
         </div>
-        ${this.actions.length === 0
-          ? html`<p class="section-empty">No actions configured for this ${this.subjectLabel}.</p>`
-          : html`
+        ${
+          this.actions.length === 0
+            ? html`<p class="section-empty">No actions configured for this ${this.subjectLabel}.</p>`
+            : html`
               <ol class="action-list">
                 ${this.actions.map((action, index) => {
                   const entry = this._actionEntry(action);
@@ -1261,8 +1330,9 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                         </div>
                       </div>
                       <div class="action-item-controls">
-                        ${this.target === 'stage'
-                          ? html`
+                        ${
+                          this.target === 'stage'
+                            ? html`
                               <label class="field-block compact-field">
                                 <span class="field-label">Timing</span>
                                 <select
@@ -1270,18 +1340,21 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                                   data-wayfinder-stage-action-timing="${index}"
                                   @change=${(event: Event) => this._updateActionTiming(index, event)}
                                 >
-                                  ${contexts.map(context => html`
+                                  ${contexts.map(
+                                    (context) => html`
                                     <option
                                       value=${timingForContext(context)}
                                       ?selected=${contextForTiming(action.timing, this.target) === context}
                                     >
                                       ${contextLabel(context)}
                                     </option>
-                                  `)}
+                                  `
+                                  )}
                                 </select>
                               </label>
                             `
-                          : html`<span class="action-context-pill">${contextLabel('transition')}</span>`}
+                            : html`<span class="action-context-pill">${contextLabel('transition')}</span>`
+                        }
                         <div class="action-buttons">
                           <button type="button" class="icon-button" ?disabled=${index === 0} @click=${() => this._moveAction(index, -1)}>Move up</button>
                           <button type="button" class="icon-button" ?disabled=${index === this.actions.length - 1} @click=${() => this._moveAction(index, 1)}>Move down</button>
@@ -1300,7 +1373,8 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
                   `;
                 })}
               </ol>
-            `}
+            `
+        }
         ${this._renderPickerDialog()}
         ${this._renderDeleteDialog()}
       </div>

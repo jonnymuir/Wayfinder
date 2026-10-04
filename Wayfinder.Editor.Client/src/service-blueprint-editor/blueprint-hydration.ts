@@ -22,17 +22,16 @@ import type {
  * blueprint on every edit, so it must be idempotent and must not delete a half-typed entry.
  */
 /** Every property of T must be produced, with its real type: a property added to the C# model cannot be dropped here silently. */
-type OptionalKeys<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[keyof T];
-type Complete<T> =
-  { [K in Exclude<keyof T, OptionalKeys<T>>]: T[K] }
-  & { [K in OptionalKeys<T>]: T[K] | undefined };
+type OptionalKeys<T> = { [K in keyof T]-?: Record<never, never> extends Pick<T, K> ? K : never }[keyof T];
+type Complete<T> = { [K in Exclude<keyof T, OptionalKeys<T>>]: T[K] } & { [K in OptionalKeys<T>]: T[K] | undefined };
 
 export function hydrateServiceBlueprintDefinition(serviceBlueprint: unknown): ServiceBlueprint {
   const root = asRecord(serviceBlueprint);
   const queues = dedupeByKey(
     asArray<Record<string, unknown>>(root.queues)
-      .map(normaliseQueueDefinition).filter((queue): queue is Complete<QueueDefinition> => queue !== null),
-    queue => queue.key
+      .map(normaliseQueueDefinition)
+      .filter((queue): queue is Complete<QueueDefinition> => queue !== null),
+    (queue) => queue.key
   );
   const stages = asArray<Record<string, unknown>>(root.stages).map(normaliseStage);
   const handoffs = asArray<HandoffDefinition>(root.handoffs);
@@ -51,9 +50,10 @@ export function hydrateServiceBlueprintDefinition(serviceBlueprint: unknown): Se
     queues,
     stages,
     gateways: asArray<Record<string, unknown>>(root.gateways).map(normaliseGateway),
-    calculations: root.calculations && typeof root.calculations === 'object' && !Array.isArray(root.calculations)
-      ? root.calculations as ServiceBlueprintCalculationSet
-      : undefined,
+    calculations:
+      root.calculations && typeof root.calculations === 'object' && !Array.isArray(root.calculations)
+        ? (root.calculations as ServiceBlueprintCalculationSet)
+        : undefined,
     layout: sanitiseLayoutBlock(root.layout),
     handoffs: handoffs.length > 0 ? handoffs : undefined,
     tags: Object.keys(tags).length > 0 ? tags : undefined,
@@ -66,10 +66,7 @@ function sanitisePositionRecord(value: unknown): Record<string, NodePosition> {
   const entries: Record<string, NodePosition> = {};
   for (const [key, raw] of Object.entries(record)) {
     const position = asRecord(raw);
-    if (
-      typeof position.x === 'number' && Number.isFinite(position.x)
-      && typeof position.y === 'number' && Number.isFinite(position.y)
-    ) {
+    if (typeof position.x === 'number' && Number.isFinite(position.x) && typeof position.y === 'number' && Number.isFinite(position.y)) {
       entries[key] = { x: position.x, y: position.y };
     }
   }
@@ -100,24 +97,22 @@ function firstString(...values: unknown[]): string | undefined {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? value as T[] : [];
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
 function asStringArray(value: unknown): string[] {
   return asArray<unknown>(value)
     .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
-    .map(entry => entry.trim());
+    .map((entry) => entry.trim());
 }
 
 function dedupeByKey<T>(items: T[], keyFor: (item: T) => string): T[] {
   const seen = new Set<string>();
-  return items.filter(item => {
+  return items.filter((item) => {
     const key = keyFor(item);
     if (!key || seen.has(key)) {
       return false;
@@ -165,8 +160,8 @@ function normaliseRoute(rawRoute: Record<string, unknown>, sourceKey: string): C
 
 function normaliseRoutes(rawRoutes: unknown, sourceKey: string): ServiceBlueprintRouteDefinition[] {
   return dedupeByKey(
-    asArray<Record<string, unknown>>(rawRoutes).map(route => normaliseRoute(route, sourceKey)),
-    route => route.id
+    asArray<Record<string, unknown>>(rawRoutes).map((route) => normaliseRoute(route, sourceKey)),
+    (route) => route.id
   );
 }
 
@@ -193,7 +188,7 @@ function normaliseStageValidations(value: unknown): Complete<ServiceBlueprintSta
   // this exact normalisation on every edit (see hydrateServiceBlueprintDefinition's callers), so
   // filtering out an all-blank entry would delete a rule the instant it's added, before an author
   // has typed anything into it. Same tolerance routes/fields already get mid-edit.
-  return asArray<Record<string, unknown>>(value).map(raw => ({
+  return asArray<Record<string, unknown>>(value).map((raw) => ({
     code: firstString(raw.code) ?? '',
     when: firstString(raw.when),
     rule: firstString(raw.rule) ?? '',

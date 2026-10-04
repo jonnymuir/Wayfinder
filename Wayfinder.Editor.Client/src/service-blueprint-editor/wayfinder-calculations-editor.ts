@@ -1,10 +1,21 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import type { ServiceBlueprint, StageDefinition, ServiceBlueprintStageValidationRule, ComponentDescriptor, ServiceBlueprintCalculationSet } from './types.js';
+import type {
+  ServiceBlueprint,
+  StageDefinition,
+  ServiceBlueprintStageValidationRule,
+  ComponentDescriptor,
+  ServiceBlueprintCalculationSet,
+} from './types.js';
 import { collectStageInputFields, type FieldReference } from './component-property-references.js';
 import { computeStableFieldOrder, type FieldInput } from './calculation-ordering.js';
-import { inScopeInputFieldKeys, tryEvaluateFieldsForPreview, tryEvaluateSeriesForPreview, tryParseExpression } from './calculation-runtime.js';
+import {
+  inScopeInputFieldKeys,
+  tryEvaluateFieldsForPreview,
+  tryEvaluateSeriesForPreview,
+  tryParseExpression,
+} from './calculation-runtime.js';
 import { computeCalculationDiagnostics } from './calculation-diagnostics.js';
 import './wayfinder-calculation-expression-editor.js';
 import type { ExpressionCompletionItem } from './wayfinder-calculation-expression-editor.js';
@@ -45,7 +56,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   }
 
   private get _allInputFields(): FieldReference[] {
-    const allComponents = (this.serviceBlueprint?.stages ?? []).flatMap(stage => stage.components ?? []);
+    const allComponents = (this.serviceBlueprint?.stages ?? []).flatMap((stage) => stage.components ?? []);
     return collectStageInputFields(allComponents, this.componentCatalog);
   }
 
@@ -96,9 +107,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   }
 
   private _emitServiceBlueprintUpdated(next: ServiceBlueprint) {
-    this.dispatchEvent(
-      new CustomEvent('service-blueprint-updated', { detail: { serviceBlueprint: next }, bubbles: true, composed: true })
-    );
+    this.dispatchEvent(new CustomEvent('service-blueprint-updated', { detail: { serviceBlueprint: next }, bubbles: true, composed: true }));
   }
 
   private _updateCalculations(next: ServiceBlueprintCalculationSet) {
@@ -135,7 +144,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
 
     if (orderResult.moved.length > 0) {
       this._announce(
-        orderResult.moved.map(move => `Moved "${move.name}" after "${move.movedAfter}" because it now depends on it.`).join(' ')
+        orderResult.moved.map((move) => `Moved "${move.name}" after "${move.movedAfter}" because it now depends on it.`).join(' ')
       );
     }
 
@@ -163,7 +172,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     delete fields[name];
     this._updateFields(
       fields,
-      order.filter(existing => existing !== name)
+      order.filter((existing) => existing !== name)
     );
     this._announce(`${name} deleted.`);
   }
@@ -180,7 +189,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     }
     this._updateFields(
       next,
-      order.map(existing => (existing === oldName ? trimmed : existing))
+      order.map((existing) => (existing === oldName ? trimmed : existing))
     );
   }
 
@@ -218,7 +227,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     if (collidingFieldNames.has(name)) {
       return `Collides with an input field's own fieldKey ("${name}").`;
     }
-    if (order.filter(existing => existing === name).length > 1) {
+    if (order.filter((existing) => existing === name).length > 1) {
       return 'Duplicate field name.';
     }
     return null;
@@ -229,10 +238,8 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     const order = Object.keys(fields);
     const preview = tryEvaluateFieldsForPreview(this._calculations, this._sampleInputs);
     const diagnostics = this._diagnostics;
-    const collidingFieldNames = new Set(
-      diagnostics.filter(d => d.kind === 'field-name-collision').map(d => d.field)
-    );
-    const cycle = diagnostics.find(d => d.kind === 'field-cycle');
+    const collidingFieldNames = new Set(diagnostics.filter((d) => d.kind === 'field-name-collision').map((d) => d.field));
+    const cycle = diagnostics.find((d) => d.kind === 'field-cycle');
     const tableNames = Object.keys(this._calculations.tables ?? {});
 
     return html`
@@ -242,22 +249,23 @@ export class WayfinderCalculationsEditorElement extends LitElement {
           <span class="calc-section-meta">${order.length}</span>
         </summary>
 
-        ${cycle
-          ? html`
+        ${
+          cycle
+            ? html`
               <div class="calc-cycle-banner" role="alert">
                 Circular dependency: ${cycle.fields.join(' → ')} → ${cycle.fields[0]}.
                 These fields reference each other in a loop and can never be ordered — fix one of
                 these expressions before saving.
               </div>
             `
-          : nothing}
+            : nothing
+        }
 
         <ul class="calc-field-list">
           ${repeat(
             order,
-            name => name,
-            (name, index) =>
-              this._renderFieldRow(name, fields[name], order, index, preview.results[name], collidingFieldNames, tableNames)
+            (name) => name,
+            (name, index) => this._renderFieldRow(name, fields[name], order, index, preview.results[name], collidingFieldNames, tableNames)
           )}
         </ul>
 
@@ -279,9 +287,9 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     const nameError = this._fieldNameError(name, order, collidingFieldNames);
 
     const completions: ExpressionCompletionItem[] = [
-      ...this._allInputFields.map(input => ({ name: input.fieldKey, detail: input.label })),
-      ...order.slice(0, index).map(earlier => ({ name: earlier, detail: 'field' })),
-      ...tableNames.map(table => ({ name: table, detail: 'table' })),
+      ...this._allInputFields.map((input) => ({ name: input.fieldKey, detail: input.label })),
+      ...order.slice(0, index).map((earlier) => ({ name: earlier, detail: 'field' })),
+      ...tableNames.map((table) => ({ name: table, detail: 'table' })),
     ];
 
     return html`
@@ -314,10 +322,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
           >Delete</button>
         </div>
 
-        ${isService
-          ? html`<p class="calc-field-service-note">Supplied by the host at runtime (e.g. a record fetched
+        ${
+          isService
+            ? html`<p class="calc-field-service-note">Supplied by the host at runtime (e.g. a record fetched
               from a system of record) — no expression to author here.</p>`
-          : html`
+            : html`
               <div class="calc-field-row-body">
                 <div class="field-block calc-expression-block">
                   <span class="field-label" id="${name}-expr-label">Expression</span>
@@ -325,14 +334,15 @@ export class WayfinderCalculationsEditorElement extends LitElement {
                     .value=${field.expr ?? ''}
                     .completions=${completions}
                     label-text="${name} expression"
-                    @expression-input=${(event: CustomEvent<{ value: string }>) =>
-                      this._setFieldExpr(name, event.detail.value, order)}
+                    @expression-input=${(event: CustomEvent<{ value: string }>) => this._setFieldExpr(name, event.detail.value, order)}
                   ></wayfinder-calculation-expression-editor>
-                  ${result?.status === 'ok'
-                    ? html`<span class="calc-preview calc-preview-ok" data-wayfinder-calc-field-preview>= ${result.display}</span>`
-                    : result?.status === 'error'
-                      ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-field-preview>${result.message}</span>`
-                      : nothing}
+                  ${
+                    result?.status === 'ok'
+                      ? html`<span class="calc-preview calc-preview-ok" data-wayfinder-calc-field-preview>= ${result.display}</span>`
+                      : result?.status === 'error'
+                        ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-field-preview>${result.message}</span>`
+                        : nothing
+                  }
                 </div>
 
                 <label class="field-block">
@@ -347,7 +357,8 @@ export class WayfinderCalculationsEditorElement extends LitElement {
                   </select>
                 </label>
               </div>
-            `}
+            `
+        }
       </li>
     `;
   }
@@ -461,7 +472,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
         </summary>
 
         <ul class="calc-field-list">
-          ${repeat(names, name => name, name => this._renderTableRow(name, tables[name]))}
+          ${repeat(
+            names,
+            (name) => name,
+            (name) => this._renderTableRow(name, tables[name])
+          )}
         </ul>
 
         <button type="button" class="secondary-button" @click=${() => this._addTable()}>+ Add table</button>
@@ -646,7 +661,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
         </summary>
 
         <ul class="calc-field-list">
-          ${repeat(names, name => name, name => this._renderSeriesRow(name, series[name], fieldScope))}
+          ${repeat(
+            names,
+            (name) => name,
+            (name) => this._renderSeriesRow(name, series[name], fieldScope)
+          )}
         </ul>
 
         <button type="button" class="secondary-button" @click=${() => this._addSeries()}>+ Add series</button>
@@ -661,14 +680,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     // only see earlier-declared fields) all of them are always in scope here — no order slicing
     // needed.
     const completions: ExpressionCompletionItem[] = [
-      ...this._allInputFields.map(input => ({ name: input.fieldKey, detail: input.label })),
-      ...Object.keys(this._calculations.fields).map(field => ({ name: field, detail: 'field' })),
-      ...Object.keys(this._calculations.tables ?? {}).map(table => ({ name: table, detail: 'table' })),
+      ...this._allInputFields.map((input) => ({ name: input.fieldKey, detail: input.label })),
+      ...Object.keys(this._calculations.fields).map((field) => ({ name: field, detail: 'field' })),
+      ...Object.keys(this._calculations.tables ?? {}).map((table) => ({ name: table, detail: 'table' })),
     ];
-    const valuesCompletions: ExpressionCompletionItem[] = [
-      ...completions,
-      { name: definition.over, detail: 'loop variable' },
-    ];
+    const valuesCompletions: ExpressionCompletionItem[] = [...completions, { name: definition.over, detail: 'loop variable' }];
 
     return html`
       <li class="calc-field-row" data-wayfinder-calc-series=${name}>
@@ -742,13 +758,15 @@ export class WayfinderCalculationsEditorElement extends LitElement {
         </ul>
         <button type="button" class="secondary-button" @click=${() => this._addSeriesColumn(name)}>+ Add column</button>
 
-        ${preview.status === 'ok'
-          ? html`
+        ${
+          preview.status === 'ok'
+            ? html`
               <p class="calc-preview calc-preview-ok" data-wayfinder-calc-series-preview>
                 ${preview.rows.length} row${preview.rows.length === 1 ? '' : 's'} computed.
               </p>
             `
-          : html`<p class="calc-preview calc-preview-error" data-wayfinder-calc-series-preview>${preview.message}</p>`}
+            : html`<p class="calc-preview calc-preview-error" data-wayfinder-calc-series-preview>${preview.message}</p>`
+        }
       </li>
     `;
   }
@@ -767,9 +785,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     if (!this.serviceBlueprint) {
       return;
     }
-    const stages = this.serviceBlueprint.stages.map(stage =>
-      stage.stageKey === stageKey ? { ...stage, ...patch } : stage
-    );
+    const stages = this.serviceBlueprint.stages.map((stage) => (stage.stageKey === stageKey ? { ...stage, ...patch } : stage));
     this._emitServiceBlueprintUpdated({ ...this.serviceBlueprint, stages });
   }
 
@@ -815,7 +831,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
         </p>
 
         ${stages.map(
-          stage => html`
+          (stage) => html`
             <div class="calc-validations-stage">
               <h4 class="calc-validations-stage-title">${stage.displayName} <span class="calc-section-meta">(${stage.stageKey})</span></h4>
               <ul class="calc-field-list">
@@ -836,15 +852,15 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   private _renderValidationRow(stage: StageDefinition, rule: ServiceBlueprintStageValidationRule, index: number) {
     const stageFields = collectStageInputFields(stage.components, this.componentCatalog);
     const completions: ExpressionCompletionItem[] = [
-      ...this._allInputFields.map(input => ({ name: input.fieldKey, detail: input.label })),
-      ...Object.keys(this._calculations.fields).map(name => ({ name, detail: 'field' })),
+      ...this._allInputFields.map((input) => ({ name: input.fieldKey, detail: input.label })),
+      ...Object.keys(this._calculations.fields).map((name) => ({ name, detail: 'field' })),
     ];
 
     // Same parse check stageValidationRuleIssues() (service-blueprint-validation.ts) blocks Save
     // with — shown here too so the error is visible right where it was typed, not just in the
     // Validation tab, matching how a calc field's own parse error already surfaces inline
     // (calc-preview-error above) rather than only in the validation rail.
-    const whenParse = rule.when && rule.when.trim() ? tryParseExpression(rule.when) : null;
+    const whenParse = rule.when?.trim() ? tryParseExpression(rule.when) : null;
     const ruleParse = tryParseExpression(rule.rule);
 
     return html`
@@ -870,7 +886,8 @@ export class WayfinderCalculationsEditorElement extends LitElement {
             >
               <option value="" ?selected=${!rule.field}>-- Stage-level (no field) --</option>
               ${stageFields.map(
-                field => html`<option value=${field.fieldKey} ?selected=${field.fieldKey === rule.field}>${field.label} (${field.fieldKey})</option>`
+                (field) =>
+                  html`<option value=${field.fieldKey} ?selected=${field.fieldKey === rule.field}>${field.label} (${field.fieldKey})</option>`
               )}
             </select>
           </label>
@@ -893,9 +910,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
               @expression-input=${(event: CustomEvent<{ value: string }>) =>
                 this._setValidation(stage, index, { when: event.detail.value || undefined })}
             ></wayfinder-calculation-expression-editor>
-            ${whenParse && !whenParse.ok
-              ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-validation-preview>${whenParse.message}</span>`
-              : nothing}
+            ${
+              whenParse && !whenParse.ok
+                ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-validation-preview>${whenParse.message}</span>`
+                : nothing
+            }
           </div>
 
           <div class="field-block calc-expression-block">
@@ -906,9 +925,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
               label-text="${rule.code || 'validation'} rule"
               @expression-input=${(event: CustomEvent<{ value: string }>) => this._setValidation(stage, index, { rule: event.detail.value })}
             ></wayfinder-calculation-expression-editor>
-            ${!ruleParse.ok
-              ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-validation-preview>${ruleParse.message}</span>`
-              : nothing}
+            ${
+              !ruleParse.ok
+                ? html`<span class="calc-preview calc-preview-error" data-wayfinder-calc-validation-preview>${ruleParse.message}</span>`
+                : nothing
+            }
           </div>
 
           <label class="field-block">

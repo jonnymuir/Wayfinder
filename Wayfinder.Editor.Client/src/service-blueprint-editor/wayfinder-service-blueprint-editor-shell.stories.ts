@@ -41,9 +41,10 @@ function buildServiceBlueprint(seed: ServiceBlueprintSeed): ServiceBlueprint {
   const gatewayKeyFor = (stageKey: string) => `route-from-${stageKey}`;
   const builtStages = stages.map((stage, index) => ({
     ...stage,
-    routes: index < stages.length - 1
-      ? [{ id: `${stage.stageKey}--route--${gatewayKeyFor(stage.stageKey)}`, target: gatewayKeyFor(stage.stageKey), trigger: 'route' }]
-      : [],
+    routes:
+      index < stages.length - 1
+        ? [{ id: `${stage.stageKey}--route--${gatewayKeyFor(stage.stageKey)}`, target: gatewayKeyFor(stage.stageKey), trigger: 'route' }]
+        : [],
   }));
   return {
     ...serviceBlueprint,

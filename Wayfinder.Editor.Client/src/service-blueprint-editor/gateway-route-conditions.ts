@@ -21,13 +21,13 @@ export const TRANSITION_ACTION_OPTIONS = [
 ] as const;
 
 export function transitionQuickAction(action?: string): string {
-  return TRANSITION_ACTION_OPTIONS.some(option => option.value === (action ?? '').trim().toLowerCase())
+  return TRANSITION_ACTION_OPTIONS.some((option) => option.value === (action ?? '').trim().toLowerCase())
     ? (action ?? '').trim().toLowerCase()
     : 'custom';
 }
 
 export function defaultTransitionTarget(serviceBlueprint: ServiceBlueprint, sourceStageKey: string): string | null {
-  const currentIndex = serviceBlueprint.stages.findIndex(stage => stage.stageKey === sourceStageKey);
+  const currentIndex = serviceBlueprint.stages.findIndex((stage) => stage.stageKey === sourceStageKey);
   if (currentIndex >= 0) {
     const nextStage = serviceBlueprint.stages[currentIndex + 1];
     if (nextStage) {
@@ -35,7 +35,7 @@ export function defaultTransitionTarget(serviceBlueprint: ServiceBlueprint, sour
     }
   }
 
-  return serviceBlueprint.stages.find(stage => stage.stageKey !== sourceStageKey)?.stageKey ?? null;
+  return serviceBlueprint.stages.find((stage) => stage.stageKey !== sourceStageKey)?.stageKey ?? null;
 }
 
 export function defaultTransitionAction(serviceBlueprint: ServiceBlueprint, targetStageKey: string): string {

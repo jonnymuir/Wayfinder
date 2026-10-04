@@ -1,4 +1,13 @@
-import type { NodePosition, ServiceBlueprintGatewayDefinition, ServiceBlueprintLayoutDefinition, ServiceBlueprintRouteDefinition, StageDefinition, ServiceBlueprintStageValidationRule, ServiceBlueprint, QueueDefinition } from './types.js';
+import type {
+  NodePosition,
+  ServiceBlueprintGatewayDefinition,
+  ServiceBlueprintLayoutDefinition,
+  ServiceBlueprintRouteDefinition,
+  StageDefinition,
+  ServiceBlueprintStageValidationRule,
+  ServiceBlueprint,
+  QueueDefinition,
+} from './types.js';
 
 /** A serialiser must name every property of the model it writes, so a property added to the C# model cannot be dropped silently. */
 type Serialised<T> = { [K in keyof T]-?: unknown };
@@ -99,9 +108,7 @@ function serialisableState(stage: StageDefinition): Serialised<StageDefinition> 
     actions: stage.actions,
     roleGates: stage.roleGates,
     icon: stage.icon,
-    validations: (stage.validations ?? []).length > 0
-      ? (stage.validations ?? []).map(serialisableStageValidation)
-      : undefined,
+    validations: (stage.validations ?? []).length > 0 ? (stage.validations ?? []).map(serialisableStageValidation) : undefined,
   };
 }
 
@@ -155,7 +162,9 @@ function wholePixels(positions: Record<string, NodePosition> | undefined): Recor
   return Object.fromEntries(entries.map(([key, position]) => [key, { x: Math.round(position.x), y: Math.round(position.y) }]));
 }
 
-function serialisableLayout(layout: ServiceBlueprintLayoutDefinition | undefined): Serialised<ServiceBlueprintLayoutDefinition> | undefined {
+function serialisableLayout(
+  layout: ServiceBlueprintLayoutDefinition | undefined
+): Serialised<ServiceBlueprintLayoutDefinition> | undefined {
   const nodes = wholePixels(layout?.nodes);
   const routes = wholePixels(layout?.routes);
   return nodes || routes ? { nodes, routes } : undefined;
@@ -222,10 +231,7 @@ export function serializeAuthoredServiceBlueprint(serviceBlueprint: ServiceBluep
   return JSON.stringify(canonical, null, 2);
 }
 
-export function authoredServiceBlueprintJsonEquals(
-  left: ServiceBlueprint | null,
-  right: ServiceBlueprint | null
-): boolean {
+export function authoredServiceBlueprintJsonEquals(left: ServiceBlueprint | null, right: ServiceBlueprint | null): boolean {
   if (!left && !right) {
     return true;
   }

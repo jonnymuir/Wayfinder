@@ -5,11 +5,7 @@ import type {
   RouteView,
   ServiceBlueprintLayoutDefinition,
 } from '../types.js';
-import {
-  deriveGatewayBindings,
-  gatewayQueueKey,
-  type GatewayBinding,
-} from '../gateway-representation.js';
+import { deriveGatewayBindings, gatewayQueueKey, type GatewayBinding } from '../gateway-representation.js';
 import { flattenRoutes } from '../route-model.js';
 import {
   stageQueueDescription,
@@ -204,7 +200,7 @@ export function laneForPosition(lanes: LaneGeometry[], centerX: number): LaneGeo
   if (lanes.length === 0) {
     return null;
   }
-  const containing = lanes.find(lane => centerX >= lane.x && centerX <= lane.x + lane.width);
+  const containing = lanes.find((lane) => centerX >= lane.x && centerX <= lane.x + lane.width);
   if (containing) {
     return containing;
   }
@@ -223,10 +219,7 @@ function gatewayQueueKeyWithFallback(gateway: ServiceBlueprintGatewayDefinition)
   return gatewayQueueKey(gateway) || 'public';
 }
 
-export function computeTopology(
-  serviceBlueprint: ServiceBlueprint | null,
-  availableQueues: QueueDefinition[] = []
-): GraphTopology {
+export function computeTopology(serviceBlueprint: ServiceBlueprint | null, availableQueues: QueueDefinition[] = []): GraphTopology {
   const stages = serviceBlueprint?.stages ?? [];
   const transitions = flattenRoutes(serviceBlueprint);
   const gatewayBindings = serviceBlueprint ? deriveGatewayBindings(serviceBlueprint) : [];
@@ -249,7 +242,7 @@ export function computeTopology(
       height: NODE_HEIGHT,
     };
   });
-  const gatewayNodes: GatewayTopologyNode[] = gatewayBindings.map(binding => {
+  const gatewayNodes: GatewayTopologyNode[] = gatewayBindings.map((binding) => {
     const surface = stageSurface(binding.gateway);
     const queueKey = binding.queueKey || gatewayQueueKeyWithFallback(binding.gateway);
     const size = gatewayNodeSize(binding.gateway);
@@ -280,17 +273,21 @@ export function computeTopology(
     queueStateByKey.set(queueKey, { surface, stageCount: isStage ? 1 : 0 });
     queueOrder.push(queueKey);
   };
-  stageNodes.forEach(node => ensureQueue(node.queueKey, node.surface, true));
-  gatewayNodes.forEach(node => ensureQueue(node.queueKey, node.surface, false));
+  for (const node of stageNodes) {
+    ensureQueue(node.queueKey, node.surface, true);
+  }
+  for (const node of gatewayNodes) {
+    ensureQueue(node.queueKey, node.surface, false);
+  }
 
   // 2. Adjacency graph spanning stages and gateways. Each gateway is wired
   //    to its anchor stage (split: stage→gateway) so the topological sort
   //    produces a stage → gateway → stage reading.
   const nodes: GraphTopologyNode[] = [...stageNodes, ...gatewayNodes];
-  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const nodeOrder = new Map(nodes.map((node, index) => [node.id, index]));
   const adjacency = new Map<string, Set<string>>();
-  const inDegree = new Map<string, number>(nodes.map(node => [node.id, 0]));
+  const inDegree = new Map<string, number>(nodes.map((node) => [node.id, 0]));
   const edgeTransitionIndices = new Map<string, Set<number>>();
 
   const addEdge = (fromId: string, toId: string, transitionIndex?: number | number[]) => {
@@ -306,22 +303,20 @@ export function computeTopology(
       outgoing.add(toId);
       inDegree.set(toId, (inDegree.get(toId) ?? 0) + 1);
     }
-    const indices = transitionIndex === undefined
-      ? []
-      : Array.isArray(transitionIndex)
-        ? transitionIndex
-        : [transitionIndex];
+    const indices = transitionIndex === undefined ? [] : Array.isArray(transitionIndex) ? transitionIndex : [transitionIndex];
     if (indices.length > 0) {
       const key = `${fromId}->${toId}`;
       const existing = edgeTransitionIndices.get(key) ?? new Set<number>();
-      indices.forEach(index => existing.add(index));
+      for (const index of indices) {
+        existing.add(index);
+      }
       edgeTransitionIndices.set(key, existing);
     }
   };
 
   const splitGatewayKeyByAnchorStage = new Map<string, string>();
 
-  gatewayNodes.forEach(node => {
+  gatewayNodes.forEach((node) => {
     const anchorStageKey = node.binding.anchorStageKey;
     if (!anchorStageKey) {
       return;
@@ -353,8 +348,8 @@ export function computeTopology(
     // after the first through the first route's gateway instead of the
     // stage itself — fabricating an edge between two unrelated gateways
     // that never appears in the authored JSON.
-    const sourceGatewayKey = transition.fromGateway
-      ?? (targetGatewayKey ? null : splitGatewayKeyByAnchorStage.get(transition.fromStage) ?? null);
+    const sourceGatewayKey =
+      transition.fromGateway ?? (targetGatewayKey ? null : (splitGatewayKeyByAnchorStage.get(transition.fromStage) ?? null));
     const sourceGatewayId = sourceGatewayKey ? gatewayNodeId(sourceGatewayKey) : null;
     const targetGatewayId = targetGatewayKey ? gatewayNodeId(targetGatewayKey) : null;
 
@@ -370,8 +365,7 @@ export function computeTopology(
     addEdge(routedSourceId, targetStageId, index);
   });
 
-  const byIntroductionOrder = (left: string, right: string) =>
-    (nodeOrder.get(left) ?? 0) - (nodeOrder.get(right) ?? 0);
+  const byIntroductionOrder = (left: string, right: string) => (nodeOrder.get(left) ?? 0) - (nodeOrder.get(right) ?? 0);
 
   // 2b. Remove backward edges so Kahn's stays a DAG. Any route that closes a
   //     cycle back to an earlier point in the graph — not just a Join
@@ -402,7 +396,7 @@ export function computeTopology(
     dfsState.set(fromId, 'visiting');
     const neighbors = adjacency.get(fromId);
     if (neighbors) {
-      [...neighbors].sort(byIntroductionOrder).forEach(toId => {
+      [...neighbors].sort(byIntroductionOrder).forEach((toId) => {
         const state = dfsState.get(toId);
         if (state === 'visiting') {
           neighbors.delete(toId);
@@ -418,15 +412,15 @@ export function computeTopology(
     dfsState.set(fromId, 'done');
   };
   nodes
-    .map(node => node.id)
-    .filter(id => (inDegree.get(id) ?? 0) === 0)
+    .map((node) => node.id)
+    .filter((id) => (inDegree.get(id) ?? 0) === 0)
     .sort(byIntroductionOrder)
-    .forEach(id => {
+    .forEach((id) => {
       if (!dfsState.has(id)) {
         visitForBackEdges(id);
       }
     });
-  nodes.forEach(node => {
+  nodes.forEach((node) => {
     if (!dfsState.has(node.id)) {
       visitForBackEdges(node.id);
     }
@@ -434,12 +428,12 @@ export function computeTopology(
 
   // 3. Row-rank via longest-path (Kahn's algorithm): rank(B) > rank(A) for
   //    every forward edge A→B regardless of lane.
-  const ranks = new Map<string, number>(nodes.map(node => [node.id, 0]));
+  const ranks = new Map<string, number>(nodes.map((node) => [node.id, 0]));
   const inDegreeCopy = new Map(inDegree);
 
   const queue = nodes
-    .map(node => node.id)
-    .filter(id => (inDegreeCopy.get(id) ?? 0) === 0)
+    .map((node) => node.id)
+    .filter((id) => (inDegreeCopy.get(id) ?? 0) === 0)
     .sort(byIntroductionOrder);
 
   while (queue.length > 0) {
@@ -449,18 +443,16 @@ export function computeTopology(
     if (!neighbours) {
       continue;
     }
-    [...neighbours]
-      .sort(byIntroductionOrder)
-      .forEach(nextId => {
-        ranks.set(nextId, Math.max(ranks.get(nextId) ?? 0, currentRank + 1));
+    [...neighbours].sort(byIntroductionOrder).forEach((nextId) => {
+      ranks.set(nextId, Math.max(ranks.get(nextId) ?? 0, currentRank + 1));
 
-        const nextInDegree = (inDegreeCopy.get(nextId) ?? 0) - 1;
-        inDegreeCopy.set(nextId, nextInDegree);
-        if (nextInDegree === 0) {
-          queue.push(nextId);
-          queue.sort(byIntroductionOrder);
-        }
-      });
+      const nextInDegree = (inDegreeCopy.get(nextId) ?? 0) - 1;
+      inDegreeCopy.set(nextId, nextInDegree);
+      if (nextInDegree === 0) {
+        queue.push(nextId);
+        queue.sort(byIntroductionOrder);
+      }
+    });
   }
 
   // Per-authored-transition visual endpoints and hosting edge (the final hop
@@ -475,14 +467,11 @@ export function computeTopology(
     // See the matching guard in the adjacency-building loop above: a route
     // that already resolves its own target gateway needs no source-side
     // anchor fallback.
-    const sourceGatewayKey = transition.fromGateway
-      ?? (transition.toGateway ? null : splitGatewayKeyByAnchorStage.get(transition.fromStage) ?? null);
-    const sourceGatewayId = sourceGatewayKey && nodeById.has(gatewayNodeId(sourceGatewayKey))
-      ? gatewayNodeId(sourceGatewayKey)
-      : null;
-    const targetGatewayId = transition.toGateway && nodeById.has(gatewayNodeId(transition.toGateway))
-      ? gatewayNodeId(transition.toGateway)
-      : null;
+    const sourceGatewayKey =
+      transition.fromGateway ?? (transition.toGateway ? null : (splitGatewayKeyByAnchorStage.get(transition.fromStage) ?? null));
+    const sourceGatewayId = sourceGatewayKey && nodeById.has(gatewayNodeId(sourceGatewayKey)) ? gatewayNodeId(sourceGatewayKey) : null;
+    const targetGatewayId =
+      transition.toGateway && nodeById.has(gatewayNodeId(transition.toGateway)) ? gatewayNodeId(transition.toGateway) : null;
     const targetStageId = stageNodeId(transition.toStage);
 
     const effectiveSourceId = nodeById.has(sourceStageId) ? sourceStageId : sourceGatewayId;
@@ -531,7 +520,7 @@ export function computeTopology(
   // graph-model.ts give approve/reject (etc.) their own exit/entry points
   // rather than a single shared anchor both curves have to converge on.
   const bindingsByPairKey = new Map<string, TransitionBinding[]>();
-  provisionalBindings.forEach(binding => {
+  provisionalBindings.forEach((binding) => {
     if (!binding.edgeKey) {
       return;
     }
@@ -540,7 +529,7 @@ export function computeTopology(
     bindingsByPairKey.set(binding.edgeKey, siblings);
   });
 
-  const transitionBindings: TransitionBinding[] = provisionalBindings.map(binding => {
+  const transitionBindings: TransitionBinding[] = provisionalBindings.map((binding) => {
     if (!binding.edgeKey) {
       return binding;
     }
@@ -564,7 +553,7 @@ export function computeTopology(
     const siblings = bindingsByPairKey.get(key);
 
     if (siblings && siblings.length > 1) {
-      siblings.forEach(binding => {
+      siblings.forEach((binding) => {
         edges.push({
           key: `${key}#${binding.index}`,
           fromId,
@@ -589,14 +578,16 @@ export function computeTopology(
     });
   };
   adjacency.forEach((targets, fromId) => {
-    [...targets].sort(byIntroductionOrder).forEach(toId => pushEdge(fromId, toId, false));
+    for (const toId of [...targets].sort(byIntroductionOrder)) {
+      pushEdge(fromId, toId, false);
+    }
   });
-  backwardEdgeKeys.forEach(key => {
+  backwardEdgeKeys.forEach((key) => {
     const [fromId, toId] = key.split('->');
     pushEdge(fromId, toId, true);
   });
 
-  const queues: GraphQueueInfo[] = queueOrder.map(queueKey => {
+  const queues: GraphQueueInfo[] = queueOrder.map((queueKey) => {
     const queueState = queueStateByKey.get(queueKey)!;
     return {
       key: queueKey,
@@ -614,10 +605,9 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
   // 4. Bucket nodes by (lane, rowRank) so each band can size and centre its
   //    slot columns. Same-lane fan-out widens the lane horizontally.
   const nodesByQueueRow = new Map<string, Map<number, GraphTopologyNode[]>>();
-  const rankFor = (node: GraphTopologyNode) =>
-    topology.ranks.get(node.id) ?? (node.kind === 'gateway' ? 1 : 0);
+  const rankFor = (node: GraphTopologyNode) => topology.ranks.get(node.id) ?? (node.kind === 'gateway' ? 1 : 0);
   const allRanks = new Set<number>();
-  topology.nodes.forEach(node => {
+  topology.nodes.forEach((node) => {
     let rows = nodesByQueueRow.get(node.queueKey);
     if (!rows) {
       rows = new Map<number, GraphTopologyNode[]>();
@@ -632,15 +622,12 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
 
   // 5. Queue width = widest row band in that queue.
   const laneWidthByKey = new Map<string, number>();
-  topology.queues.forEach(queue => {
+  topology.queues.forEach((queue) => {
     const rows = nodesByQueueRow.get(queue.key);
     let widestRow = LANE_WIDTH;
-    rows?.forEach(items => {
+    rows?.forEach((items) => {
       const contentWidth = items.reduce((sum, item) => sum + item.width, 0);
-      widestRow = Math.max(
-        widestRow,
-        LANE_INSET * 2 + contentWidth + Math.max(items.length - 1, 0) * SLOT_GAP
-      );
+      widestRow = Math.max(widestRow, LANE_INSET * 2 + contentWidth + Math.max(items.length - 1, 0) * SLOT_GAP);
     });
     laneWidthByKey.set(queue.key, widestRow);
   });
@@ -675,7 +662,7 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
   //    has already been placed by the time its dependents are laid out.
   const nodeOrder = new Map(topology.nodes.map((node, index) => [node.id, index]));
   const incomingByNode = new Map<string, string[]>();
-  topology.edges.forEach(edge => {
+  topology.edges.forEach((edge) => {
     if (edge.backward) {
       return;
     }
@@ -702,7 +689,7 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
     visited.add(nodeId);
     const sameLane: number[] = [];
     const crossLane: string[] = [];
-    (incomingByNode.get(nodeId) ?? []).forEach(predecessorId => {
+    (incomingByNode.get(nodeId) ?? []).forEach((predecessorId) => {
       const placement = placements.get(predecessorId);
       if (!placement) {
         return;
@@ -716,7 +703,7 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
     if (sameLane.length > 0) {
       return sameLane;
     }
-    return crossLane.flatMap(predecessorId => sameLaneAncestorCenters(predecessorId, laneKey, visited));
+    return crossLane.flatMap((predecessorId) => sameLaneAncestorCenters(predecessorId, laneKey, visited));
   };
   const preferredCenterX = (nodeId: string, lane: LaneGeometry): number => {
     const centers = sameLaneAncestorCenters(nodeId, lane.key, new Set());
@@ -726,62 +713,64 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
     return centers.reduce((sum, x) => sum + x, 0) / centers.length;
   };
 
-  [...allRanks].sort((left, right) => left - right).forEach(rowRank => {
-    topology.queues.forEach(queue => {
-      const lane = laneByKey.get(queue.key);
-      const items = nodesByQueueRow.get(queue.key)?.get(rowRank);
-      if (!lane || !items || items.length === 0) {
-        return;
-      }
+  [...allRanks]
+    .sort((left, right) => left - right)
+    .forEach((rowRank) => {
+      topology.queues.forEach((queue) => {
+        const lane = laneByKey.get(queue.key);
+        const items = nodesByQueueRow.get(queue.key)?.get(rowRank);
+        if (!lane || !items || items.length === 0) {
+          return;
+        }
 
-      // Order left-to-right by where each item's predecessors already sit
-      // (its preferred column), falling back to introduction order for
-      // siblings tied on the same predecessor (e.g. two routes fanning out
-      // of the same gateway).
-      const entries = items
-        .map(item => ({ item, preferredCenter: preferredCenterX(item.id, lane) }))
-        .sort((left, right) =>
-          left.preferredCenter - right.preferredCenter
-          || (nodeOrder.get(left.item.id) ?? 0) - (nodeOrder.get(right.item.id) ?? 0));
+        // Order left-to-right by where each item's predecessors already sit
+        // (its preferred column), falling back to introduction order for
+        // siblings tied on the same predecessor (e.g. two routes fanning out
+        // of the same gateway).
+        const entries = items
+          .map((item) => ({ item, preferredCenter: preferredCenterX(item.id, lane) }))
+          .sort(
+            (left, right) =>
+              left.preferredCenter - right.preferredCenter || (nodeOrder.get(left.item.id) ?? 0) - (nodeOrder.get(right.item.id) ?? 0)
+          );
 
-      const contentWidth = entries.reduce((sum, entry) => sum + entry.item.width, 0);
-      const totalWidth = contentWidth + Math.max(entries.length - 1, 0) * SLOT_GAP;
-      const blockCenter = entries.reduce((sum, entry) => sum + entry.preferredCenter, 0) / entries.length;
+        const contentWidth = entries.reduce((sum, entry) => sum + entry.item.width, 0);
+        const totalWidth = contentWidth + Math.max(entries.length - 1, 0) * SLOT_GAP;
+        const blockCenter = entries.reduce((sum, entry) => sum + entry.preferredCenter, 0) / entries.length;
 
-      // The widest row in this lane already sizes the lane to
-      // LANE_INSET*2 + its own totalWidth, so every row's totalWidth fits
-      // within lane.width - LANE_INSET*2 — this clamp keeps the row's block
-      // as close to its preferred column as the lane allows, without ever
-      // spilling past the lane's inset edges.
-      const insetMin = lane.x + LANE_INSET;
-      const insetMax = lane.x + lane.width - LANE_INSET - totalWidth;
-      const startX = Math.min(Math.max(blockCenter - totalWidth / 2, insetMin), insetMax);
+        // The widest row in this lane already sizes the lane to
+        // LANE_INSET*2 + its own totalWidth, so every row's totalWidth fits
+        // within lane.width - LANE_INSET*2 — this clamp keeps the row's block
+        // as close to its preferred column as the lane allows, without ever
+        // spilling past the lane's inset edges.
+        const insetMin = lane.x + LANE_INSET;
+        const insetMax = lane.x + lane.width - LANE_INSET - totalWidth;
+        const startX = Math.min(Math.max(blockCenter - totalWidth / 2, insetMin), insetMax);
 
-      const bandCenter = rowBandCenter(rowRank);
-      let cursorX = startX;
-      entries.forEach(({ item }) => {
-        placements.set(item.id, {
-          id: item.id,
-          kind: item.kind,
-          x: cursorX,
-          y: bandCenter - item.height / 2,
-          width: item.width,
-          height: item.height,
-          queueKey: queue.key,
-          rowRank,
+        const bandCenter = rowBandCenter(rowRank);
+        let cursorX = startX;
+        entries.forEach(({ item }) => {
+          placements.set(item.id, {
+            id: item.id,
+            kind: item.kind,
+            x: cursorX,
+            y: bandCenter - item.height / 2,
+            width: item.width,
+            height: item.height,
+            queueKey: queue.key,
+            rowRank,
+          });
+          cursorX += item.width + SLOT_GAP;
         });
-        cursorX += item.width + SLOT_GAP;
       });
     });
-  });
 
-  const width = lanes.length === 0
-    ? SIDE_PADDING * 2 + LANE_WIDTH
-    : currentLaneX - LANE_GAP + SIDE_PADDING;
-  const contentBottom = Math.max(
-    TOP_PADDING + LANE_HEADER_OFFSET + NODE_HEIGHT,
-    ...[...placements.values()].map(placement => placement.y + placement.height)
-  ) + BOTTOM_PADDING;
+  const width = lanes.length === 0 ? SIDE_PADDING * 2 + LANE_WIDTH : currentLaneX - LANE_GAP + SIDE_PADDING;
+  const contentBottom =
+    Math.max(
+      TOP_PADDING + LANE_HEADER_OFFSET + NODE_HEIGHT,
+      ...[...placements.values()].map((placement) => placement.y + placement.height)
+    ) + BOTTOM_PADDING;
   const height = contentBottom + TOP_PADDING;
 
   return { placements, lanes, bounds: { width, height } };
@@ -793,10 +782,7 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
  * node widens its lane rather than escaping it), and the canvas bounds grow
  * with the content. Nodes without a stored position keep their derived slot.
  */
-export function mergeLayout(
-  topology: GraphTopology,
-  layoutBlock?: ServiceBlueprintLayoutDefinition | null
-): ServiceBlueprintGraphLayout {
+export function mergeLayout(topology: GraphTopology, layoutBlock?: ServiceBlueprintLayoutDefinition | null): ServiceBlueprintGraphLayout {
   const derived = computeDerivedLayout(topology);
   const stored = layoutBlock?.nodes;
   if (!stored || Object.keys(stored).length === 0) {
@@ -806,33 +792,24 @@ export function mergeLayout(
   const placements = new Map<string, NodePlacement>();
   derived.placements.forEach((placement, id) => {
     const override = stored[id];
-    placements.set(
-      id,
-      override ? { ...placement, x: override.x, y: override.y } : placement
-    );
+    placements.set(id, override ? { ...placement, x: override.x, y: override.y } : placement);
   });
 
-  const lanes = derived.lanes.map(lane => {
-    const members = [...placements.values()].filter(placement => placement.queueKey === lane.key);
+  const lanes = derived.lanes.map((lane) => {
+    const members = [...placements.values()].filter((placement) => placement.queueKey === lane.key);
     if (members.length === 0) {
       return lane;
     }
-    const left = Math.min(lane.x, ...members.map(member => member.x - LANE_INSET));
-    const right = Math.max(
-      lane.x + lane.width,
-      ...members.map(member => member.x + member.width + LANE_INSET)
-    );
+    const left = Math.min(lane.x, ...members.map((member) => member.x - LANE_INSET));
+    const right = Math.max(lane.x + lane.width, ...members.map((member) => member.x + member.width + LANE_INSET));
     return { ...lane, x: left, width: right - left };
   });
 
   const contentBottom = Math.max(
     derived.bounds.height - TOP_PADDING,
-    ...[...placements.values()].map(placement => placement.y + placement.height + BOTTOM_PADDING)
+    ...[...placements.values()].map((placement) => placement.y + placement.height + BOTTOM_PADDING)
   );
-  const contentRight = Math.max(
-    derived.bounds.width - SIDE_PADDING,
-    ...lanes.map(lane => lane.x + lane.width)
-  );
+  const contentRight = Math.max(derived.bounds.width - SIDE_PADDING, ...lanes.map((lane) => lane.x + lane.width));
 
   return {
     placements,

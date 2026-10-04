@@ -324,11 +324,7 @@
           "fieldKey": "benefitOption",
           "label": "How do you want to take your benefits?",
           "hint": "You can change your mind any time before you retire.",
-          "options": [
-            "Standard benefits",
-            "Maximum tax-free cash",
-            "Take DC pot as cash"
-          ],
+          "options": ["Standard benefits", "Maximum tax-free cash", "Take DC pot as cash"],
           "default": "Standard benefits",
           "required": true
         },
@@ -379,10 +375,7 @@
           "showWhen": "not quoteMode",
           "fieldKey": "moneyBasis",
           "label": "Show amounts in",
-          "options": [
-            "Today's money",
-            "Future money"
-          ],
+          "options": ["Today's money", "Future money"],
           "default": "Today's money",
           "required": false
         },
@@ -483,9 +476,7 @@
       "stageType": "Question",
       "actor": "reviewer",
       "queueKey": "business-user",
-      "roleGates": [
-        "reviewer"
-      ],
+      "roleGates": ["reviewer"],
       "components": [
         {
           "type": "body",

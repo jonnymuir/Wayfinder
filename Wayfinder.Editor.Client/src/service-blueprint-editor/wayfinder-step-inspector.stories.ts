@@ -23,11 +23,13 @@ function makeElement(args: StoryArgs): WayfinderStepInspectorElement {
   el.actionCatalog = args.actionCatalog;
   el.componentCatalog = args.componentCatalog ?? [];
   el.supportSystemCatalog = args.supportSystemCatalog ?? [];
-  el.addEventListener('service-blueprint-updated', event => {
-    const detail = (event as CustomEvent<{
-      serviceBlueprint: ServiceBlueprint;
-      selection?: { kind?: 'stage' | 'gateway'; stageKey?: string; gatewayKey?: string } | null;
-    }>).detail;
+  el.addEventListener('service-blueprint-updated', (event) => {
+    const detail = (
+      event as CustomEvent<{
+        serviceBlueprint: ServiceBlueprint;
+        selection?: { kind?: 'stage' | 'gateway'; stageKey?: string; gatewayKey?: string } | null;
+      }>
+    ).detail;
     el.serviceBlueprint = detail.serviceBlueprint;
     if (detail.selection?.kind === 'gateway') {
       el.selectedGatewayKey = detail.selection.gatewayKey ?? null;
@@ -66,7 +68,7 @@ const meta: Meta<StoryArgs> = {
     componentCatalog: [],
     supportSystemCatalog: [],
   },
-  render: args => makeElement(args),
+  render: (args) => makeElement(args),
 };
 
 export default meta;
@@ -74,7 +76,7 @@ type Story = StoryObj<StoryArgs>;
 
 export const Empty: Story = {
   play: async ({ canvasElement }) => {
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
     await el.updateComplete;
     await expect(el.shadowRoot?.querySelector('.empty-state')).not.toBeNull();
@@ -87,7 +89,7 @@ export const EditableStage: Story = {
     selectedStageKey: 'reviewer-assessment',
   },
   play: async ({ canvasElement }) => {
-    await new Promise(resolve => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 120));
     const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
     await el.updateComplete;
 
@@ -265,9 +267,7 @@ const COMPONENT_CATALOG_FIXTURE: ComponentDescriptor[] = [
     category: 'Content',
     clrType: 'BodyComponent',
     isInput: false,
-    properties: [
-      { key: 'content', title: 'Content', valueKind: 'String', required: true, editor: 'textarea' },
-    ],
+    properties: [{ key: 'content', title: 'Content', valueKind: 'String', required: true, editor: 'textarea' }],
     containment: { kind: 'None' },
   },
   {
@@ -320,7 +320,7 @@ export const ComponentAddEditDelete: Story = {
     componentCatalog: COMPONENT_CATALOG_FIXTURE,
   },
   play: async ({ canvasElement }) => {
-    await new Promise(resolve => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 120));
     const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
     await el.updateComplete;
     const root = el.shadowRoot!;
@@ -335,7 +335,7 @@ export const ComponentAddEditDelete: Story = {
     addButton.click();
     await el.updateComplete;
 
-    let stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
+    let stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
     await expect(stage.components?.length).toBe(1);
     await expect(stage.components?.[0].type).toBe('body');
 
@@ -345,8 +345,8 @@ export const ComponentAddEditDelete: Story = {
     contentField.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
-    await expect((stage.components?.[0] as { content?: string }).content).toBe('Hello from the properties panel.');
+    stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
+    await expect((stage.components[0] as { content?: string }).content).toBe('Hello from the properties panel.');
 
     // Add a "Statistic group" and exercise the recursive Array-of-Object property editor.
     typeSelect.value = 'stat-group';
@@ -355,8 +355,9 @@ export const ComponentAddEditDelete: Story = {
 
     const statGroupItem = root.querySelector<HTMLElement>('[data-wayfinder-component-index="1"]')!;
     await expect(statGroupItem).not.toBeNull();
-    const addTileButton = Array.from(statGroupItem.querySelectorAll<HTMLButtonElement>('button'))
-      .find(button => button.textContent?.includes('Add'))!;
+    const addTileButton = Array.from(statGroupItem.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      button.textContent?.includes('Add')
+    )!;
     await expect(addTileButton).not.toBeUndefined();
     addTileButton.click();
     await el.updateComplete;
@@ -367,7 +368,7 @@ export const ComponentAddEditDelete: Story = {
     tileLabelField!.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
     const statGroup = stage.components?.[1] as { items?: Array<{ label?: string }> };
     await expect(statGroup.items?.[0]?.label).toBe('Total');
 
@@ -377,7 +378,7 @@ export const ComponentAddEditDelete: Story = {
     deleteButtons[0].click();
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
     await expect(stage.components?.length).toBe(1);
     await expect(stage.components?.[0].type).toBe('stat-group');
   },
@@ -396,7 +397,7 @@ export const ComponentReferenceAwareFields: Story = {
     componentCatalog: COMPONENT_CATALOG_FIXTURE,
   },
   play: async ({ canvasElement }) => {
-    await new Promise(resolve => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 120));
     const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
     await el.updateComplete;
     const root = el.shadowRoot!;
@@ -421,30 +422,32 @@ export const ComponentReferenceAwareFields: Story = {
     await el.updateComplete;
 
     const secondItem = root.querySelector<HTMLElement>('[data-wayfinder-component-index="1"]')!;
-    const conditionalOnSelect = Array.from(secondItem.querySelectorAll<HTMLSelectElement>('.component-editor select'))
-      .find(select => select.id.endsWith('-conditionalOn'))!;
+    const conditionalOnSelect = Array.from(secondItem.querySelectorAll<HTMLSelectElement>('.component-editor select')).find((select) =>
+      select.id.endsWith('-conditionalOn')
+    )!;
     await expect(conditionalOnSelect).not.toBeUndefined();
-    const optionValues = Array.from(conditionalOnSelect.options).map(option => option.value);
+    const optionValues = Array.from(conditionalOnSelect.options).map((option) => option.value);
     await expect(optionValues).toContain('firstName');
 
     conditionalOnSelect.value = 'firstName';
     conditionalOnSelect.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    let stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
-    await expect((stage.components?.[1] as { conditionalOn?: string }).conditionalOn).toBe('firstName');
+    let stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
+    await expect((stage.components[1] as { conditionalOn?: string }).conditionalOn).toBe('firstName');
 
     // Insert the "Letters only" regex preset into the second field's Pattern property.
-    const presetSelect = Array.from(secondItem.querySelectorAll<HTMLSelectElement>('.component-editor select'))
-      .find(select => select.id.endsWith('-pattern-preset'))!;
+    const presetSelect = Array.from(secondItem.querySelectorAll<HTMLSelectElement>('.component-editor select')).find((select) =>
+      select.id.endsWith('-pattern-preset')
+    )!;
     await expect(presetSelect).not.toBeUndefined();
-    const lettersOnlyOption = Array.from(presetSelect.options).find(option => option.textContent === 'Letters only')!;
+    const lettersOnlyOption = Array.from(presetSelect.options).find((option) => option.textContent === 'Letters only')!;
     presetSelect.value = lettersOnlyOption.value;
     presetSelect.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
-    await expect((stage.components?.[1] as { pattern?: string }).pattern).toBe('^[A-Za-z]+$');
+    stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
+    await expect((stage.components[1] as { pattern?: string }).pattern).toBe('^[A-Za-z]+$');
   },
 };
 
@@ -459,7 +462,7 @@ export const ComponentRecursiveChildEditing: Story = {
     componentCatalog: COMPONENT_CATALOG_FIXTURE,
   },
   play: async ({ canvasElement }) => {
-    await new Promise(resolve => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 120));
     const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
     await el.updateComplete;
     const root = el.shadowRoot!;
@@ -489,7 +492,7 @@ export const ComponentRecursiveChildEditing: Story = {
     childAddButton.click();
     await el.updateComplete;
 
-    let stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
+    let stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
     let fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
     await expect(fieldset.legend).toBe('Applicant details');
     await expect(fieldset.children?.length).toBe(1);
@@ -509,7 +512,7 @@ export const ComponentRecursiveChildEditing: Story = {
     childLabelField.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
     fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
     await expect(fieldset.children?.[0].label).toBe('Full name');
 
@@ -519,9 +522,9 @@ export const ComponentRecursiveChildEditing: Story = {
     const deleteChildButton = childContainer.querySelector<HTMLButtonElement>('.component-item-actions .danger-button')!;
     deleteChildButton.click();
     await el.updateComplete;
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find((s) => s.stageKey === 'reviewer-assessment')!;
     fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
     await expect(fieldset.children?.length).toBe(0);
     await expect(root.activeElement?.closest('.component-add-row')).not.toBeNull();
@@ -671,7 +674,7 @@ export const SupportSystemCallActionConfiguration: Story = {
     supportSystemCatalog: SUPPORT_SYSTEM_CATALOG_FIXTURE,
   },
   play: async ({ canvasElement }) => {
-    await new Promise(resolve => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 120));
     const el = canvasElement.querySelector('wayfinder-step-inspector') as WayfinderStepInspectorElement;
     await el.updateComplete;
     const root = el.shadowRoot!;

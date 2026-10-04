@@ -41,7 +41,7 @@ const centerY = (box: ObstacleBox) => box.y + box.height / 2;
 const DAMPING = 0.6;
 
 export function declutterChips(chips: ChipBox[], obstacles: ObstacleBox[], iterations = 120): Map<string, { x: number; y: number }> {
-  const boxes = chips.map(chip => ({ ...chip }));
+  const boxes = chips.map((chip) => ({ ...chip }));
   const dx = new Array(boxes.length).fill(0) as number[];
   const dy = new Array(boxes.length).fill(0) as number[];
 
@@ -94,5 +94,5 @@ export function declutterChips(chips: ChipBox[], obstacles: ObstacleBox[], itera
     }
   }
 
-  return new Map(boxes.map(box => [box.id, { x: box.x, y: box.y }]));
+  return new Map(boxes.map((box) => [box.id, { x: box.x, y: box.y }]));
 }

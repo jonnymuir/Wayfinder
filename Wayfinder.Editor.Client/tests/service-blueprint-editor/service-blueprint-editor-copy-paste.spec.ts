@@ -5,20 +5,22 @@ function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
 }
 
-async function pressEditorShortcut(
-  page: import('@playwright/test').Page,
-  key: 'c' | 'v'
-) {
+async function pressEditorShortcut(page: import('@playwright/test').Page, key: 'c' | 'v') {
   const isMac = process.platform === 'darwin';
-  await page.locator('wayfinder-service-blueprint-editor').evaluate((element, detail) => {
-    element.dispatchEvent(new KeyboardEvent('keydown', {
-      key: detail.key,
-      bubbles: true,
-      composed: true,
-      metaKey: detail.isMac,
-      ctrlKey: !detail.isMac,
-    }));
-  }, { key, isMac });
+  await page.locator('wayfinder-service-blueprint-editor').evaluate(
+    (element, detail) => {
+      element.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: detail.key,
+          bubbles: true,
+          composed: true,
+          metaKey: detail.isMac,
+          ctrlKey: !detail.isMac,
+        })
+      );
+    },
+    { key, isMac }
+  );
 }
 
 test.describe('ServiceBlueprint editor copy and paste', () => {

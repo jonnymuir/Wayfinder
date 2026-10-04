@@ -9,5 +9,5 @@ export const STAGE_KIND_OPTIONS: ReadonlyArray<{ value: StageKind; label: string
 ];
 
 export function stageKindLabel(kind: StageKind): string {
-  return STAGE_KIND_OPTIONS.find(option => option.value === kind)?.label ?? kind;
+  return STAGE_KIND_OPTIONS.find((option) => option.value === kind)?.label ?? kind;
 }

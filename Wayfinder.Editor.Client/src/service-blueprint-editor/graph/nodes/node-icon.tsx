@@ -15,6 +15,7 @@ export function NodeIcon({ icon, size = 16 }: { icon: NodeIconDef; size?: number
       aria-hidden="true"
     >
       {icon.paths.map((d, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static SVG path list, never reordered
         <path key={index} d={d} />
       ))}
     </svg>

@@ -10,9 +10,9 @@
 //      so a new one is a deliberate, reviewed act. The reason must name the escaping that makes it safe.
 //   2. `return el.innerHTML` is banned: reading innerHTML back as an "escaper" does not escape quotes,
 //      which is exactly the bulk-data review bug (value="…" broke out of its attribute).
-import { readdirSync, readFileSync, statSync } from 'fs';
-import { dirname, join, relative } from 'path';
-import { fileURLToPath } from 'url';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
@@ -20,7 +20,8 @@ const ROOTS = [join(repo, 'Wayfinder.Rendering.GovUk', 'wwwroot', 'js'), join(re
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'bin', 'obj', 'fixtures']);
 const SKIP_FILE = /\.(test|spec|stories)\.ts$/;
 
-const SINK = /(\.(innerHTML|outerHTML|srcdoc)\s*=(?!=)|\binsertAdjacentHTML\s*\(|\bdocument\.write(ln)?\s*\(|\bunsafeHTML\s*\(|\bcreateContextualFragment\s*\(|\bdangerouslySetInnerHTML\b)/;
+const SINK =
+  /(\.(innerHTML|outerHTML|srcdoc)\s*=(?!=)|\binsertAdjacentHTML\s*\(|\bdocument\.write(ln)?\s*\(|\bunsafeHTML\s*\(|\bcreateContextualFragment\s*\(|\bdangerouslySetInnerHTML\b)/;
 const ESCAPE_BY_READBACK = /\breturn\s+[\w.$]+\.innerHTML\b/;
 const MARKER = /html-sink-ok:\s*\S+/;
 

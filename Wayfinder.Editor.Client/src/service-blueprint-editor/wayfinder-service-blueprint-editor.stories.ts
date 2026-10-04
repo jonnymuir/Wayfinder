@@ -116,9 +116,7 @@ function makeSimulationBranchServiceBlueprint(): ServiceBlueprint {
       gatewayType: 'Split',
       queueKey: 'applicant',
       roleGates: [],
-      routes: [
-        { id: 'declaration--continue--application-form', target: 'application-form', trigger: 'continue' },
-      ],
+      routes: [{ id: 'declaration--continue--application-form', target: 'application-form', trigger: 'continue' }],
     },
     {
       key: 'application-form-routes',
@@ -126,9 +124,7 @@ function makeSimulationBranchServiceBlueprint(): ServiceBlueprint {
       gatewayType: 'Split',
       queueKey: 'applicant',
       roleGates: [],
-      routes: [
-        { id: 'application-form--submit--review-decision', target: 'review-decision', trigger: 'submit for review' },
-      ],
+      routes: [{ id: 'application-form--submit--review-decision', target: 'review-decision', trigger: 'submit for review' }],
     },
   ];
   const gatewayFor: Record<string, string> = {
@@ -137,8 +133,8 @@ function makeSimulationBranchServiceBlueprint(): ServiceBlueprint {
     'application-form': 'application-form-routes',
   };
   for (const [stageKey, gatewayKey] of Object.entries(gatewayFor)) {
-    const stage = serviceBlueprint.stages.find(candidate => candidate.stageKey === stageKey);
-    const trigger = (serviceBlueprint.gateways ?? []).find(gateway => gateway.key === gatewayKey)?.routes?.[0]?.trigger ?? 'continue';
+    const stage = serviceBlueprint.stages.find((candidate) => candidate.stageKey === stageKey);
+    const trigger = (serviceBlueprint.gateways ?? []).find((gateway) => gateway.key === gatewayKey)?.routes?.[0]?.trigger ?? 'continue';
     if (stage) {
       stage.routes = [{ id: `${stageKey}--${trigger}--${gatewayKey}`, target: gatewayKey, trigger }];
     }
@@ -149,12 +145,10 @@ function makeSimulationBranchServiceBlueprint(): ServiceBlueprint {
 function makeSimulationBlockerServiceBlueprint(): ServiceBlueprint {
   const serviceBlueprint = makeSimulationBranchServiceBlueprint();
   serviceBlueprint.displayName = 'Planning Application Simulation Blockers';
-  const rejectGateway = (serviceBlueprint.gateways ?? []).find(g => g.key === 'review-decision-routes');
+  const rejectGateway = (serviceBlueprint.gateways ?? []).find((g) => g.key === 'review-decision-routes');
   if (rejectGateway) {
-    rejectGateway.routes = (rejectGateway.routes ?? []).map(route =>
-      route.trigger === 'reject'
-        ? { ...route, target: 'missing-rejection-stage' }
-        : route
+    rejectGateway.routes = (rejectGateway.routes ?? []).map((route) =>
+      route.trigger === 'reject' ? { ...route, target: 'missing-rejection-stage' } : route
     );
   }
   return serviceBlueprint;
@@ -201,9 +195,12 @@ export const PlanningServiceBlueprint: Story = {
 
     // The React Flow canvas mounts lazily; wait for it to signal readiness
     // rather than racing a fixed delay against the async import.
-    await waitFor(() => {
-      expect(graph?.shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]').length ?? 0).toBeGreaterThan(0);
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(graph?.shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]').length ?? 0).toBeGreaterThan(0);
+      },
+      { timeout: 5000 }
+    );
 
     const inspector = root.querySelector('wayfinder-step-inspector');
     await expect(inspector).not.toBeNull();
@@ -228,19 +225,13 @@ export const WithStageSelected: Story = {
 
     // The React Flow canvas mounts lazily; wait for the stage button to land.
     await waitFor(() => {
-      const stage = graph!.shadowRoot!.querySelector<HTMLButtonElement>(
-        'button[aria-label="Declaration, Applicant queue"]'
-      );
+      const stage = graph!.shadowRoot!.querySelector<HTMLButtonElement>('button[aria-label="Declaration, Applicant queue"]');
       expect(stage).not.toBeNull();
     });
-    const declarationStage = graph!.shadowRoot!.querySelector<HTMLButtonElement>(
-      'button[aria-label="Declaration, Applicant queue"]'
-    )!;
+    const declarationStage = graph!.shadowRoot!.querySelector<HTMLButtonElement>('button[aria-label="Declaration, Applicant queue"]')!;
     declarationStage.click();
 
-    await waitFor(() =>
-      expect(inspector!.shadowRoot!.querySelector('[data-wayfinder-stage-detail="declaration"]')).not.toBeNull()
-    );
+    await waitFor(() => expect(inspector!.shadowRoot!.querySelector('[data-wayfinder-stage-detail="declaration"]')).not.toBeNull());
   },
 };
 
@@ -252,7 +243,7 @@ export const EmptyServiceBlueprint: Story = {
     return el;
   },
   play: async ({ canvasElement }) => {
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 200));
     const el = canvasElement.querySelector('wayfinder-service-blueprint-editor') as WayfinderServiceBlueprintEditorElement;
     await el.updateComplete;
 
@@ -263,7 +254,7 @@ export const EmptyServiceBlueprint: Story = {
 
     const helpButton = root.querySelector<HTMLElement>('[data-wayfinder-help]');
     helpButton?.click();
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
     await expect(root.querySelector('[data-wayfinder-shortcut-dialog]')).not.toBeNull();
   },
 };

@@ -1,5 +1,11 @@
 import { validateServiceBlueprint } from './service-blueprint-validation.js';
-import type { ActionDefinition, ServiceBlueprint, StageDefinition, ServiceBlueprintStageValidationRule, SupportSystemDescriptor } from './types.js';
+import type {
+  ActionDefinition,
+  ServiceBlueprint,
+  StageDefinition,
+  ServiceBlueprintStageValidationRule,
+  SupportSystemDescriptor,
+} from './types.js';
 
 let failures = 0;
 
@@ -44,7 +50,15 @@ function validation(overrides: Partial<ServiceBlueprintStageValidationRule> = {}
 }
 
 const TEXT_COMPONENT_CATALOG = [
-  { discriminator: 'text', displayName: 'Text', category: 'Input' as const, clrType: 'TextInputComponent', isInput: true, properties: [], containment: { kind: 'None' as const } },
+  {
+    discriminator: 'text',
+    displayName: 'Text',
+    category: 'Input' as const,
+    clrType: 'TextInputComponent',
+    isInput: true,
+    properties: [],
+    containment: { kind: 'None' as const },
+  },
 ];
 
 const SUPPORT_SYSTEM_KEY = 'safetynet-underwriting';
@@ -97,21 +111,21 @@ export function run(): number {
   // ── A well-formed when/rule pair produces no stage-validation issues ───────
   {
     const issues = validateServiceBlueprint(
-      blueprint([stage({ validations: [validation({ when: 'hasDangerousProps', rule: "riskAssessment <> '' or mitigationHasEvidence" })] })])
+      blueprint([
+        stage({ validations: [validation({ when: 'hasDangerousProps', rule: "riskAssessment <> '' or mitigationHasEvidence" })] }),
+      ])
     );
     check(
       'valid when/rule expressions are not flagged',
-      !issues.some(issue => issue.code === 'stage-validation-parse-error'),
+      !issues.some((issue) => issue.code === 'stage-validation-parse-error'),
       JSON.stringify(issues)
     );
   }
 
   // ── A malformed `when` blocks save, mirroring calculationValidationIssues ──
   {
-    const issues = validateServiceBlueprint(
-      blueprint([stage({ validations: [validation({ when: 'hasDangerousProps ko[ko[k[ok' })] })])
-    );
-    const issue = issues.find(candidate => candidate.code === 'stage-validation-parse-error');
+    const issues = validateServiceBlueprint(blueprint([stage({ validations: [validation({ when: 'hasDangerousProps ko[ko[k[ok' })] })]));
+    const issue = issues.find((candidate) => candidate.code === 'stage-validation-parse-error');
     check('a malformed when expression is flagged', !!issue, JSON.stringify(issues));
     check('the flagged issue blocks save', issue?.blocking === true, JSON.stringify(issue));
     check(
@@ -123,22 +137,22 @@ export function run(): number {
 
   // ── A malformed `rule` (the required field, no guard) is flagged the same way ──
   {
-    const issues = validateServiceBlueprint(
-      blueprint([stage({ validations: [validation({ rule: 'true ko[ko[k[ok' })] })])
-    );
+    const issues = validateServiceBlueprint(blueprint([stage({ validations: [validation({ rule: 'true ko[ko[k[ok' })] })]));
     check(
       'a malformed rule expression is flagged',
-      issues.some(issue => issue.code === 'stage-validation-parse-error' && issue.message.includes('invalid rule expression')),
+      issues.some((issue) => issue.code === 'stage-validation-parse-error' && issue.message.includes('invalid rule expression')),
       JSON.stringify(issues)
     );
   }
 
   // ── An absent `when` (optional guard) is never flagged ──────────────────────
   {
-    const issues = validateServiceBlueprint(
-      blueprint([stage({ validations: [validation({ when: undefined })] })])
+    const issues = validateServiceBlueprint(blueprint([stage({ validations: [validation({ when: undefined })] })]));
+    check(
+      'no `when` at all is not treated as a malformed expression',
+      !issues.some((issue) => issue.code === 'stage-validation-parse-error'),
+      JSON.stringify(issues)
     );
-    check('no `when` at all is not treated as a malformed expression', !issues.some(issue => issue.code === 'stage-validation-parse-error'), JSON.stringify(issues));
   }
 
   // ── support-system-call: a well-formed action against a real captured field is not flagged ──
@@ -149,11 +163,18 @@ export function run(): number {
         stageKey: 'automation',
         components: [],
         actions: [supportSystemCallAction()],
-        routes: [{ id: 'r1', target: 'done', trigger: 'approved' }, { id: 'r2', target: 'done', trigger: 'rejected' }],
+        routes: [
+          { id: 'r1', target: 'done', trigger: 'approved' },
+          { id: 'r2', target: 'done', trigger: 'rejected' },
+        ],
       }),
     ];
     const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, supportSystemCatalog());
-    check('a valid support-system-call action is not flagged', !issues.some(issue => issue.code === 'action-support-system'), JSON.stringify(issues));
+    check(
+      'a valid support-system-call action is not flagged',
+      !issues.some((issue) => issue.code === 'action-support-system'),
+      JSON.stringify(issues)
+    );
   }
 
   // ── support-system-call: missing supportSystemKey/capabilityKey is flagged ──
@@ -162,93 +183,121 @@ export function run(): number {
     const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
     check(
       'a support-system-call action with no keys set is flagged',
-      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('missing-keys')),
+      issues.some((issue) => issue.code === 'action-support-system' && issue.id.endsWith('missing-keys')),
       JSON.stringify(issues)
     );
   }
 
   // ── support-system-call: an unregistered support system is flagged ──
   {
-    const stages = [stage({
-      stageKey: 'automation',
-      actions: [supportSystemCallAction({ params: { supportSystemKey: 'not-registered', capabilityKey: CAPABILITY_KEY, inputs: {} } })],
-    })];
+    const stages = [
+      stage({
+        stageKey: 'automation',
+        actions: [supportSystemCallAction({ params: { supportSystemKey: 'not-registered', capabilityKey: CAPABILITY_KEY, inputs: {} } })],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
     check(
       'an unregistered support system is flagged',
-      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('unknown-support-system')),
+      issues.some((issue) => issue.code === 'action-support-system' && issue.id.endsWith('unknown-support-system')),
       JSON.stringify(issues)
     );
   }
 
   // ── support-system-call: an unregistered capability is flagged ──
   {
-    const stages = [stage({
-      stageKey: 'automation',
-      actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: 'not-a-capability', inputs: {} } })],
-    })];
+    const stages = [
+      stage({
+        stageKey: 'automation',
+        actions: [
+          supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: 'not-a-capability', inputs: {} } }),
+        ],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
     check(
       'an unregistered capability is flagged',
-      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('unknown-capability')),
+      issues.some((issue) => issue.code === 'action-support-system' && issue.id.endsWith('unknown-capability')),
       JSON.stringify(issues)
     );
   }
 
   // ── support-system-call: a missing required input is flagged ──
   {
-    const stages = [stage({
-      stageKey: 'automation',
-      actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: {} } })],
-    })];
+    const stages = [
+      stage({
+        stageKey: 'automation',
+        actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: {} } })],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
     check(
       'a missing required input ("File") is flagged',
-      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('missing-input-File')),
+      issues.some((issue) => issue.code === 'action-support-system' && issue.id.endsWith('missing-input-File')),
       JSON.stringify(issues)
     );
   }
 
   // ── support-system-call: an input mapping key the capability never declared is flagged ──
   {
-    const stages = [stageWithCapturedField('riskAssessment'), stage({
-      stageKey: 'automation',
-      actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: { File: 'riskAssessment', NotReal: 'riskAssessment' } } })],
-    })];
+    const stages = [
+      stageWithCapturedField('riskAssessment'),
+      stage({
+        stageKey: 'automation',
+        actions: [
+          supportSystemCallAction({
+            params: {
+              supportSystemKey: SUPPORT_SYSTEM_KEY,
+              capabilityKey: CAPABILITY_KEY,
+              inputs: { File: 'riskAssessment', NotReal: 'riskAssessment' },
+            },
+          }),
+        ],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, supportSystemCatalog());
     check(
       'an input key the capability never declared is flagged',
-      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('unknown-input-NotReal')),
+      issues.some((issue) => issue.code === 'action-support-system' && issue.id.endsWith('unknown-input-NotReal')),
       JSON.stringify(issues)
     );
   }
 
   // ── support-system-call: an input bound to a field that doesn't exist anywhere is flagged ──
   {
-    const stages = [stage({
-      stageKey: 'automation',
-      actions: [supportSystemCallAction({ params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: { File: 'notARealField' } } })],
-    })];
+    const stages = [
+      stage({
+        stageKey: 'automation',
+        actions: [
+          supportSystemCallAction({
+            params: { supportSystemKey: SUPPORT_SYSTEM_KEY, capabilityKey: CAPABILITY_KEY, inputs: { File: 'notARealField' } },
+          }),
+        ],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], [], supportSystemCatalog());
     check(
       'an input bound to a nonexistent field is flagged',
-      issues.some(issue => issue.code === 'action-support-system' && issue.id.endsWith('input-unknown-field-File')),
+      issues.some((issue) => issue.code === 'action-support-system' && issue.id.endsWith('input-unknown-field-File')),
       JSON.stringify(issues)
     );
   }
 
   // ── support-system-call: an outgoing route trigger that isn't a declared outcome is flagged ──
   {
-    const stages = [stageWithCapturedField('riskAssessment'), stage({
-      stageKey: 'automation',
-      components: [],
-      actions: [supportSystemCallAction()],
-      routes: [{ id: 'r1', target: 'done', trigger: 'maybe' }],
-    })];
+    const stages = [
+      stageWithCapturedField('riskAssessment'),
+      stage({
+        stageKey: 'automation',
+        components: [],
+        actions: [supportSystemCallAction()],
+        routes: [{ id: 'r1', target: 'done', trigger: 'maybe' }],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, supportSystemCatalog());
     check(
       'a route trigger not among the capability’s declared outcomes is flagged',
-      issues.some(issue => issue.code === 'action-support-system' && issue.id.includes('route-trigger-maybe')),
+      issues.some((issue) => issue.code === 'action-support-system' && issue.id.includes('route-trigger-maybe')),
       JSON.stringify(issues)
     );
   }
@@ -261,7 +310,7 @@ export function run(): number {
     const issues = validateServiceBlueprint(bp, [], [], supportSystemCatalog());
     check(
       'a route-level support-system-call action is not checked (mirrors ProcessManagerEngine’s stage-entry-only scope)',
-      !issues.some(issue => issue.code === 'action-support-system'),
+      !issues.some((issue) => issue.code === 'action-support-system'),
       JSON.stringify(issues)
     );
   }
@@ -295,38 +344,59 @@ export function run(): number {
   {
     const stages = [stageWithCapturedField('contributionsFile'), stage({ stageKey: 'review', actions: [ingestAction()] })];
     const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, []);
-    check('a valid bulk-dataset-ingest action is not flagged', !issues.some(issue => issue.code === 'action-bulk-dataset'), JSON.stringify(issues));
+    check(
+      'a valid bulk-dataset-ingest action is not flagged',
+      !issues.some((issue) => issue.code === 'action-bulk-dataset'),
+      JSON.stringify(issues)
+    );
   }
 
   // ── bulk-dataset-ingest: missing datasetIdField is flagged ──
   {
-    const stages = [stage({ stageKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'contributionsFile', columns: validColumns } })] })];
+    const stages = [
+      stage({ stageKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'contributionsFile', columns: validColumns } })] }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], [], []);
     check(
       'a bulk-dataset-ingest action with no datasetIdField is flagged',
-      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-dataset-id-field')),
+      issues.some((issue) => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-dataset-id-field')),
       JSON.stringify(issues)
     );
   }
 
   // ── bulk-dataset-ingest: sourceFileField pointing at a nonexistent field is flagged ──
   {
-    const stages = [stage({ stageKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'notReal', datasetIdField: 'contributionsDatasetId', columns: validColumns } })] })];
+    const stages = [
+      stage({
+        stageKey: 'review',
+        actions: [
+          ingestAction({ params: { sourceFileField: 'notReal', datasetIdField: 'contributionsDatasetId', columns: validColumns } }),
+        ],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], [], []);
     check(
       'a bulk-dataset-ingest sourceFileField pointing nowhere is flagged',
-      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('invalid-source-field')),
+      issues.some((issue) => issue.code === 'action-bulk-dataset' && issue.id.endsWith('invalid-source-field')),
       JSON.stringify(issues)
     );
   }
 
   // ── bulk-dataset-ingest: no columns at all is flagged ──
   {
-    const stages = [stageWithCapturedField('contributionsFile'), stage({ stageKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'contributionsFile', datasetIdField: 'contributionsDatasetId', columns: [] } })] })];
+    const stages = [
+      stageWithCapturedField('contributionsFile'),
+      stage({
+        stageKey: 'review',
+        actions: [
+          ingestAction({ params: { sourceFileField: 'contributionsFile', datasetIdField: 'contributionsDatasetId', columns: [] } }),
+        ],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, []);
     check(
       'a bulk-dataset-ingest action with no columns is flagged',
-      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-columns')),
+      issues.some((issue) => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-columns')),
       JSON.stringify(issues)
     );
   }
@@ -334,29 +404,47 @@ export function run(): number {
   // ── bulk-dataset-ingest: no RowKey column is flagged ──
   {
     const columns = [{ key: 'memberName', title: 'Name', valueKind: 'String', role: 'Data' }];
-    const stages = [stageWithCapturedField('contributionsFile'), stage({ stageKey: 'review', actions: [ingestAction({ params: { sourceFileField: 'contributionsFile', datasetIdField: 'contributionsDatasetId', columns } })] })];
+    const stages = [
+      stageWithCapturedField('contributionsFile'),
+      stage({
+        stageKey: 'review',
+        actions: [ingestAction({ params: { sourceFileField: 'contributionsFile', datasetIdField: 'contributionsDatasetId', columns } })],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, []);
     check(
       'a bulk-dataset-ingest action with no RowKey column is flagged',
-      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-row-key')),
+      issues.some((issue) => issue.code === 'action-bulk-dataset' && issue.id.endsWith('missing-row-key')),
       JSON.stringify(issues)
     );
   }
 
   // ── bulk-dataset-materialize: a well-formed action matching a real ingest action is not flagged ──
   {
-    const stages = [stageWithCapturedField('contributionsFile'), stage({ stageKey: 'automation', actions: [ingestAction(), materializeAction()] })];
+    const stages = [
+      stageWithCapturedField('contributionsFile'),
+      stage({ stageKey: 'automation', actions: [ingestAction(), materializeAction()] }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], TEXT_COMPONENT_CATALOG, []);
-    check('a valid bulk-dataset-materialize action is not flagged', !issues.some(issue => issue.code === 'action-bulk-dataset'), JSON.stringify(issues));
+    check(
+      'a valid bulk-dataset-materialize action is not flagged',
+      !issues.some((issue) => issue.code === 'action-bulk-dataset'),
+      JSON.stringify(issues)
+    );
   }
 
   // ── bulk-dataset-materialize: datasetIdField not matching any ingest action is flagged ──
   {
-    const stages = [stage({ stageKey: 'automation', actions: [materializeAction({ params: { datasetIdField: 'someOtherId', targetFileField: 'contributionsFile' } })] })];
+    const stages = [
+      stage({
+        stageKey: 'automation',
+        actions: [materializeAction({ params: { datasetIdField: 'someOtherId', targetFileField: 'contributionsFile' } })],
+      }),
+    ];
     const issues = validateServiceBlueprint(blueprint(stages), [], [], []);
     check(
       'a bulk-dataset-materialize action with an unknown datasetIdField is flagged',
-      issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('unknown-dataset')),
+      issues.some((issue) => issue.code === 'action-bulk-dataset' && issue.id.endsWith('unknown-dataset')),
       JSON.stringify(issues)
     );
   }
@@ -367,7 +455,7 @@ export function run(): number {
     const issues = validateServiceBlueprint(blueprint(stages), [], [], []);
     check(
       'a bulk-dataset-materialize action matches an ingest action’s datasetIdField even when declared first',
-      !issues.some(issue => issue.code === 'action-bulk-dataset' && issue.id.endsWith('unknown-dataset')),
+      !issues.some((issue) => issue.code === 'action-bulk-dataset' && issue.id.endsWith('unknown-dataset')),
       JSON.stringify(issues)
     );
   }

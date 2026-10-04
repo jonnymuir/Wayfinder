@@ -1,8 +1,8 @@
 // Runs calculation-ordering.test.ts — pure checks, no fixtures needed. Uses Vite in SSR mode so
 // the editor's .js-specifier TS imports resolve without a bundling step, same as
 // run-component-schema-tests.mjs.
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
 const here = dirname(fileURLToPath(import.meta.url));

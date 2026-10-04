@@ -7,9 +7,7 @@ import { NodeIcon } from './node-icon.js';
 
 export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
   const callbacks = useGraphCallbacks();
-  const {
-    node, rowRank, sourceHandles, targetHandles, selected, routeCount, triggerLabel, conditionLabel, readOnly,
-  } = data;
+  const { node, rowRank, sourceHandles, targetHandles, selected, routeCount, triggerLabel, conditionLabel, readOnly } = data;
   const gateway = node.gateway;
   const isPill = node.pill;
   const shapeClass = isPill ? 'shape-pill' : 'shape-diamond';
@@ -54,13 +52,9 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
     );
   };
 
-  const className = [
-    'gateway-node',
-    node.surface,
-    `kind-${gateway.gatewayType.toLowerCase()}`,
-    shapeClass,
-    selected ? 'selected' : '',
-  ].filter(Boolean).join(' ');
+  const className = ['gateway-node', node.surface, `kind-${gateway.gatewayType.toLowerCase()}`, shapeClass, selected ? 'selected' : '']
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
@@ -74,9 +68,11 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
         type="button"
         className={className}
         aria-pressed={selected}
-        aria-label={isPill
-          ? `${gateway.displayName}, single-route gateway via “${triggerLabel}”, ${node.queueLabel} queue`
-          : `${gateway.displayName}, ${gateway.gatewayType} gateway, ${node.queueLabel} queue`}
+        aria-label={
+          isPill
+            ? `${gateway.displayName}, single-route gateway via “${triggerLabel}”, ${node.queueLabel} queue`
+            : `${gateway.displayName}, ${gateway.gatewayType} gateway, ${node.queueLabel} queue`
+        }
         data-wayfinder-gateway={gateway.key}
         data-wayfinder-gateway-kind={gateway.gatewayType}
         data-wayfinder-gateway-route-count={String(routeCount)}
@@ -86,24 +82,27 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
         onKeyDown={handleKeyDown}
         onContextMenu={handleContextMenu}
       >
-        {isPill
-          ? (
-            <>
-              <span className="pill-trigger">{triggerLabel || gateway.displayName}</span>
-              {conditionLabel
-                ? <span className="pill-condition" aria-label="conditional route" title={conditionLabel}>•</span>
-                : null}
-            </>
-          )
-          : (
-            <>
-              <span className="node-header">
-                <span className="node-icon-chip"><NodeIcon icon={iconForGateway(gateway)} /></span>
-                <span className="node-meta">{gateway.gatewayType}</span>
+        {isPill ? (
+          <>
+            <span className="pill-trigger">{triggerLabel || gateway.displayName}</span>
+            {conditionLabel ? (
+              // biome-ignore lint/a11y/useAriaPropsSupportedByRole: the dot is the only cue that a route is conditional, so it carries a name
+              <span className="pill-condition" aria-label="conditional route" title={conditionLabel}>
+                •
               </span>
-              <span className="node-label">{gateway.displayName}</span>
-            </>
-          )}
+            ) : null}
+          </>
+        ) : (
+          <>
+            <span className="node-header">
+              <span className="node-icon-chip">
+                <NodeIcon icon={iconForGateway(gateway)} />
+              </span>
+              <span className="node-meta">{gateway.gatewayType}</span>
+            </span>
+            <span className="node-label">{gateway.displayName}</span>
+          </>
+        )}
       </button>
       <HandleFan handles={sourceHandles} type="source" readOnly={readOnly} />
     </div>

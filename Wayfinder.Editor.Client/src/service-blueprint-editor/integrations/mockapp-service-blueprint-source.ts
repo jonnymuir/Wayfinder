@@ -35,9 +35,12 @@ type ProblemDetailsPayload = {
 // "Conflict") with a ServiceBlueprintSaveOutcome — not a ProblemDetails payload — so it is
 // recognised and parsed separately, see parseSaveOutcome below.
 function isServiceBlueprintSaveOutcome(payload: unknown): payload is ServiceBlueprintSaveOutcome {
-  return !!payload && typeof payload === 'object'
-    && typeof (payload as ServiceBlueprintSaveOutcome).status === 'string'
-    && Array.isArray((payload as ServiceBlueprintSaveOutcome).diagnostics);
+  return (
+    !!payload &&
+    typeof payload === 'object' &&
+    typeof (payload as ServiceBlueprintSaveOutcome).status === 'string' &&
+    Array.isArray((payload as ServiceBlueprintSaveOutcome).diagnostics)
+  );
 }
 
 /** `Path`s like `stages.review.validations[0].when` or `stages.review.components[2].showWhen`
@@ -47,7 +50,7 @@ function stageKeyFromDiagnosticPath(path: string): string | undefined {
 }
 
 function readSaveOutcomeDiagnosticDetails(diagnostics: ServiceBlueprintDiagnostic[]): ServiceBlueprintSaveErrorDetail[] {
-  return diagnostics.flatMap(diagnostic => {
+  return diagnostics.flatMap((diagnostic) => {
     const message = sanitiseServiceBlueprintSaveErrorText(diagnostic.message);
     return message ? [{ message, stageKey: stageKeyFromDiagnosticPath(diagnostic.path) }] : [];
   });
@@ -57,17 +60,18 @@ function parseSaveOutcome(payload: ServiceBlueprintSaveOutcome, statusCode: numb
   const isConflict = statusCode === 409;
   const currentVersion = payload.currentVersion ?? null;
   const details = readSaveOutcomeDiagnosticDetails(payload.diagnostics);
-  const detailLines = details.map(detail => detail.message);
-  const summary = sanitiseServiceBlueprintSaveErrorText(detailLines[0])
-    ?? (isConflict
+  const detailLines = details.map((detail) => detail.message);
+  const summary =
+    sanitiseServiceBlueprintSaveErrorText(detailLines[0]) ??
+    (isConflict
       ? `“${blueprintKey}” was changed elsewhere since you loaded it${currentVersion != null ? ` (now at version ${currentVersion})` : ''}.`
       : `The host app rejected the save request for “${blueprintKey}”.`);
 
   return new ServiceBlueprintSaveError({
     title: isConflict ? 'This service blueprint changed elsewhere' : 'We couldn’t save this service blueprint',
     summary,
-    details: details.filter(detail => detail.message !== summary),
-    detailLines: detailLines.filter(line => line !== summary),
+    details: details.filter((detail) => detail.message !== summary),
+    detailLines: detailLines.filter((line) => line !== summary),
     statusCode,
     isConflict,
     currentVersion,
@@ -80,39 +84,38 @@ function readStructuredErrorLines(value: unknown): string[] {
   }
 
   if (value && typeof value === 'object') {
-    return Object.entries(value as Record<string, unknown>)
-      .flatMap(([field, messages]) => {
-        if (Array.isArray(messages)) {
-          return messages
-            .filter((message): message is string => typeof message === 'string')
-            .map(message => field ? `${field}: ${message}` : message);
-        }
+    return Object.entries(value as Record<string, unknown>).flatMap(([field, messages]) => {
+      if (Array.isArray(messages)) {
+        return messages
+          .filter((message): message is string => typeof message === 'string')
+          .map((message) => (field ? `${field}: ${message}` : message));
+      }
 
-        return typeof messages === 'string'
-          ? [field ? `${field}: ${messages}` : messages]
-          : [];
-      });
+      return typeof messages === 'string' ? [field ? `${field}: ${messages}` : messages] : [];
+    });
   }
 
   return typeof value === 'string' ? sanitiseServiceBlueprintSaveErrorLines([value]) : [];
 }
 
 function parseProblemDetails(payload: ProblemDetailsPayload, statusCode: number, blueprintKey: string): ServiceBlueprintSaveError {
-  const title = sanitiseServiceBlueprintSaveErrorText(typeof payload.title === 'string' ? payload.title : null)
-    ?? 'We couldn’t save this service blueprint';
-  const summary = sanitiseServiceBlueprintSaveErrorText(
-    typeof payload.summary === 'string'
-      ? payload.summary
-      : typeof payload.detail === 'string'
-        ? payload.detail
-        : typeof payload.message === 'string'
-          ? payload.message
-          : null
-  ) ?? `The host app rejected the save request for “${blueprintKey}”.`;
+  const title =
+    sanitiseServiceBlueprintSaveErrorText(typeof payload.title === 'string' ? payload.title : null) ??
+    'We couldn’t save this service blueprint';
+  const summary =
+    sanitiseServiceBlueprintSaveErrorText(
+      typeof payload.summary === 'string'
+        ? payload.summary
+        : typeof payload.detail === 'string'
+          ? payload.detail
+          : typeof payload.message === 'string'
+            ? payload.message
+            : null
+    ) ?? `The host app rejected the save request for “${blueprintKey}”.`;
   const detailLines = sanitiseServiceBlueprintSaveErrorLines([
     ...readStructuredErrorLines(payload.errors),
     ...readStructuredErrorLines(payload.extensions?.errors),
-  ]).filter(line => line !== summary);
+  ]).filter((line) => line !== summary);
   const traceId = sanitiseServiceBlueprintSaveErrorText(
     typeof payload.traceId === 'string'
       ? payload.traceId
@@ -133,8 +136,7 @@ function parseProblemDetails(payload: ProblemDetailsPayload, statusCode: number,
 async function buildSaveError(response: Response, blueprintKey: string): Promise<ServiceBlueprintSaveError> {
   const payloadText = await response.text().catch(() => '');
   const contentType = response.headers.get('content-type') ?? '';
-  const fallbackSummary = sanitiseServiceBlueprintSaveErrorText(payloadText)
-    ?? `Save failed (${response.status} ${response.statusText}).`;
+  const fallbackSummary = sanitiseServiceBlueprintSaveErrorText(payloadText) ?? `Save failed (${response.status} ${response.statusText}).`;
 
   if (contentType.includes('json') || payloadText.trim().startsWith('{')) {
     try {

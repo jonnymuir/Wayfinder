@@ -15,7 +15,9 @@ function chipClassName(chip: TransitionChip): string {
     chip.merge ? 'merge-path' : '',
     chip.selected ? 'selected' : '',
     chip.simulationPath ? 'simulation-path' : '',
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function RouteEdge({
@@ -51,8 +53,9 @@ export function RouteEdge({
   // transition's own rail a little to either side of the shared line so the branches read as
   // distinct paths; the offset axis is whichever axis is perpendicular to the dominant
   // source→target direction, so a bend never runs parallel to the flow itself.
-  const verticalFlow = (sourcePosition === Position.Top || sourcePosition === Position.Bottom)
-    && (targetPosition === Position.Top || targetPosition === Position.Bottom);
+  const verticalFlow =
+    (sourcePosition === Position.Top || sourcePosition === Position.Bottom) &&
+    (targetPosition === Position.Top || targetPosition === Position.Bottom);
 
   const path = buildCurvedRoutePath(source, sourcePosition, target, targetPosition, 0, verticalFlow);
 
@@ -60,9 +63,7 @@ export function RouteEdge({
   // path entirely: a smooth curve constrained to pass exactly through the dropped point, rather
   // than the plain source→target curve.
   const activeWaypoint = dragPreview ?? manualWaypoint ?? null;
-  const manualPath = activeWaypoint
-    ? buildCurvedWaypointPath(source, sourcePosition, activeWaypoint, target, targetPosition)
-    : null;
+  const manualPath = activeWaypoint ? buildCurvedWaypointPath(source, sourcePosition, activeWaypoint, target, targetPosition) : null;
   const effectivePath = manualPath ?? path;
 
   const pathForChip = (chip: TransitionChip): string => {
@@ -132,7 +133,9 @@ export function RouteEdge({
     edge.backward ? 'loop-back' : '',
     simulationPath ? 'simulation-path' : '',
     manualWaypoint ? 'manually-routed' : '',
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   const handleChipKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, chip: TransitionChip) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -191,7 +194,7 @@ export function RouteEdge({
         data-wayfinder-route-to={toKey}
         data-wayfinder-route-simulation-path={String(simulationPath)}
       />
-      {chips.map(chip => (
+      {chips.map((chip) => (
         <path
           key={`transition-path-${chip.index}`}
           d={pathForChip(chip)}
@@ -203,7 +206,9 @@ export function RouteEdge({
             chip.merge ? 'merge-path' : '',
             chip.selected ? 'selected' : '',
             chip.simulationPath ? 'simulation-path' : '',
-          ].filter(Boolean).join(' ')}
+          ]
+            .filter(Boolean)
+            .join(' ')}
           data-wayfinder-transition-path={String(chip.index)}
           data-wayfinder-transition-from={chip.fromKey}
           data-wayfinder-transition-to={chip.toKey}
@@ -211,7 +216,7 @@ export function RouteEdge({
         />
       ))}
       <EdgeLabelRenderer>
-        {chips.map(chip => {
+        {chips.map((chip) => {
           const position = chipPosition(chip);
           return (
             <button
@@ -222,22 +227,24 @@ export function RouteEdge({
                 position: 'absolute',
                 transform: `translate(-50%, -50%) translate(${position.x}px, ${position.y}px)`,
                 pointerEvents: 'all',
-                cursor: readOnly ? undefined : (draggingChipIndexRef.current === chip.index ? 'grabbing' : 'grab'),
+                cursor: readOnly ? undefined : draggingChipIndexRef.current === chip.index ? 'grabbing' : 'grab',
               }}
-              aria-label={manualWaypoint
-                ? `${chip.ariaLabel}. Drag to move this route's bend point, press R to reset to the automatic path.`
-                : `${chip.ariaLabel}. Drag to bend this route.`}
+              aria-label={
+                manualWaypoint
+                  ? `${chip.ariaLabel}. Drag to move this route's bend point, press R to reset to the automatic path.`
+                  : `${chip.ariaLabel}. Drag to bend this route.`
+              }
               data-wayfinder-transition={String(chip.index)}
               data-wayfinder-transition-from={chip.fromKey}
               data-wayfinder-transition-to={chip.toKey}
               data-wayfinder-transition-simulation-path={String(chip.simulationPath)}
-              onPointerDown={event => handleChipPointerDown(event, chip)}
-              onPointerMove={event => handleChipPointerMove(event, chip)}
-              onPointerUp={event => handleChipPointerUp(event, chip)}
+              onPointerDown={(event) => handleChipPointerDown(event, chip)}
+              onPointerMove={(event) => handleChipPointerMove(event, chip)}
+              onPointerUp={(event) => handleChipPointerUp(event, chip)}
               onClick={() => handleChipClick(chip)}
               onDoubleClick={() => callbacks.selectTransition(chip.index, { openInspector: true })}
-              onKeyDown={event => handleChipKeyDown(event, chip)}
-              onContextMenu={event => handleChipContextMenu(event, chip)}
+              onKeyDown={(event) => handleChipKeyDown(event, chip)}
+              onContextMenu={(event) => handleChipContextMenu(event, chip)}
             >
               {chip.label}
             </button>

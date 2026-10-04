@@ -45,10 +45,8 @@ test.describe('Planning service blueprint — migrated format', () => {
     // All stages must carry data-wayfinder-queue and resolve to the applicant queue.
     const stages = graph.locator('[data-wayfinder-stage]');
     await expect(stages.first()).toBeVisible({ timeout: 5_000 });
-    const laneAttrs = await stages.evaluateAll(els =>
-      els.map(el => el.getAttribute('data-wayfinder-queue'))
-    );
-    expect(laneAttrs.every(attr => attr === 'applicant')).toBe(true);
+    const laneAttrs = await stages.evaluateAll((els) => els.map((el) => el.getAttribute('data-wayfinder-queue')));
+    expect(laneAttrs.every((attr) => attr === 'applicant')).toBe(true);
   });
 
   test('Split gateways are visible as gateway nodes', async ({ page }) => {
@@ -71,10 +69,8 @@ test.describe('Planning service blueprint — migrated format', () => {
     await expect(graph).toBeVisible({ timeout: 10_000 });
     await expect(graph.locator('[data-wayfinder-stage]').first()).toBeVisible({ timeout: 5_000 });
 
-    const tops = await graph.locator('[data-wayfinder-stage]').evaluateAll(
-      els => els.map(el => el.getBoundingClientRect().top)
-    );
-    const uniqueTops = new Set(tops.map(t => Math.round(t)));
+    const tops = await graph.locator('[data-wayfinder-stage]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top));
+    const uniqueTops = new Set(tops.map((t) => Math.round(t)));
     expect(uniqueTops.size).toBeGreaterThan(1);
   });
 
@@ -227,10 +223,8 @@ test.describe('Information Request service blueprint — migrated format', () =>
     await expect(graph).toBeVisible({ timeout: 10_000 });
     await expect(graph.locator('[data-wayfinder-stage]').first()).toBeVisible({ timeout: 5_000 });
 
-    const tops = await graph.locator('[data-wayfinder-stage]').evaluateAll(
-      els => els.map(el => el.getBoundingClientRect().top)
-    );
-    const uniqueTops = new Set(tops.map(t => Math.round(t)));
+    const tops = await graph.locator('[data-wayfinder-stage]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top));
+    const uniqueTops = new Set(tops.map((t) => Math.round(t)));
     expect(uniqueTops.size).toBeGreaterThan(1);
   });
 });

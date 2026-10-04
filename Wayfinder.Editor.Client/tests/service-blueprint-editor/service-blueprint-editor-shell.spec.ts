@@ -6,9 +6,13 @@ function storyUrl(storyId: string): string {
 }
 
 async function waitForServiceBlueprintLoad(page: Page, serviceBlueprintKey: string): Promise<void> {
-  await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute('data-wayfinder-service-blueprint-loaded', serviceBlueprintKey, {
-    timeout: 30_000,
-  });
+  await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+    'data-wayfinder-service-blueprint-loaded',
+    serviceBlueprintKey,
+    {
+      timeout: 30_000,
+    }
+  );
 }
 
 async function loadPaymentDemo(page: Page): Promise<void> {
@@ -61,13 +65,12 @@ test.describe('ServiceBlueprint editor shell proof', () => {
 
     await waitForServiceBlueprintLoad(page, 'planning');
 
-    const initialHostWiring = await editor.evaluate(node => {
+    const initialHostWiring = await editor.evaluate((node) => {
       const source = (node as unknown as { serviceBlueprintSource?: object }).serviceBlueprintSource;
-      const availableQueues = ((node as unknown as { availableQueues?: Array<{ queueName: string }> }).availableQueues ?? [])
-        .map(queue => queue.queueName);
-      return source
-        ? { sourceName: source.constructor.name, queueNames: availableQueues }
-        : null;
+      const availableQueues = ((node as unknown as { availableQueues?: Array<{ queueName: string }> }).availableQueues ?? []).map(
+        (queue) => queue.queueName
+      );
+      return source ? { sourceName: source.constructor.name, queueNames: availableQueues } : null;
     });
     expect(initialHostWiring).not.toBeNull();
     expect(initialHostWiring?.queueNames).toContain('payments');
@@ -77,11 +80,11 @@ test.describe('ServiceBlueprint editor shell proof', () => {
 
     const hostWiringSurvived = await editor.evaluate((node, expected) => {
       const source = (node as unknown as { serviceBlueprintSource?: object }).serviceBlueprintSource;
-      const availableQueues = ((node as unknown as { availableQueues?: Array<{ queueName: string }> }).availableQueues ?? [])
-        .map(queue => queue.queueName);
+      const availableQueues = ((node as unknown as { availableQueues?: Array<{ queueName: string }> }).availableQueues ?? []).map(
+        (queue) => queue.queueName
+      );
       return source
-        ? source.constructor.name === expected.sourceName
-          && JSON.stringify(availableQueues) === JSON.stringify(expected.queueNames)
+        ? source.constructor.name === expected.sourceName && JSON.stringify(availableQueues) === JSON.stringify(expected.queueNames)
         : false;
     }, initialHostWiring);
     expect(hostWiringSurvived).toBe(true);
@@ -123,12 +126,12 @@ test.describe('ServiceBlueprint editor shell proof', () => {
         const right = geometry.nodes[nextIndex];
         expect(
           rectanglesOverlap(left, right),
-          `"${left.label || left.key}" overlaps "${right.label || right.key}" in the payment demo graph.`,
+          `"${left.label || left.key}" overlaps "${right.label || right.key}" in the payment demo graph.`
         ).toBe(false);
       }
     }
 
-    const routeChipRects = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+    const routeChipRects = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
       const root = (graphElement as HTMLElement).shadowRoot;
       if (!root) {
         throw new Error('Graph shadow root not found');
@@ -147,43 +150,39 @@ test.describe('ServiceBlueprint editor shell proof', () => {
         bottom: rect.bottom - sceneRect.top,
       });
 
-      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-transition]'))
-        .map(chip => ({
-          label: chip.textContent?.trim() ?? '',
-          ...rel(chip.getBoundingClientRect()),
-        }));
+      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-transition]')).map((chip) => ({
+        label: chip.textContent?.trim() ?? '',
+        ...rel(chip.getBoundingClientRect()),
+      }));
     });
 
     for (const chip of routeChipRects) {
       for (const node of geometry.nodes) {
         expect(
           rectanglesOverlap(chip, node),
-          `Route label "${chip.label}" overlaps "${node.label || node.key}" in the payment demo graph.`,
+          `Route label "${chip.label}" overlaps "${node.label || node.key}" in the payment demo graph.`
         ).toBe(false);
       }
     }
 
-    const textMetrics = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+    const textMetrics = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
       const root = (graphElement as HTMLElement).shadowRoot;
       if (!root) {
         throw new Error('Graph shadow root not found');
       }
 
       return Array.from(root.querySelectorAll<HTMLElement>('.node-label, .pill-trigger'))
-        .map(element => ({
+        .map((element) => ({
           text: element.textContent?.trim() ?? '',
           scrollWidth: element.scrollWidth,
           clientWidth: element.clientWidth,
         }))
-        .filter(metric => metric.text.length > 0);
+        .filter((metric) => metric.text.length > 0);
     });
 
     expect(textMetrics.length).toBeGreaterThan(0);
     for (const metric of textMetrics) {
-      expect(
-        metric.scrollWidth,
-        `"${metric.text}" is clipped in the payment demo graph.`,
-      ).toBeLessThanOrEqual(metric.clientWidth + 1);
+      expect(metric.scrollWidth, `"${metric.text}" is clipped in the payment demo graph.`).toBeLessThanOrEqual(metric.clientWidth + 1);
     }
   });
 
@@ -212,14 +211,15 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const stageTops = () => page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
-      const shadowRoot = (graphElement as HTMLElement).shadowRoot!;
-      return Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
-        .map(node => node.getBoundingClientRect().top);
-    });
-    const canvasBox = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
-      const rect = (graphElement as HTMLElement).shadowRoot!
-        .querySelector<HTMLElement>('.graph-canvas')!.getBoundingClientRect();
+    const stageTops = () =>
+      page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
+        const shadowRoot = (graphElement as HTMLElement).shadowRoot!;
+        return Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]')).map(
+          (node) => node.getBoundingClientRect().top
+        );
+      });
+    const canvasBox = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
+      const rect = (graphElement as HTMLElement).shadowRoot!.querySelector<HTMLElement>('.graph-canvas')!.getBoundingClientRect();
       return { x: rect.left, y: rect.top, height: rect.height };
     });
 
@@ -267,7 +267,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     const toolbarBefore = await toolbar.boundingBox();
 
     // Scroll the graph-canvas
-    await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+    await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
       const graph = graphElement as HTMLElement;
       const shadowRoot = graph.shadowRoot;
       const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -287,7 +287,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     expect(outlineAfter?.y).toBe(outlineBefore?.y);
     expect(inspectorAfter?.y).toBe(inspectorBefore?.y);
     expect(toolbarAfter?.y).toBe(toolbarBefore?.y);
-    
+
     // Window body should still be at scroll position 0
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   });

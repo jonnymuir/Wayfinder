@@ -1,5 +1,5 @@
-import { mkdirSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
@@ -83,10 +83,7 @@ export function graphLocator(page: Page): Locator {
 }
 
 /** Navigate to a story and wait until the graph has measurable layout. */
-export async function gotoCanonicalScenario(
-  page: Page,
-  scenario: CanonicalScenario,
-): Promise<void> {
+export async function gotoCanonicalScenario(page: Page, scenario: CanonicalScenario): Promise<void> {
   await page.setViewportSize({ ...VISUAL_VIEWPORT });
   await page.goto(storyUrl(scenario.storyId));
   const graph = graphLocator(page);
@@ -96,9 +93,11 @@ export async function gotoCanonicalScenario(
   // host once nodes and edges are committed to the DOM. Empty service
   // blueprints render the Lit empty state instead and never mount the canvas.
   await expect(
-    page.locator(
-      'wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"], wayfinder-service-blueprint-graph [data-wayfinder-empty-state]',
-    ).first(),
+    page
+      .locator(
+        'wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"], wayfinder-service-blueprint-graph [data-wayfinder-empty-state]'
+      )
+      .first()
   ).toBeAttached({ timeout: 15_000 });
 }
 
@@ -166,27 +165,17 @@ export async function measureGraph(page: Page): Promise<GraphGeometry> {
       height: rect.height,
     });
 
-    const lanes = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-wayfinder-queue-container]'),
-    ).map((lane) => ({
+    const lanes = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-queue-container]')).map((lane) => ({
       key: lane.getAttribute('data-wayfinder-queue-container') ?? '',
       ...rel(lane.getBoundingClientRect()),
     }));
 
     const inferLane = (left: number, right: number) => {
       const centre = (left + right) / 2;
-      return (
-        lanes.find((lane) => centre >= lane.left && centre <= lane.right)?.key ??
-        null
-      );
+      return lanes.find((lane) => centre >= lane.left && centre <= lane.right)?.key ?? null;
     };
 
-    const measureNode = (
-      shell: HTMLElement,
-      kind: 'stage' | 'gateway',
-      shellAttr: string,
-      buttonSelector: string,
-    ) => {
+    const measureNode = (shell: HTMLElement, kind: 'stage' | 'gateway', shellAttr: string, buttonSelector: string) => {
       const r = rel(shell.getBoundingClientRect());
       const button = shell.querySelector<HTMLElement>(buttonSelector);
       const labelEl = button?.querySelector<HTMLElement>('.node-label');
@@ -203,26 +192,15 @@ export async function measureGraph(page: Page): Promise<GraphGeometry> {
       };
     };
 
-    const stages = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'),
-    ).map((shell) =>
-      measureNode(shell, 'stage', 'data-wayfinder-stage-card', '[data-wayfinder-stage]'),
+    const stages = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]')).map((shell) =>
+      measureNode(shell, 'stage', 'data-wayfinder-stage-card', '[data-wayfinder-stage]')
     );
 
-    const gateways = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-wayfinder-gateway-node]'),
-    ).map((shell) =>
-      measureNode(
-        shell,
-        'gateway',
-        'data-wayfinder-gateway-node',
-        '[data-wayfinder-gateway]',
-      ),
+    const gateways = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-gateway-node]')).map((shell) =>
+      measureNode(shell, 'gateway', 'data-wayfinder-gateway-node', '[data-wayfinder-gateway]')
     );
 
-    const routes = Array.from(
-      root.querySelectorAll<SVGPathElement>('[data-wayfinder-route-path]'),
-    )
+    const routes = Array.from(root.querySelectorAll<SVGPathElement>('[data-wayfinder-route-path]'))
       .map((path) => {
         const length = (path as SVGPathElement).getTotalLength?.() ?? 0;
         if (!length) return null;
@@ -268,12 +246,7 @@ export function nodeCentre(node: NodeBox): { x: number; y: number } {
 export function rectanglesOverlap(
   a: { left: number; right: number; top: number; bottom: number },
   b: { left: number; right: number; top: number; bottom: number },
-  tolerance = 1,
+  tolerance = 1
 ): boolean {
-  return (
-    a.left + tolerance < b.right &&
-    b.left + tolerance < a.right &&
-    a.top + tolerance < b.bottom &&
-    b.top + tolerance < a.bottom
-  );
+  return a.left + tolerance < b.right && b.left + tolerance < a.right && a.top + tolerance < b.bottom && b.top + tolerance < a.bottom;
 }

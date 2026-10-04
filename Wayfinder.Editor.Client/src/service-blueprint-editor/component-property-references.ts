@@ -46,26 +46,19 @@ export interface PropertyReferenceContext {
  * a radio's conditional children is still a real sibling whose value is submitted with the rest
  * of the stage.
  */
-export function collectStageInputFields(
-  components: Component[] | undefined,
-  catalog: ComponentDescriptor[]
-): FieldReference[] {
+export function collectStageInputFields(components: Component[] | undefined, catalog: ComponentDescriptor[]): FieldReference[] {
   const results: FieldReference[] = [];
   walkComponents(components, catalog, results);
   return results;
 }
 
-function walkComponents(
-  components: Component[] | undefined,
-  catalog: ComponentDescriptor[],
-  results: FieldReference[]
-): void {
+function walkComponents(components: Component[] | undefined, catalog: ComponentDescriptor[], results: FieldReference[]): void {
   if (!Array.isArray(components)) {
     return;
   }
 
   for (const component of components) {
-    const descriptor = catalog.find(candidate => candidate.discriminator === component.type);
+    const descriptor = catalog.find((candidate) => candidate.discriminator === component.type);
     const record = component as unknown as Record<string, unknown>;
 
     if (descriptor?.isInput && typeof record.fieldKey === 'string') {
@@ -122,12 +115,12 @@ export function buildPropertyReferenceContext(
   stageComponents: Component[] | undefined,
   catalog: ComponentDescriptor[]
 ): PropertyReferenceContext {
-  const allComponents = (serviceBlueprint?.stages ?? []).flatMap(stage => stage.components ?? []);
+  const allComponents = (serviceBlueprint?.stages ?? []).flatMap((stage) => stage.components ?? []);
 
   return {
     siblingFields: collectStageInputFields(stageComponents, catalog),
     allFields: collectStageInputFields(allComponents, catalog),
-    stageOptions: (serviceBlueprint?.stages ?? []).map(stage => ({
+    stageOptions: (serviceBlueprint?.stages ?? []).map((stage) => ({
       key: stage.stageKey,
       label: `${stage.displayName} (${stage.stageKey})`,
     })),

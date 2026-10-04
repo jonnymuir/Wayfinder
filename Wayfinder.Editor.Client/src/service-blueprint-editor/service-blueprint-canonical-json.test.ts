@@ -1,5 +1,5 @@
 import { serializeAuthoredServiceBlueprint, authoredServiceBlueprintJsonEquals } from './service-blueprint-canonical-json.js';
-import { type ServiceBlueprint } from './types.js';
+import type { ServiceBlueprint } from './types.js';
 import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
 
 let failures = 0;
@@ -65,8 +65,14 @@ export function run(): number {
 
     const json = serializeAuthoredServiceBlueprint(blueprint);
     const parsed = JSON.parse(json);
-    check('calculations.tables key order is preserved', JSON.stringify(Object.keys(parsed.calculations.tables)) === JSON.stringify(['zTable', 'aTable']));
-    check('calculations.series key order is preserved', JSON.stringify(Object.keys(parsed.calculations.series)) === JSON.stringify(['zSeries', 'aSeries']));
+    check(
+      'calculations.tables key order is preserved',
+      JSON.stringify(Object.keys(parsed.calculations.tables)) === JSON.stringify(['zTable', 'aTable'])
+    );
+    check(
+      'calculations.series key order is preserved',
+      JSON.stringify(Object.keys(parsed.calculations.series)) === JSON.stringify(['zSeries', 'aSeries'])
+    );
   }
 
   // ── Everything else still gets deterministic key ordering ────────────────
@@ -100,7 +106,10 @@ export function run(): number {
   {
     const blueprint = minimalBlueprint({ calculations: { fields: { b: { expr: '1' }, a: { expr: 'b + 1' } } } });
     const clone: ServiceBlueprint = JSON.parse(JSON.stringify(blueprint));
-    check('two structurally-identical blueprints (including calculations) compare equal', authoredServiceBlueprintJsonEquals(blueprint, clone));
+    check(
+      'two structurally-identical blueprints (including calculations) compare equal',
+      authoredServiceBlueprintJsonEquals(blueprint, clone)
+    );
   }
 
   // ── Stage validations round-trip ──────────────────────────────────────────
@@ -112,9 +121,7 @@ export function run(): number {
           displayName: 'Only',
           queueKey: 'citizen',
           components: [],
-          validations: [
-            { code: 'evidence-required', when: 'hasIssue', rule: 'hasEvidence', field: 'notes', message: 'Add detail.' },
-          ],
+          validations: [{ code: 'evidence-required', when: 'hasIssue', rule: 'hasEvidence', field: 'notes', message: 'Add detail.' }],
         },
       ],
     });
@@ -145,7 +152,11 @@ export function run(): number {
       JSON.parse(JSON.stringify(minimalBlueprint({ allowManualRestart: true }))) as ServiceBlueprint
     );
     const parsed = JSON.parse(serializeAuthoredServiceBlueprint(loaded));
-    check('allowManualRestart survives a load and save round trip', parsed.allowManualRestart === true, JSON.stringify(parsed.allowManualRestart));
+    check(
+      'allowManualRestart survives a load and save round trip',
+      parsed.allowManualRestart === true,
+      JSON.stringify(parsed.allowManualRestart)
+    );
   }
 
   {
@@ -155,23 +166,38 @@ export function run(): number {
 
   {
     const handoff = { id: 'a-to-b', fromState: 'a', toState: 'b', label: 'A to B', actorChange: 'caseworker' };
-    const loaded = hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(minimalBlueprint({
-      authoredServiceBlueprintId: '2c1b6f1e-0000-4000-8000-000000000001',
-      handoffs: [handoff],
-      tags: { demo: 'x' },
-    }))) as ServiceBlueprint);
+    const loaded = hydrateServiceBlueprintDefinition(
+      JSON.parse(
+        JSON.stringify(
+          minimalBlueprint({
+            authoredServiceBlueprintId: '2c1b6f1e-0000-4000-8000-000000000001',
+            handoffs: [handoff],
+            tags: { demo: 'x' },
+          })
+        )
+      ) as ServiceBlueprint
+    );
     const parsed = JSON.parse(serializeAuthoredServiceBlueprint(loaded));
     check('tags survive a load and save round trip', parsed.tags?.demo === 'x', JSON.stringify(parsed.tags));
-    check('handoffs survive a load and save round trip',
-      parsed.handoffs?.length === 1 && Object.entries(handoff).every(([key, value]) => parsed.handoffs[0][key] === value), JSON.stringify(parsed.handoffs));
-    check('authoredServiceBlueprintId survives a load and save round trip',
-      parsed.authoredServiceBlueprintId === '2c1b6f1e-0000-4000-8000-000000000001', JSON.stringify(parsed.authoredServiceBlueprintId));
+    check(
+      'handoffs survive a load and save round trip',
+      parsed.handoffs?.length === 1 && Object.entries(handoff).every(([key, value]) => parsed.handoffs[0][key] === value),
+      JSON.stringify(parsed.handoffs)
+    );
+    check(
+      'authoredServiceBlueprintId survives a load and save round trip',
+      parsed.authoredServiceBlueprintId === '2c1b6f1e-0000-4000-8000-000000000001',
+      JSON.stringify(parsed.authoredServiceBlueprintId)
+    );
   }
 
   {
     const parsed = JSON.parse(serializeAuthoredServiceBlueprint(minimalBlueprint()));
-    check('a blueprint with no tags, handoffs or id omits those keys',
-      !('tags' in parsed) && !('handoffs' in parsed) && !('authoredServiceBlueprintId' in parsed), JSON.stringify(parsed));
+    check(
+      'a blueprint with no tags, handoffs or id omits those keys',
+      !('tags' in parsed) && !('handoffs' in parsed) && !('authoredServiceBlueprintId' in parsed),
+      JSON.stringify(parsed)
+    );
   }
 
   return failures;

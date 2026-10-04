@@ -14,16 +14,17 @@ async function openDefinitionTab(page: Page): Promise<void> {
   await expect(editor).toBeVisible({ timeout: 10_000 });
   await expect(editor).toHaveAttribute('data-wayfinder-service-blueprint-loaded', /.+/, { timeout: 30_000 });
 
-  const definitionTab = editor
-    .locator('wayfinder-confidence-tabs')
-    .locator('button[data-wayfinder-confidence-tab="definition"]');
+  const definitionTab = editor.locator('wayfinder-confidence-tabs').locator('button[data-wayfinder-confidence-tab="definition"]');
   await definitionTab.click();
   await expect(editor.locator('[data-wayfinder-definition-panel]')).toBeVisible();
-  await page.waitForFunction(() => {
-    const host = document.querySelector('wayfinder-service-blueprint-editor');
-    const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
-    return !!def?.shadowRoot?.querySelector('.cm-content');
-  }, { timeout: 10_000 });
+  await page.waitForFunction(
+    () => {
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
+      return !!def?.shadowRoot?.querySelector('.cm-content');
+    },
+    { timeout: 10_000 }
+  );
 }
 
 async function focusDefinitionEditor(page: Page): Promise<void> {
@@ -186,7 +187,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     const docLength = await page.evaluate(() => {
       const host = document.querySelector('wayfinder-service-blueprint-editor');
       const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as
-        (HTMLElement & { _view?: { state: { doc: { length: number } } } }) | null;
+        | (HTMLElement & { _view?: { state: { doc: { length: number } } } })
+        | null;
       return def?._view?.state.doc.length ?? 0;
     });
     expect(docLength).toBeGreaterThan(0);
@@ -203,7 +205,8 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     const selectionLength = await page.evaluate(() => {
       const host = document.querySelector('wayfinder-service-blueprint-editor');
       const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as
-        (HTMLElement & { _view?: { state: { selection: { main: { from: number; to: number } } } } }) | null;
+        | (HTMLElement & { _view?: { state: { selection: { main: { from: number; to: number } } } } })
+        | null;
       const sel = def?._view?.state.selection.main;
       return sel ? sel.to - sel.from : 0;
     });

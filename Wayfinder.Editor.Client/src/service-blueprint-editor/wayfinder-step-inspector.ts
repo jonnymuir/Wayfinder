@@ -21,7 +21,7 @@ import { buildPropertyReferenceContext } from './component-property-references.j
 function renderNodeIconSvg(icon: NodeIconDef) {
   return svg`
     <svg viewBox=${icon.viewBox} width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      ${icon.paths.map(d => svg`<path d=${d}></path>`)}
+      ${icon.paths.map((d) => svg`<path d=${d}></path>`)}
     </svg>
   `;
 }
@@ -50,9 +50,11 @@ function describeComponent(component: Component): string {
     case 'details':
     case 'heading':
     case 'notification-banner':
-      return ('content' in component ? component.content : undefined)
-        ?? ('heading' in component ? component.heading : undefined)
-        ?? component.type;
+      return (
+        ('content' in component ? component.content : undefined) ??
+        ('heading' in component ? component.heading : undefined) ??
+        component.type
+      );
     case 'stat-group':
       return `${component.title ?? 'Statistics'} · ${component.items.length} tile${component.items.length === 1 ? '' : 's'}`;
     case 'chart':
@@ -62,13 +64,9 @@ function describeComponent(component: Component): string {
       // checkboxlist/date/email/textarea/boolean/slider/file-upload/guidance-checklist) — shares
       // `label`/`fieldKey` via AuthoredInputComponentBase, so this stays generic rather than
       // needing a case added every time a new input type is registered.
-      return (component as { label?: string }).label
-        ?? (component as { fieldKey?: string }).fieldKey
-        ?? component.type;
+      return (component as { label?: string }).label ?? (component as { fieldKey?: string }).fieldKey ?? component.type;
   }
 }
-import {
-} from './types.js';
 import {
   applyQueueToStage,
   stageQueueKey,
@@ -92,7 +90,6 @@ import './wayfinder-calculation-expression-editor.js';
 import type { ExpressionCompletionItem } from './wayfinder-calculation-expression-editor.js';
 import { tryParseExpression } from './calculation-runtime.js';
 import { STAGE_KIND_OPTIONS, stageKindLabel } from './stage-kind-options.js';
-
 
 type GraphSelectionDetail = {
   kind: 'stage' | 'gateway';
@@ -168,7 +165,7 @@ export class WayfinderStepInspectorElement extends LitElement {
       return null;
     }
 
-    return this.serviceBlueprint.stages.find(stage => stage.stageKey === this.selectedStageKey) ?? null;
+    return this.serviceBlueprint.stages.find((stage) => stage.stageKey === this.selectedStageKey) ?? null;
   }
 
   private get _selectedGateway(): ServiceBlueprintGatewayDefinition | null {
@@ -176,7 +173,7 @@ export class WayfinderStepInspectorElement extends LitElement {
       return null;
     }
 
-    return serviceBlueprintGateways(this.serviceBlueprint).find(gateway => gateway.key === this.selectedGatewayKey) ?? null;
+    return serviceBlueprintGateways(this.serviceBlueprint).find((gateway) => gateway.key === this.selectedGatewayKey) ?? null;
   }
 
   /** Blueprint-wide captured input fields, for a support-system-call action's own inputs — see wayfinder-stage-action-editor.ts's supportSystemFieldReferences doc comment for why this is blueprint-wide, not stage-scoped. */
@@ -195,8 +192,8 @@ export class WayfinderStepInspectorElement extends LitElement {
   private get _routeConditionCompletions(): ExpressionCompletionItem[] {
     const context = buildPropertyReferenceContext(this.serviceBlueprint, undefined, this.componentCatalog);
     return [
-      ...context.allFields.map(field => ({ name: field.fieldKey, detail: field.label })),
-      ...context.calculationFieldNames.map(name => ({ name, detail: 'field' })),
+      ...context.allFields.map((field) => ({ name: field.fieldKey, detail: field.label })),
+      ...context.calculationFieldNames.map((name) => ({ name, detail: 'field' })),
     ];
   }
 
@@ -269,13 +266,15 @@ export class WayfinderStepInspectorElement extends LitElement {
   }
 
   private _stageLabel(stageKey: string) {
-    return this.serviceBlueprint?.stages.find(stage => stage.stageKey === stageKey)?.displayName
-      ?? serviceBlueprintGateways(this.serviceBlueprint).find(gateway => gateway.key === stageKey)?.displayName
-      ?? stageKey;
+    return (
+      this.serviceBlueprint?.stages.find((stage) => stage.stageKey === stageKey)?.displayName ??
+      serviceBlueprintGateways(this.serviceBlueprint).find((gateway) => gateway.key === stageKey)?.displayName ??
+      stageKey
+    );
   }
 
   private _gatewayLabel(gatewayKey: string) {
-    return serviceBlueprintGateways(this.serviceBlueprint).find(gateway => gateway.key === gatewayKey)?.displayName ?? gatewayKey;
+    return serviceBlueprintGateways(this.serviceBlueprint).find((gateway) => gateway.key === gatewayKey)?.displayName ?? gatewayKey;
   }
 
   private _routeDescriptor(transition: RouteView) {
@@ -292,9 +291,7 @@ export class WayfinderStepInspectorElement extends LitElement {
 
     const visibleTokens = [fromStage, fromGateway, toGateway, toStage].filter((token): token is string => Boolean(token));
     const arrow = html`<span aria-hidden="true"> → </span>`;
-    const visible = visibleTokens.map((token, index) =>
-      index === 0 ? html`<span>${token}</span>` : html`${arrow}<span>${token}</span>`
-    );
+    const visible = visibleTokens.map((token, index) => (index === 0 ? html`<span>${token}</span>` : html`${arrow}<span>${token}</span>`));
 
     return html`<span aria-label=${ariaLabel}>${visible}</span>`;
   }
@@ -304,13 +301,13 @@ export class WayfinderStepInspectorElement extends LitElement {
       return [];
     }
 
-    const stage = this.serviceBlueprint.stages.find(candidate => candidate.stageKey === stageKey);
+    const stage = this.serviceBlueprint.stages.find((candidate) => candidate.stageKey === stageKey);
     const queueKey = stage ? stageQueueKey(stage) : '';
 
     return deriveGatewayBindings(this.serviceBlueprint)
-      .filter(binding => binding.gateway.gatewayType === 'Join')
-      .filter(binding => binding.anchorStageKey === stageKey || (!binding.anchorStageKey && binding.queueKey === queueKey))
-      .map(binding => binding.gateway);
+      .filter((binding) => binding.gateway.gatewayType === 'Join')
+      .filter((binding) => binding.anchorStageKey === stageKey || (!binding.anchorStageKey && binding.queueKey === queueKey))
+      .map((binding) => binding.gateway);
   }
 
   private _selectedStageOutgoing(stage: StageDefinition) {
@@ -337,7 +334,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     if (!ownerKey || !routeId) {
       return;
     }
-    const nextServiceBlueprint = updateRoute(this.serviceBlueprint, { routeId }, route => ({
+    const nextServiceBlueprint = updateRoute(this.serviceBlueprint, { routeId }, (route) => ({
       ...route,
       target: nextTransition.toStage || route.target,
       trigger: nextTransition.action || route.trigger,
@@ -368,7 +365,7 @@ export class WayfinderStepInspectorElement extends LitElement {
       return;
     }
 
-    const stageIndex = this.serviceBlueprint.stages.findIndex(stage => stage.stageKey === previousStageKey);
+    const stageIndex = this.serviceBlueprint.stages.findIndex((stage) => stage.stageKey === previousStageKey);
     if (stageIndex < 0) {
       return;
     }
@@ -379,18 +376,20 @@ export class WayfinderStepInspectorElement extends LitElement {
     stages[stageIndex] = nextStage;
 
     if (nextStage.stageKey !== previousStageKey) {
-      stages = stages.map(stage => stage.stageKey === nextStage.stageKey
-        ? stage
-        : ({
-            ...stage,
-            routes: (stage.routes ?? []).map(route => ({
-              ...route,
-              target: route.target === previousStageKey ? nextStage.stageKey : route.target,
-            })),
-          }));
-      gateways = serviceBlueprintGateways(this.serviceBlueprint).map(gateway => ({
+      stages = stages.map((stage) =>
+        stage.stageKey === nextStage.stageKey
+          ? stage
+          : {
+              ...stage,
+              routes: (stage.routes ?? []).map((route) => ({
+                ...route,
+                target: route.target === previousStageKey ? nextStage.stageKey : route.target,
+              })),
+            }
+      );
+      gateways = serviceBlueprintGateways(this.serviceBlueprint).map((gateway) => ({
         ...gateway,
-        routes: (gateway.routes ?? []).map(route => ({
+        routes: (gateway.routes ?? []).map((route) => ({
           ...route,
           target: route.target === previousStageKey ? nextStage.stageKey : route.target,
         })),
@@ -432,14 +431,11 @@ export class WayfinderStepInspectorElement extends LitElement {
     if (!Number.isInteger(transitionIndex)) {
       return;
     }
-    const transition = (flattenRoutes(this.serviceBlueprint))[transitionIndex];
+    const transition = flattenRoutes(this.serviceBlueprint)[transitionIndex];
     if (!transition) {
       return;
     }
-    this._replaceSelectedTransition(
-      { ...transition, actions: event.detail.actions },
-      transitionIndex
-    );
+    this._replaceSelectedTransition({ ...transition, actions: event.detail.actions }, transitionIndex);
   }
 
   private _handleRouteActionSelected(event: CustomEvent<ActionSelectedDetail>) {
@@ -497,8 +493,8 @@ export class WayfinderStepInspectorElement extends LitElement {
       return;
     }
 
-    const duplicate = this.serviceBlueprint.stages.some(candidate =>
-      candidate.stageKey === nextKey && candidate.stageKey !== stage.stageKey
+    const duplicate = this.serviceBlueprint.stages.some(
+      (candidate) => candidate.stageKey === nextKey && candidate.stageKey !== stage.stageKey
     );
     if (duplicate) {
       this._stageKeyError = 'Stage key must be unique.';
@@ -578,7 +574,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     if (index === null) {
       return null;
     }
-    const transition = (flattenRoutes(this.serviceBlueprint))[index];
+    const transition = flattenRoutes(this.serviceBlueprint)[index];
     return transition ? { index, transition } : null;
   }
 
@@ -616,9 +612,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     if (toGateway === ctx.transition.toGateway) return;
     this._replaceSelectedTransition({ ...ctx.transition, toGateway }, ctx.index);
     this._announce(
-      toGateway
-        ? `Route now arrives through ${this._gatewayLabel(toGateway)}.`
-        : 'Route now arrives directly at the target stage.'
+      toGateway ? `Route now arrives through ${this._gatewayLabel(toGateway)}.` : 'Route now arrives directly at the target stage.'
     );
   }
 
@@ -666,15 +660,16 @@ export class WayfinderStepInspectorElement extends LitElement {
   private _handleAddRoute() {
     if (!this.serviceBlueprint) return;
 
-    const sourceStageKey = this._selectedStage?.stageKey
-      ?? deriveGatewayBindings(this.serviceBlueprint).find(binding => binding.gateway.key === this.selectedGatewayKey)?.anchorStageKey
-      ?? null;
+    const sourceStageKey =
+      this._selectedStage?.stageKey ??
+      deriveGatewayBindings(this.serviceBlueprint).find((binding) => binding.gateway.key === this.selectedGatewayKey)?.anchorStageKey ??
+      null;
 
     if (!sourceStageKey) return;
 
     const { serviceBlueprint: withGateway, gatewayKey } = findOrCreateSplitGateway(this.serviceBlueprint, sourceStageKey);
 
-    const routeId = newRouteId(sourceStageKey, '', '') + '-' + Date.now().toString(36);
+    const routeId = `${newRouteId(sourceStageKey, '', '')}-${Date.now().toString(36)}`;
     const nextRoute = {
       id: routeId,
       target: '',
@@ -704,7 +699,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     }
 
     const select = this.shadowRoot?.querySelector<HTMLSelectElement>('[data-wayfinder-add-component-type]');
-    const descriptor = this.componentCatalog.find(candidate => candidate.discriminator === select?.value);
+    const descriptor = this.componentCatalog.find((candidate) => candidate.discriminator === select?.value);
     if (!descriptor) {
       this._announce('Choose a component type before adding.');
       return;
@@ -801,7 +796,9 @@ export class WayfinderStepInspectorElement extends LitElement {
       <section class="inspector-section" aria-labelledby="section-gateway-routes">
         <div class="section-header-row">
           <h3 id="section-gateway-routes" class="section-heading">${routeNoun}</h3>
-          ${!isJoin ? html`
+          ${
+            !isJoin
+              ? html`
             <button
               type="button"
               class="secondary-button"
@@ -809,21 +806,24 @@ export class WayfinderStepInspectorElement extends LitElement {
               aria-label="Add route from ${sourceStageLabel}"
               @click=${this._handleAddRoute}
             >+ Add route</button>
-          ` : nothing}
+          `
+              : nothing
+          }
         </div>
-        ${indices.length === 0
-          ? html`
+        ${
+          indices.length === 0
+            ? html`
               <p class="empty-section" data-wayfinder-gateway-routes-empty>
                 No routes yet. Use <strong>+ Add route</strong> above to send this stage to its next destination.
               </p>
             `
-          : html`
+            : html`
               <p class="action-summary" data-wayfinder-gateway-routes-summary>
                 ${indices.length} ${indices.length === 1 ? 'route' : 'routes'} ${isJoin ? 'feed into' : 'leave'} this gateway.
               </p>
               <ul class="gateway-route-list" role="list">
-                ${indices.map(transitionIndex => {
-                  const transition = (flattenRoutes(this.serviceBlueprint))[transitionIndex];
+                ${indices.map((transitionIndex) => {
+                  const transition = flattenRoutes(this.serviceBlueprint)[transitionIndex];
                   if (!transition) return nothing;
                   return html`
                     <li
@@ -837,13 +837,14 @@ export class WayfinderStepInspectorElement extends LitElement {
                   `;
                 })}
               </ul>
-            `}
+            `
+        }
       </section>
     `;
   }
 
   private _renderRouteEditor(transition: RouteView, transitionIndex: number) {
-    const targetOptions = (this.serviceBlueprint?.stages ?? []).filter(stage => stage.stageKey !== transition.fromStage);
+    const targetOptions = (this.serviceBlueprint?.stages ?? []).filter((stage) => stage.stageKey !== transition.fromStage);
     const joinGateways = this._availableJoinGatewaysForStage(transition.toStage);
     const idx = String(transitionIndex);
     const ariaId = `route-${transitionIndex}-title`;
@@ -860,8 +861,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     // route was wired to (by "+ Add route" or by direct JSON authoring) isn't something this
     // control is meant to do; that's what deleting and re-adding the route is for.
     const targetIsGateway = Boolean(transition.toGateway);
-    const targetIsUnresolved = !targetEmpty && !targetIsGateway
-      && !targetOptions.some(stage => stage.stageKey === transition.toStage);
+    const targetIsUnresolved = !targetEmpty && !targetIsGateway && !targetOptions.some((stage) => stage.stageKey === transition.toStage);
 
     return html`
       <article
@@ -895,33 +895,40 @@ export class WayfinderStepInspectorElement extends LitElement {
               data-wayfinder-route-index="${idx}"
               @change=${this._updateRouteActionPreset}
             >
-              ${TRANSITION_ACTION_OPTIONS.map(option => html`
+              ${TRANSITION_ACTION_OPTIONS.map(
+                (option) => html`
                 <option value=${option.value} ?selected=${transitionQuickAction(transition.action) === option.value}>${option.label}</option>
-              `)}
+              `
+              )}
               <option value="custom" ?selected=${transitionQuickAction(transition.action) === 'custom'}>Custom label</option>
             </select>
           </label>
           <label class="field-block">
             <span class="field-label-row">
               <span class="field-label">Target stage</span>
-              ${targetIsGateway || targetIsUnresolved
-                ? html`
+              ${
+                targetIsGateway || targetIsUnresolved
+                  ? html`
                     <wayfinder-inline-help
                       label="Target stage help"
                       message="This route goes to a gateway rather than a stage directly — that's normal for a route created with + Add route. A gateway's own onward routing is edited by selecting it, not from here."
                     ></wayfinder-inline-help>
                   `
-                : nothing}
+                  : nothing
+              }
             </span>
-            ${targetIsGateway || targetIsUnresolved
-              ? html`
+            ${
+              targetIsGateway || targetIsUnresolved
+                ? html`
                   <p class="field-control field-static-value" data-wayfinder-route-target-gateway>
-                    ${targetIsGateway
-                      ? html`<strong>${this._gatewayLabel(transition.toGateway!)}</strong> (gateway)`
-                      : html`“${transition.toStage}” — not a stage in this service blueprint`}
+                    ${
+                      targetIsGateway
+                        ? html`<strong>${this._gatewayLabel(transition.toGateway!)}</strong> (gateway)`
+                        : html`“${transition.toStage}” — not a stage in this service blueprint`
+                    }
                   </p>
                 `
-              : html`
+                : html`
                   <select
                     class="field-control ${targetEmpty ? 'field-control-error' : ''}"
                     data-wayfinder-route-target-select
@@ -931,14 +938,19 @@ export class WayfinderStepInspectorElement extends LitElement {
                     @change=${this._updateRouteTarget}
                   >
                     <option value="" ?selected=${targetEmpty} disabled>Choose a destination…</option>
-                    ${targetOptions.map(stage => html`
+                    ${targetOptions.map(
+                      (stage) => html`
                       <option value=${stage.stageKey} ?selected=${stage.stageKey === transition.toStage}>${stage.displayName}</option>
-                    `)}
+                    `
+                    )}
                   </select>
-                  ${targetEmpty
-                    ? html`<span id="${targetWarningId}" class="field-error" data-wayfinder-route-target-warning>Choose a destination</span>`
-                    : nothing}
-                `}
+                  ${
+                    targetEmpty
+                      ? html`<span id="${targetWarningId}" class="field-error" data-wayfinder-route-target-warning>Choose a destination</span>`
+                      : nothing
+                  }
+                `
+            }
           </label>
           <label class="field-block">
             <span class="field-label">Arrive through</span>
@@ -949,9 +961,11 @@ export class WayfinderStepInspectorElement extends LitElement {
               @change=${this._updateRouteToGateway}
             >
               <option value="">No join gateway</option>
-              ${joinGateways.map(g => html`
+              ${joinGateways.map(
+                (g) => html`
                 <option value=${g.key} ?selected=${g.key === transition.toGateway}>${g.displayName}</option>
-              `)}
+              `
+              )}
             </select>
           </label>
           <label class="field-block">
@@ -973,11 +987,13 @@ export class WayfinderStepInspectorElement extends LitElement {
           </label>
         </div>
 
-        ${transition.fromGateway
-          ? nothing
-          : (() => {
-              const showWhenParse = transition.showWhen?.trim() ? tryParseExpression(transition.showWhen) : null;
-              return html`
+        ${
+          transition.fromGateway
+            ? nothing
+            : (
+                () => {
+                  const showWhenParse = transition.showWhen?.trim() ? tryParseExpression(transition.showWhen) : null;
+                  return html`
                 <div class="field-grid">
                   <div class="field-block calc-expression-block">
                     <span class="field-label-row">
@@ -994,13 +1010,17 @@ export class WayfinderStepInspectorElement extends LitElement {
                       label-text="${transition.action || 'route'} available when"
                       @expression-input=${this._updateRouteShowWhen}
                     ></wayfinder-calculation-expression-editor>
-                    ${showWhenParse && !showWhenParse.ok
-                      ? html`<span class="calc-preview calc-preview-error" data-wayfinder-route-show-when-preview>${showWhenParse.message}</span>`
-                      : nothing}
+                    ${
+                      showWhenParse && !showWhenParse.ok
+                        ? html`<span class="calc-preview calc-preview-error" data-wayfinder-route-show-when-preview>${showWhenParse.message}</span>`
+                        : nothing
+                    }
                   </div>
                 </div>
               `;
-            })()}
+                }
+              )()
+        }
 
         <div class="action-buttons">
           <button
@@ -1043,7 +1063,7 @@ export class WayfinderStepInspectorElement extends LitElement {
       return;
     }
 
-    const gatewayIndex = serviceBlueprintGateways(this.serviceBlueprint).findIndex(g => g.key === previousGatewayKey);
+    const gatewayIndex = serviceBlueprintGateways(this.serviceBlueprint).findIndex((g) => g.key === previousGatewayKey);
     if (gatewayIndex < 0) {
       return;
     }
@@ -1054,20 +1074,24 @@ export class WayfinderStepInspectorElement extends LitElement {
     let nextStates = this.serviceBlueprint.stages;
     let nextGateways = gateways;
     if (nextGateway.key !== previousGatewayKey) {
-      nextStates = this.serviceBlueprint.stages.map(stage => ({
+      nextStates = this.serviceBlueprint.stages.map((stage) => ({
         ...stage,
-        routes: (stage.routes ?? []).map(route => ({
+        routes: (stage.routes ?? []).map((route) => ({
           ...route,
           target: route.target === previousGatewayKey ? nextGateway.key : route.target,
         })),
       }));
-      nextGateways = gateways.map((g, idx) => idx === gatewayIndex ? g : ({
-        ...g,
-        routes: (g.routes ?? []).map(route => ({
-          ...route,
-          target: route.target === previousGatewayKey ? nextGateway.key : route.target,
-        })),
-      }));
+      nextGateways = gateways.map((g, idx) =>
+        idx === gatewayIndex
+          ? g
+          : {
+              ...g,
+              routes: (g.routes ?? []).map((route) => ({
+                ...route,
+                target: route.target === previousGatewayKey ? nextGateway.key : route.target,
+              })),
+            }
+      );
     }
 
     this._emitServiceBlueprintUpdated(
@@ -1104,8 +1128,10 @@ export class WayfinderStepInspectorElement extends LitElement {
     }
 
     const allKeys = [
-      ...this.serviceBlueprint.stages.map(s => s.stageKey),
-      ...serviceBlueprintGateways(this.serviceBlueprint).map(g => g.key).filter(k => k !== gateway.key),
+      ...this.serviceBlueprint.stages.map((s) => s.stageKey),
+      ...serviceBlueprintGateways(this.serviceBlueprint)
+        .map((g) => g.key)
+        .filter((k) => k !== gateway.key),
     ];
     if (allKeys.includes(nextKey)) {
       this._gatewayKeyError = 'Gateway key must be unique across stages and gateways.';
@@ -1143,7 +1169,7 @@ export class WayfinderStepInspectorElement extends LitElement {
 
   private _updateJoinWaitingContent(event: Event) {
     const gateway = this._selectedGateway;
-    if (!gateway || gateway.gatewayType !== 'Join') return;
+    if (gateway?.gatewayType !== 'Join') return;
     const content = (event.currentTarget as HTMLTextAreaElement).value.trim() || undefined;
     this._replaceSelectedGateway({ ...gateway, waitingContent: content });
     this._announce(`${gateway.displayName} waiting message updated.`);
@@ -1151,7 +1177,7 @@ export class WayfinderStepInspectorElement extends LitElement {
 
   private _updateJoinWaitingExpectedSeconds(event: Event) {
     const gateway = this._selectedGateway;
-    if (!gateway || gateway.gatewayType !== 'Join') return;
+    if (gateway?.gatewayType !== 'Join') return;
     const raw = (event.currentTarget as HTMLInputElement).value;
     const expectedWaitSeconds = raw ? Number(raw) : undefined;
     this._replaceSelectedGateway({ ...gateway, waitingExpectedSeconds: expectedWaitSeconds });
@@ -1160,7 +1186,7 @@ export class WayfinderStepInspectorElement extends LitElement {
 
   private _updateJoinWaitingAllowDefer(event: Event) {
     const gateway = this._selectedGateway;
-    if (!gateway || gateway.gatewayType !== 'Join') return;
+    if (gateway?.gatewayType !== 'Join') return;
     const allowDefer = (event.currentTarget as HTMLInputElement).checked;
     this._replaceSelectedGateway({
       ...gateway,
@@ -1172,7 +1198,7 @@ export class WayfinderStepInspectorElement extends LitElement {
 
   private _updateJoinWaitingDeferMessage(event: Event) {
     const gateway = this._selectedGateway;
-    if (!gateway || gateway.gatewayType !== 'Join') return;
+    if (gateway?.gatewayType !== 'Join') return;
     const deferMessage = (event.currentTarget as HTMLInputElement).value.trim() || undefined;
     this._replaceSelectedGateway({ ...gateway, waitingDeferMessage: deferMessage });
     this._announce(`${gateway.displayName} defer message updated.`);
@@ -1181,16 +1207,16 @@ export class WayfinderStepInspectorElement extends LitElement {
   private _deleteSelectedGateway() {
     const gateway = this._selectedGateway;
     if (!this.serviceBlueprint || !gateway) return;
-    const gateways = serviceBlueprintGateways(this.serviceBlueprint).filter(g => g.key !== gateway.key);
+    const gateways = serviceBlueprintGateways(this.serviceBlueprint).filter((g) => g.key !== gateway.key);
     const nextServiceBlueprint = {
       ...this.serviceBlueprint,
-      stages: this.serviceBlueprint.stages.map(stage => ({
+      stages: this.serviceBlueprint.stages.map((stage) => ({
         ...stage,
-        routes: (stage.routes ?? []).filter(route => route.target !== gateway.key),
+        routes: (stage.routes ?? []).filter((route) => route.target !== gateway.key),
       })),
-      gateways: gateways.map(candidate => ({
+      gateways: gateways.map((candidate) => ({
         ...candidate,
-        routes: (candidate.routes ?? []).filter(route => route.target !== gateway.key),
+        routes: (candidate.routes ?? []).filter((route) => route.target !== gateway.key),
       })),
     };
     this._emitServiceBlueprintUpdated(nextServiceBlueprint, null);
@@ -1201,7 +1227,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     const queueKey = gatewayQueueKey(gateway);
     const queueLabel = stageQueueLabel(this.serviceBlueprint, queueKey, this.availableQueues);
     const binding = this.serviceBlueprint
-      ? deriveGatewayBindings(this.serviceBlueprint).find(candidate => candidate.gateway.key === gateway.key) ?? null
+      ? (deriveGatewayBindings(this.serviceBlueprint).find((candidate) => candidate.gateway.key === gateway.key) ?? null)
       : null;
     const queueOptionsId = `gateway-queue-options-${gateway.key}`;
     const isJoin = gateway.gatewayType === 'Join';
@@ -1246,12 +1272,16 @@ export class WayfinderStepInspectorElement extends LitElement {
                 data-wayfinder-gateway-key
                 aria-invalid=${String(Boolean(this._gatewayKeyError))}
                 .value=${gateway.key}
-                @input=${() => { this._gatewayKeyError = null; }}
+                @input=${() => {
+                  this._gatewayKeyError = null;
+                }}
                 @change=${this._updateGatewayKey}
               />
-              ${this._gatewayKeyError
-                ? html`<span class="field-error" data-wayfinder-gateway-key-error>${this._gatewayKeyError}</span>`
-                : nothing}
+              ${
+                this._gatewayKeyError
+                  ? html`<span class="field-error" data-wayfinder-gateway-key-error>${this._gatewayKeyError}</span>`
+                  : nothing
+              }
             </label>
             <label class="field-block">
               <span class="field-label-row">
@@ -1270,16 +1300,18 @@ export class WayfinderStepInspectorElement extends LitElement {
                 @change=${this._updateGatewayQueue}
               />
               <datalist id=${queueOptionsId}>
-                ${serviceBlueprintQueueOptions(this.serviceBlueprint, this.availableQueues).map(option => html`
+                ${serviceBlueprintQueueOptions(this.serviceBlueprint, this.availableQueues).map(
+                  (option) => html`
                   <option value=${option}>${stageQueueLabel(this.serviceBlueprint, option, this.availableQueues)}</option>
-                `)}
+                `
+                )}
               </datalist>
             </label>
           </div>
 
           <div class="field-block field-block-full">
             <span class="field-label">Icon</span>
-            ${this._renderIconPicker(gateway.icon ?? defaultIconForGateway(gateway), iconName => this._updateGatewayIcon(gateway, iconName))}
+            ${this._renderIconPicker(gateway.icon ?? defaultIconForGateway(gateway), (iconName) => this._updateGatewayIcon(gateway, iconName))}
           </div>
 
           <label class="field-block field-block-full">
@@ -1305,14 +1337,16 @@ export class WayfinderStepInspectorElement extends LitElement {
               <dt>Related routes</dt>
               <dd>${binding?.relatedTransitionIndices.length ?? 0} transition${(binding?.relatedTransitionIndices.length ?? 0) === 1 ? '' : 's'}</dd>
             </div>
-            ${binding?.anchorStageKey
-              ? html`
+            ${
+              binding?.anchorStageKey
+                ? html`
                   <div class="meta-row">
                     <dt>${isJoin ? 'Merge near' : 'Branches from'}</dt>
                     <dd>${this._stageLabel(binding.anchorStageKey)}</dd>
                   </div>
                 `
-              : nothing}
+                : nothing
+            }
           </dl>
           <p class="action-summary gateway-routing-hint">
             Use route editing to bind stages through this gateway so the authored flow stays visible as stage → gateway → stage.
@@ -1320,8 +1354,9 @@ export class WayfinderStepInspectorElement extends LitElement {
           </p>
         </section>
 
-        ${isJoin
-          ? html`
+        ${
+          isJoin
+            ? html`
               <section class="inspector-section" aria-labelledby="gateway-waiting-heading">
                 <div class="section-header-row">
                   <h3 id="gateway-waiting-heading" class="section-heading">Waiting information</h3>
@@ -1371,8 +1406,9 @@ export class WayfinderStepInspectorElement extends LitElement {
                       <span>Users in this queue can defer the wait</span>
                     </label>
                   </div>
-                  ${gateway.waitingAllowDefer
-                    ? html`
+                  ${
+                    gateway.waitingAllowDefer
+                      ? html`
                         <label class="field-block">
                           <span class="field-label">Defer message</span>
                           <input
@@ -1384,11 +1420,13 @@ export class WayfinderStepInspectorElement extends LitElement {
                           />
                         </label>
                       `
-                    : nothing}
+                      : nothing
+                  }
                 </div>
               </section>
             `
-          : nothing}
+            : nothing
+        }
 
         ${this._renderGatewayOutgoingRoutes(gateway, binding)}
 
@@ -1413,7 +1451,8 @@ export class WayfinderStepInspectorElement extends LitElement {
   private _renderIconPicker(selected: NodeIconName, onPick: (icon: NodeIconName) => void) {
     return html`
       <div class="icon-picker" role="radiogroup" aria-label="Icon">
-        ${(Object.keys(NODE_ICONS) as NodeIconName[]).map(name => html`
+        ${(Object.keys(NODE_ICONS) as NodeIconName[]).map(
+          (name) => html`
           <button
             type="button"
             class="icon-picker-option ${name === selected ? 'icon-picker-option-selected' : ''}"
@@ -1426,7 +1465,8 @@ export class WayfinderStepInspectorElement extends LitElement {
           >
             ${renderNodeIconSvg(NODE_ICONS[name])}
           </button>
-        `)}
+        `
+        )}
       </div>
     `;
   }
@@ -1441,13 +1481,13 @@ export class WayfinderStepInspectorElement extends LitElement {
     const queueEyebrow = `${queueLabel} queue`;
     const queueOptionsId = `stage-queue-options-${stage.stageKey}`;
     const unreachable = this.serviceBlueprint
-      ? serviceBlueprintUnreachableStages(this.serviceBlueprint).some(candidate => candidate.stageKey === stage.stageKey)
+      ? serviceBlueprintUnreachableStages(this.serviceBlueprint).some((candidate) => candidate.stageKey === stage.stageKey)
       : false;
     const orphaned = this.serviceBlueprint
-      ? serviceBlueprintOrphanedStages(this.serviceBlueprint).some(candidate => candidate.stageKey === stage.stageKey)
+      ? serviceBlueprintOrphanedStages(this.serviceBlueprint).some((candidate) => candidate.stageKey === stage.stageKey)
       : false;
     const deadEnd = this.serviceBlueprint
-      ? serviceBlueprintDeadEndStages(this.serviceBlueprint).some(candidate => candidate.stageKey === stage.stageKey)
+      ? serviceBlueprintDeadEndStages(this.serviceBlueprint).some((candidate) => candidate.stageKey === stage.stageKey)
       : false;
     const validationMessages = [
       ...(this._stageKeyError ? [this._stageKeyError] : []),
@@ -1473,16 +1513,18 @@ export class WayfinderStepInspectorElement extends LitElement {
           <span class="stage-kind-badge">${stageKindLabel(stageType)}</span>
         </div>
 
-        ${validationMessages.length > 0
-          ? html`
+        ${
+          validationMessages.length > 0
+            ? html`
               <section class="inspector-section validation-section" aria-labelledby="stage-validation-heading">
                 <h3 id="stage-validation-heading" class="section-heading">Validation</h3>
                 <ul class="validation-list">
-                  ${validationMessages.map(message => html`<li>${message}</li>`) }
+                  ${validationMessages.map((message) => html`<li>${message}</li>`)}
                 </ul>
               </section>
             `
-          : nothing}
+            : nothing
+        }
 
         <section class="inspector-section" aria-labelledby="stage-basics-heading">
           <h3 id="stage-basics-heading" class="section-heading">Stage details</h3>
@@ -1514,9 +1556,9 @@ export class WayfinderStepInspectorElement extends LitElement {
                 }}
                 @change=${this._updateStageKey}
               />
-              ${this._stageKeyError
-                ? html`<span class="field-error" data-wayfinder-stage-key-error>${this._stageKeyError}</span>`
-                : nothing}
+              ${
+                this._stageKeyError ? html`<span class="field-error" data-wayfinder-stage-key-error>${this._stageKeyError}</span>` : nothing
+              }
             </label>
             <label class="field-block">
               <span class="field-label-row">
@@ -1535,24 +1577,28 @@ export class WayfinderStepInspectorElement extends LitElement {
                 @change=${this._updateStageQueue}
               />
               <datalist id=${queueOptionsId}>
-                ${serviceBlueprintQueueOptions(this.serviceBlueprint, this.availableQueues).map(option => html`
+                ${serviceBlueprintQueueOptions(this.serviceBlueprint, this.availableQueues).map(
+                  (option) => html`
                   <option value=${option}>${stageQueueLabel(this.serviceBlueprint, option, this.availableQueues)}</option>
-                `)}
+                `
+                )}
               </datalist>
             </label>
             <label class="field-block">
               <span class="field-label">Type</span>
               <select class="field-control" data-wayfinder-stage-type @change=${this._updateStageType}>
-                ${STAGE_KIND_OPTIONS.map(option => html`
+                ${STAGE_KIND_OPTIONS.map(
+                  (option) => html`
                   <option value=${option.value} ?selected=${stageType === option.value}>${option.label}</option>
-                `)}
+                `
+                )}
               </select>
             </label>
           </div>
 
           <div class="field-block field-block-full">
             <span class="field-label">Icon</span>
-            ${this._renderIconPicker(stage.icon ?? defaultIconForStage(stage), iconName => this._updateStageIcon(stage, iconName))}
+            ${this._renderIconPicker(stage.icon ?? defaultIconForStage(stage), (iconName) => this._updateStageIcon(stage, iconName))}
           </div>
 
           <label class="field-block field-block-full">
@@ -1595,11 +1641,13 @@ export class WayfinderStepInspectorElement extends LitElement {
               @click=${this._handleAddRoute}
             >+ Add route</button>
           </div>
-          ${outgoing.length === 0
-            ? html`<p class="section-empty">No routes yet. Use <strong>+ Add route</strong> above to send this stage to its next destination.</p>`
-            : html`
+          ${
+            outgoing.length === 0
+              ? html`<p class="section-empty">No routes yet. Use <strong>+ Add route</strong> above to send this stage to its next destination.</p>`
+              : html`
                 <ul class="gateway-route-list" role="list">
-                  ${outgoing.map(transition => html`
+                  ${outgoing.map(
+                    (transition) => html`
                     <li
                       class="gateway-route-item"
                       data-wayfinder-route-target="${transition.toStage}"
@@ -1607,9 +1655,11 @@ export class WayfinderStepInspectorElement extends LitElement {
                     >
                       ${this._renderRouteEditor(transition, transition.routeIndex)}
                     </li>
-                  `)}
+                  `
+                  )}
                 </ul>
-              `}
+              `
+          }
         </section>
 
         <section class="inspector-section" aria-labelledby="stage-components-heading">
@@ -1617,15 +1667,18 @@ export class WayfinderStepInspectorElement extends LitElement {
             <h3 id="stage-components-heading" class="section-heading">Components</h3>
             <span class="section-meta">${components.length}</span>
           </div>
-          ${components.length === 0
-            ? html`<p class="section-empty">No components defined for this stage.</p>`
-            : html`
+          ${
+            components.length === 0
+              ? html`<p class="section-empty">No components defined for this stage.</p>`
+              : html`
                 <ul class="field-list" data-wayfinder-stage-components>
                   ${components.map((component, index) => this._renderComponentListItem(component, index))}
                 </ul>
-              `}
-          ${this.componentCatalog.length > 0
-            ? html`
+              `
+          }
+          ${
+            this.componentCatalog.length > 0
+              ? html`
                 <div class="component-add-row">
                   <label class="sr-only" for="add-component-type-${stage.stageKey}">Component type to add</label>
                   <select
@@ -1633,9 +1686,11 @@ export class WayfinderStepInspectorElement extends LitElement {
                     class="field-control"
                     data-wayfinder-add-component-type
                   >
-                    ${this.componentCatalog.map(descriptor => html`
+                    ${this.componentCatalog.map(
+                      (descriptor) => html`
                       <option value=${descriptor.discriminator}>${descriptor.displayName}</option>
-                    `)}
+                    `
+                    )}
                   </select>
                   <button
                     type="button"
@@ -1645,19 +1700,20 @@ export class WayfinderStepInspectorElement extends LitElement {
                   >+ Add component</button>
                 </div>
               `
-            : html`
+              : html`
                 <p class="section-empty">
                   To add components, switch to the <strong>Definition</strong> tab and edit this stage's
                   <code>components</code> block in the JSON editor.
                 </p>
-              `}
+              `
+          }
         </section>
       </article>
     `;
   }
 
   private _renderComponentListItem(component: Component, index: number) {
-    const descriptor = this.componentCatalog.find(candidate => candidate.discriminator === component.type);
+    const descriptor = this.componentCatalog.find((candidate) => candidate.discriminator === component.type);
     const expanded = this._expandedComponentIndex === index;
     const label = describeComponent(component);
     const editorId = `component-editor-${index}`;
@@ -1668,8 +1724,9 @@ export class WayfinderStepInspectorElement extends LitElement {
           <span class="field-item-label">${label}</span>
           <span class="field-item-meta">${component.type}</span>
           <div class="component-item-actions">
-            ${descriptor
-              ? html`
+            ${
+              descriptor
+                ? html`
                   <button
                     type="button"
                     class="secondary-button"
@@ -1678,7 +1735,8 @@ export class WayfinderStepInspectorElement extends LitElement {
                     @click=${() => this._toggleComponentExpanded(index)}
                   >${expanded ? 'Close' : 'Edit'}</button>
                 `
-              : nothing}
+                : nothing
+            }
             <button
               type="button"
               class="icon-button danger-button"
@@ -1693,19 +1751,15 @@ export class WayfinderStepInspectorElement extends LitElement {
   }
 
   private _renderComponentEditor(component: Component, index: number, editorId: string) {
-    const references = buildPropertyReferenceContext(
-      this.serviceBlueprint,
-      this._selectedStage?.components,
-      this.componentCatalog
-    );
+    const references = buildPropertyReferenceContext(this.serviceBlueprint, this._selectedStage?.components, this.componentCatalog);
 
     return html`
       <div id=${editorId} class="component-editor field-grid">
         ${renderComponentNode(component, [index], {
           catalog: this.componentCatalog,
           onChange: (path, value) => this._handleComponentTreeChange(path, value),
-          onAnnounce: message => this._announce(message),
-          onFocusContainer: containerPath => this._focusChildContainer(containerPath),
+          onAnnounce: (message) => this._announce(message),
+          onFocusContainer: (containerPath) => this._focusChildContainer(containerPath),
           idPrefix: `component-${index}`,
           references,
         })}
@@ -1720,11 +1774,7 @@ export class WayfinderStepInspectorElement extends LitElement {
     return html`
       <div class="step-inspector-root" data-wayfinder-component="step-inspector" tabindex="0">
         <div id="inspector-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true">${this._statusMessage ?? ''}</div>
-        ${gateway
-          ? this._renderGateway(gateway)
-          : stage
-            ? this._renderStage(stage)
-            : this._renderEmpty()}
+        ${gateway ? this._renderGateway(gateway) : stage ? this._renderStage(stage) : this._renderEmpty()}
       </div>
     `;
   }

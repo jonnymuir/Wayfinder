@@ -11,14 +11,16 @@ async function dispatchEditorShortcut(
   detail: { key: string; shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }
 ) {
   await page.locator('wayfinder-service-blueprint-editor').evaluate((element, shortcut) => {
-    element.dispatchEvent(new KeyboardEvent('keydown', {
-      key: shortcut.key,
-      bubbles: true,
-      composed: true,
-      shiftKey: shortcut.shiftKey ?? false,
-      ctrlKey: shortcut.ctrlKey ?? false,
-      metaKey: shortcut.metaKey ?? false,
-    }));
+    element.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: shortcut.key,
+        bubbles: true,
+        composed: true,
+        shiftKey: shortcut.shiftKey ?? false,
+        ctrlKey: shortcut.ctrlKey ?? false,
+        metaKey: shortcut.metaKey ?? false,
+      })
+    );
   }, detail);
 }
 

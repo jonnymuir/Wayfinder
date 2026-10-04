@@ -54,10 +54,12 @@ export interface ChildEditorContext {
 }
 
 function describeChildLabel(component: Component): string {
-  return (component as { label?: string }).label
-    ?? (component as { fieldKey?: string }).fieldKey
-    ?? (component as { legend?: string | null }).legend
-    ?? component.type;
+  return (
+    (component as { label?: string }).label ??
+    (component as { fieldKey?: string }).fieldKey ??
+    (component as { legend?: string | null }).legend ??
+    component.type
+  );
 }
 
 /**
@@ -65,12 +67,8 @@ function describeChildLabel(component: Component): string {
  * children (phase 6b) — the single recursive unit reused at every depth, so a fieldset
  * containing another fieldset works with no special-casing.
  */
-export function renderComponentNode(
-  component: Component,
-  path: PropertyPath,
-  ctx: ChildEditorContext
-): TemplateResult {
-  const descriptor = ctx.catalog.find(candidate => candidate.discriminator === component.type);
+export function renderComponentNode(component: Component, path: PropertyPath, ctx: ChildEditorContext): TemplateResult {
+  const descriptor = ctx.catalog.find((candidate) => candidate.discriminator === component.type);
   if (!descriptor) {
     return html`<p class="section-empty">Unknown component type "${component.type}" — edit it via the Definition tab.</p>`;
   }
@@ -92,18 +90,13 @@ export function renderComponentNode(
  * currently names), and what this component's own `options` array is (for Default on
  * select/radio/checkboxlist).
  */
-function resolveInstanceReferences(
-  component: Component,
-  references: PropertyReferenceContext
-): ResolvedPropertyReferences {
+function resolveInstanceReferences(component: Component, references: PropertyReferenceContext): ResolvedPropertyReferences {
   const record = component as unknown as Record<string, unknown>;
   const ownFieldKey = typeof record.fieldKey === 'string' ? record.fieldKey : undefined;
-  const siblingFields = ownFieldKey
-    ? references.siblingFields.filter(field => field.fieldKey !== ownFieldKey)
-    : references.siblingFields;
+  const siblingFields = ownFieldKey ? references.siblingFields.filter((field) => field.fieldKey !== ownFieldKey) : references.siblingFields;
 
   const conditionalOn = typeof record.conditionalOn === 'string' ? record.conditionalOn : undefined;
-  const target = conditionalOn ? references.siblingFields.find(field => field.fieldKey === conditionalOn) : undefined;
+  const target = conditionalOn ? references.siblingFields.find((field) => field.fieldKey === conditionalOn) : undefined;
 
   const conditionalTargetKind: ResolvedPropertyReferences['conditionalTargetKind'] = !target
     ? 'text'
@@ -154,7 +147,8 @@ function renderContainment(
     return html`
       <details class="child-container" open data-wayfinder-child-container="${containerKey}">
         <summary>${containment.propertyName} (${sections.length})</summary>
-        ${sections.map((section, sectionIndex) => html`
+        ${sections.map(
+          (section, sectionIndex) => html`
           <div class="child-section">
             <label class="field-block">
               <span class="field-label">Heading</span>
@@ -172,7 +166,8 @@ function renderContainment(
               `${section.heading || `Section ${sectionIndex + 1}`} children`
             )}
           </div>
-        `)}
+        `
+        )}
         <button
           type="button"
           class="secondary-button"
@@ -191,9 +186,8 @@ function renderContainment(
   if (containment.kind === 'KeyedChildren' && containment.keySourceProperty) {
     const optionsKey = containment.keySourceProperty;
     const options = Array.isArray(record[optionsKey]) ? (record[optionsKey] as string[]) : [];
-    const byKey = (record[propertyKey] && typeof record[propertyKey] === 'object')
-      ? (record[propertyKey] as Record<string, Component[]>)
-      : {};
+    const byKey =
+      record[propertyKey] && typeof record[propertyKey] === 'object' ? (record[propertyKey] as Record<string, Component[]>) : {};
     const keyedPath: PropertyPath = [...path, propertyKey];
     const containerKey = keyedPath.join('-');
 
@@ -204,12 +198,14 @@ function renderContainment(
     return html`
       <details class="child-container" open data-wayfinder-child-container="${containerKey}">
         <summary>${containment.propertyName} (${Object.keys(byKey).length} of ${options.length} option${options.length === 1 ? '' : 's'})</summary>
-        ${options.map(option => html`
+        ${options.map(
+          (option) => html`
           <div class="child-section">
             <p class="field-label">When "${option}" is selected</p>
             ${renderChildList(byKey[option] ?? [], [...keyedPath, option], ctx, `"${option}" children`)}
           </div>
-        `)}
+        `
+        )}
       </details>
     `;
   }
@@ -217,21 +213,18 @@ function renderContainment(
   return html``;
 }
 
-function renderChildList(
-  children: Component[],
-  childrenPath: PropertyPath,
-  ctx: ChildEditorContext,
-  label: string
-): TemplateResult {
+function renderChildList(children: Component[], childrenPath: PropertyPath, ctx: ChildEditorContext, label: string): TemplateResult {
   const containerKey = childrenPath.join('-');
 
   return html`
     <details class="child-container" open data-wayfinder-child-container="${containerKey}">
       <summary>${label} (${children.length})</summary>
-      ${children.length > 0
-        ? html`
+      ${
+        children.length > 0
+          ? html`
             <ul class="field-list child-list">
-              ${children.map((child, index) => html`
+              ${children.map(
+                (child, index) => html`
                 <li class="field-item component-item child-item">
                   <details class="child-editor">
                     <summary class="component-item-header">
@@ -278,16 +271,20 @@ function renderChildList(
                     >Delete</button>
                   </div>
                 </li>
-              `)}
+              `
+              )}
             </ul>
           `
-        : nothing}
+          : nothing
+      }
       <div class="component-add-row">
         <label class="sr-only" for="add-child-type-${containerKey}">Component type to add to ${label}</label>
         <select id="add-child-type-${containerKey}" class="field-control" data-wayfinder-add-child-type>
-          ${ctx.catalog.map(descriptor => html`
+          ${ctx.catalog.map(
+            (descriptor) => html`
             <option value=${descriptor.discriminator}>${descriptor.displayName}</option>
-          `)}
+          `
+          )}
         </select>
         <button
           type="button"
@@ -296,7 +293,7 @@ function renderChildList(
           @click=${(event: Event) => {
             const row = (event.currentTarget as HTMLElement).closest('.component-add-row');
             const select = row?.querySelector<HTMLSelectElement>('[data-wayfinder-add-child-type]');
-            const descriptor = ctx.catalog.find(candidate => candidate.discriminator === select?.value);
+            const descriptor = ctx.catalog.find((candidate) => candidate.discriminator === select?.value);
             if (!descriptor) {
               ctx.onAnnounce('Choose a component type before adding.');
               return;

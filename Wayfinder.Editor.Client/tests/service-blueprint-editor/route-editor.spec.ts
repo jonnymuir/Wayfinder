@@ -49,13 +49,13 @@ test.describe('Route visibility (showWhen)', () => {
     await expect(showWhenContent).toHaveText('readyForReview');
 
     // (b) Underlying route showWhen is updated in the service blueprint model.
-    const updatedShowWhen = await inspector.evaluate(node => {
+    const updatedShowWhen = await inspector.evaluate((node) => {
       const el = node as unknown as {
         serviceBlueprint: { stages?: Array<{ stageKey: string; routes?: Array<{ target: string; showWhen?: string }> }> } | null;
       };
-      for (const stage of (el.serviceBlueprint?.stages ?? [])) {
+      for (const stage of el.serviceBlueprint?.stages ?? []) {
         if (stage.stageKey !== 'reviewer-assessment') continue;
-        for (const route of (stage.routes ?? [])) {
+        for (const route of stage.routes ?? []) {
           if (route.target === 'decision-join') return route.showWhen ?? null;
         }
       }
@@ -64,7 +64,7 @@ test.describe('Route visibility (showWhen)', () => {
     expect(updatedShowWhen).toBe('readyForReview');
 
     // (c) The polite live region announced the update.
-    const announcement = await inspector.evaluate(node => {
+    const announcement = await inspector.evaluate((node) => {
       const announcer = (node as HTMLElement).shadowRoot?.getElementById('inspector-announcer');
       return announcer?.textContent?.trim() ?? '';
     });
@@ -122,7 +122,9 @@ test.describe("A stage's own routes are fully editable from the stage's own pane
     await expect(inspector.locator('[data-wayfinder-route-target="review-split"] .gateway-route-title')).toHaveText('begin request');
   });
 
-  test("a route targeting a gateway shows an honest read-only readout, not a native select silently defaulted to the wrong stage", async ({ page }) => {
+  test('a route targeting a gateway shows an honest read-only readout, not a native select silently defaulted to the wrong stage', async ({
+    page,
+  }) => {
     // Before this fix: the "Target stage" <select> only ever lists real stages, so a route whose
     // target is a gateway (review-split) matched none of its <option>s, and — since nothing was
     // marked selected — the browser's own native fallback silently highlighted the FIRST stage in

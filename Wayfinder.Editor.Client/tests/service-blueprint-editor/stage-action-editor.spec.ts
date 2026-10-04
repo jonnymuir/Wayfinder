@@ -120,7 +120,7 @@ test.describe('ServiceBlueprint action editor', () => {
     await addFieldButton.focus();
     // Drain the rAF scheduled by _setSelectedAction(1) (focus moved from action 2 to action 1).
     // Without this, the rAF fires between press()'s internal focus and keydown, stealing focus.
-    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     await addFieldButton.press('Enter');
     await expect(stage.locator('[data-wayfinder-form-field="1-1"]')).toBeVisible({ timeout: 10_000 });
 
@@ -140,7 +140,7 @@ test.describe('ServiceBlueprint action editor', () => {
     // _moveAction calls _setSelectedAction(1), triggering a Lit render → updated() → rAF for
     // _focusActionEditor(1). That rAF can fire between press()'s internal focus CDP call and its
     // keydown CDP call, stealing focus from the remove button. Drain it here so state is stable.
-    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 
     const removeButton = stage.locator('[data-wayfinder-stage-action-remove="1"]');
     await removeButton.focus();

@@ -1,10 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  CANONICAL_SCENARIOS,
-  gotoCanonicalScenario,
-  measureGraph,
-  VISUAL_VIEWPORT,
-} from './support/canvas-helpers';
+import { CANONICAL_SCENARIOS, gotoCanonicalScenario, measureGraph, VISUAL_VIEWPORT } from './support/canvas-helpers';
 
 /**
  * Concern 2 (typography) from
@@ -26,9 +21,7 @@ test.describe('ServiceBlueprint canvas — text fits without crashing', () => {
       await gotoCanonicalScenario(page, scenario);
       const geometry = await measureGraph(page);
 
-      const candidates = geometry.nodes.filter(
-        (node) => node.label.length > 0 && node.label.length <= DOCUMENTED_TITLE_LIMIT,
-      );
+      const candidates = geometry.nodes.filter((node) => node.label.length > 0 && node.label.length <= DOCUMENTED_TITLE_LIMIT);
       expect(candidates.length, 'at least one labelled node should be measurable').toBeGreaterThan(0);
 
       for (const node of candidates) {
@@ -36,7 +29,7 @@ test.describe('ServiceBlueprint canvas — text fits without crashing', () => {
         // container, so text-overflow / ellipsis would clip it.
         expect(
           node.scrollWidth,
-          `${node.kind} "${node.label}" label is clipped: scrollWidth=${node.scrollWidth} > clientWidth=${node.clientWidth}`,
+          `${node.kind} "${node.label}" label is clipped: scrollWidth=${node.scrollWidth} > clientWidth=${node.clientWidth}`
         ).toBeLessThanOrEqual(node.clientWidth + 1);
       }
     });

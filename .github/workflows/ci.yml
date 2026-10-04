@@ -119,6 +119,12 @@ jobs:
           npm run test:calculation-ordering &&
           npm run test:calculation-diagnostics
 
+      # Biome: lint + format in one tool. `npm run format` fixes formatting; lint findings are fixed or
+      # suppressed with a written reason (`// biome-ignore rule: reason`).
+      - name: Lint and format
+        working-directory: Wayfinder.Editor.Client
+        run: npm run lint
+
       - name: No legacy blueprint shapes
         working-directory: Wayfinder.Editor.Client
         run: npm run test:no-legacy-shapes

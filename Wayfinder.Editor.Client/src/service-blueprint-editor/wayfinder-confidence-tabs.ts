@@ -38,9 +38,7 @@ export class WayfinderConfidenceTabs extends LitElement {
     const nextTab = tabs[nextIndex];
     this._handleTabClick(nextTab);
     requestAnimationFrame(() => {
-      this.shadowRoot
-        ?.querySelector<HTMLButtonElement>(`#confidence-tab-${nextTab}`)
-        ?.focus();
+      this.shadowRoot?.querySelector<HTMLButtonElement>(`#confidence-tab-${nextTab}`)?.focus();
     });
   }
 
@@ -77,9 +75,8 @@ export class WayfinderConfidenceTabs extends LitElement {
 
   private _renderTabButton(tab: ConfidenceTab, label: string, badge?: number) {
     const isActive = this.activeTab === tab;
-    const badgeHtml = typeof badge === 'number' && badge > 0
-      ? html`<span class="tab-badge" data-wayfinder-tab-badge="${tab}">${badge}</span>`
-      : nothing;
+    const badgeHtml =
+      typeof badge === 'number' && badge > 0 ? html`<span class="tab-badge" data-wayfinder-tab-badge="${tab}">${badge}</span>` : nothing;
 
     return html`
       <button

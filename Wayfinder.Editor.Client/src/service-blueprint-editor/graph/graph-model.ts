@@ -95,9 +95,11 @@ export type GraphModel = {
 };
 
 function labelForNodeKey(serviceBlueprint: ServiceBlueprint | null, key: string): string {
-  return serviceBlueprint?.stages.find(stage => stage.stageKey === key)?.displayName
-    ?? serviceBlueprint?.gateways?.find(gateway => gateway.key === key)?.displayName
-    ?? key;
+  return (
+    serviceBlueprint?.stages.find((stage) => stage.stageKey === key)?.displayName ??
+    serviceBlueprint?.gateways?.find((gateway) => gateway.key === key)?.displayName ??
+    key
+  );
 }
 
 function transitionDescriptor(serviceBlueprint: ServiceBlueprint | null, transition: RouteView): string {
@@ -120,12 +122,10 @@ function pickEdgeSides(
   backward: boolean
 ): { sourceSide: HandleSide; targetSide: HandleSide } {
   if (!backward && from && to) {
-    const dx = (to.x + to.width / 2) - (from.x + from.width / 2);
-    const dy = (to.y + to.height / 2) - (from.y + from.height / 2);
+    const dx = to.x + to.width / 2 - (from.x + from.width / 2);
+    const dy = to.y + to.height / 2 - (from.y + from.height / 2);
     if (Math.abs(dx) > Math.abs(dy)) {
-      return dx >= 0
-        ? { sourceSide: 'right', targetSide: 'left' }
-        : { sourceSide: 'left', targetSide: 'right' };
+      return dx >= 0 ? { sourceSide: 'right', targetSide: 'left' } : { sourceSide: 'left', targetSide: 'right' };
     }
   }
   return { sourceSide: 'bottom', targetSide: 'top' };
@@ -187,9 +187,7 @@ function assignHandleSlots(
     if (!placement) {
       return 0;
     }
-    return side === 'left' || side === 'right'
-      ? placement.y + placement.height / 2
-      : placement.x + placement.width / 2;
+    return side === 'left' || side === 'right' ? placement.y + placement.height / 2 : placement.x + placement.width / 2;
   };
 
   type GroupEntry = { edgeKey: string; sortKey: number };
@@ -204,7 +202,7 @@ function assignHandleSlots(
 
   const sourceGroups: GroupMap = new Map();
   const targetGroups: GroupMap = new Map();
-  edges.forEach(edge => {
+  edges.forEach((edge) => {
     pushEntry(sourceGroups, edge.fromId, edge.sourceSide, {
       edgeKey: edge.key,
       sortKey: otherEndpointCoordinate(edge.sourceSide, placements.get(edge.toId)),
@@ -217,10 +215,9 @@ function assignHandleSlots(
 
   const resolve = (groups: GroupMap, rolePrefix: string): Map<string, { id: string; offset: number }> => {
     const slotByEdgeKey = new Map<string, { id: string; offset: number }>();
-    groups.forEach(bySide => {
+    groups.forEach((bySide) => {
       bySide.forEach((group, side) => {
-        const ordered = [...group].sort((left, right) => left.sortKey - right.sortKey
-          || left.edgeKey.localeCompare(right.edgeKey));
+        const ordered = [...group].sort((left, right) => left.sortKey - right.sortKey || left.edgeKey.localeCompare(right.edgeKey));
         ordered.forEach((entry, index) => {
           slotByEdgeKey.set(entry.edgeKey, {
             id: `${rolePrefix}-${side}-${index}`,
@@ -246,7 +243,7 @@ function assignHandleSlots(
     return entry;
   };
 
-  edges.forEach(edge => {
+  edges.forEach((edge) => {
     const sourceSlot = sourceSlotByEdgeKey.get(edge.key)!;
     const targetSlot = targetSlotByEdgeKey.get(edge.key)!;
     edgeHandles.set(edge.key, {
@@ -272,7 +269,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
   // Handle assignment + a natural anchor point per edge, computed once up
   // front so nodes (their rendered handles), edges, and chips (below) can
   // all use it.
-  const edgesForSlotting = topology.edges.map(topologyEdge => {
+  const edgesForSlotting = topology.edges.map((topologyEdge) => {
     const sides = pickEdgeSides(
       layout.placements.get(topologyEdge.fromId),
       layout.placements.get(topologyEdge.toId),
@@ -283,7 +280,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
   const { edgeHandles, nodeHandles } = assignHandleSlots(edgesForSlotting, layout.placements);
   const emptyHandles = { source: [] as HandleSlot[], target: [] as HandleSlot[] };
 
-  const nodes: GraphFlowNode[] = topology.nodes.map(topologyNode => {
+  const nodes: GraphFlowNode[] = topology.nodes.map((topologyNode) => {
     const placement = layout.placements.get(topologyNode.id);
     const position = placement ? { x: placement.x, y: placement.y } : { x: 0, y: 0 };
     const rowRank = placement?.rowRank ?? 0;
@@ -337,16 +334,17 @@ export function buildGraphModel(props: GraphProps): GraphModel {
   });
 
   const routingByEdgeKey = new Map<string, EdgeHandles & { anchor: Point }>();
-  topology.edges.forEach(topologyEdge => {
+  topology.edges.forEach((topologyEdge) => {
     const fromPlacement = layout.placements.get(topologyEdge.fromId);
     const toPlacement = layout.placements.get(topologyEdge.toId);
     const handles = edgeHandles.get(topologyEdge.key)!;
-    const anchor = fromPlacement && toPlacement
-      ? midpoint(
-        handlePoint(fromPlacement, handles.sourceSide, handles.sourceOffset),
-        handlePoint(toPlacement, handles.targetSide, handles.targetOffset)
-      )
-      : { x: 0, y: 0 };
+    const anchor =
+      fromPlacement && toPlacement
+        ? midpoint(
+            handlePoint(fromPlacement, handles.sourceSide, handles.sourceOffset),
+            handlePoint(toPlacement, handles.targetSide, handles.targetOffset)
+          )
+        : { x: 0, y: 0 };
     routingByEdgeKey.set(topologyEdge.key, {
       sourceHandle: handles.sourceHandle,
       targetHandle: handles.targetHandle,
@@ -355,7 +353,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
   });
 
   const chipsByEdgeKey = new Map<string, TransitionChip[]>();
-  topology.transitionBindings.forEach(binding => {
+  topology.transitionBindings.forEach((binding) => {
     if (!binding.edgeKey) {
       return;
     }
@@ -412,14 +410,14 @@ export function buildGraphModel(props: GraphProps): GraphModel {
   // Lane header text (label + description, up top in each lane) isn't a
   // node placement, but a chip landing there is just as unreadable as one
   // landing on a node — keep chips out of that band too.
-  const headerObstacles = layout.lanes.map(lane => ({
+  const headerObstacles = layout.lanes.map((lane) => ({
     x: lane.x,
     y: TOP_PADDING,
     width: lane.width,
     height: LANE_HEADER_OFFSET,
   }));
   const obstacles = [
-    ...[...layout.placements.values()].map(placement => ({
+    ...[...layout.placements.values()].map((placement) => ({
       x: placement.x,
       y: placement.y,
       width: placement.width,
@@ -428,8 +426,8 @@ export function buildGraphModel(props: GraphProps): GraphModel {
     ...headerObstacles,
   ];
   const resolvedChipBoxes = declutterChips(chipBoxes, obstacles);
-  chipsByEdgeKey.forEach(chips => {
-    chips.forEach(chip => {
+  chipsByEdgeKey.forEach((chips) => {
+    chips.forEach((chip) => {
       const box = resolvedChipBoxes.get(String(chip.index));
       if (box) {
         chip.x = box.x + CHIP_WIDTH / 2;
@@ -438,8 +436,8 @@ export function buildGraphModel(props: GraphProps): GraphModel {
     });
   });
 
-  const edges: RouteFlowEdge[] = topology.edges.map(topologyEdge => {
-    const simulationPath = topologyEdge.transitionIndices.some(index => simulationTransitionIndices.has(index));
+  const edges: RouteFlowEdge[] = topology.edges.map((topologyEdge) => {
+    const simulationPath = topologyEdge.transitionIndices.some((index) => simulationTransitionIndices.has(index));
     const { sourceHandle, targetHandle } = routingByEdgeKey.get(topologyEdge.key)!;
     return {
       id: topologyEdge.key,

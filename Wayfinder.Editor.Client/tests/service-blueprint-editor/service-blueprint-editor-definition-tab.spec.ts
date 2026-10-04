@@ -17,37 +17,37 @@ async function openDefinitionTab(page: Page): Promise<void> {
   await definitionTab.click();
   await expect(editor.locator('[data-wayfinder-definition-panel]')).toBeVisible();
   // Wait for the definition editor element to be present *and* populated.
-  await expect.poll(async () => readDefinitionText(page), { timeout: 10_000 })
-    .not.toEqual('');
+  await expect.poll(async () => readDefinitionText(page), { timeout: 10_000 }).not.toEqual('');
 }
 
 async function readDefinitionText(page: Page): Promise<string> {
   return await page.evaluate(() => {
     const editorEl = document.querySelector('wayfinder-service-blueprint-editor') as HTMLElement | null;
-    const def = editorEl?.shadowRoot?.querySelector('wayfinder-definition-editor') as HTMLElement & { value?: string } | null;
+    const def = editorEl?.shadowRoot?.querySelector('wayfinder-definition-editor') as (HTMLElement & { value?: string }) | null;
     return def?.value ?? '';
   });
 }
 
 async function setDefinitionText(page: Page, value: string): Promise<void> {
-  await page.evaluate(text => {
+  await page.evaluate((text) => {
     const editorEl = document.querySelector('wayfinder-service-blueprint-editor') as HTMLElement | null;
     const def = editorEl?.shadowRoot?.querySelector('wayfinder-definition-editor') as (HTMLElement & { value?: string }) | null;
     if (!def) {
       throw new Error('wayfinder-definition-editor not present');
     }
     def.value = text;
-    def.dispatchEvent(new CustomEvent('definition-input', {
-      detail: { value: text },
-      bubbles: true,
-      composed: true,
-    }));
+    def.dispatchEvent(
+      new CustomEvent('definition-input', {
+        detail: { value: text },
+        bubbles: true,
+        composed: true,
+      })
+    );
   }, value);
 }
 
 async function waitForDefinitionTextContains(page: Page, fragment: string): Promise<void> {
-  await expect.poll(async () => readDefinitionText(page), { timeout: 5_000 })
-    .toContain(fragment);
+  await expect.poll(async () => readDefinitionText(page), { timeout: 5_000 }).toContain(fragment);
 }
 
 test.describe('Definition (JSON twin-pane) tab', () => {
@@ -142,11 +142,13 @@ test.describe('Definition (JSON twin-pane) tab', () => {
       const internalServiceBlueprint = (host as unknown as { _serviceBlueprint: { displayName: string } })._serviceBlueprint;
       const next = JSON.parse(JSON.stringify(internalServiceBlueprint));
       next.displayName = 'Definition Twin Demo';
-      graph.dispatchEvent(new CustomEvent('service-blueprint-updated', {
-        detail: { serviceBlueprint: next, selection: null },
-        bubbles: true,
-        composed: true,
-      }));
+      graph.dispatchEvent(
+        new CustomEvent('service-blueprint-updated', {
+          detail: { serviceBlueprint: next, selection: null },
+          bubbles: true,
+          composed: true,
+        })
+      );
     });
 
     // Wait for the host to reflect the change in JSON.
@@ -200,11 +202,14 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     await expect(defEditor).toBeVisible();
 
     // Wait for CodeMirror to mount.
-    await page.waitForFunction(() => {
-      const host = document.querySelector('wayfinder-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
-      return !!def?.shadowRoot?.querySelector('.cm-content');
-    }, { timeout: 5_000 });
+    await page.waitForFunction(
+      () => {
+        const host = document.querySelector('wayfinder-service-blueprint-editor');
+        const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
+        return !!def?.shadowRoot?.querySelector('.cm-content');
+      },
+      { timeout: 5_000 }
+    );
 
     const before = await readDefinitionText(page);
 

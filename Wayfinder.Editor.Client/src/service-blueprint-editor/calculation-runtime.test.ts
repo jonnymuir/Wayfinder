@@ -65,19 +65,35 @@ export function run(): number {
   // ── extractReferencedNames ────────────────────────────────────────────────
   {
     const result = extractReferencedNames('a + b * 2');
-    check('scope names from a simple binary expression', JSON.stringify(result?.scopeNames.sort()) === JSON.stringify(['a', 'b']), JSON.stringify(result));
+    check(
+      'scope names from a simple binary expression',
+      JSON.stringify(result?.scopeNames.sort()) === JSON.stringify(['a', 'b']),
+      JSON.stringify(result)
+    );
     check('no table names when there is no lookup() call', result?.tableNames.length === 0, JSON.stringify(result));
   }
 
   {
     const result = extractReferencedNames('member.age + 1');
-    check('a dotted path contributes only its first segment', JSON.stringify(result?.scopeNames) === JSON.stringify(['member']), JSON.stringify(result));
+    check(
+      'a dotted path contributes only its first segment',
+      JSON.stringify(result?.scopeNames) === JSON.stringify(['member']),
+      JSON.stringify(result)
+    );
   }
 
   {
-    const result = extractReferencedNames("lookup(pensionAgeFactor, age) + bonus");
-    check('lookup()\'s first arg is a table name, not a scope name', JSON.stringify(result?.tableNames) === JSON.stringify(['pensionAgeFactor']), JSON.stringify(result));
-    check('lookup()\'s remaining args are still scope names', JSON.stringify(result?.scopeNames.sort()) === JSON.stringify(['age', 'bonus']), JSON.stringify(result));
+    const result = extractReferencedNames('lookup(pensionAgeFactor, age) + bonus');
+    check(
+      "lookup()'s first arg is a table name, not a scope name",
+      JSON.stringify(result?.tableNames) === JSON.stringify(['pensionAgeFactor']),
+      JSON.stringify(result)
+    );
+    check(
+      "lookup()'s remaining args are still scope names",
+      JSON.stringify(result?.scopeNames.sort()) === JSON.stringify(['age', 'bonus']),
+      JSON.stringify(result)
+    );
   }
 
   {
@@ -95,7 +111,11 @@ export function run(): number {
   {
     const calc: CalculationSet = { fields: { double: { expr: 'age * 2' } } };
     const { results } = tryEvaluateFieldsForPreview(calc, { age: 21 });
-    check('a field referencing an input evaluates', results.double.status === 'ok' && results.double.display === '42', JSON.stringify(results));
+    check(
+      'a field referencing an input evaluates',
+      results.double.status === 'ok' && results.double.display === '42',
+      JSON.stringify(results)
+    );
   }
 
   {
@@ -106,7 +126,11 @@ export function run(): number {
       },
     };
     const { results } = tryEvaluateFieldsForPreview(calc, {});
-    check('a field referencing an earlier field evaluates', results.doubled.status === 'ok' && results.doubled.display === '20', JSON.stringify(results));
+    check(
+      'a field referencing an earlier field evaluates',
+      results.doubled.status === 'ok' && results.doubled.display === '20',
+      JSON.stringify(results)
+    );
   }
 
   {
@@ -118,7 +142,11 @@ export function run(): number {
     };
     const { results } = tryEvaluateFieldsForPreview(calc, {});
     check('a failing field reports status:error', results.broken.status === 'error', JSON.stringify(results));
-    check('a failing field does not poison an unrelated field', results.unaffected.status === 'ok' && results.unaffected.display === '10', JSON.stringify(results));
+    check(
+      'a failing field does not poison an unrelated field',
+      results.unaffected.status === 'ok' && results.unaffected.display === '10',
+      JSON.stringify(results)
+    );
   }
 
   {
@@ -130,7 +158,11 @@ export function run(): number {
     };
     const { results } = tryEvaluateFieldsForPreview(calc, {});
     check('a service field reports status:service, no attempted evaluation', results.member.status === 'service', JSON.stringify(results));
-    check('a field depending on an unsupplied service field fails, not silently succeeds', results.age.status === 'error', JSON.stringify(results));
+    check(
+      'a field depending on an unsupplied service field fails, not silently succeeds',
+      results.age.status === 'error',
+      JSON.stringify(results)
+    );
   }
 
   {
@@ -142,32 +174,20 @@ export function run(): number {
   // ── tryEvaluateSeriesForPreview ───────────────────────────────────────────
   {
     const calc: CalculationSet = {};
-    const result = tryEvaluateSeriesForPreview(
-      { over: 'age', from: '1', to: '3', values: { doubled: 'age * 2' } },
-      {},
-      calc
-    );
+    const result = tryEvaluateSeriesForPreview({ over: 'age', from: '1', to: '3', values: { doubled: 'age * 2' } }, {}, calc);
     check('a simple series produces the expected row count', result.status === 'ok' && result.rows.length === 3, JSON.stringify(result));
     check('a simple series computes each row correctly', result.status === 'ok' && result.rows[1].doubled === '4', JSON.stringify(result));
   }
 
   {
     const calc: CalculationSet = {};
-    const result = tryEvaluateSeriesForPreview(
-      { over: 'age', from: 'age', to: '3', values: {} },
-      { age: 1 },
-      calc
-    );
-    check("a loop variable colliding with an existing scope name is rejected", result.status === 'error', JSON.stringify(result));
+    const result = tryEvaluateSeriesForPreview({ over: 'age', from: 'age', to: '3', values: {} }, { age: 1 }, calc);
+    check('a loop variable colliding with an existing scope name is rejected', result.status === 'error', JSON.stringify(result));
   }
 
   {
     const calc: CalculationSet = {};
-    const result = tryEvaluateSeriesForPreview(
-      { over: 'x', from: '1', to: '5000', values: {} },
-      {},
-      calc
-    );
+    const result = tryEvaluateSeriesForPreview({ over: 'x', from: '1', to: '5000', values: {} }, {}, calc);
     check('a series that would produce too many rows is rejected', result.status === 'error', JSON.stringify(result));
   }
 

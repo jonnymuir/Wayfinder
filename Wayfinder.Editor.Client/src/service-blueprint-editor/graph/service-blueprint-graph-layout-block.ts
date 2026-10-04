@@ -1,12 +1,7 @@
 import type { ServiceBlueprint, NodePosition } from '../types.js';
 import { serviceBlueprintGateways } from '../types.js';
 import type { QueueDefinition } from '../stage-assignment.js';
-import {
-  computeDerivedLayout,
-  computeTopology,
-  gatewayNodeId,
-  stageNodeId,
-} from './service-blueprint-graph-layout.js';
+import { computeDerivedLayout, computeTopology, gatewayNodeId, stageNodeId } from './service-blueprint-graph-layout.js';
 
 /**
  * Immutable helpers for the definition's `layout` block. Positions are stored
@@ -18,18 +13,12 @@ function roundPosition(position: NodePosition): NodePosition {
   return { x: Math.round(position.x), y: Math.round(position.y) };
 }
 
-export function getNodePosition(
-  serviceBlueprint: ServiceBlueprint,
-  nodeId: string
-): NodePosition | null {
+export function getNodePosition(serviceBlueprint: ServiceBlueprint, nodeId: string): NodePosition | null {
   return serviceBlueprint.layout?.nodes?.[nodeId] ?? null;
 }
 
 /** Returns a new serviceBlueprint with the given node positions written into the layout block. */
-export function setNodePositions(
-  serviceBlueprint: ServiceBlueprint,
-  positions: Record<string, NodePosition>
-): ServiceBlueprint {
+export function setNodePositions(serviceBlueprint: ServiceBlueprint, positions: Record<string, NodePosition>): ServiceBlueprint {
   const nodes: Record<string, NodePosition> = { ...(serviceBlueprint.layout?.nodes ?? {}) };
   for (const [nodeId, position] of Object.entries(positions)) {
     nodes[nodeId] = roundPosition(position);
@@ -42,11 +31,7 @@ export function setNodePositions(
  * passing `position: null`, cleared back to the derived auto-routed path).
  * Keyed by the same graph edge key ("fromId->toId") RouteEdge renders with.
  */
-export function setRouteWaypoint(
-  serviceBlueprint: ServiceBlueprint,
-  edgeKey: string,
-  position: NodePosition | null
-): ServiceBlueprint {
+export function setRouteWaypoint(serviceBlueprint: ServiceBlueprint, edgeKey: string, position: NodePosition | null): ServiceBlueprint {
   const routes: Record<string, NodePosition> = { ...(serviceBlueprint.layout?.routes ?? {}) };
   if (position) {
     routes[edgeKey] = roundPosition(position);
@@ -65,8 +50,8 @@ export function pruneLayout(serviceBlueprint: ServiceBlueprint): ServiceBlueprin
   }
 
   const liveIds = new Set<string>([
-    ...serviceBlueprint.stages.map(stage => stageNodeId(stage.stageKey)),
-    ...serviceBlueprintGateways(serviceBlueprint).map(gateway => gatewayNodeId(gateway.key)),
+    ...serviceBlueprint.stages.map((stage) => stageNodeId(stage.stageKey)),
+    ...serviceBlueprintGateways(serviceBlueprint).map((gateway) => gatewayNodeId(gateway.key)),
   ]);
   const nodes: Record<string, NodePosition> = {};
   for (const [nodeId, position] of nodeEntries) {
@@ -107,13 +92,10 @@ export function pruneLayout(serviceBlueprint: ServiceBlueprint): ServiceBlueprin
  * stored positions) and write the result back as explicit positions, so the
  * arrangement is deterministic and each node stays individually adjustable.
  */
-export function applyAutoArrange(
-  serviceBlueprint: ServiceBlueprint,
-  availableQueues: QueueDefinition[] = []
-): ServiceBlueprint {
+export function applyAutoArrange(serviceBlueprint: ServiceBlueprint, availableQueues: QueueDefinition[] = []): ServiceBlueprint {
   const layout = computeDerivedLayout(computeTopology(serviceBlueprint, availableQueues));
   const nodes: Record<string, NodePosition> = {};
-  layout.placements.forEach(placement => {
+  layout.placements.forEach((placement) => {
     nodes[placement.id] = roundPosition({ x: placement.x, y: placement.y });
   });
   if (Object.keys(nodes).length === 0) {

@@ -1,8 +1,4 @@
-import {
-  mapServerDiagnosticsToIssues,
-  normaliseServerSeverity,
-  parseDiagnosticPath,
-} from './server-diagnostic-location.js';
+import { mapServerDiagnosticsToIssues, normaliseServerSeverity, parseDiagnosticPath } from './server-diagnostic-location.js';
 import type { ServiceBlueprintValidationOutcome } from './service-blueprint-source.js';
 
 let failures = 0;
@@ -26,13 +22,11 @@ export function run(): number {
   // ── path → location ────────────────────────────────────────────────────
   check(
     'calculations.fields.{name} → calculation field location',
-    JSON.stringify(parseDiagnosticPath('calculations.fields.totalCost')) ===
-      JSON.stringify({ kind: 'calculation', field: 'totalCost' })
+    JSON.stringify(parseDiagnosticPath('calculations.fields.totalCost')) === JSON.stringify({ kind: 'calculation', field: 'totalCost' })
   );
   check(
     'calculations.series.{name} → calculation series location',
-    JSON.stringify(parseDiagnosticPath('calculations.series.trend')) ===
-      JSON.stringify({ kind: 'calculation', series: 'trend' })
+    JSON.stringify(parseDiagnosticPath('calculations.series.trend')) === JSON.stringify({ kind: 'calculation', series: 'trend' })
   );
   check(
     'stages.{key}.actions[{n}] → stage action location',
@@ -41,18 +35,15 @@ export function run(): number {
   );
   check(
     'stages.{key}.routes[{n}] → containing stage location',
-    JSON.stringify(parseDiagnosticPath('stages.review.routes[0]')) ===
-      JSON.stringify({ kind: 'stage', stageKey: 'review' })
+    JSON.stringify(parseDiagnosticPath('stages.review.routes[0]')) === JSON.stringify({ kind: 'stage', stageKey: 'review' })
   );
   check(
     'stages.{key}.components[{n}].showWhen → containing stage location',
-    JSON.stringify(parseDiagnosticPath('stages.review.components[3].showWhen')) ===
-      JSON.stringify({ kind: 'stage', stageKey: 'review' })
+    JSON.stringify(parseDiagnosticPath('stages.review.components[3].showWhen')) === JSON.stringify({ kind: 'stage', stageKey: 'review' })
   );
   check(
     'stages.{key} → stage location',
-    JSON.stringify(parseDiagnosticPath('stages.declaration')) ===
-      JSON.stringify({ kind: 'stage', stageKey: 'declaration' })
+    JSON.stringify(parseDiagnosticPath('stages.declaration')) === JSON.stringify({ kind: 'stage', stageKey: 'declaration' })
   );
   check(
     'an unlocatable path (definitionKey) → non-jumpable document location',

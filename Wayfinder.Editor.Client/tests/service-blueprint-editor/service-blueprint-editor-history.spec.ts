@@ -4,10 +4,7 @@ function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
 }
 
-async function expectStageSelectionDetails(
-  page: import('@playwright/test').Page,
-  stageKey: string
-) {
+async function expectStageSelectionDetails(page: import('@playwright/test').Page, stageKey: string) {
   const stage = page.locator(`[data-wayfinder-stage="${stageKey}"]`);
   await expect(stage).toBeVisible();
   await expect(stage).toHaveAttribute('aria-pressed', 'true');
@@ -17,14 +14,16 @@ async function expectStageSelectionDetails(
 async function pressRedoShortcut(page: import('@playwright/test').Page) {
   const isMac = process.platform === 'darwin';
   await page.locator('wayfinder-service-blueprint-editor').evaluate((element, mac) => {
-    element.dispatchEvent(new KeyboardEvent('keydown', {
-      key: 'z',
-      bubbles: true,
-      composed: true,
-      shiftKey: true,
-      metaKey: mac,
-      ctrlKey: !mac,
-    }));
+    element.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'z',
+        bubbles: true,
+        composed: true,
+        shiftKey: true,
+        metaKey: mac,
+        ctrlKey: !mac,
+      })
+    );
   }, isMac);
 }
 
@@ -87,38 +86,25 @@ test.describe('ServiceBlueprint editor undo and redo', () => {
     await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
 
     await page.locator('[data-wayfinder-gateway="review-split"]').click();
-    const labelInput = page
-      .locator('[data-wayfinder-gateway-route] [data-wayfinder-route-label]')
-      .first();
+    const labelInput = page.locator('[data-wayfinder-gateway-route] [data-wayfinder-route-label]').first();
     await expect(labelInput).toBeVisible();
     const originalLabel = await labelInput.inputValue();
 
     await labelInput.fill('continue applicant branch (edited)');
     await labelInput.press('Tab');
-    await expect(
-      page
-        .locator('[data-wayfinder-gateway-route] [data-wayfinder-route-label]')
-        .first()
-    ).toHaveValue('continue applicant branch (edited)');
+    await expect(page.locator('[data-wayfinder-gateway-route] [data-wayfinder-route-label]').first()).toHaveValue(
+      'continue applicant branch (edited)'
+    );
 
     await page.locator('[data-wayfinder-undo]').click();
-    await expect(
-      page
-        .locator('[data-wayfinder-gateway-route] [data-wayfinder-route-label]')
-        .first()
-    ).toHaveValue(originalLabel);
+    await expect(page.locator('[data-wayfinder-gateway-route] [data-wayfinder-route-label]').first()).toHaveValue(originalLabel);
     await pressRedoShortcut(page);
-    await expect(
-      page
-        .locator('[data-wayfinder-gateway-route] [data-wayfinder-route-label]')
-        .first()
-    ).toHaveValue('continue applicant branch (edited)');
+    await expect(page.locator('[data-wayfinder-gateway-route] [data-wayfinder-route-label]').first()).toHaveValue(
+      'continue applicant branch (edited)'
+    );
 
     const routesBefore = await page.locator('[data-wayfinder-gateway-route]').count();
-    await page
-      .locator('[data-wayfinder-gateway-route] [data-wayfinder-route-delete]')
-      .first()
-      .click();
+    await page.locator('[data-wayfinder-gateway-route] [data-wayfinder-route-delete]').first().click();
     await expect(page.locator('[data-wayfinder-gateway-route]')).toHaveCount(routesBefore - 1);
 
     await page.locator('[data-wayfinder-undo]').click();

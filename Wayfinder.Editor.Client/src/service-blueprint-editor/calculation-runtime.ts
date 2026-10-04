@@ -53,9 +53,7 @@ export function inScopeInputFieldKeys(allInputFields: FieldReference[]): Set<str
   // would treat "" as "no default" and wrongly flag a real, correctly-defaulted field as unknown —
   // exactly the false positive this must not produce.
   return new Set(
-    allInputFields
-      .filter(field => field.default !== undefined || !NUMERIC_COMPONENT_TYPES.has(field.type))
-      .map(field => field.fieldKey)
+    allInputFields.filter((field) => field.default !== undefined || !NUMERIC_COMPONENT_TYPES.has(field.type)).map((field) => field.fieldKey)
   );
 }
 
@@ -63,9 +61,7 @@ export function inScopeInputFieldKeys(allInputFields: FieldReference[]): Set<str
  * cap for this module's own hand-rolled series preview loop, not the real engine's own check. */
 const MAX_PREVIEW_SERIES_ROWS = 1000;
 
-export type ParseResult =
-  | { ok: true; node: CalculationNode }
-  | { ok: false; message: string; position?: number };
+export type ParseResult = { ok: true; node: CalculationNode } | { ok: false; message: string; position?: number };
 
 /** Syntax-only check — no scope needed, instant feedback. */
 export function tryParseExpression(expression: string): ParseResult {
@@ -137,10 +133,7 @@ function firstSegment(path: string): string {
   return dot === -1 ? path : path.slice(0, dot);
 }
 
-export type FieldPreviewResult =
-  | { status: 'ok'; display: string }
-  | { status: 'error'; message: string }
-  | { status: 'service' };
+export type FieldPreviewResult = { status: 'ok'; display: string } | { status: 'error'; message: string } | { status: 'service' };
 
 /**
  * Evaluates every non-service field in `calculations.fields`, in the object's own key order —
@@ -165,7 +158,7 @@ export function tryEvaluateFieldsForPreview(
       continue;
     }
 
-    if (!field.expr || !field.expr.trim()) {
+    if (!field.expr?.trim()) {
       results[name] = { status: 'error', message: 'No expression set.' };
       continue;
     }
@@ -182,9 +175,7 @@ export function tryEvaluateFieldsForPreview(
   return { results, scope };
 }
 
-export type SeriesPreviewResult =
-  | { status: 'ok'; rows: Array<Record<string, string>> }
-  | { status: 'error'; message: string };
+export type SeriesPreviewResult = { status: 'ok'; rows: Array<Record<string, string>> } | { status: 'error'; message: string };
 
 /** Evaluates one series against a scope already populated by `tryEvaluateFieldsForPreview`
  * (fields must be resolved first — a series may reference them). */
@@ -194,7 +185,7 @@ export function tryEvaluateSeriesForPreview(
   calculations: CalculationSet
 ): SeriesPreviewResult {
   try {
-    if (!definition.over || !definition.over.trim()) {
+    if (!definition.over?.trim()) {
       return { status: 'error', message: "Series has no loop variable ('over')." };
     }
 

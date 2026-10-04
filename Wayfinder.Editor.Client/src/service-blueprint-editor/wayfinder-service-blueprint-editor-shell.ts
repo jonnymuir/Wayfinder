@@ -99,7 +99,7 @@ export class WayfinderServiceBlueprintEditorShellElement extends LitElement {
     }
 
     return this._serviceBlueprintOptions.map(
-      option => html`
+      (option) => html`
         <option value="${option.blueprintKey}" ?selected="${option.blueprintKey === this._draftBlueprintKey}">
           ${option.displayName} (${option.blueprintKey}${option.definitionKey !== option.blueprintKey ? ` → ${option.definitionKey}` : ''})
         </option>
@@ -160,8 +160,9 @@ export class WayfinderServiceBlueprintEditorShellElement extends LitElement {
         <header class="topbar">
           <div class="topbar-content">
             <h1>Service Blueprint Editor</h1>
-            ${this._serviceBlueprintOptions.length > 0
-             ? html`
+            ${
+              this._serviceBlueprintOptions.length > 0
+                ? html`
                  <select
                    class="service-blueprint-selector"
                    .value="${live(this._draftBlueprintKey)}"
@@ -174,9 +175,10 @@ export class WayfinderServiceBlueprintEditorShellElement extends LitElement {
                    ${this._renderServiceBlueprintOptions()}
                  </select>
                `
-             : this.serviceBlueprintSource
-               ? html`<p class="service-blueprint-label">${this.blueprintKey}</p>`
-               : nothing}
+                : this.serviceBlueprintSource
+                  ? html`<p class="service-blueprint-label">${this.blueprintKey}</p>`
+                  : nothing
+            }
           </div>
         </header>
 

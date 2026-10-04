@@ -116,8 +116,7 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     const inspector = page.locator('wayfinder-step-inspector');
     await expect(inspector).toBeVisible();
     await expect(inspector.locator('[data-wayfinder-inspector-kind="gateway"]')).toBeVisible();
-    await expect(inspector.locator('[data-wayfinder-field="kind"]')).toContainText('Join gateway',
-      { timeout: 5_000 });
+    await expect(inspector.locator('[data-wayfinder-field="kind"]')).toContainText('Join gateway', { timeout: 5_000 });
   });
 
   test('split gateway inspector does not show a waiting copy field', async ({ page }) => {
@@ -137,10 +136,8 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await expect(inspector.locator('[data-wayfinder-inspector-kind="gateway"]')).toBeVisible();
 
     // A split gateway routes — it must not expose waiting copy fields to authors
-    await expect(inspector.locator('[data-wayfinder-field="waitingCopy"]')).toHaveCount(0,
-      { timeout: 3_000 });
-    await expect(inspector.locator('[data-wayfinder-field="waitingInstructions"]')).toHaveCount(0,
-      { timeout: 3_000 });
+    await expect(inspector.locator('[data-wayfinder-field="waitingCopy"]')).toHaveCount(0, { timeout: 3_000 });
+    await expect(inspector.locator('[data-wayfinder-field="waitingInstructions"]')).toHaveCount(0, { timeout: 3_000 });
   });
 
   // ─── #84 pending: join gateway waiting copy field (needs Blathers implementation) ──

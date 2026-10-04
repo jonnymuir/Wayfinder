@@ -14,6 +14,6 @@ export interface ServiceBlueprintActionCatalog {
 /** The generic action types Wayfinder ships out of the box (see `action-catalog-entries.ts`). */
 export class BuiltInServiceBlueprintActionCatalog implements ServiceBlueprintActionCatalog {
   async entries(): Promise<ActionCatalogEntry[]> {
-    return BUILT_IN_ACTION_CATALOG.map(entry => JSON.parse(JSON.stringify(entry)) as ActionCatalogEntry);
+    return BUILT_IN_ACTION_CATALOG.map((entry) => JSON.parse(JSON.stringify(entry)) as ActionCatalogEntry);
   }
 }
