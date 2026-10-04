@@ -98,7 +98,6 @@
         "src/service-blueprint-editor/graph/service-blueprint-graph-layout-block.ts",
         "src/service-blueprint-editor/graph/service-blueprint-graph-layout.ts",
         "src/service-blueprint-editor/service-blueprint-validation.ts",
-        "src/service-blueprint-editor/wayfinder-service-blueprint-graph.ts",
         "src/service-blueprint-editor/wayfinder-service-blueprint-outline.ts",
         "src/service-blueprint-editor/inspector/components-controller.ts",
         "src/service-blueprint-editor/inspector/gateway-inspector-controller.ts",
