@@ -1,6 +1,6 @@
 import { LitElement, html, nothing, unsafeCSS } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import type { ActionCatalogEntry, ActionDefinition, ServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
+import type { ServiceBlueprint } from './types.js';
 import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
 import { DefinitionController } from './definition-controller.js';
 import { cloneServiceBlueprint, serviceBlueprintsEqual } from './blueprint-snapshot.js';
@@ -12,58 +12,39 @@ import { SaveController } from './save-controller.js';
 import { ToastController } from './toast-controller.js';
 import { StalenessController } from './staleness-controller.js';
 import { ValidationController } from './validation-controller.js';
+import { EditorCatalogsController } from './editor-catalogs-controller.js';
+import {
+  type EditorSelection,
+  SelectionController,
+  type SelectionDetail,
+  cloneSelection,
+  selectionFromDetail,
+  selectionsEqual,
+} from './editor-selection.js';
+import { ValidationNavigator } from './validation-navigation.js';
+import { renderEditorToolbar, type ToolbarModel } from './editor-toolbar.js';
+import { renderCanvasHealthHint, renderPanelHeader } from './editor-panels.js';
 import type { ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
-import { BuiltInServiceBlueprintActionCatalog } from './action-catalog.js';
 import type { ServiceBlueprintComponentCatalog } from './component-catalog.js';
-import { HttpServiceBlueprintComponentCatalog } from './component-catalog.js';
 import type { ServiceBlueprintSupportSystemCatalog } from './support-system-catalog.js';
-import { HttpServiceBlueprintSupportSystemCatalog } from './support-system-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
-import type { ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
-import { flattenRoutes } from './route-model.js';
 import './wayfinder-service-blueprint-graph.js';
 import './wayfinder-step-inspector.js';
 import './wayfinder-calculations-editor.js';
 import './wayfinder-service-blueprint-outline.js';
 import './wayfinder-confidence-tabs.js';
 import type { ConfidenceTab } from './wayfinder-confidence-tabs.js';
-import { renderToolbarIcon } from './graph/toolbar-icons.js';
 import editorStyles from './wayfinder-service-blueprint-editor.css?inline';
-import { COPY_SHORTCUT, HELP_SHORTCUT, PASTE_SHORTCUT, REDO_SHORTCUT, SAVE_SHORTCUT, UNDO_SHORTCUT } from './editor-shortcut-bindings.js';
-
-type ServiceBlueprintSelection = { kind: 'stage'; stageKey: string } | { kind: 'gateway'; gatewayKey: string } | null;
 
 type ServiceBlueprintHistoryEntry = {
   serviceBlueprint: ServiceBlueprint;
-  selection: ServiceBlueprintSelection;
+  selection: EditorSelection;
 };
 
-type ActionSelection = {
-  target: 'stage' | 'transition';
-  index: number;
-} | null;
-
-function cloneSelection(selection: ServiceBlueprintSelection): ServiceBlueprintSelection {
-  return selection ? { ...selection } : null;
-}
-
-function selectionsEqual(left: ServiceBlueprintSelection, right: ServiceBlueprintSelection): boolean {
-  if (left?.kind !== right?.kind) {
-    return false;
-  }
-
-  if (left?.kind === 'stage' && right?.kind === 'stage') {
-    return left.stageKey === right.stageKey;
-  }
-
-  if (left?.kind === 'gateway' && right?.kind === 'gateway') {
-    return left.gatewayKey === right.gatewayKey;
-  }
-
-  return left === right;
-}
+/** What the graph, calculations editor and inspector report when they change the blueprint. */
+type ServiceBlueprintUpdatedDetail = { serviceBlueprint: ServiceBlueprint; selection?: SelectionDetail };
 
 /**
  * Top-level editor host page composing the four V1 serviceBlueprint editor components.
@@ -140,27 +121,56 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   initialServiceBlueprint: ServiceBlueprint | null = null;
 
   @state() private _serviceBlueprint: ServiceBlueprint | null = null;
-  @state() private _selection: ServiceBlueprintSelection = null;
-  @state() private _selectedTransitionIndex: number | null = null;
+  @state() private _loading = false;
+  @state() private _error: string | null = null;
+  @state() private _historyAnnouncement = '';
+  @state() private _activeConfidenceTab: ConfidenceTab = 'canvas';
+  /** Prefixed node ids from the canvas's shift-marquee multi-selection. */
+  @state() private _graphMultiSelection: string[] = [];
+  /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
+  @state() private _graphZoom = 1;
+  @query('.graph-panel') private _graphElement?: HTMLElementTagNameMap['wayfinder-service-blueprint-graph'];
+
   private readonly _toast = new ToastController(this);
+  private readonly _history = new EditHistory<ServiceBlueprintHistoryEntry>();
+  private readonly _clipboard = new BlueprintClipboard();
+  private readonly _layout = new PanelLayoutController(this);
+  private readonly _help = new ShortcutGuideController(this);
+  private readonly _selection = new SelectionController(this, {
+    blueprint: () => this._serviceBlueprint,
+    revealInspector: () => this._layout.expandInspector(),
+  });
+  private readonly _catalogs = new EditorCatalogsController(
+    this,
+    { actions: () => this.actionCatalog, components: () => this.componentCatalog, supportSystems: () => this.supportSystemCatalog },
+    (changed) => {
+      // Component schema issues in the Definition tab only re-lint on text edits, so a catalog that
+      // arrives after the tab was opened would otherwise leave them unflagged until the next keystroke.
+      if (changed === 'components') {
+        this._definition.relint();
+      }
+      this._validation.schedule();
+    }
+  );
   private readonly _staleness = new StalenessController(this, {
     source: () => this.serviceBlueprintSource,
     blueprintKey: () => this.blueprintKey,
     loadedVersion: () => this._serviceBlueprint?.version ?? null,
     reload: () => this._handleReloadAfterConflict(),
   });
-  @state() private _loading = false;
-  @state() private _error: string | null = null;
-  @state() private _actionCatalog: ActionCatalogEntry[] = [];
-  @state() private _componentCatalog: ComponentDescriptor[] = [];
-  @state() private _supportSystemCatalog: SupportSystemDescriptor[] = [];
-  private readonly _history = new EditHistory<ServiceBlueprintHistoryEntry>();
-  @state() private _historyAnnouncement = '';
-  @state() private _actionSelection: ActionSelection = null;
-  private readonly _clipboard = new BlueprintClipboard();
-
-  /** Prefixed node ids from the canvas's shift-marquee multi-selection. */
-  @state() private _graphMultiSelection: string[] = [];
+  private readonly _validation = new ValidationController(this, () => ({
+    blueprint: this._serviceBlueprint,
+    blueprintKey: this.blueprintKey,
+    source: this.serviceBlueprintSource,
+    actionCatalog: this._catalogs.actions,
+    componentCatalog: this._catalogs.components,
+    supportSystemCatalog: this._catalogs.supportSystems,
+  }));
+  private readonly _definition = new DefinitionController(this, {
+    blueprint: () => this._serviceBlueprint,
+    componentCatalog: () => this._catalogs.components,
+    apply: (next) => this._commitServiceBlueprintUpdate(next, this._selection.current),
+  });
   private readonly _save = new SaveController(this, {
     blueprint: () => this._serviceBlueprint,
     blueprintKey: () => this.blueprintKey,
@@ -172,9 +182,17 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     },
     conflict: (version) => this._staleness.markStale(version),
     toast: (message) => this._toast.show(message),
-    jumpToStage: (stageKey) => this._jumpToStage(stageKey),
+    jumpToStage: (stageKey) => this._navigator.jumpToStage(stageKey),
   });
-  private readonly _help = new ShortcutGuideController(this);
+  private readonly _navigator = new ValidationNavigator({
+    blueprint: () => this._serviceBlueprint,
+    selection: this._selection,
+    showTab: (tab) => {
+      this._activeConfidenceTab = tab;
+    },
+    revealInspector: () => this._layout.expandInspector(),
+    inspector: () => this.shadowRoot?.querySelector<HTMLElement>('wayfinder-step-inspector') ?? null,
+  });
   /** Registers itself with the element; nothing else needs to call it. */
   readonly keyboard = new EditorKeyboard(this, {
     save: () => void this._save.save(),
@@ -187,36 +205,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     openHelp: () => this._help.open(this.shadowRoot?.activeElement as HTMLElement | null),
     isHelpOpen: () => this._help.isOpen,
   });
-  @state() private _activeConfidenceTab: ConfidenceTab = 'canvas';
-  private readonly _layout = new PanelLayoutController(this);
-  /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
-  @state() private _graphZoom = 1;
-  @query('.graph-panel') private _graphElement?: HTMLElementTagNameMap['wayfinder-service-blueprint-graph'];
-  private readonly _definition = new DefinitionController(this, {
-    blueprint: () => this._serviceBlueprint,
-    componentCatalog: () => this._componentCatalog,
-    apply: (next) => this._commitServiceBlueprintUpdate(next, this._currentSelection()),
-  });
 
   private _lastLoadedBlueprintKey: string | null = null;
   private _serviceBlueprintLoadRequestId = 0;
-
-  private readonly _validation = new ValidationController(this, () => ({
-    blueprint: this._serviceBlueprint,
-    blueprintKey: this.blueprintKey,
-    source: this.serviceBlueprintSource,
-    actionCatalog: this._actionCatalog,
-    componentCatalog: this._componentCatalog,
-    supportSystemCatalog: this._supportSystemCatalog,
-  }));
-
-  private get _selectedStageKey(): string | null {
-    return this._selection?.kind === 'stage' ? this._selection.stageKey : null;
-  }
-
-  private get _selectedGatewayKey(): string | null {
-    return this._selection?.kind === 'gateway' ? this._selection.gatewayKey : null;
-  }
 
   connectedCallback() {
     super.connectedCallback();
@@ -224,16 +215,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     // Honour ?serviceBlueprint= URL param when running as a standalone page
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const keyParam = params.get('serviceBlueprint');
+      const keyParam = new URLSearchParams(window.location.search).get('serviceBlueprint');
       if (keyParam && !this.hasAttribute('blueprint-key')) {
         this.blueprintKey = keyParam;
       }
     }
-
-    void this._loadActionCatalog();
-    void this._loadComponentCatalog();
-    void this._loadSupportSystemCatalog();
 
     if (this.initialServiceBlueprint) {
       this._initialiseEditorState(this.initialServiceBlueprint);
@@ -250,39 +236,19 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  updated(_changedProperties: Map<string, unknown>) {
+  updated(changedProperties: Map<string, unknown>) {
     this._definition.syncFromBlueprint();
-    // The component catalog fetch (component-catalog.ts) resolves asynchronously, independent
-    // of the Definition tab's own debounced re-lint (which only re-runs on text edits) — a user
-    // who opens the Definition tab before it resolves would otherwise see component-schema
-    // issues only after their next keystroke. Re-lint the already-loaded text once the catalog
-    // actually arrives, so it isn't silently skipped for however long that race happens to last.
-    if (_changedProperties.has('_componentCatalog')) {
-      this._definition.relint();
-    }
 
-    // Recompute the validation rail whenever the blueprint, a catalog the fallback validator
-    // needs, or the host source itself changes. Debounced inside _scheduleRevalidate — a server
-    // `validate` is a round-trip, and the fallback is cheap enough that debouncing it too keeps
-    // the two paths behaving identically. The first load (null → a blueprint) validates
-    // immediately so the rail isn't blank for the debounce interval right after opening.
-    if (
-      _changedProperties.has('_serviceBlueprint') ||
-      _changedProperties.has('_componentCatalog') ||
-      _changedProperties.has('_actionCatalog') ||
-      _changedProperties.has('_supportSystemCatalog') ||
-      _changedProperties.has('serviceBlueprintSource')
-    ) {
-      if (_changedProperties.has('_serviceBlueprint') && !_changedProperties.get('_serviceBlueprint') && this._serviceBlueprint) {
-        void this._validation.run();
-      } else {
-        this._validation.schedule();
-      }
+    // Recompute the validation rail when the blueprint or the host source changes (catalog changes
+    // schedule it themselves). Debounced: a server `validate` is a round-trip, and the in-browser
+    // fallback is cheap enough that debouncing it too keeps the two paths behaving identically. The
+    // first load (null → a blueprint) validates immediately so the rail isn't blank right after opening.
+    const blueprintChanged = changedProperties.has('_serviceBlueprint');
+    if (blueprintChanged && !changedProperties.get('_serviceBlueprint') && this._serviceBlueprint) {
+      void this._validation.run();
+    } else if (blueprintChanged || changedProperties.has('serviceBlueprintSource')) {
+      this._validation.schedule();
     }
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
   }
 
   private async _loadServiceBlueprint() {
@@ -293,10 +259,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._lastLoadedBlueprintKey = this.blueprintKey;
 
     if (!this.serviceBlueprintSource) {
-      // Empty state — no source wired. The shell renders a developer
-      // affordance; the editor element itself stays silently empty so
-      // Storybook stories that drive it via `initialServiceBlueprint` are not
-      // disturbed.
+      // Empty state — no source wired. The shell renders a developer affordance; the editor element
+      // itself stays silently empty so Storybook stories that drive it via `initialServiceBlueprint`
+      // are not disturbed.
       this._serviceBlueprint = null;
       this._loading = false;
       this._reflectServiceBlueprintLoadedState();
@@ -305,17 +270,15 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     try {
       const serviceBlueprint = await this.serviceBlueprintSource.load(this.blueprintKey);
-      if (requestId !== this._serviceBlueprintLoadRequestId) {
-        return;
+      if (requestId === this._serviceBlueprintLoadRequestId) {
+        this._initialiseEditorState(serviceBlueprint);
       }
-      this._initialiseEditorState(serviceBlueprint);
     } catch (err) {
-      if (requestId !== this._serviceBlueprintLoadRequestId) {
-        return;
+      if (requestId === this._serviceBlueprintLoadRequestId) {
+        this._error = err instanceof Error ? err.message : String(err);
+        this._serviceBlueprint = null;
+        this._reflectServiceBlueprintLoadedState();
       }
-      this._error = err instanceof Error ? err.message : String(err);
-      this._serviceBlueprint = null;
-      this._reflectServiceBlueprintLoadedState();
     } finally {
       if (requestId === this._serviceBlueprintLoadRequestId) {
         this._loading = false;
@@ -323,42 +286,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  private async _loadActionCatalog() {
-    const catalog = this.actionCatalog ?? new BuiltInServiceBlueprintActionCatalog();
-    this._actionCatalog = await catalog.entries();
-  }
-
-  private async _loadComponentCatalog() {
-    const catalog = this.componentCatalog ?? new HttpServiceBlueprintComponentCatalog();
-    try {
-      this._componentCatalog = await catalog.entries();
-    } catch {
-      // No live host to fetch from (an offline demo, a Storybook story with no override) — the
-      // properties panel's add/edit UI simply stays unavailable, same as before this feature
-      // existed; never block the rest of the editor on this.
-      this._componentCatalog = [];
-    }
-  }
-
-  private async _loadSupportSystemCatalog() {
-    const catalog = this.supportSystemCatalog ?? new HttpServiceBlueprintSupportSystemCatalog();
-    try {
-      this._supportSystemCatalog = await catalog.entries();
-    } catch {
-      // Same reasoning as _loadComponentCatalog above — a support-system-call action's own
-      // editor simply has nothing to offer in its pickers; never block the rest of the editor.
-      this._supportSystemCatalog = [];
-    }
-  }
-
   private _initialiseEditorState(serviceBlueprint: ServiceBlueprint) {
     this._serviceBlueprint = cloneServiceBlueprint(serviceBlueprint);
     this._reflectServiceBlueprintLoadedState();
     this._history.clear();
-    this._actionSelection = null;
+    this._selection.clearAction();
     this._save.loaded(this._serviceBlueprint);
     this._definition.reset();
-    this._applySelection(null, this._serviceBlueprint);
+    this._selection.apply(null, this._serviceBlueprint);
     this._announceHistory('Service blueprint loaded. Undo history is ready for your next edit.');
     this._staleness.reset();
   }
@@ -373,76 +308,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this.removeAttribute('data-wayfinder-service-blueprint-loaded');
   }
 
-  private _currentSelection(): ServiceBlueprintSelection {
-    return this._selection;
-  }
-
-  private _normaliseSelection(
-    selection?: { kind: 'stage' | 'gateway' | 'transition'; stageKey?: string; gatewayKey?: string; transitionIndex?: number } | null
-  ): ServiceBlueprintSelection {
-    if (selection?.kind === 'stage' && selection.stageKey) {
-      return { kind: 'stage', stageKey: selection.stageKey };
-    }
-
-    if (selection?.kind === 'gateway' && selection.gatewayKey) {
-      return { kind: 'gateway', gatewayKey: selection.gatewayKey };
-    }
-
-    return null;
-  }
-
-  private _applySelection(selection: ServiceBlueprintSelection, serviceBlueprint: ServiceBlueprint | null = this._serviceBlueprint) {
-    if (!serviceBlueprint) {
-      this._selection = null;
-      this._selectedTransitionIndex = null;
-      return;
-    }
-
-    if (selection?.kind === 'stage') {
-      const exists = serviceBlueprint.stages.some((stage) => stage.stageKey === selection.stageKey);
-      this._selection = exists ? { kind: 'stage', stageKey: selection.stageKey } : null;
-      this._selectedTransitionIndex = null;
-      if (this._selection) {
-        this._layout.expandInspector();
-      }
-      return;
-    }
-
-    if (selection?.kind === 'gateway') {
-      const exists = serviceBlueprint.gateways?.some((gateway) => gateway.key === selection.gatewayKey) ?? false;
-      this._selection = exists ? { kind: 'gateway', gatewayKey: selection.gatewayKey } : null;
-      this._selectedTransitionIndex = null;
-      if (this._selection) {
-        this._layout.expandInspector();
-      }
-      return;
-    }
-
-    this._selection = null;
-    this._selectedTransitionIndex = null;
-  }
-
-  private _applyTransitionHighlight(transitionIndex: number, serviceBlueprint: ServiceBlueprint | null = this._serviceBlueprint) {
-    const transitions = flattenRoutes(serviceBlueprint);
-    if (!serviceBlueprint || transitionIndex < 0 || transitionIndex >= transitions.length) {
-      this._selectedTransitionIndex = null;
-      return;
-    }
-    // wayfinder-step-inspector has no standalone "route" view — a transition is
-    // only ever shown nested inside the stage or gateway whose routes[]
-    // array actually owns it (mapRouteView sets fromGateway when the owner
-    // is a gateway; fromStage always holds the owner's key either way).
-    // Without also selecting that owner, the inspector falls through to its
-    // empty state and a newly-connected or outline-clicked route never
-    // becomes editable.
-    const route = transitions[transitionIndex];
-    this._selection = route.fromGateway ? { kind: 'gateway', gatewayKey: route.fromGateway } : { kind: 'stage', stageKey: route.fromStage };
-    this._selectedTransitionIndex = transitionIndex;
-    if (this._selection) {
-      this._layout.expandInspector();
-    }
-  }
-
   private _snapshotCurrentState(): ServiceBlueprintHistoryEntry | null {
     if (!this._serviceBlueprint) {
       return null;
@@ -450,14 +315,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     return {
       serviceBlueprint: cloneServiceBlueprint(this._serviceBlueprint),
-      selection: cloneSelection(this._currentSelection()),
+      selection: cloneSelection(this._selection.current),
     };
   }
 
   private _restoreHistoryEntry(entry: ServiceBlueprintHistoryEntry) {
     this._serviceBlueprint = cloneServiceBlueprint(entry.serviceBlueprint);
-    this._applySelection(cloneSelection(entry.selection), this._serviceBlueprint);
-    this._actionSelection = null;
+    this._selection.apply(cloneSelection(entry.selection), this._serviceBlueprint);
+    this._selection.clearAction();
   }
 
   private _announceHistory(message: string) {
@@ -471,28 +336,24 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return this._serviceBlueprint ? this._history.summary : 'History unavailable until the service blueprint loads.';
   }
 
-  private get _selectedActionIndex() {
-    const currentSelection = this._currentSelection();
-    if (!currentSelection || !this._actionSelection) {
-      return null;
-    }
-
-    return currentSelection.kind === 'stage' && this._actionSelection.target === 'stage' ? this._actionSelection.index : null;
-  }
-
   /** Public hook for tests/host: run the pending revalidation now instead of after the debounce. */
   async flushValidationPending() {
     await this._validation.flush();
     await this.updateComplete;
   }
 
-  private _commitServiceBlueprintUpdate(nextServiceBlueprint: ServiceBlueprint, nextSelection: ServiceBlueprintSelection) {
-    const previousSelection = this._currentSelection();
+  // Public hook for tests/host: flush debounce and apply if valid.
+  applyDefinitionPending() {
+    this._definition.flush();
+  }
+
+  private _commitServiceBlueprintUpdate(nextServiceBlueprint: ServiceBlueprint, nextSelection: EditorSelection) {
+    const selectionChanged = !selectionsEqual(this._selection.current, nextSelection);
 
     if (serviceBlueprintsEqual(this._serviceBlueprint, nextServiceBlueprint)) {
-      if (!selectionsEqual(previousSelection, nextSelection)) {
-        this._applySelection(nextSelection, nextServiceBlueprint);
-        this._actionSelection = null;
+      if (selectionChanged) {
+        this._selection.apply(nextSelection, nextServiceBlueprint);
+        this._selection.clearAction();
       }
       return;
     }
@@ -502,34 +363,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       this._history.record(currentState);
     }
 
-    if (!selectionsEqual(previousSelection, nextSelection)) {
-      this._actionSelection = null;
+    if (selectionChanged) {
+      this._selection.clearAction();
     }
 
     this._serviceBlueprint = nextServiceBlueprint;
     this._save.edited();
-    this._applySelection(nextSelection, nextServiceBlueprint);
+    this._selection.apply(nextSelection, nextServiceBlueprint);
     this._announceHistory(`Change recorded. ${this._historyStatusSummary}`);
-  }
-
-  private _currentAction(): { action: ActionDefinition; target: 'stage' | 'transition' } | null {
-    if (!this._serviceBlueprint || !this._actionSelection) {
-      return null;
-    }
-
-    if (this._actionSelection.target === 'stage' && this._selectedStageKey) {
-      const stage = this._serviceBlueprint.stages.find((candidate) => candidate.stageKey === this._selectedStageKey);
-      const action = stage?.actions?.[this._actionSelection.index];
-      return action ? { action, target: 'stage' } : null;
-    }
-
-    if (this._actionSelection.target === 'transition' && this._selectedTransitionIndex !== null) {
-      const transition = flattenRoutes(this._serviceBlueprint)[this._selectedTransitionIndex];
-      const action = transition?.actions?.[this._actionSelection.index];
-      return action ? { action, target: 'transition' } : null;
-    }
-
-    return null;
   }
 
   private _undo = () => {
@@ -555,48 +396,51 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   };
 
   // ---------------------------------------------------------------------------
-  // Event handlers
+  // Selection events from the graph, outline and inspector
   // ---------------------------------------------------------------------------
 
+  private _select(selection: EditorSelection) {
+    this._selection.apply(selection);
+    this._selection.clearAction();
+  }
+
   private _handleStageSelected(e: CustomEvent<{ stageKey: string }>) {
-    this._applySelection({ kind: 'stage', stageKey: e.detail.stageKey }, this._serviceBlueprint);
-    this._actionSelection = null;
+    this._select({ kind: 'stage', stageKey: e.detail.stageKey });
   }
 
   private _handleGatewaySelected(e: CustomEvent<{ gatewayKey: string }>) {
-    this._applySelection({ kind: 'gateway', gatewayKey: e.detail.gatewayKey }, this._serviceBlueprint);
-    this._actionSelection = null;
+    this._select({ kind: 'gateway', gatewayKey: e.detail.gatewayKey });
   }
 
   private _handleTransitionSelected(e: CustomEvent<{ transitionIndex: number }>) {
-    this._applyTransitionHighlight(e.detail.transitionIndex, this._serviceBlueprint);
-    this._actionSelection = null;
+    this._selection.highlightTransition(e.detail.transitionIndex);
+    this._selection.clearAction();
+  }
+
+  private _handleOutlineGatewaySelected(e: CustomEvent<{ gatewayKey: string }>) {
+    this._handleGatewaySelected(e);
+    const gateway = this._serviceBlueprint?.gateways?.find((candidate) => candidate.key === e.detail.gatewayKey);
+    if (gateway) {
+      this._announceHistory(`Selected gateway ${gateway.displayName}`);
+    }
   }
 
   private _handleActionSelected(e: CustomEvent<{ index: number | null; target: 'stage' | 'transition' }>) {
-    this._actionSelection = e.detail.index === null ? null : { target: e.detail.target, index: e.detail.index };
+    this._selection.chooseAction(e.detail.index === null ? null : { target: e.detail.target, index: e.detail.index });
   }
 
-  private _handleServiceBlueprintUpdated(
-    e: CustomEvent<{
-      serviceBlueprint: ServiceBlueprint;
-      selection?: { kind: 'stage' | 'gateway' | 'transition'; stageKey?: string; gatewayKey?: string; transitionIndex?: number } | null;
-    }>
-  ) {
+  private _handleServiceBlueprintUpdated(e: CustomEvent<ServiceBlueprintUpdatedDetail>) {
     const nextServiceBlueprint = cloneServiceBlueprint(e.detail.serviceBlueprint);
-    const detailSelection = e.detail.selection;
-    // Transition selections (e.g. the route just created by drag-to-connect)
-    // aren't part of ServiceBlueprintSelection — they live in the separate
-    // _selectedTransitionIndex field alongside _applyTransitionHighlight.
-    // _normaliseSelection has no case for them, so route this before it
-    // drops the selection to null and leaves the properties panel empty.
-    if (detailSelection?.kind === 'transition' && typeof detailSelection.transitionIndex === 'number') {
+    const detail = e.detail.selection;
+    // A route (e.g. the one just created by drag-to-connect) is not an EditorSelection: it is
+    // highlighted separately, which also selects its owner. Handle it before the selection is
+    // normalised away to null and leaves the properties panel empty.
+    if (detail?.kind === 'transition' && typeof detail.transitionIndex === 'number') {
       this._commitServiceBlueprintUpdate(nextServiceBlueprint, null);
-      this._applyTransitionHighlight(detailSelection.transitionIndex, nextServiceBlueprint);
+      this._selection.highlightTransition(detail.transitionIndex, nextServiceBlueprint);
       return;
     }
-    const nextSelection = this._normaliseSelection(detailSelection);
-    this._commitServiceBlueprintUpdate(nextServiceBlueprint, nextSelection);
+    this._commitServiceBlueprintUpdate(nextServiceBlueprint, selectionFromDetail(detail));
   }
 
   private _handleInspectorRequested() {
@@ -606,25 +450,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     });
   }
 
-  private _handleOutlineStageSelected = (e: CustomEvent<{ stageKey: string }>) => {
-    this._applySelection({ kind: 'stage', stageKey: e.detail.stageKey }, this._serviceBlueprint);
-    this._actionSelection = null;
-  };
-
-  private _handleOutlineGatewaySelected = (e: CustomEvent<{ gatewayKey: string }>) => {
-    this._applySelection({ kind: 'gateway', gatewayKey: e.detail.gatewayKey }, this._serviceBlueprint);
-    this._actionSelection = null;
-    const gateway = this._serviceBlueprint?.gateways?.find((g) => g.key === e.detail.gatewayKey);
-    if (gateway) {
-      this._announceHistory(`Selected gateway ${gateway.displayName}`);
-    }
-  };
-
-  private _handleOutlineTransitionSelected = (e: CustomEvent<{ transitionIndex: number }>) => {
-    this._applyTransitionHighlight(e.detail.transitionIndex, this._serviceBlueprint);
-    this._actionSelection = null;
-  };
-
   private _handleConfidenceTabChanged = (e: CustomEvent<{ tab: ConfidenceTab }>) => {
     this._activeConfidenceTab = e.detail.tab;
     if (e.detail.tab === 'definition') {
@@ -632,36 +457,31 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Definition tab — JSON twin-pane sync
-  // ---------------------------------------------------------------------------
-
-  // Public hook for tests/host: flush debounce and apply if valid.
-  applyDefinitionPending() {
-    this._definition.flush();
+  private async _handleReloadAfterConflict() {
+    this._save.clearOutcome();
+    // Deliberately NOT clearing the stale flag here — it must stay true (read-only overlay up,
+    // banner's Reload button available) until _loadServiceBlueprint actually succeeds.
+    // _initialiseEditorState clears it on success. If the reload itself fails, we're correctly still
+    // stale/read-only rather than briefly unlocked with old content.
+    await this._loadServiceBlueprint();
+    if (!this._staleness.stale) {
+      this._toast.show('Reloaded the latest version.');
+    }
   }
+
+  // ---------------------------------------------------------------------------
+  // Copy and paste
+  // ---------------------------------------------------------------------------
 
   private get _clipboardContext(): ClipboardContext {
     return {
       blueprint: this._serviceBlueprint,
-      selectedStageKey: this._selectedStageKey,
+      selectedStageKey: this._selection.stageKey,
       multiSelection: this._graphMultiSelection,
-      selectedAction: this._currentAction(),
-      actionCatalog: this._actionCatalog,
+      selectedAction: this._selection.currentAction(),
+      actionCatalog: this._catalogs.actions,
       availableQueues: this.availableQueues,
     };
-  }
-
-  private get _canCopy() {
-    return this._clipboard.canCopy(this._clipboardContext);
-  }
-
-  private get _canPaste() {
-    return this._clipboard.canPaste(this._clipboardContext);
-  }
-
-  private get _clipboardSummary() {
-    return this._clipboard.summary;
   }
 
   private _copySelection() {
@@ -683,136 +503,18 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return false;
     }
 
-    const selection = outcome.selectStageKey ? { kind: 'stage' as const, stageKey: outcome.selectStageKey } : this._currentSelection();
+    const selection: EditorSelection = outcome.selectStageKey
+      ? { kind: 'stage', stageKey: outcome.selectStageKey }
+      : this._selection.current;
     this._commitServiceBlueprintUpdate(outcome.blueprint, selection);
     if (outcome.selectActionIndex !== undefined) {
-      this._actionSelection = { target: 'stage', index: outcome.selectActionIndex };
+      this._selection.chooseAction({ target: 'stage', index: outcome.selectActionIndex });
     }
     this._toast.show(outcome.message);
     if (outcome.revealInspector) {
       this._handleInspectorRequested();
     }
     return true;
-  }
-
-  private _focusInspectorForValidationIssue(issue: ServiceBlueprintValidationIssue) {
-    const actionLocation = issue.location.kind === 'action' ? issue.location : null;
-    this._layout.expandInspector();
-    requestAnimationFrame(() => {
-      const inspector = this.shadowRoot?.querySelector<HTMLElement>('wayfinder-step-inspector');
-      inspector?.focus();
-
-      if (!actionLocation) {
-        return;
-      }
-
-      requestAnimationFrame(() => {
-        const actionEditor = inspector?.shadowRoot?.querySelector<HTMLElement>('wayfinder-stage-action-editor');
-        const selector =
-          actionLocation.fieldKey && actionLocation.fieldKey !== 'fields'
-            ? `[data-wayfinder-action-param="${actionLocation.actionIndex}-${actionLocation.fieldKey}"]`
-            : typeof actionLocation.formFieldIndex === 'number'
-              ? `[data-wayfinder-form-field-key="${actionLocation.actionIndex}-${actionLocation.formFieldIndex}"]`
-              : `[data-wayfinder-stage-action="${actionLocation.actionIndex}"]`;
-        actionEditor?.shadowRoot?.querySelector<HTMLElement>(selector)?.focus();
-      });
-    });
-  }
-
-  /**
-   * Jumps the canvas to a stage named by a save-time diagnostic's path — the server-side
-   * counterpart to `_jumpToValidationIssue`'s stage branch, minus the `ServiceBlueprintValidationIssue`
-   * object those diagnostics don't have. Selecting the stage is enough to guide someone to the
-   * problem; the message itself (already shown in the save-error list) names the specific
-   * component and field.
-   */
-  private _jumpToStage(stageKey: string) {
-    if (!this._serviceBlueprint) {
-      return;
-    }
-
-    this._activeConfidenceTab = 'canvas';
-    this._layout.expandInspector();
-    this._applySelection({ kind: 'stage', stageKey }, this._serviceBlueprint);
-    this._actionSelection = null;
-  }
-
-  private _jumpToValidationIssue(issue: ServiceBlueprintValidationIssue) {
-    if (!this._serviceBlueprint) {
-      return;
-    }
-
-    if (issue.location.kind === 'calculation') {
-      this._activeConfidenceTab = 'calculations';
-      return;
-    }
-
-    // A server diagnostic that names nothing navigable — leave the view where it is.
-    if (issue.location.kind === 'document') {
-      return;
-    }
-
-    this._activeConfidenceTab = 'canvas';
-    this._layout.expandInspector();
-
-    if (issue.location.kind === 'stage') {
-      this._applySelection({ kind: 'stage', stageKey: issue.location.stageKey }, this._serviceBlueprint);
-      this._actionSelection = null;
-      this._focusInspectorForValidationIssue(issue);
-      return;
-    }
-
-    if (issue.location.kind === 'route') {
-      const gatewayKey = issue.location.routeId;
-      const routeId = issue.location.routeId;
-      const transitions = flattenRoutes(this._serviceBlueprint);
-      const targetIndex = transitions.findIndex((view) => view.key === gatewayKey && view.routeId === routeId);
-      if (targetIndex >= 0) {
-        this._applyTransitionHighlight(targetIndex, this._serviceBlueprint);
-      }
-      this._actionSelection = null;
-      this._focusInspectorForValidationIssue(issue);
-      return;
-    }
-
-    if (issue.location.kind === 'action' && issue.location.target === 'route') {
-      const gatewayKey = issue.location.routeId;
-      const routeId = issue.location.routeId;
-      const transitions = flattenRoutes(this._serviceBlueprint);
-      const targetIndex = transitions.findIndex((view) => view.key === gatewayKey && view.routeId === routeId);
-      this._applyTransitionHighlight(targetIndex >= 0 ? targetIndex : 0, this._serviceBlueprint);
-      this._actionSelection = { target: 'transition', index: issue.location.actionIndex };
-      this._focusInspectorForValidationIssue(issue);
-      return;
-    }
-
-    if (issue.location.kind === 'action' && issue.location.target === 'stage') {
-      this._applySelection({ kind: 'stage', stageKey: issue.location.stageKey ?? '' }, this._serviceBlueprint);
-      this._actionSelection = { target: 'stage', index: issue.location.actionIndex };
-      this._focusInspectorForValidationIssue(issue);
-    }
-  }
-
-  private async _handleReloadAfterConflict() {
-    this._save.clearOutcome();
-    // Deliberately NOT clearing _serviceBlueprintStale here — that must stay true (read-only
-    // overlay up, banner's Reload button available) until _loadServiceBlueprint actually succeeds.
-    // _initialiseEditorState clears it on success. If the reload itself fails, we're
-    // correctly still stale/read-only rather than briefly unlocked with old content.
-    await this._loadServiceBlueprint();
-    if (!this._staleness.stale) {
-      this._toast.show('Reloaded the latest version.');
-    }
-  }
-
-  private _renderCalculationsPanel() {
-    return html`
-      <wayfinder-calculations-editor
-        .serviceBlueprint=${this._serviceBlueprint}
-        .componentCatalog=${this._componentCatalog}
-        @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
-      ></wayfinder-calculations-editor>
-    `;
   }
 
   private get _canSaveByContext(): boolean {
@@ -822,6 +524,166 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+
+  private _toolbarModel(): ToolbarModel {
+    const graph = () => this._graphElement;
+    return {
+      title: this._serviceBlueprint?.displayName ?? 'Service Blueprint Editor',
+      save: {
+        saving: this._save.isSaving,
+        enabled: this._save.canSave,
+        allowedByContext: this._canSaveByContext,
+        dirtySummary: this._save.dirtySummary,
+        onSave: () => void this._save.save(),
+      },
+      history: { canUndo: this._history.canUndo, canRedo: this._history.canRedo, onUndo: this._undo, onRedo: this._redo },
+      canvas:
+        this._activeConfidenceTab === 'canvas'
+          ? {
+              clipboard: {
+                canCopy: this._clipboard.canCopy(this._clipboardContext),
+                canPaste: this._clipboard.canPaste(this._clipboardContext),
+                pasteTitle: this._clipboard.summary,
+                onCopy: () => this._copySelection(),
+                onPaste: () => this._pasteClipboard(),
+              },
+              onHelp: (trigger) => this._help.open(trigger),
+              graph: {
+                addStage: (trigger) => graph()?.addStage(trigger),
+                addGateway: (trigger) => graph()?.addGateway(trigger),
+                tidyLayout: () => graph()?.tidyLayout(),
+                zoomOut: () => graph()?.zoomOut(),
+                zoomIn: () => graph()?.zoomIn(),
+                fitToScreen: () => graph()?.fitToScreen(),
+                fitWidth: () => graph()?.fitToWidth(),
+                zoomPercent: Math.round(this._graphZoom * 100),
+              },
+            }
+          : null,
+    };
+  }
+
+  private _renderOutlinePanel() {
+    const stages = this._serviceBlueprint?.stages.length ?? 0;
+    const gateways = this._serviceBlueprint?.gateways?.length ?? 0;
+    const collapsed = this._layout.outlineCollapsed;
+    return html`
+      <section class=${`editor-outline-shell ${collapsed ? 'panel-collapsed' : ''}`}>
+        ${renderPanelHeader({
+          title: 'Outline',
+          subtitle: `${stages} ${stages === 1 ? 'stage' : 'stages'}${gateways ? ` · ${gateways} gateways` : ''}`,
+          collapsed,
+          toggleHook: 'wayfinder-outline-toggle',
+          controls: 'service-blueprint-editor-outline-panel',
+          expandLabel: 'Expand outline panel',
+          collapseLabel: 'Collapse outline panel',
+          opensTowards: 'right',
+          onToggle: this._layout.toggleOutline,
+        })}
+        <div id="service-blueprint-editor-outline-panel" class="panel-body" ?hidden=${collapsed}>
+          <wayfinder-service-blueprint-outline
+            class="editor-outline"
+            data-wayfinder-service-blueprint-outline
+            .serviceBlueprint=${this._serviceBlueprint}
+            .availableQueues=${this.availableQueues}
+            .selectedStageKey=${this._selection.stageKey}
+            .selectedGatewayKey=${this._selection.gatewayKey}
+            .selectedTransitionIndex=${this._selection.transitionIndex}
+            .showHeader=${false}
+            @outline-stage-selected=${this._handleStageSelected}
+            @outline-gateway-selected=${this._handleOutlineGatewaySelected}
+            @outline-transition-selected=${this._handleTransitionSelected}
+          ></wayfinder-service-blueprint-outline>
+        </div>
+      </section>
+    `;
+  }
+
+  private _renderGraphPanel() {
+    return html`
+      <div class="editor-center">
+        ${renderCanvasHealthHint(this._validation.blocking.length, this._validation.warnings.length, () => {
+          this._activeConfidenceTab = 'validation';
+        })}
+        <div class="sr-only" role="status" aria-live="polite" data-wayfinder-history-status>${this._historyAnnouncement}</div>
+
+        <wayfinder-service-blueprint-graph
+          class="graph-panel"
+          .serviceBlueprint=${this._serviceBlueprint}
+          .availableQueues=${this.availableQueues}
+          .selectedStageKey=${this._selection.stageKey}
+          .selectedGatewayKey=${this._selection.gatewayKey}
+          .selectedTransitionIndex=${this._selection.transitionIndex}
+          .hideOwnToolbar=${true}
+          @stage-selected="${this._handleStageSelected}"
+          @gateway-selected="${this._handleGatewaySelected}"
+          @transition-selected="${this._handleTransitionSelected}"
+          @service-blueprint-updated="${this._handleServiceBlueprintUpdated}"
+          @inspector-requested="${this._handleInspectorRequested}"
+          @zoom-changed="${(event: CustomEvent<{ zoom: number }>) => {
+            this._graphZoom = event.detail.zoom;
+          }}"
+          @graph-multi-selection="${(event: CustomEvent<{ nodeIds: string[] }>) => {
+            this._graphMultiSelection = event.detail.nodeIds;
+          }}"
+        ></wayfinder-service-blueprint-graph>
+      </div>
+    `;
+  }
+
+  private _renderInspectorPanel() {
+    const collapsed = this._layout.inspectorCollapsed;
+    return html`
+      <section class=${`editor-right ${collapsed ? 'panel-collapsed' : ''}`}>
+        ${
+          collapsed
+            ? nothing
+            : html`
+              <div
+                class="panel-resize-handle"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize properties panel"
+                aria-valuenow=${this._layout.inspectorWidth}
+                aria-valuemin="280"
+                aria-valuemax="720"
+                tabindex="0"
+                @pointerdown=${this._layout.startResize}
+                @keydown=${this._layout.resizeWithKeyboard}
+              ></div>
+            `
+        }
+        ${renderPanelHeader({
+          title: 'Properties',
+          subtitle: 'Selected stage, gateway, or route details',
+          collapsed,
+          toggleHook: 'wayfinder-inspector-toggle',
+          controls: 'service-blueprint-editor-inspector-panel',
+          expandLabel: 'Expand properties drawer',
+          collapseLabel: 'Collapse properties drawer',
+          opensTowards: 'left',
+          onToggle: this._layout.toggleInspector,
+        })}
+        <div id="service-blueprint-editor-inspector-panel" class="panel-body" ?hidden=${collapsed}>
+          <wayfinder-step-inspector
+            class="inspector-panel"
+            tabindex="0"
+            .serviceBlueprint=${this._serviceBlueprint}
+            .availableQueues=${this.availableQueues}
+            selected-stage-key="${this._selection.stageKey ?? ''}"
+            selected-gateway-key="${this._selection.gatewayKey ?? ''}"
+            .selectedActionIndex=${this._selection.stageActionIndex}
+            .selectedActionTransitionIndex=${this._selection.transitionIndex}
+            .actionCatalog=${this._catalogs.actions}
+            .componentCatalog=${this._catalogs.components}
+            .supportSystemCatalog=${this._catalogs.supportSystems}
+            @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
+            @action-selected=${this._handleActionSelected}
+          ></wayfinder-step-inspector>
+        </div>
+      </section>
+    `;
+  }
 
   render() {
     return html`
@@ -835,168 +697,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         ${this._error ? html`<div class="error-banner" role="alert">${this._error}</div>` : nothing}
         ${this._save.renderError()}
         ${this._staleness.renderBanner()}
+        ${renderEditorToolbar(this._toolbarModel())}
 
-        <!-- Toolbar header: sits above the whole tabbed area (not slotted into any one tab), so
-             save/undo/redo — which act on the whole serviceBlueprint, not just the canvas — stay
-             visible and usable no matter which tab is active. The rest of this bar (copy/paste,
-             add stage/gateway, zoom) only makes sense with the graph on screen, so it's shown
-             only while the Canvas tab is active rather than always present and disabled. -->
-        <div class="toolbar-header" role="none">
-          <h1 id="service-blueprint-editor-title" class="editor-title">
-            ${this._serviceBlueprint?.displayName ?? 'Service Blueprint Editor'}
-          </h1>
-          <div class="toolbar-actions" role="toolbar" aria-label="ServiceBlueprint editor tools">
-            <button
-              class="toolbar-btn toolbar-btn--icon govuk-button${this._save.isSaving ? ' toolbar-btn--spinning' : ''}"
-              data-wayfinder-save
-              ?disabled=${!this._save.canSave}
-              aria-label=${this._save.isSaving ? 'Saving' : 'Save'}
-              title=${
-                !this._canSaveByContext
-                  ? 'Saving is disabled for the current author.'
-                  : `${this._save.dirtySummary} — ${this._save.isSaving ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`
-              }
-              aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
-              @click=${() => void this._save.save()}
-            >
-              ${this._save.isSaving ? renderToolbarIcon('saving') : renderToolbarIcon('save')}
-            </button>
-            <button
-              class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-              data-wayfinder-undo
-              ?disabled=${!this._history.canUndo}
-              aria-label="Undo"
-              title=${`Undo${UNDO_SHORTCUT ? ` (${UNDO_SHORTCUT.labels[0]})` : ''}`}
-              aria-keyshortcuts=${UNDO_SHORTCUT?.ariaKeys ?? nothing}
-              @click=${this._undo}
-            >
-              ${renderToolbarIcon('undo')}
-            </button>
-            <button
-              class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-              data-wayfinder-redo
-              ?disabled=${!this._history.canRedo}
-              aria-label="Redo"
-              title=${`Redo${REDO_SHORTCUT ? ` (${REDO_SHORTCUT.labels[0]})` : ''}`}
-              aria-keyshortcuts=${REDO_SHORTCUT?.ariaKeys ?? nothing}
-              @click=${this._redo}
-            >
-              ${renderToolbarIcon('redo')}
-            </button>
-
-            ${
-              this._activeConfidenceTab === 'canvas'
-                ? html`
-                  <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
-                  <div class="editor-toolbar">
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-copy
-                      ?disabled=${!this._canCopy}
-                      aria-label="Copy"
-                      title=${`Copy${COPY_SHORTCUT ? ` (${COPY_SHORTCUT.labels[0]})` : ''}`}
-                      aria-keyshortcuts=${COPY_SHORTCUT?.ariaKeys ?? nothing}
-                      @click=${() => this._copySelection()}
-                    >
-                      ${renderToolbarIcon('copy')}
-                    </button>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-paste
-                      ?disabled=${!this._canPaste}
-                      aria-label="Paste"
-                      title=${`${this._clipboardSummary}${PASTE_SHORTCUT ? ` (${PASTE_SHORTCUT.labels[0]})` : ''}`}
-                      aria-keyshortcuts=${PASTE_SHORTCUT?.ariaKeys ?? nothing}
-                      @click=${() => this._pasteClipboard()}
-                    >
-                      ${renderToolbarIcon('paste')}
-                    </button>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-help
-                      aria-label="Help"
-                      title=${`Help${HELP_SHORTCUT ? ` (${HELP_SHORTCUT.labels[0]})` : ''}`}
-                      aria-keyshortcuts=${HELP_SHORTCUT?.ariaKeys ?? nothing}
-                      @click=${(event: Event) => this._help.open(event.currentTarget as HTMLElement)}
-                    >
-                      ${renderToolbarIcon('help')}
-                    </button>
-
-                    <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
-
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-add-stage
-                      aria-label="Add stage"
-                      title="Add stage"
-                      @click=${(event: Event) => this._graphElement?.addStage(event.currentTarget as HTMLElement)}
-                    >
-                      ${renderToolbarIcon('addStage')}
-                    </button>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-add-gateway
-                      aria-label="Add gateway"
-                      title="Add gateway"
-                      @click=${(event: Event) => this._graphElement?.addGateway(event.currentTarget as HTMLElement)}
-                    >
-                      ${renderToolbarIcon('addGateway')}
-                    </button>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-auto-arrange
-                      aria-label="Tidy layout"
-                      title="Tidy layout"
-                      @click=${() => this._graphElement?.tidyLayout()}
-                    >
-                      ${renderToolbarIcon('tidyLayout')}
-                    </button>
-
-                    <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
-
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      aria-label="Zoom out"
-                      title="Zoom out"
-                      @click=${() => this._graphElement?.zoomOut()}
-                    >
-                      ${renderToolbarIcon('zoomOut')}
-                    </button>
-                    <span class="zoom-indicator" data-wayfinder-zoom>${Math.round(this._graphZoom * 100)}%</span>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      aria-label="Zoom in"
-                      title="Zoom in"
-                      @click=${() => this._graphElement?.zoomIn()}
-                    >
-                      ${renderToolbarIcon('zoomIn')}
-                    </button>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-fit-screen
-                      aria-label="Fit to screen"
-                      title="Fit to screen"
-                      @click=${() => this._graphElement?.fitToScreen()}
-                    >
-                      ${renderToolbarIcon('fitToScreen')}
-                    </button>
-                    <button
-                      class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
-                      data-wayfinder-fit-width
-                      aria-label="Fit width"
-                      title="Fit width"
-                      @click=${() => this._graphElement?.fitToWidth()}
-                    >
-                      ${renderToolbarIcon('fitWidth')}
-                    </button>
-                  </div>
-                `
-                : nothing
-            }
-          </div>
-        </div>
-
-        <!-- Tab-based navigation -->
         <div class="editor-content-wrapper">
         ${this._staleness.renderOverlay()}
         <wayfinder-confidence-tabs
@@ -1006,183 +708,22 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           warning-count="${this._validation.warnings.length}"
           @tab-changed=${this._handleConfidenceTabChanged}
         >
-          <!-- Canvas tab: main workspace -->
           <div slot="canvas" class="canvas-workspace">
-            <div
-              class=${`editor-shell ${this._layout.resizing ? 'editor-shell-resizing' : ''}`}
-              style=${this._layout.shellStyle}
-            >
-              <!-- Left: outline -->
-              <section class=${`editor-outline-shell ${this._layout.outlineCollapsed ? 'panel-collapsed' : ''}`}>
-                <div class="panel-header">
-                  <div class="panel-header-copy">
-                    <h2 class="panel-title">Outline</h2>
-                    ${
-                      this._layout.outlineCollapsed
-                        ? nothing
-                        : html`
-                          <p class="panel-subtitle">
-                            ${this._serviceBlueprint?.stages.length ?? 0} ${(this._serviceBlueprint?.stages.length ?? 0) === 1 ? 'stage' : 'stages'}
-                            ${this._serviceBlueprint?.gateways?.length ? ` · ${this._serviceBlueprint.gateways.length} gateways` : ''}
-                          </p>
-                        `
-                    }
-                  </div>
-                  <button
-                    type="button"
-                    class="panel-toggle"
-                    data-wayfinder-outline-toggle
-                    aria-controls="service-blueprint-editor-outline-panel"
-                    aria-expanded=${String(!this._layout.outlineCollapsed)}
-                    aria-label=${this._layout.outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
-                    @click=${this._layout.toggleOutline}
-                  >
-                    ${this._layout.outlineCollapsed ? renderToolbarIcon('chevronRight') : renderToolbarIcon('chevronLeft')}
-                    <span class="sr-only">${this._layout.outlineCollapsed ? 'Expand outline' : 'Collapse outline'}</span>
-                  </button>
-                </div>
-                <div
-                  id="service-blueprint-editor-outline-panel"
-                  class="panel-body"
-                  ?hidden=${this._layout.outlineCollapsed}
-                >
-                  <wayfinder-service-blueprint-outline
-                    class="editor-outline"
-                    data-wayfinder-service-blueprint-outline
-                    .serviceBlueprint=${this._serviceBlueprint}
-                    .availableQueues=${this.availableQueues}
-                    .selectedStageKey=${this._selectedStageKey}
-                    .selectedGatewayKey=${this._selectedGatewayKey}
-                    .selectedTransitionIndex=${this._selectedTransitionIndex}
-                    .showHeader=${false}
-                    @outline-stage-selected=${this._handleOutlineStageSelected}
-                    @outline-gateway-selected=${this._handleOutlineGatewaySelected}
-                    @outline-transition-selected=${this._handleOutlineTransitionSelected}
-                  ></wayfinder-service-blueprint-outline>
-                </div>
-              </section>
-
-              <!-- Center: graph workspace -->
-              <div class="editor-center">
-                ${(() => {
-                  const errorCount = this._validation.blocking.length;
-                  const warningCount = this._validation.warnings.length;
-                  const total = errorCount + warningCount;
-                  if (total === 0) return nothing;
-                  const summary =
-                    errorCount > 0 && warningCount > 0
-                      ? `${errorCount} error${errorCount === 1 ? '' : 's'} and ${warningCount} warning${warningCount === 1 ? '' : 's'} need attention.`
-                      : errorCount > 0
-                        ? `${errorCount} validation error${errorCount === 1 ? '' : 's'} need attention.`
-                        : `${warningCount} validation warning${warningCount === 1 ? '' : 's'} need attention.`;
-                  return html`
-                    <div
-                      class=${`canvas-health-hint ${errorCount > 0 ? 'is-error' : 'is-warning'}`}
-                      data-wayfinder-canvas-health-hint
-                      role="status"
-                    >
-                      <span class="canvas-health-summary">${summary}</span>
-                      <button
-                        type="button"
-                        class="canvas-health-action"
-                        data-wayfinder-open-validation
-                        @click=${() => {
-                          this._activeConfidenceTab = 'validation';
-                        }}
-                      >Open Validation</button>
-                    </div>
-                  `;
-                })()}
-                <div class="sr-only" role="status" aria-live="polite" data-wayfinder-history-status>${this._historyAnnouncement}</div>
-
-                <wayfinder-service-blueprint-graph
-                  class="graph-panel"
-                  .serviceBlueprint=${this._serviceBlueprint}
-                  .availableQueues=${this.availableQueues}
-                  .selectedStageKey=${this._selectedStageKey}
-                  .selectedGatewayKey=${this._selectedGatewayKey}
-                  .selectedTransitionIndex=${this._selectedTransitionIndex}
-                  .hideOwnToolbar=${true}
-                  @stage-selected="${this._handleStageSelected}"
-                  @gateway-selected="${this._handleGatewaySelected}"
-                  @transition-selected="${this._handleTransitionSelected}"
-                  @service-blueprint-updated="${this._handleServiceBlueprintUpdated}"
-                  @inspector-requested="${this._handleInspectorRequested}"
-                  @zoom-changed="${(event: CustomEvent<{ zoom: number }>) => {
-                    this._graphZoom = event.detail.zoom;
-                  }}"
-                  @graph-multi-selection="${(event: CustomEvent<{ nodeIds: string[] }>) => {
-                    this._graphMultiSelection = event.detail.nodeIds;
-                  }}"
-                ></wayfinder-service-blueprint-graph>
-              </div>
-
-              <!-- Right: inspector -->
-              <section class=${`editor-right ${this._layout.inspectorCollapsed ? 'panel-collapsed' : ''}`}>
-                ${
-                  this._layout.inspectorCollapsed
-                    ? nothing
-                    : html`
-                      <div
-                        class="panel-resize-handle"
-                        role="separator"
-                        aria-orientation="vertical"
-                        aria-label="Resize properties panel"
-                        aria-valuenow=${this._layout.inspectorWidth}
-                        aria-valuemin="280"
-                        aria-valuemax="720"
-                        tabindex="0"
-                        @pointerdown=${this._layout.startResize}
-                        @keydown=${this._layout.resizeWithKeyboard}
-                      ></div>
-                    `
-                }
-                <div class="panel-header">
-                  <div class="panel-header-copy">
-                    <h2 class="panel-title">Properties</h2>
-                    ${this._layout.inspectorCollapsed ? nothing : html`<p class="panel-subtitle">Selected stage, gateway, or route details</p>`}
-                  </div>
-                  <button
-                    type="button"
-                    class="panel-toggle"
-                    data-wayfinder-inspector-toggle
-                    aria-controls="service-blueprint-editor-inspector-panel"
-                    aria-expanded=${String(!this._layout.inspectorCollapsed)}
-                    aria-label=${this._layout.inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}
-                    @click=${this._layout.toggleInspector}
-                  >
-                    ${this._layout.inspectorCollapsed ? renderToolbarIcon('chevronLeft') : renderToolbarIcon('chevronRight')}
-                    <span class="sr-only">${this._layout.inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}</span>
-                  </button>
-                </div>
-                <div
-                  id="service-blueprint-editor-inspector-panel"
-                  class="panel-body"
-                  ?hidden=${this._layout.inspectorCollapsed}
-                >
-                  <wayfinder-step-inspector
-                    class="inspector-panel"
-                    tabindex="0"
-                    .serviceBlueprint=${this._serviceBlueprint}
-                    .availableQueues=${this.availableQueues}
-                    selected-stage-key="${this._selectedStageKey ?? ''}"
-                    selected-gateway-key="${this._selectedGatewayKey ?? ''}"
-                    .selectedActionIndex=${this._selectedActionIndex}
-                    .selectedActionTransitionIndex=${this._selectedTransitionIndex}
-                    .actionCatalog=${this._actionCatalog}
-                    .componentCatalog=${this._componentCatalog}
-                    .supportSystemCatalog=${this._supportSystemCatalog}
-                    @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
-                    @action-selected=${this._handleActionSelected}
-                  ></wayfinder-step-inspector>
-                </div>
-              </section>
+            <div class=${`editor-shell ${this._layout.resizing ? 'editor-shell-resizing' : ''}`} style=${this._layout.shellStyle}>
+              ${this._renderOutlinePanel()}
+              ${this._renderGraphPanel()}
+              ${this._renderInspectorPanel()}
             </div>
           </div>
 
-          <!-- Other tabs -->
-          <div slot="calculations">${this._renderCalculationsPanel()}</div>
-          <div slot="validation">${this._validation.renderPanel({ saveStatus: this._save.statusSummary, onJump: (issue) => this._jumpToValidationIssue(issue) })}</div>
+          <div slot="calculations">
+            <wayfinder-calculations-editor
+              .serviceBlueprint=${this._serviceBlueprint}
+              .componentCatalog=${this._catalogs.components}
+              @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
+            ></wayfinder-calculations-editor>
+          </div>
+          <div slot="validation">${this._validation.renderPanel({ saveStatus: this._save.statusSummary, onJump: (issue) => this._navigator.jump(issue) })}</div>
           <div slot="definition">${this._definition.renderPanel()}</div>
         </wayfinder-confidence-tabs>
         </div>
