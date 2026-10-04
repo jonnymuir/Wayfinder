@@ -26,8 +26,3 @@ csharp_style_var_when_type_is_apparent = true:suggestion
 # Tests name behaviours with underscores (Behaviour_Under_Condition_Outcome).
 [Wayfinder.Tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
-
-# Removed when the engine is split into focused collaborators, each of which gets source-generated logging.
-[Wayfinder.Engine/Services/ProcessManagerEngine.cs]
-dotnet_diagnostic.CA1848.severity = suggestion
-dotnet_diagnostic.CA1873.severity = suggestion
