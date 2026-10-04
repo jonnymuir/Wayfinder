@@ -39,7 +39,7 @@ public abstract record CalcNode
     public sealed record Identifier(string Path) : CalcNode;
     public sealed record Unary(string Op, CalcNode Operand) : CalcNode;
     public sealed record Binary(string Op, CalcNode Left, CalcNode Right) : CalcNode;
-    public sealed record Call(string Name, IReadOnlyList<CalcNode> Args) : CalcNode;
+    public sealed record FunctionCall(string Name, IReadOnlyList<CalcNode> Args) : CalcNode;
 }
 
 /// <summary>Parses calculation expressions into <see cref="CalcNode"/> trees.</summary>
@@ -355,7 +355,7 @@ public static class CalculationExpressionParser
                 }
 
                 index++;
-                return new CalcNode.Call(name, args);
+                return new CalcNode.FunctionCall(name, args);
             }
 
             index++;

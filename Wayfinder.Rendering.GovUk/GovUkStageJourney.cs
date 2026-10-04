@@ -29,7 +29,7 @@ public static class GovUkStageJourney
         var esc = GovUk.Esc;
         if (envelope.Render is null)
         {
-            var message = envelope.Problems.FirstOrDefault()?.Message ?? "Nothing to show.";
+            var message = (envelope.Problems.Count > 0 ? envelope.Problems[0].Message : null) ?? "Nothing to show.";
             return $"""<p class="govuk-body">{esc(message)}</p>""";
         }
 

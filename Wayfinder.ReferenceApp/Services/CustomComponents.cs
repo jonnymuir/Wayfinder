@@ -1,3 +1,4 @@
+using System.Globalization;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Rendering.GovUk;
@@ -101,7 +102,7 @@ public static class CustomComponents
 
         var items = RatingScale.Select((label, index) =>
         {
-            var score = (index + 1).ToString();
+            var score = (index + 1).ToString(CultureInfo.InvariantCulture);
             var optionId = $"{id}-{score}";
             var isChecked = string.Equals(score, value, StringComparison.Ordinal);
             return $"""

@@ -67,7 +67,7 @@ public class WorklistAuthorizationTests
 
         foreach (var endpoint in endpoints)
         {
-            var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.FirstOrDefault() ?? "GET";
+            var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var verb, ..] ? verb : "GET";
             var url = System.Text.RegularExpressions.Regex.Replace(endpoint.RoutePattern.RawText ?? "/", @"\{[^}]+\}", "x");
 
             var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), url));

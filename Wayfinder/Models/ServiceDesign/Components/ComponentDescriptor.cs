@@ -38,6 +38,8 @@ public enum ComponentCategory
 /// <see cref="ComponentCategory"/>'s remarks for why this attribute matters.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<ComponentPropertyValueKind>))]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1720:Identifier contains type name",
+    Justification = "These members are the JSON value kinds a component property can hold; the names are the wire vocabulary.")]
 public enum ComponentPropertyValueKind
 {
     String,

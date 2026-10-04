@@ -25,9 +25,9 @@ public class ProcessManagerEngine : IProcessManager
     private readonly Dictionary<string, ServiceBlueprint> _definitions = new(StringComparer.OrdinalIgnoreCase);
     private readonly IServiceRequestStore _instanceStore;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
-    private readonly IReadOnlyDictionary<string, ISupportSystemClient> _supportSystemClients;
+    private readonly Dictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
-    private readonly IReadOnlyDictionary<string, IRequestConcurrencyPolicy> _requestConcurrencyPolicies;
+    private readonly Dictionary<string, IRequestConcurrencyPolicy> _requestConcurrencyPolicies;
     private readonly IAuditLogStore _auditLogStore;
 
     public ProcessManagerEngine(
@@ -132,8 +132,7 @@ public class ProcessManagerEngine : IProcessManager
                 definition,
                 accessProfile,
                 action,
-                "Created new service request {Id} for key={Key} (action=start-new)",
-                blueprintKey);
+                "action=start-new");
         }
 
         if (string.Equals(action, "resume", StringComparison.OrdinalIgnoreCase))
@@ -151,8 +150,7 @@ public class ProcessManagerEngine : IProcessManager
                 definition,
                 accessProfile,
                 action,
-                "Created service request {Id} for key={Key} (action=resume, no existing)",
-                blueprintKey);
+                "action=resume, no existing");
         }
 
         // A host-registered custom policy (see IRequestConcurrencyPolicy's own remarks) takes over
@@ -192,8 +190,7 @@ public class ProcessManagerEngine : IProcessManager
                         definition,
                         accessProfile,
                         action,
-                        "Created new service request {Id} for key={Key} (custom concurrency policy: AllowNew)",
-                        blueprintKey);
+                        "custom concurrency policy: AllowNew");
             }
         }
 
@@ -208,8 +205,7 @@ public class ProcessManagerEngine : IProcessManager
                 definition,
                 accessProfile,
                 action,
-                "Created new service request {Id} for key={Key} (policy=multiple)",
-                blueprintKey);
+                "policy=multiple");
         }
 
         if (string.Equals(policy, "prompt", StringComparison.OrdinalIgnoreCase))
@@ -252,8 +248,7 @@ public class ProcessManagerEngine : IProcessManager
                 definition,
                 accessProfile,
                 action,
-                "Created service request {Id} for key={Key} (policy=prompt, no active)",
-                blueprintKey);
+                "policy=prompt, no active");
         }
 
         if (existingInstance is null)
@@ -265,9 +260,7 @@ public class ProcessManagerEngine : IProcessManager
                 definition,
                 accessProfile,
                 action,
-                "Created service request {Id} for key={Key} tenant={Tenant}",
-                blueprintKey,
-                tenantId);
+                "no existing instance");
         }
 
         // "single" means at most one instance per user for this blueprint, full stop — once it
@@ -658,7 +651,7 @@ public class ProcessManagerEngine : IProcessManager
             Items = page,
             PageIndex = effectivePageIndex,
             PageSize = effectivePageSize,
-            TotalMatchingCount = ordered.Count
+            TotalMatchingCount = ordered.Length
         };
     }
 
@@ -703,7 +696,7 @@ public class ProcessManagerEngine : IProcessManager
             || Contains(summary.UserId);
     }
 
-    private static IReadOnlyList<ServiceRequestAdminSummary> ApplyAdminSort(
+    private static ServiceRequestAdminSummary[] ApplyAdminSort(
         IReadOnlyList<ServiceRequestAdminSummary> items, ServiceRequestAdminSort sort) => sort switch
     {
         ServiceRequestAdminSort.UpdatedAtNewestFirst => items
@@ -1327,7 +1320,7 @@ public class ProcessManagerEngine : IProcessManager
         return IsTerminalWorkItem(item, definition) ? QueueWorkItemStatus.Done : null;
     }
 
-    private static IReadOnlyList<QueueWorkItem> ApplyQueueWorkListSort(
+    private static QueueWorkItem[] ApplyQueueWorkListSort(
         IReadOnlyList<QueueWorkItem> items, QueueWorkListSort sort) => sort switch
     {
         QueueWorkListSort.CreatedAtNewestFirst => items
@@ -1439,7 +1432,7 @@ public class ProcessManagerEngine : IProcessManager
             Items = page,
             PageIndex = effectivePageIndex,
             PageSize = effectivePageSize,
-            TotalMatchingCount = ordered.Count
+            TotalMatchingCount = ordered.Length
         };
     }
 
@@ -1491,7 +1484,7 @@ public class ProcessManagerEngine : IProcessManager
             Items = teamPage,
             PageIndex = effectivePageIndex,
             PageSize = effectivePageSize,
-            TotalMatchingCount = orderedTeamItems.Count
+            TotalMatchingCount = orderedTeamItems.Length
         };
     }
 
@@ -1624,7 +1617,7 @@ public class ProcessManagerEngine : IProcessManager
         ServiceBlueprint definition,
         ActorProfile accessProfile)
     {
-        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile).FirstOrDefault();
+        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
         if (visibleItem is not { IsJoinGateway: true })
         {
             return instance;
@@ -1657,9 +1650,7 @@ public class ProcessManagerEngine : IProcessManager
     {
         var isNewKey = !_definitions.ContainsKey(key);
         _definitions[key] = updated;
-        Logger.LogInformation(
-            isNewKey ? "Service blueprint registered in-memory: {Key}" : "Service blueprint updated in-memory: {Key}",
-            key);
+        Logger.LogInformation("Service blueprint {Outcome} in-memory: {Key}", isNewKey ? "registered" : "updated", key);
         return true;
     }
 
@@ -1899,7 +1890,7 @@ public class ProcessManagerEngine : IProcessManager
         }
 
         var workItems = FindAccessibleWorkItems(instance, definition, accessProfile, userId);
-        var visibleItem = workItems.FirstOrDefault();
+        var visibleItem = workItems is [var firstItem, ..] ? firstItem : null;
 
         if (visibleItem is null)
         {
@@ -1983,7 +1974,7 @@ public class ProcessManagerEngine : IProcessManager
         };
     }
 
-    protected bool CanAccessInstance(
+    private static bool CanAccessInstance(
         ServiceRequest instance,
         string tenantId,
         string userId,
@@ -1998,7 +1989,7 @@ public class ProcessManagerEngine : IProcessManager
                || string.Equals(instance.UserId, userId, StringComparison.Ordinal);
     }
 
-    protected bool CanStartInitialState(ServiceBlueprint definition, ActorProfile accessProfile)
+    private static bool CanStartInitialState(ServiceBlueprint definition, ActorProfile accessProfile)
     {
         var initialStage = definition.Stages.FirstOrDefault(stage =>
             string.Equals(stage.StageKey, definition.InitialStage, StringComparison.Ordinal));
@@ -2226,7 +2217,7 @@ public class ProcessManagerEngine : IProcessManager
         || userId is null
         || string.Equals(assignedTo, userId, StringComparison.Ordinal);
 
-    protected bool CanViewQueue(
+    private static bool CanViewQueue(
         ServiceBlueprint definition,
         string? queueKey,
         string? queueName,
@@ -2514,8 +2505,7 @@ public class ProcessManagerEngine : IProcessManager
         ServiceBlueprint definition,
         ActorProfile accessProfile,
         string? action,
-        string logMessage,
-        params object?[] additionalLogArgs)
+        string reason)
     {
         var instance = CreateNewInstance(
             blueprintKey, tenantId, userId, definition.InitialStage, ResolveIsAuthenticated(tenantId, userId),
@@ -2527,7 +2517,7 @@ public class ProcessManagerEngine : IProcessManager
 
         instance = SaveInstance(instance, userId);
 
-        Logger.LogInformation(logMessage, [instance.InstanceId, .. additionalLogArgs]);
+        Logger.LogInformation("Created service request {Id} for key={Key} ({Reason})", instance.InstanceId, blueprintKey, reason);
         return BuildEnvelope(instance, definition, accessProfile, userId);
     }
 
@@ -2635,7 +2625,7 @@ public class ProcessManagerEngine : IProcessManager
         _ => value.ToString()
     };
 
-    private JsonObject BuildLiveModel(ServiceBlueprint definition, CalculationRenderContext calc)
+    private static JsonObject BuildLiveModel(ServiceBlueprint definition, CalculationRenderContext calc)
     {
         var inputTypes = new JsonObject();
         var defaults = new JsonObject();
@@ -2788,7 +2778,7 @@ public class ProcessManagerEngine : IProcessManager
     /// <see cref="CalculationEvaluator.EvaluateCollectingErrors"/>), not every validation on the
     /// stage.
     /// </summary>
-    private IReadOnlyList<ServiceRequestProblem> EvaluateStageValidations(
+    private List<ServiceRequestProblem> EvaluateStageValidations(
         ServiceRequest instance,
         ServiceBlueprint definition,
         StageDefinition stage,
@@ -3634,7 +3624,7 @@ public class ProcessManagerEngine : IProcessManager
                ?? BuildJoinWaitingEnvelope(arrivedInstance, definition, joinGateway);
     }
 
-    protected ServiceRequestResponseEnvelope BuildJoinWaitingEnvelope(
+    private static ServiceRequestResponseEnvelope BuildJoinWaitingEnvelope(
         ServiceRequest instance,
         ServiceBlueprint definition,
         ServiceBlueprintGatewayDefinition joinGateway)
@@ -3701,7 +3691,7 @@ public class ProcessManagerEngine : IProcessManager
     /// — a single-queue blueprint has no automation actor for such an action to belong to, so
     /// this deliberately isn't called from the single-cursor "regular stage transition" path.
     /// </summary>
-    private IReadOnlyList<SupportSystemInvocation> ExecuteOnEnterSupportSystemActions(
+    private List<SupportSystemInvocation> ExecuteOnEnterSupportSystemActions(
         string instanceId,
         ServiceBlueprint definition,
         IReadOnlyDictionary<string, object?> fieldValues,
@@ -4030,7 +4020,7 @@ public class ProcessManagerEngine : IProcessManager
         }
     }
 
-    private static IReadOnlyList<BulkDatasetColumnDescriptor> ParseBulkDatasetColumns(ActionDefinition action)
+    private static List<BulkDatasetColumnDescriptor> ParseBulkDatasetColumns(ActionDefinition action)
     {
         var columns = new List<BulkDatasetColumnDescriptor>();
         foreach (var columnNode in action.Parameters["columns"]?.AsArray() ?? [])
@@ -4444,7 +4434,7 @@ public class ProcessManagerEngine : IProcessManager
             return true;
         }
 
-        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile).FirstOrDefault();
+        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
         return visibleItem is not null && IsTerminalWorkItem(visibleItem, definition);
     }
 

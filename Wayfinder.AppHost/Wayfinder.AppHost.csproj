@@ -7,10 +7,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>aspire-Wayfinder.AppHost</UserSecretsId>
+    <!-- The reference app runs without the Aspire CLI bundle; its optional features aren't used here. -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.5.3" />
+    <PackageReference Include="Aspire.Hosting.AppHost" />
   </ItemGroup>
 
   <ItemGroup>

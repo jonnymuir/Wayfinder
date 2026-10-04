@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Wayfinder.Models.ServiceDesign;
 
@@ -287,7 +288,7 @@ public static class GovUkComponents
             return $"""<div class="wayfinder-chart__bar" title="{GovUk.Esc(xKey)} {row.X}: {row.Values.Sum():N0}">{segments}</div>""";
         });
 
-        var labels = rows.Select(row => $"<span>{(row.X % xLabelEvery == 0 ? row.X.ToString("0") : "")}</span>");
+        var labels = rows.Select(row => $"<span>{(row.X % xLabelEvery == 0 ? row.X.ToString("0", CultureInfo.InvariantCulture) : "")}</span>");
 
         var headerCells = string.Concat(bands.Select(band => $"""<th scope="col">{GovUk.Esc(band.Label)}</th>"""));
         var tableRows = rows.Where((r, i) => r.X % xLabelEvery == 0 || i == 0).Select(row =>

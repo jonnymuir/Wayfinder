@@ -1,4 +1,10 @@
 <Project>
+  <PropertyGroup>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
   <!-- Ship the existing /// XML doc comments to consumers of every published package. Stage 1:
        don't block the build on undocumented public members yet (CS1591). -->
   <PropertyGroup Condition="'$(IsPackable)' == 'true'">

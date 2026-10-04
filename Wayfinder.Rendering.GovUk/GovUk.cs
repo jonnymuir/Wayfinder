@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 
 namespace Wayfinder.Rendering.GovUk;
@@ -17,9 +18,9 @@ public static class GovUk
 
     public static (string Day, string Month, string Year) SplitIsoDate(string? isoValue)
     {
-        if (DateOnly.TryParse(isoValue, out var date))
+        if (DateOnly.TryParse(isoValue, CultureInfo.InvariantCulture, out var date))
         {
-            return (date.Day.ToString(), date.Month.ToString(), date.Year.ToString());
+            return (date.Day.ToString(CultureInfo.InvariantCulture), date.Month.ToString(CultureInfo.InvariantCulture), date.Year.ToString(CultureInfo.InvariantCulture));
         }
 
         // Not a real calendar date, but CombineIsoDate below still preserves whatever day/month/
@@ -49,7 +50,7 @@ public static class GovUk
         {
             try
             {
-                return new DateOnly(y, m, d).ToString("yyyy-MM-dd");
+                return new DateOnly(y, m, d).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             }
             catch (ArgumentOutOfRangeException)
             {

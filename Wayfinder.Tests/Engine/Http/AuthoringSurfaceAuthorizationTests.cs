@@ -72,7 +72,7 @@ public class AuthoringSurfaceAuthorizationTests
         // Every route, called the way it is meant to be called, with no credentials.
         foreach (var endpoint in endpoints)
         {
-            var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.FirstOrDefault() ?? "GET";
+            var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var verb, ..] ? verb : "GET";
             var url = System.Text.RegularExpressions.Regex.Replace(endpoint.RoutePattern.RawText ?? path, @"\{[^}]+\}", "x");
 
             var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), url));

@@ -77,9 +77,7 @@ public static class SupportSystemCallbacks
                     "required outside the Development environment; pass sharedSecret to MapWebhookSupportSystemCallbacks.");
             }
 
-            logger.LogWarning(
-                "Support-system callback route {Path}/{{invocationId}} is mapped with NO shared secret — " +
-                "Development only: restricting it to loopback callers. Set a real secret before deploying.", basePath);
+            logger.UnauthenticatedRouteMapped(basePath);
         }
 
         return endpoints.MapPost($"{basePath}/{{invocationId}}", (
@@ -90,18 +88,13 @@ public static class SupportSystemCallbacks
                 var presented = request.Headers["X-Webhook-Secret"].ToString();
                 if (string.IsNullOrEmpty(presented) || !FixedTimeEquals(presented, sharedSecret))
                 {
-                    logger.LogWarning(
-                        "Rejected support-system callback for invocation {InvocationId}: missing/invalid secret.",
-                        invocationId);
+                    logger.RejectedBadSecret(invocationId);
                     return Results.Unauthorized();
                 }
             }
             else if (request.HttpContext.Connection.RemoteIpAddress is not { } remoteIp || !System.Net.IPAddress.IsLoopback(remoteIp))
             {
-                logger.LogWarning(
-                    "Rejected support-system callback for invocation {InvocationId}: no shared secret is " +
-                    "configured and the caller ({RemoteIp}) is not loopback.",
-                    invocationId, request.HttpContext.Connection.RemoteIpAddress);
+                logger.RejectedNonLoopback(invocationId, request.HttpContext.Connection.RemoteIpAddress);
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             }
 
@@ -132,9 +125,7 @@ public static class SupportSystemCallbacks
 
             IResult LogAndOk(string id)
             {
-                logger.LogInformation(
-                    "Support-system callback for invocation {InvocationId} was a no-op (unknown or already resolved).",
-                    id);
+                logger.CallbackWasNoOp(id);
                 return Results.Ok(new { status = "no-op" });
             }
         });

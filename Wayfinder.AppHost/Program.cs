@@ -1,3 +1,7 @@
+// Aspire marks ResourceUrlAnnotation.DisplayOrder obsolete ("incorrectly created as a field; will be
+// re-added as a property"). Setting it still works, so keep the dashboard link order and drop this
+// pragma once Aspire ships the property.
+#pragma warning disable CS0618
 // Wayfinder's reference-host orchestrator. Deliberately minimal: no database, no external
 // identity provider — matching Wayfinder.ReferenceApp's own in-memory, boot-fast architecture.
 // See Wayfinder.ReferenceApp/Services/DemoUsers.cs for why auth is a hand-rolled in-memory login

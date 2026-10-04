@@ -13,7 +13,7 @@ namespace Wayfinder.Engine.Stores;
 /// by any standalone host — e.g. the MCP server, which runs as its own process and can't share
 /// a running app's in-memory engine.
 /// </summary>
-public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : IServiceBlueprintSourceStore
+public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : IServiceBlueprintSourceStore, IDisposable
 {
     // Serializes save's read-check-write so the version compare-and-swap is atomic within this
     // process. Sufficient for a single-process reference app; a real multi-process file-backed
@@ -122,4 +122,6 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
         File.Delete(path);
         return Task.FromResult(true);
     }
+
+    public void Dispose() => _saveLock.Dispose();
 }

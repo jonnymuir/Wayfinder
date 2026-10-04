@@ -17,14 +17,14 @@ public class StageFileUploadsTests
 {
     private const string InstanceId = "instance-1";
 
-    private static IFormFile MakeFile(string fieldKey, string fileName, string content, string contentType = "text/plain")
+    private static FormFile MakeFile(string fieldKey, string fileName, string content, string contentType = "text/plain")
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         var stream = new MemoryStream(bytes);
         return new FormFile(stream, 0, bytes.Length, $"field:{fieldKey}", fileName) { Headers = new HeaderDictionary(), ContentType = contentType };
     }
 
-    private static IFormCollection FormWith(params IFormFile[] files)
+    private static FormCollection FormWith(params IFormFile[] files)
     {
         var fileCollection = new FormFileCollection();
         fileCollection.AddRange(files);

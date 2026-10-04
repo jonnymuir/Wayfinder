@@ -34,13 +34,15 @@ public sealed record ServiceRequestFileReference
     /// than the <see cref="JsonElement"/> a reload produces, so both need their own case. Returns
     /// <see langword="null"/> for anything else, including no value at all.
     /// </summary>
+    private static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
+
     public static ServiceRequestFileReference? FromFieldValue(object? raw) => raw switch
     {
         ServiceRequestFileReference reference => reference,
         JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Object =>
-            jsonElement.Deserialize<ServiceRequestFileReference>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true }),
+            jsonElement.Deserialize<ServiceRequestFileReference>(CaseInsensitive),
         JsonObject jsonObject =>
-            jsonObject.Deserialize<ServiceRequestFileReference>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true }),
+            jsonObject.Deserialize<ServiceRequestFileReference>(CaseInsensitive),
         _ => null
     };
 }

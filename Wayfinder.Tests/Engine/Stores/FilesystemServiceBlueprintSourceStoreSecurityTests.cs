@@ -23,6 +23,8 @@ public class FilesystemServiceBlueprintSourceStoreSecurityTests : IDisposable
         {
             Directory.Delete(_baseDir, recursive: true);
         }
+
+        GC.SuppressFinalize(this);
     }
 
     public static TheoryData<string> MaliciousKeys() =>

@@ -29,6 +29,8 @@ namespace Wayfinder.Tests.Engine.Http;
 /// </summary>
 public class SupportSystemCallbacksTests
 {
+    private static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
+
     private const string Secret = "callback-shared-secret";
     private const string TenantId = "tenant";
     private const string UserId = "user";
@@ -152,7 +154,7 @@ public class SupportSystemCallbacksTests
         });
 
         var definition = JsonSerializer.Deserialize<ServiceBlueprint>(
-            BlueprintJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            BlueprintJson, CaseInsensitive)!;
         var client = new StubClient();
         var engine = new ProcessManagerEngine(
             NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),

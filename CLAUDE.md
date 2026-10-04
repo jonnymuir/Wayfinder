@@ -63,6 +63,12 @@ dotnet run --project Wayfinder.AppHost
 
 There is **no `.sln`**. Everything is `Wayfinder.slnx`.
 
+The build treats every warning as an error (`TreatWarningsAsErrors`, .NET analyzers at `latest-recommended`), so a
+new analyzer finding fails the build rather than accumulating. Fix the finding; suppress only with a written
+justification (`SuppressMessage(..., Justification = ...)` or a commented, narrowly scoped `.editorconfig` entry).
+NuGet versions live once in `Directory.Packages.props` (central package management); projects reference packages by
+name only. `.editorconfig` holds formatting; `global.json` pins the SDK.
+
 CI (`.github/workflows/ci.yml`) also runs the reference app's own Playwright journeys (`reference-app-e2e`;
 the `-live` specs need Aspire and stay local-only). It runs the editor client build → `dotnet` restore/build/test/pack →
 the TS conformance scripts → storybook a11y/interaction → editor Playwright. `Wayfinder.ReferenceApp.Tests`

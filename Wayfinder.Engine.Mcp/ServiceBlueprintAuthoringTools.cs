@@ -198,7 +198,6 @@ public static class ServiceBlueprintAuthoringTools
         "go unverified — route a reviewer/business action only into the Join, matching " +
         "payment-demo/information-request's convention, rather than giving it a parallel terminal.")]
     public static ServiceBlueprintSimulationResult SimulateServiceBlueprint(
-        ServiceBlueprintAuthoringService service,
         [Description("The full ServiceBlueprint JSON to simulate.")] string blueprintJson,
         [Description(
             "JSON array of steps to advance through in order, e.g. " +
@@ -218,7 +217,7 @@ public static class ServiceBlueprintAuthoringTools
         var mockServiceInputs = string.IsNullOrWhiteSpace(mockServiceInputsJson)
             ? null
             : CalculationScopeJson.ToScopeValues(mockServiceInputsJson);
-        return service.Simulate(blueprint, steps, mockServiceInputs);
+        return ServiceBlueprintSimulationRunner.Run(blueprint, steps, mockServiceInputs);
     }
 
     // System.Text.Json throws on any malformed blueprintJson (wrong types, truncated JSON,

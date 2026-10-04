@@ -143,7 +143,7 @@ public class GovUkStageJourneyTests
         result.Render!.Components[0].BulkDatasetAntiforgeryToken.Should().Be("CfDJ8-token");
     }
 
-    private static IFormCollection Form(params (string Key, string Value)[] entries) =>
+    private static FormCollection Form(params (string Key, string Value)[] entries) =>
         new FormCollection(entries.ToDictionary(e => e.Key, e => new StringValues(e.Value)));
 
     [Fact]

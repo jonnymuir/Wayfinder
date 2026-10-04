@@ -5,7 +5,7 @@ using Wayfinder.Engine.Abstractions;
 
 namespace Wayfinder.Engine.Stores;
 
-public sealed class FilesystemServiceBlueprintStore(string blueprintSeedPath) : IServiceBlueprintStore
+public sealed partial class FilesystemServiceBlueprintStore(string blueprintSeedPath) : IServiceBlueprintStore
 {
     public IReadOnlyDictionary<string, ServiceBlueprint> LoadDefinitions(ILogger logger)
     {
@@ -13,9 +13,7 @@ public sealed class FilesystemServiceBlueprintStore(string blueprintSeedPath) : 
 
         if (!Directory.Exists(blueprintSeedPath))
         {
-            logger.LogWarning(
-                "workflow-seeds directory not found at {Path}; no service blueprints loaded.",
-                blueprintSeedPath);
+            SeedDirectoryMissing(logger, blueprintSeedPath);
             return definitions;
         }
 
@@ -33,17 +31,23 @@ public sealed class FilesystemServiceBlueprintStore(string blueprintSeedPath) : 
                 }
 
                 definitions[definition.DefinitionKey] = definition;
-                logger.LogInformation(
-                    "Loaded service blueprint '{Key}' from {File}",
-                    definition.DefinitionKey,
-                    Path.GetFileName(file));
+                BlueprintLoaded(logger, definition.DefinitionKey, Path.GetFileName(file));
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to load service blueprint from {File}", file);
+                BlueprintLoadFailed(logger, ex, file);
             }
         }
 
         return definitions;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "workflow-seeds directory not found at {Path}; no service blueprints loaded.")]
+    private static partial void SeedDirectoryMissing(ILogger logger, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Loaded service blueprint '{Key}' from {File}")]
+    private static partial void BlueprintLoaded(ILogger logger, string key, string file);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to load service blueprint from {File}")]
+    private static partial void BlueprintLoadFailed(ILogger logger, Exception exception, string file);
 }
