@@ -63,7 +63,8 @@ dotnet run --project Wayfinder.AppHost
 
 There is **no `.sln`**. Everything is `Wayfinder.slnx`.
 
-CI (`.github/workflows/ci.yml`) runs the editor client build → `dotnet` restore/build/test/pack →
+CI (`.github/workflows/ci.yml`) also runs the reference app's own Playwright journeys (`reference-app-e2e`;
+the `-live` specs need Aspire and stay local-only). It runs the editor client build → `dotnet` restore/build/test/pack →
 the TS conformance scripts → storybook a11y/interaction → editor Playwright. `Wayfinder.ReferenceApp.Tests`
 Playwright specs run via their own configs.
 
