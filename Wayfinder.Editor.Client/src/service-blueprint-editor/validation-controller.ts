@@ -1,4 +1,4 @@
-import type { ReactiveController, ReactiveControllerHost } from 'lit';
+import { type ReactiveController, type ReactiveControllerHost, type TemplateResult, html, nothing } from 'lit';
 import { mapServerDiagnosticsToIssues } from './server-diagnostic-location.js';
 import type { ServiceBlueprintSource } from './service-blueprint-source.js';
 import { type ServiceBlueprintValidationIssue, validateServiceBlueprint } from './service-blueprint-validation.js';
@@ -145,5 +145,63 @@ export class ValidationController implements ReactiveController {
     this.issues = issues;
     this.pending = pending;
     this.host.requestUpdate();
+  }
+
+  /** The Validation tab: the issue list, each linking back to where it is, plus the current save status. */
+  renderPanel(options: { saveStatus: string; onJump: (issue: ServiceBlueprintValidationIssue) => void }): TemplateResult {
+    if (!this.inputs().blueprint) {
+      return html`<div class="validation-empty-panel">No serviceBlueprint loaded</div>`;
+    }
+
+    const issues = this.issues;
+    const errorCount = this.blocking.length;
+    const warningCount = this.warnings.length;
+
+    return html`
+      <section class="validation-panel" aria-labelledby="service-blueprint-validation-panel-title" data-wayfinder-validation-rail>
+        <div class="validation-panel-header">
+          <div>
+            <h2 id="service-blueprint-validation-panel-title" class="validation-panel-title">Service Blueprint validation</h2>
+            <p class="validation-panel-summary">${this.summary}</p>
+          </div>
+          <div class="validation-panel-meta">
+            ${this.pending ? html`<span class="validation-count" data-wayfinder-validation-pending>checking…</span>` : nothing}
+            <span class="validation-count validation-count-error" data-wayfinder-validation-errors>${errorCount} errors</span>
+            <span class="validation-count validation-count-warning" data-wayfinder-validation-warnings>${warningCount} warnings</span>
+          </div>
+        </div>
+
+        <div class="validation-panel-save-status" data-wayfinder-save-status>
+          <span class="validation-save-label">Save status</span>
+          <span>${options.saveStatus}</span>
+        </div>
+
+        ${
+          issues.length === 0
+            ? html`<p class="validation-empty">No validation issues. You can save whenever you are ready.</p>`
+            : html`
+              <ol class="validation-issue-list">
+                ${issues.map(
+                  (issue) => html`
+                  <li>
+                    <button
+                      type="button"
+                      class="validation-issue-link"
+                      data-wayfinder-validation-issue=${issue.id}
+                      @click=${() => options.onJump(issue)}
+                    >
+                      <span class=${`validation-issue-badge validation-issue-badge-${issue.severity}`}>
+                        ${issue.severity === 'error' ? 'Error' : 'Warning'}
+                      </span>
+                      <span>${issue.message}</span>
+                    </button>
+                  </li>
+                `
+                )}
+              </ol>
+            `
+        }
+      </section>
+    `;
   }
 }

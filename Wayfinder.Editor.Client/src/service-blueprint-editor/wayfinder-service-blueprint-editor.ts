@@ -815,63 +815,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     `;
   }
 
-  private _renderValidationPanel() {
-    if (!this._serviceBlueprint) {
-      return html`<div class="validation-empty-panel">No serviceBlueprint loaded</div>`;
-    }
-
-    const issues = this._validation.issues;
-    const errorCount = this._validation.blocking.length;
-    const warningCount = this._validation.warnings.length;
-
-    return html`
-      <section class="validation-panel" aria-labelledby="service-blueprint-validation-panel-title" data-wayfinder-validation-rail>
-        <div class="validation-panel-header">
-          <div>
-            <h2 id="service-blueprint-validation-panel-title" class="validation-panel-title">Service Blueprint validation</h2>
-            <p class="validation-panel-summary">${this._validation.summary}</p>
-          </div>
-          <div class="validation-panel-meta">
-            ${this._validation.pending ? html`<span class="validation-count" data-wayfinder-validation-pending>checking…</span>` : nothing}
-            <span class="validation-count validation-count-error" data-wayfinder-validation-errors>${errorCount} errors</span>
-            <span class="validation-count validation-count-warning" data-wayfinder-validation-warnings>${warningCount} warnings</span>
-          </div>
-        </div>
-
-        <div class="validation-panel-save-status" data-wayfinder-save-status>
-          <span class="validation-save-label">Save status</span>
-          <span>${this._save.statusSummary}</span>
-        </div>
-
-        ${
-          issues.length === 0
-            ? html`<p class="validation-empty">No validation issues. You can save whenever you are ready.</p>`
-            : html`
-              <ol class="validation-issue-list">
-                ${issues.map(
-                  (issue) => html`
-                  <li>
-                    <button
-                      type="button"
-                      class="validation-issue-link"
-                      data-wayfinder-validation-issue=${issue.id}
-                      @click=${() => this._jumpToValidationIssue(issue)}
-                    >
-                      <span class=${`validation-issue-badge validation-issue-badge-${issue.severity}`}>
-                        ${issue.severity === 'error' ? 'Error' : 'Warning'}
-                      </span>
-                      <span>${issue.message}</span>
-                    </button>
-                  </li>
-                `
-                )}
-              </ol>
-            `
-        }
-      </section>
-    `;
-  }
-
   private get _canSaveByContext(): boolean {
     return this.authorContext?.canSave !== false;
   }
@@ -1239,7 +1182,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
           <!-- Other tabs -->
           <div slot="calculations">${this._renderCalculationsPanel()}</div>
-          <div slot="validation">${this._renderValidationPanel()}</div>
+          <div slot="validation">${this._validation.renderPanel({ saveStatus: this._save.statusSummary, onJump: (issue) => this._jumpToValidationIssue(issue) })}</div>
           <div slot="definition">${this._definition.renderPanel()}</div>
         </wayfinder-confidence-tabs>
         </div>
