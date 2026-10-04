@@ -12,28 +12,9 @@
  * Integrator examples: `MockBusinessApp/wwwroot/dist/service-blueprint-editor-bootstrap.js`.
  */
 
-import type { AuthoredServiceBlueprint } from './types.js';
+import type { ServiceBlueprint, ServiceBlueprintValidationOutcome } from './types.js';
 
-/**
- * The wire shape of one `Wayfinder.Models.ServiceDesign.ServiceBlueprintDiagnostic` — a single
- * authoring-time diagnostic from the server's authoritative validator
- * (`ServiceBlueprintAuthoringService.Validate`). `path` is a document path in the C# grammar
- * (`stages.{key}.actions[{n}]`, `calculations.fields.{name}`, …); `severity` may arrive as the
- * string enum name or, from a host that serializes enums numerically, as `0` (Error) / `1`
- * (Warning) — `server-diagnostic-location.ts` normalises both.
- */
-export interface ServiceBlueprintServerDiagnostic {
-  code: string;
-  path: string;
-  message: string;
-  severity: 'Error' | 'Warning' | 0 | 1;
-}
-
-/** The wire shape of `Wayfinder.Engine.Services.ServiceBlueprintValidationOutcome`. */
-export interface ServiceBlueprintValidationOutcome {
-  isValid: boolean;
-  diagnostics: ServiceBlueprintServerDiagnostic[];
-}
+export type { ServiceBlueprintValidationOutcome };
 
 /**
  * One save-error detail line, optionally locating the stage it came from — a server-side
@@ -209,15 +190,15 @@ export interface ServiceBlueprintSource {
   list(): Promise<ServiceBlueprintSummary[]>;
 
   /** Loads one authored serviceBlueprint by its host-facing key. */
-  load(key: string): Promise<AuthoredServiceBlueprint>;
+  load(key: string): Promise<ServiceBlueprint>;
 
   /**
    * Persists the authored serviceBlueprint back to the host. The host enforces save permissions.
    * Hosts may throw `ServiceBlueprintSaveError` with a user-facing title/summary/detail payload
    * (with `isConflict: true` when the service blueprint's `version` no longer matched — see
-   * `AuthoredServiceBlueprint.version` and the host's optimistic-concurrency contract).
+   * `ServiceBlueprint.version` and the host's optimistic-concurrency contract).
    */
-  save(key: string, serviceBlueprint: AuthoredServiceBlueprint): Promise<void>;
+  save(key: string, serviceBlueprint: ServiceBlueprint): Promise<void>;
 
   /**
    * Optional: returns the currently-persisted version of a service blueprint, for a client that wants
@@ -235,5 +216,5 @@ export interface ServiceBlueprintSource {
    * never disagree. A host with no server omits it and the editor falls back to its built-in
    * best-effort checks.
    */
-  validate?(key: string, serviceBlueprint: AuthoredServiceBlueprint): Promise<ServiceBlueprintValidationOutcome>;
+  validate?(key: string, serviceBlueprint: ServiceBlueprint): Promise<ServiceBlueprintValidationOutcome>;
 }

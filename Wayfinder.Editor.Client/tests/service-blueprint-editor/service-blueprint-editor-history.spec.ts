@@ -69,7 +69,7 @@ test.describe('ServiceBlueprint editor undo and redo', () => {
     await createStageDialog.locator('[data-wayfinder-create-stage-title]').fill('Site visit');
     await createStageDialog.locator('[data-wayfinder-create-stage-key]').fill('site-visit');
     await createStageDialog.locator('[data-wayfinder-create-stage-queue]').fill('reviewer');
-    await createStageDialog.locator('[data-wayfinder-create-stage-type]').selectOption('review');
+    await createStageDialog.locator('[data-wayfinder-create-stage-type]').selectOption('CheckAnswers');
     await createStageDialog.getByRole('button', { name: 'Create stage' }).click();
     await expect(createStageDialog).toBeHidden();
 

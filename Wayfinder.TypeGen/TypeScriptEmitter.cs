@@ -122,17 +122,34 @@ public sealed class TypeScriptEmitter(JsonSerializerOptions options)
                 : DeclareInterface(type.Name, info, discriminator: null);
     }
 
-    private static string DeclareEnum(Type type)
+    private string DeclareEnum(Type type)
     {
-        if (type.GetCustomAttribute<JsonConverterAttribute>()?.ConverterType?.Name.Contains("StringEnum", StringComparison.Ordinal) != true)
+        if (!IsStringEnumConverter(type.GetCustomAttribute<JsonConverterAttribute>()?.ConverterType))
         {
             throw new InvalidOperationException($"{type.Name} is not serialized as a string; teach the emitter its representation.");
         }
 
-        var values = string.Join(", ", Enum.GetNames(type).Select(name => $"'{name}'"));
+        var values = string.Join(", ", Enum.GetValues(type).Cast<object>().Select(value => $"'{WireName(value)}'"));
         var constant = char.ToLowerInvariant(type.Name[0]) + type.Name[1..] + "Values";
         return $"export const {constant} = [{values}] as const;\nexport type {type.Name} = (typeof {constant})[number];\n";
     }
+
+    private static bool IsStringEnumConverter(Type? converter)
+    {
+        for (var type = converter; type is not null; type = type.BaseType)
+        {
+            if (type == typeof(JsonStringEnumConverter)
+                || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(JsonStringEnumConverter<>)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>The string the enum value takes on the wire, by asking the serializer itself.</summary>
+    private string WireName(object value) => JsonSerializer.Serialize(value, value.GetType(), options).Trim('"');
 
     private string DeclarePolymorphic(Type baseType, JsonPolymorphismOptions polymorphism)
     {
@@ -159,7 +176,7 @@ public sealed class TypeScriptEmitter(JsonSerializerOptions options)
 
         foreach (var member in info.Properties)
         {
-            var optional = member.IsRequired ? "" : IsNullable(member) ? "?" : "";
+            var optional = member.IsRequired ? "" : CanBeAbsent(member) ? "?" : "";
             var tsType = ConverterOverride(member) ?? Reference(member.PropertyType);
             body.Append(CultureInfo.InvariantCulture, $"  {Key(member.Name)}{optional}: {tsType};\n");
         }
@@ -193,6 +210,16 @@ public sealed class TypeScriptEmitter(JsonSerializerOptions options)
         throw new InvalidOperationException(
             $"{member.Name} uses {converter.Name}; teach TypeScriptEmitter.ConverterOverride the shape it writes.");
     }
+
+    /// <summary>
+    /// Whether a reader can see the property missing: its C# type is nullable, or the writer
+    /// omits it when null/default (so a document that round-tripped through the server may lack it).
+    /// </summary>
+    private bool CanBeAbsent(JsonPropertyInfo member) =>
+        IsNullable(member)
+        || member.AttributeProvider?.GetCustomAttributes(typeof(JsonIgnoreAttribute), inherit: true)
+            .OfType<JsonIgnoreAttribute>()
+            .Any(ignore => ignore.Condition is JsonIgnoreCondition.WhenWritingNull or JsonIgnoreCondition.WhenWritingDefault) == true;
 
     private bool IsNullable(JsonPropertyInfo member)
     {

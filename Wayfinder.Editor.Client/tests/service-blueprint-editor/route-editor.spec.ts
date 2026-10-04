@@ -51,10 +51,10 @@ test.describe('Route visibility (showWhen)', () => {
     // (b) Underlying route showWhen is updated in the service blueprint model.
     const updatedShowWhen = await inspector.evaluate(node => {
       const el = node as unknown as {
-        serviceBlueprint: { stages?: Array<{ stateKey: string; routes?: Array<{ target: string; showWhen?: string }> }> } | null;
+        serviceBlueprint: { stages?: Array<{ stageKey: string; routes?: Array<{ target: string; showWhen?: string }> }> } | null;
       };
       for (const stage of (el.serviceBlueprint?.stages ?? [])) {
-        if (stage.stateKey !== 'reviewer-assessment') continue;
+        if (stage.stageKey !== 'reviewer-assessment') continue;
         for (const route of (stage.routes ?? [])) {
           if (route.target === 'decision-join') return route.showWhen ?? null;
         }

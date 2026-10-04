@@ -3,7 +3,7 @@ import { expect, waitFor } from 'storybook/test';
 import './wayfinder-service-blueprint-editor.js';
 import type { WayfinderServiceBlueprintEditorElement } from './wayfinder-service-blueprint-editor.js';
 import { PLANNING_SERVICE_BLUEPRINT, LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT, cloneAuthoredServiceBlueprint } from './fixtures/index.js';
-import type { AuthoredServiceBlueprint } from './types.js';
+import type { ServiceBlueprint } from './types.js';
 import { InMemoryServiceBlueprintSource } from './in-memory-service-blueprint-source.js';
 import type { QueueDefinition } from './stage-assignment.js';
 
@@ -17,7 +17,7 @@ const STORY_QUEUES: QueueDefinition[] = [
   { queueName: 'system', displayName: 'System' },
 ];
 
-function makeEditor(serviceBlueprint: AuthoredServiceBlueprint = PLANNING_SERVICE_BLUEPRINT): WayfinderServiceBlueprintEditorElement {
+function makeEditor(serviceBlueprint: ServiceBlueprint = PLANNING_SERVICE_BLUEPRINT): WayfinderServiceBlueprintEditorElement {
   const el = document.createElement('wayfinder-service-blueprint-editor') as WayfinderServiceBlueprintEditorElement;
   // Stories drive the editor by injecting the service blueprint directly. The Save
   // button still needs a `serviceBlueprintSource` to resolve, so wire an in-memory
@@ -30,8 +30,8 @@ function makeEditor(serviceBlueprint: AuthoredServiceBlueprint = PLANNING_SERVIC
   return el;
 }
 
-function makeEmptyServiceBlueprint(): AuthoredServiceBlueprint {
-  const serviceBlueprint = JSON.parse(JSON.stringify(PLANNING_SERVICE_BLUEPRINT)) as AuthoredServiceBlueprint;
+function makeEmptyServiceBlueprint(): ServiceBlueprint {
+  const serviceBlueprint = JSON.parse(JSON.stringify(PLANNING_SERVICE_BLUEPRINT)) as ServiceBlueprint;
   return {
     ...serviceBlueprint,
     displayName: 'Empty ServiceBlueprint',
@@ -41,47 +41,51 @@ function makeEmptyServiceBlueprint(): AuthoredServiceBlueprint {
   };
 }
 
-function makeSimulationBranchServiceBlueprint(): AuthoredServiceBlueprint {
-  const serviceBlueprint = JSON.parse(JSON.stringify(PLANNING_SERVICE_BLUEPRINT)) as AuthoredServiceBlueprint;
+function makeSimulationBranchServiceBlueprint(): ServiceBlueprint {
+  const serviceBlueprint = JSON.parse(JSON.stringify(PLANNING_SERVICE_BLUEPRINT)) as ServiceBlueprint;
   serviceBlueprint.displayName = 'Planning Application Simulation';
   serviceBlueprint.stages = [
     serviceBlueprint.stages[0],
     serviceBlueprint.stages[1],
     {
-      stateKey: 'review-decision',
+      stageKey: 'review-decision',
+      queueKey: '',
       displayName: 'Reviewer decision',
       description: 'Reviewer chooses whether to approve, reject, or request more checks.',
-      kind: 'TaskList',
+      stageType: 'TaskList',
       actor: 'reviewer',
       actions: [],
       components: [],
       roleGates: ['reviewer'],
     },
     {
-      stateKey: 'checks-pending',
+      stageKey: 'checks-pending',
+      queueKey: '',
       displayName: 'Checks pending',
       description: 'The application is paused while further checks run.',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'reviewer',
       actions: [],
       components: [],
       roleGates: ['reviewer'],
     },
     {
-      stateKey: 'approved',
+      stageKey: 'approved',
+      queueKey: '',
       displayName: 'Application approved',
       description: 'The application has been approved.',
-      kind: 'Confirmation',
+      stageType: 'Confirmation',
       actor: 'reviewer',
       actions: [],
       components: [],
       roleGates: ['reviewer'],
     },
     {
-      stateKey: 'rejected',
+      stageKey: 'rejected',
+      queueKey: '',
       displayName: 'Application rejected',
       description: 'The application has been rejected.',
-      kind: 'Confirmation',
+      stageType: 'Confirmation',
       actor: 'reviewer',
       actions: [],
       components: [],
@@ -133,7 +137,7 @@ function makeSimulationBranchServiceBlueprint(): AuthoredServiceBlueprint {
     'application-form': 'application-form-routes',
   };
   for (const [stageKey, gatewayKey] of Object.entries(gatewayFor)) {
-    const stage = serviceBlueprint.stages.find(candidate => candidate.stateKey === stageKey);
+    const stage = serviceBlueprint.stages.find(candidate => candidate.stageKey === stageKey);
     const trigger = (serviceBlueprint.gateways ?? []).find(gateway => gateway.key === gatewayKey)?.routes?.[0]?.trigger ?? 'continue';
     if (stage) {
       stage.routes = [{ id: `${stageKey}--${trigger}--${gatewayKey}`, target: gatewayKey, trigger }];
@@ -142,7 +146,7 @@ function makeSimulationBranchServiceBlueprint(): AuthoredServiceBlueprint {
   return serviceBlueprint;
 }
 
-function makeSimulationBlockerServiceBlueprint(): AuthoredServiceBlueprint {
+function makeSimulationBlockerServiceBlueprint(): ServiceBlueprint {
   const serviceBlueprint = makeSimulationBranchServiceBlueprint();
   serviceBlueprint.displayName = 'Planning Application Simulation Blockers';
   const rejectGateway = (serviceBlueprint.gateways ?? []).find(g => g.key === 'review-decision-routes');

@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import type { AuthoredServiceBlueprint, AuthoredStage, AuthoredStageValidation, ComponentDescriptor, ServiceBlueprintCalculationsBlock } from './types.js';
+import type { ServiceBlueprint, StageDefinition, ServiceBlueprintStageValidationRule, ComponentDescriptor, ServiceBlueprintCalculationSet } from './types.js';
 import { collectStageInputFields, type FieldReference } from './component-property-references.js';
 import { computeStableFieldOrder, type FieldInput } from './calculation-ordering.js';
 import { inScopeInputFieldKeys, tryEvaluateFieldsForPreview, tryEvaluateSeriesForPreview, tryParseExpression } from './calculation-runtime.js';
@@ -9,11 +9,11 @@ import { computeCalculationDiagnostics } from './calculation-diagnostics.js';
 import './wayfinder-calculation-expression-editor.js';
 import type { ExpressionCompletionItem } from './wayfinder-calculation-expression-editor.js';
 
-type CalcFields = ServiceBlueprintCalculationsBlock['fields'];
+type CalcFields = ServiceBlueprintCalculationSet['fields'];
 type CalcFieldDefinition = CalcFields[string];
-type CalcTables = NonNullable<ServiceBlueprintCalculationsBlock['tables']>;
+type CalcTables = NonNullable<ServiceBlueprintCalculationSet['tables']>;
 type CalcTableDefinition = CalcTables[string];
-type CalcSeriesMap = NonNullable<ServiceBlueprintCalculationsBlock['series']>;
+type CalcSeriesMap = NonNullable<ServiceBlueprintCalculationSet['series']>;
 type CalcSeriesDefinition = CalcSeriesMap[string];
 
 const NUMERIC_INPUT_TYPES = new Set(['slider', 'number', 'decimal']);
@@ -33,14 +33,14 @@ const NUMERIC_INPUT_TYPES = new Set(['slider', 'number', 'decimal']);
 @customElement('wayfinder-calculations-editor')
 export class WayfinderCalculationsEditorElement extends LitElement {
   @property({ attribute: false })
-  serviceBlueprint: AuthoredServiceBlueprint | null = null;
+  serviceBlueprint: ServiceBlueprint | null = null;
 
   @property({ attribute: false })
   componentCatalog: ComponentDescriptor[] = [];
 
   @state() private _statusMessage: string | null = null;
 
-  private get _calculations(): ServiceBlueprintCalculationsBlock {
+  private get _calculations(): ServiceBlueprintCalculationSet {
     return this.serviceBlueprint?.calculations ?? { fields: {} };
   }
 
@@ -95,13 +95,13 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     return inputs;
   }
 
-  private _emitServiceBlueprintUpdated(next: AuthoredServiceBlueprint) {
+  private _emitServiceBlueprintUpdated(next: ServiceBlueprint) {
     this.dispatchEvent(
       new CustomEvent('service-blueprint-updated', { detail: { serviceBlueprint: next }, bubbles: true, composed: true })
     );
   }
 
-  private _updateCalculations(next: ServiceBlueprintCalculationsBlock) {
+  private _updateCalculations(next: ServiceBlueprintCalculationSet) {
     if (!this.serviceBlueprint) {
       return;
     }
@@ -763,39 +763,39 @@ export class WayfinderCalculationsEditorElement extends LitElement {
   // captured on an earlier stage, so this reuses `_allInputFields`/`_calculations` exactly as the
   // Fields section above does, just grouped one subsection per stage instead of one flat list.
 
-  private _updateStage(stageKey: string, patch: Partial<AuthoredStage>) {
+  private _updateStage(stageKey: string, patch: Partial<StageDefinition>) {
     if (!this.serviceBlueprint) {
       return;
     }
     const stages = this.serviceBlueprint.stages.map(stage =>
-      stage.stateKey === stageKey ? { ...stage, ...patch } : stage
+      stage.stageKey === stageKey ? { ...stage, ...patch } : stage
     );
     this._emitServiceBlueprintUpdated({ ...this.serviceBlueprint, stages });
   }
 
-  private _updateStageValidations(stageKey: string, next: AuthoredStageValidation[]) {
+  private _updateStageValidations(stageKey: string, next: ServiceBlueprintStageValidationRule[]) {
     this._updateStage(stageKey, { validations: next });
   }
 
-  private _addValidation(stage: AuthoredStage) {
+  private _addValidation(stage: StageDefinition) {
     // Starts empty, same as _addField's { expr: '' } — an incomplete row is expected to be
     // transiently invalid while being authored (same tolerance the Validation tab already
     // extends to a field mid-edit), not pre-seeded with a placeholder that's easy to forget to
     // actually replace.
     const next = [...(stage.validations ?? []), { code: '', rule: '', message: '' }];
-    this._updateStageValidations(stage.stateKey, next);
+    this._updateStageValidations(stage.stageKey, next);
     this._announce(`Validation rule added to ${stage.displayName}.`);
   }
 
-  private _deleteValidation(stage: AuthoredStage, index: number) {
+  private _deleteValidation(stage: StageDefinition, index: number) {
     const next = (stage.validations ?? []).filter((_, i) => i !== index);
-    this._updateStageValidations(stage.stateKey, next);
+    this._updateStageValidations(stage.stageKey, next);
     this._announce(`Validation rule removed from ${stage.displayName}.`);
   }
 
-  private _setValidation(stage: AuthoredStage, index: number, patch: Partial<AuthoredStageValidation>) {
+  private _setValidation(stage: StageDefinition, index: number, patch: Partial<ServiceBlueprintStageValidationRule>) {
     const next = (stage.validations ?? []).map((rule, i) => (i === index ? { ...rule, ...patch } : rule));
-    this._updateStageValidations(stage.stateKey, next);
+    this._updateStageValidations(stage.stageKey, next);
   }
 
   private _renderValidationsSection() {
@@ -817,11 +817,11 @@ export class WayfinderCalculationsEditorElement extends LitElement {
         ${stages.map(
           stage => html`
             <div class="calc-validations-stage">
-              <h4 class="calc-validations-stage-title">${stage.displayName} <span class="calc-section-meta">(${stage.stateKey})</span></h4>
+              <h4 class="calc-validations-stage-title">${stage.displayName} <span class="calc-section-meta">(${stage.stageKey})</span></h4>
               <ul class="calc-field-list">
                 ${repeat(
                   stage.validations ?? [],
-                  (_, index) => `${stage.stateKey}-${index}`,
+                  (_, index) => `${stage.stageKey}-${index}`,
                   (rule, index) => this._renderValidationRow(stage, rule, index)
                 )}
               </ul>
@@ -833,7 +833,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     `;
   }
 
-  private _renderValidationRow(stage: AuthoredStage, rule: AuthoredStageValidation, index: number) {
+  private _renderValidationRow(stage: StageDefinition, rule: ServiceBlueprintStageValidationRule, index: number) {
     const stageFields = collectStageInputFields(stage.components, this.componentCatalog);
     const completions: ExpressionCompletionItem[] = [
       ...this._allInputFields.map(input => ({ name: input.fieldKey, detail: input.label })),
@@ -848,7 +848,7 @@ export class WayfinderCalculationsEditorElement extends LitElement {
     const ruleParse = tryParseExpression(rule.rule);
 
     return html`
-      <li class="calc-field-row" data-wayfinder-calc-validation=${`${stage.stateKey}-${index}`}>
+      <li class="calc-field-row" data-wayfinder-calc-validation=${`${stage.stageKey}-${index}`}>
         <div class="calc-field-row-header">
           <label class="field-block">
             <span class="field-label">Code</span>

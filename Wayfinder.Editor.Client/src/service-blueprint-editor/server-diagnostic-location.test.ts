@@ -22,8 +22,6 @@ export function run(): number {
   // ── severity normalisation ──────────────────────────────────────────────
   check('severity "Error" → error', normaliseServerSeverity('Error') === 'error');
   check('severity "Warning" → warning', normaliseServerSeverity('Warning') === 'warning');
-  check('severity 0 (STJ int) → error', normaliseServerSeverity(0) === 'error');
-  check('severity 1 (STJ int) → warning', normaliseServerSeverity(1) === 'warning');
 
   // ── path → location ────────────────────────────────────────────────────
   check(

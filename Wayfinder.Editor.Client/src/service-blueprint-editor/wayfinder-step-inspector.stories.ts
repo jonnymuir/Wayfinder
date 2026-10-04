@@ -2,11 +2,12 @@ import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { expect } from 'storybook/test';
 import './wayfinder-step-inspector.js';
 import type { WayfinderStepInspectorElement } from './wayfinder-step-inspector.js';
-import { STUB_ACTION_CATALOG, STUB_SERVICE_BLUEPRINT } from './types.js';
-import type { ActionCatalogEntry, AuthoredServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
+import { BUILT_IN_ACTION_CATALOG } from './action-catalog-entries.js';
+import { STUB_SERVICE_BLUEPRINT } from './fixtures/planning-permission-stub.js';
+import type { ActionCatalogEntry, ServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
 
 type StoryArgs = {
-  serviceBlueprint: AuthoredServiceBlueprint | null;
+  serviceBlueprint: ServiceBlueprint | null;
   selectedStageKey: string | null;
   selectedGatewayKey?: string | null;
   actionCatalog: ActionCatalogEntry[];
@@ -24,7 +25,7 @@ function makeElement(args: StoryArgs): WayfinderStepInspectorElement {
   el.supportSystemCatalog = args.supportSystemCatalog ?? [];
   el.addEventListener('service-blueprint-updated', event => {
     const detail = (event as CustomEvent<{
-      serviceBlueprint: AuthoredServiceBlueprint;
+      serviceBlueprint: ServiceBlueprint;
       selection?: { kind?: 'stage' | 'gateway'; stageKey?: string; gatewayKey?: string } | null;
     }>).detail;
     el.serviceBlueprint = detail.serviceBlueprint;
@@ -61,7 +62,7 @@ const meta: Meta<StoryArgs> = {
     serviceBlueprint: null,
     selectedStageKey: null,
     selectedGatewayKey: null,
-    actionCatalog: STUB_ACTION_CATALOG,
+    actionCatalog: BUILT_IN_ACTION_CATALOG,
     componentCatalog: [],
     supportSystemCatalog: [],
   },
@@ -132,9 +133,9 @@ const GATEWAY_ROUTE_SERVICE_BLUEPRINT = {
   initialStage: 'submitted',
   stages: [
     {
-      stateKey: 'submitted',
+      stageKey: 'submitted',
       displayName: 'Submitted',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'public',
       actions: [],
       components: [],
@@ -142,18 +143,18 @@ const GATEWAY_ROUTE_SERVICE_BLUEPRINT = {
       routes: [{ id: 'submitted--route--review-split', target: 'review-split', trigger: 'route' }],
     },
     {
-      stateKey: 'reviewer-assessment',
+      stageKey: 'reviewer-assessment',
       displayName: 'Reviewer assessment',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'reviewer',
       actions: [],
       components: [],
       roleGates: ['reviewer'],
     },
     {
-      stateKey: 'applicant-amendments',
+      stageKey: 'applicant-amendments',
       displayName: 'Applicant amendments',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'public',
       actions: [],
       components: [],
@@ -177,14 +178,14 @@ const GATEWAY_ROUTE_SERVICE_BLUEPRINT = {
           actions: [
             {
               type: 'forms.submit',
-              timing: 'OnTransition',
+              timing: 'onTransition',
             },
           ],
         },
       ],
     },
   ],
-} as unknown as AuthoredServiceBlueprint;
+} as unknown as ServiceBlueprint;
 
 export const TransitionSelected: Story = {
   // Slice 3b.1 removed transition-only selection. Route editing now lives in
@@ -334,7 +335,7 @@ export const ComponentAddEditDelete: Story = {
     addButton.click();
     await el.updateComplete;
 
-    let stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    let stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     await expect(stage.components?.length).toBe(1);
     await expect(stage.components?.[0].type).toBe('body');
 
@@ -344,7 +345,7 @@ export const ComponentAddEditDelete: Story = {
     contentField.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     await expect((stage.components?.[0] as { content?: string }).content).toBe('Hello from the properties panel.');
 
     // Add a "Statistic group" and exercise the recursive Array-of-Object property editor.
@@ -366,7 +367,7 @@ export const ComponentAddEditDelete: Story = {
     tileLabelField!.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     const statGroup = stage.components?.[1] as { items?: Array<{ label?: string }> };
     await expect(statGroup.items?.[0]?.label).toBe('Total');
 
@@ -376,7 +377,7 @@ export const ComponentAddEditDelete: Story = {
     deleteButtons[0].click();
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     await expect(stage.components?.length).toBe(1);
     await expect(stage.components?.[0].type).toBe('stat-group');
   },
@@ -430,7 +431,7 @@ export const ComponentReferenceAwareFields: Story = {
     conditionalOnSelect.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    let stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    let stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     await expect((stage.components?.[1] as { conditionalOn?: string }).conditionalOn).toBe('firstName');
 
     // Insert the "Letters only" regex preset into the second field's Pattern property.
@@ -442,7 +443,7 @@ export const ComponentReferenceAwareFields: Story = {
     presetSelect.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     await expect((stage.components?.[1] as { pattern?: string }).pattern).toBe('^[A-Za-z]+$');
   },
 };
@@ -488,7 +489,7 @@ export const ComponentRecursiveChildEditing: Story = {
     childAddButton.click();
     await el.updateComplete;
 
-    let stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    let stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     let fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
     await expect(fieldset.legend).toBe('Applicant details');
     await expect(fieldset.children?.length).toBe(1);
@@ -508,7 +509,7 @@ export const ComponentRecursiveChildEditing: Story = {
     childLabelField.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     await el.updateComplete;
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
     await expect(fieldset.children?.[0].label).toBe('Full name');
 
@@ -520,7 +521,7 @@ export const ComponentRecursiveChildEditing: Story = {
     await el.updateComplete;
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    stage = el.serviceBlueprint!.stages.find(s => s.stateKey === 'reviewer-assessment')!;
+    stage = el.serviceBlueprint!.stages.find(s => s.stageKey === 'reviewer-assessment')!;
     fieldset = stage.components?.[0] as { legend?: string; children?: Array<{ type: string; label?: string }> };
     await expect(fieldset.children?.length).toBe(0);
     await expect(root.activeElement?.closest('.component-add-row')).not.toBeNull();
@@ -543,9 +544,9 @@ const SUPPORT_SYSTEM_CALL_SERVICE_BLUEPRINT = {
   initialStage: 'risk-assessment',
   stages: [
     {
-      stateKey: 'risk-assessment',
+      stageKey: 'risk-assessment',
       displayName: 'Risk assessment',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'citizen',
       actions: [],
       roleGates: [],
@@ -566,16 +567,16 @@ const SUPPORT_SYSTEM_CALL_SERVICE_BLUEPRINT = {
       routes: [{ id: 'risk-assessment--continue--insurer-validation', target: 'insurer-validation', trigger: 'continue' }],
     },
     {
-      stateKey: 'insurer-validation',
+      stageKey: 'insurer-validation',
       displayName: 'Insurer validation',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'automation',
       roleGates: [],
       components: [],
       actions: [
         {
           type: 'support-system-call',
-          timing: 'OnEntry',
+          timing: 'onEnter',
           params: {
             supportSystemKey: 'safetynet-underwriting',
             capabilityKey: 'validate-risk-assessment',
@@ -590,16 +591,16 @@ const SUPPORT_SYSTEM_CALL_SERVICE_BLUEPRINT = {
       ],
     },
     {
-      stateKey: 'done',
+      stageKey: 'done',
       displayName: 'Done',
-      kind: 'Confirmation',
+      stageType: 'Confirmation',
       actor: 'citizen',
       actions: [],
       components: [],
       roleGates: [],
     },
   ],
-} as unknown as AuthoredServiceBlueprint;
+} as unknown as ServiceBlueprint;
 
 // A minimal, story-local catalog (not COMPONENT_CATALOG_FIXTURE above — that one's shared by
 // three other stories with their own assertions about its exact contents) — just enough for

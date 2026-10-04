@@ -12,8 +12,8 @@ import {
   type ServiceBlueprintSummary,
   type ServiceBlueprintValidationOutcome,
 } from '../service-blueprint-source.js';
-import type { AuthoredServiceBlueprint } from '../types.js';
-import { hydrateServiceBlueprintDefinition } from '../types.js';
+import type { ServiceBlueprint, ServiceBlueprintDiagnostic, ServiceBlueprintSaveOutcome } from '../types.js';
+import { hydrateServiceBlueprintDefinition } from '../blueprint-hydration.js';
 import { serializeAuthoredServiceBlueprint } from '../service-blueprint-canonical-json.js';
 
 type ProblemDetailsPayload = {
@@ -30,30 +30,14 @@ type ProblemDetailsPayload = {
   };
 };
 
-// The shape Wayfinder.Engine.Services.ServiceBlueprintSaveOutcome serializes to — returned by
-// both /mockapp/service-blueprints/{key} and
-// /wayfinder/service-blueprint-authoring/blueprints/{key} on EITHER a validation failure (400,
-// Status "Invalid") or a version conflict (409, Status "Conflict"). Not a ProblemDetails payload,
-// so it's parsed separately — see isServiceBlueprintSaveOutcomePayload/parseSaveOutcome below.
-type ServiceBlueprintSaveOutcomePayload = {
-  status?: unknown;
-  diagnostics?: unknown;
-  currentVersion?: unknown;
-  newVersion?: unknown;
-};
-
-// The shape of each ServiceBlueprintDiagnostic in that array: Code, Path, Message, Severity —
-// see Wayfinder/Models/ServiceDesign/ServiceBlueprintDiagnostic.cs.
-type ServiceBlueprintDiagnosticPayload = {
-  code?: unknown;
-  path?: unknown;
-  message?: unknown;
-};
-
-function isServiceBlueprintSaveOutcomePayload(payload: unknown): payload is ServiceBlueprintSaveOutcomePayload {
+// Both /mockapp/service-blueprints/{key} and /wayfinder/service-blueprint-authoring/blueprints/{key}
+// answer a validation failure (400, Status "Invalid") or a version conflict (409, Status
+// "Conflict") with a ServiceBlueprintSaveOutcome — not a ProblemDetails payload — so it is
+// recognised and parsed separately, see parseSaveOutcome below.
+function isServiceBlueprintSaveOutcome(payload: unknown): payload is ServiceBlueprintSaveOutcome {
   return !!payload && typeof payload === 'object'
-    && typeof (payload as ServiceBlueprintSaveOutcomePayload).status === 'string'
-    && Array.isArray((payload as ServiceBlueprintSaveOutcomePayload).diagnostics);
+    && typeof (payload as ServiceBlueprintSaveOutcome).status === 'string'
+    && Array.isArray((payload as ServiceBlueprintSaveOutcome).diagnostics);
 }
 
 /** `Path`s like `stages.review.validations[0].when` or `stages.review.components[2].showWhen`
@@ -62,27 +46,16 @@ function stageKeyFromDiagnosticPath(path: string): string | undefined {
   return /^stages\.([^.[]+)/.exec(path)?.[1];
 }
 
-function readSaveOutcomeDiagnosticDetails(diagnostics: unknown): ServiceBlueprintSaveErrorDetail[] {
-  if (!Array.isArray(diagnostics)) {
-    return [];
-  }
-
-  return diagnostics
-    .filter((entry): entry is ServiceBlueprintDiagnosticPayload => !!entry && typeof entry === 'object')
-    .flatMap(entry => {
-      const message = sanitiseServiceBlueprintSaveErrorText(typeof entry.message === 'string' ? entry.message : null);
-      if (!message) {
-        return [];
-      }
-
-      const path = typeof entry.path === 'string' ? entry.path : '';
-      return [{ message, stageKey: path ? stageKeyFromDiagnosticPath(path) : undefined }];
-    });
+function readSaveOutcomeDiagnosticDetails(diagnostics: ServiceBlueprintDiagnostic[]): ServiceBlueprintSaveErrorDetail[] {
+  return diagnostics.flatMap(diagnostic => {
+    const message = sanitiseServiceBlueprintSaveErrorText(diagnostic.message);
+    return message ? [{ message, stageKey: stageKeyFromDiagnosticPath(diagnostic.path) }] : [];
+  });
 }
 
-function parseSaveOutcome(payload: ServiceBlueprintSaveOutcomePayload, statusCode: number, blueprintKey: string): ServiceBlueprintSaveError {
+function parseSaveOutcome(payload: ServiceBlueprintSaveOutcome, statusCode: number, blueprintKey: string): ServiceBlueprintSaveError {
   const isConflict = statusCode === 409;
-  const currentVersion = typeof payload.currentVersion === 'number' ? payload.currentVersion : null;
+  const currentVersion = payload.currentVersion ?? null;
   const details = readSaveOutcomeDiagnosticDetails(payload.diagnostics);
   const detailLines = details.map(detail => detail.message);
   const summary = sanitiseServiceBlueprintSaveErrorText(detailLines[0])
@@ -166,7 +139,7 @@ async function buildSaveError(response: Response, blueprintKey: string): Promise
   if (contentType.includes('json') || payloadText.trim().startsWith('{')) {
     try {
       const payload = JSON.parse(payloadText) as unknown;
-      if (isServiceBlueprintSaveOutcomePayload(payload)) {
+      if (isServiceBlueprintSaveOutcome(payload)) {
         return parseSaveOutcome(payload, response.status, blueprintKey);
       }
 
@@ -218,7 +191,7 @@ export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSo
     }));
   }
 
-  async load(blueprintKey: string): Promise<AuthoredServiceBlueprint> {
+  async load(blueprintKey: string): Promise<ServiceBlueprint> {
     const response = await fetch(`${this.base}/mockapp/service-blueprints/${encodeURIComponent(blueprintKey)}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
@@ -227,10 +200,10 @@ export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSo
       throw new Error(`Failed to load service blueprint '${blueprintKey}' (${response.status} ${response.statusText}).`);
     }
     const payload = (await response.json()) as Record<string, unknown>;
-    return hydrateServiceBlueprintDefinition(payload as unknown as AuthoredServiceBlueprint);
+    return hydrateServiceBlueprintDefinition(payload as unknown as ServiceBlueprint);
   }
 
-  async save(blueprintKey: string, serviceBlueprint: AuthoredServiceBlueprint): Promise<void> {
+  async save(blueprintKey: string, serviceBlueprint: ServiceBlueprint): Promise<void> {
     const body = serializeAuthoredServiceBlueprint(serviceBlueprint);
     const response = await fetch(`${this.base}/mockapp/service-blueprints/${encodeURIComponent(blueprintKey)}`, {
       method: 'PUT',
@@ -251,7 +224,7 @@ export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSo
    * `POST /mockapp/service-blueprints/validate`) — the same check `save` enforces and the MCP
    * `validate_service_blueprint` tool reports.
    */
-  async validate(_blueprintKey: string, serviceBlueprint: AuthoredServiceBlueprint): Promise<ServiceBlueprintValidationOutcome> {
+  async validate(_blueprintKey: string, serviceBlueprint: ServiceBlueprint): Promise<ServiceBlueprintValidationOutcome> {
     const response = await fetch(`${this.base}/mockapp/service-blueprints/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

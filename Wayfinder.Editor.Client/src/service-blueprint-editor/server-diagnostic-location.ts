@@ -14,24 +14,15 @@
  * (`definitionKey`, `params.*`).
  */
 
-import type {
-  ServiceBlueprintServerDiagnostic,
-  ServiceBlueprintValidationOutcome,
-} from './service-blueprint-source.js';
+import type { ServiceBlueprintDiagnostic, ServiceBlueprintValidationOutcome } from './types.js';
 import type {
   ServiceBlueprintValidationIssue,
   ServiceBlueprintValidationLocation,
   ServiceBlueprintValidationSeverity,
 } from './service-blueprint-validation.js';
 
-/** `severity` arrives as the STJ string enum name or, from a host that serializes enums numerically, as 0/1. */
-export function normaliseServerSeverity(
-  severity: ServiceBlueprintServerDiagnostic['severity']
-): ServiceBlueprintValidationSeverity {
-  if (severity === 'Warning' || severity === 1) {
-    return 'warning';
-  }
-  return 'error';
+export function normaliseServerSeverity(severity: ServiceBlueprintDiagnostic['severity']): ServiceBlueprintValidationSeverity {
+  return severity === 'Warning' ? 'warning' : 'error';
 }
 
 const CALC_FIELD = /^calculations\.fields\.(.+)$/;
@@ -74,7 +65,7 @@ export function parseDiagnosticPath(path: string): ServiceBlueprintValidationLoc
   return { kind: 'document' };
 }
 
-function issueCodeFor(diagnostic: ServiceBlueprintServerDiagnostic): ServiceBlueprintValidationIssue['code'] {
+function issueCodeFor(diagnostic: ServiceBlueprintDiagnostic): ServiceBlueprintValidationIssue['code'] {
   // The rail only uses `code` for its own grouping/telemetry; the authoritative machine-readable
   // kind is `diagnostic.code` (e.g. "CALC_FIELD_ERROR"), carried through in the message. Map the
   // calculation family to the existing calc codes so the Calculations tab styling still applies;

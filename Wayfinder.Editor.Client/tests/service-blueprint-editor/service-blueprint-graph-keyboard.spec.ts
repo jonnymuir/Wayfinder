@@ -43,7 +43,7 @@ test.describe('ServiceBlueprint graph workspace', () => {
     await dialog.locator('[data-wayfinder-create-stage-title]').fill('Site visit');
     await keyInput.fill('site-visit');
     await dialog.locator('[data-wayfinder-create-stage-queue]').fill('reviewer');
-    await dialog.locator('[data-wayfinder-create-stage-type]').selectOption('review');
+    await dialog.locator('[data-wayfinder-create-stage-type]').selectOption('CheckAnswers');
     await dialog.getByRole('button', { name: 'Create stage' }).click();
 
     await expect(dialog).toBeHidden();

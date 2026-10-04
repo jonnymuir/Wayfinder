@@ -1,21 +1,22 @@
 import type {
   ActionCatalogEntry,
-  AuthoredAction,
-  AuthoredStage,
-  AuthoredServiceBlueprint,
+  ActionDefinition,
+  StageDefinition,
+  StageKind,
+  ServiceBlueprint,
   ComponentDescriptor,
   RouteView,
   SupportSystemCallActionParams,
   SupportSystemDescriptor,
 } from './types.js';
-import { stageActions, stageKind, serviceBlueprintGateways, serviceBlueprintStages } from './types.js';
+import { serviceBlueprintGateways, serviceBlueprintStages } from './types.js';
 import { findCatalogEntry, validateAction } from './action-editing.js';
 import { flattenRoutes, outgoingRouteViews, inboundRouteViews } from './route-model.js';
 import { collectStageInputFields } from './component-property-references.js';
 import { inScopeInputFieldKeys, tryParseExpression } from './calculation-runtime.js';
 import { computeCalculationDiagnostics, type CalculationDiagnostic } from './calculation-diagnostics.js';
 
-const TERMINAL_STAGE_KINDS = new Set<ReturnType<typeof stageKind>>(['Confirmation']);
+const TERMINAL_STAGE_KINDS = new Set<StageKind>(['Confirmation']);
 
 export type ServiceBlueprintValidationSeverity = 'error' | 'warning';
 
@@ -69,20 +70,20 @@ export interface ServiceBlueprintValidationIssue {
   location: ServiceBlueprintValidationLocation;
 }
 
-export function isTerminalStage(stage: AuthoredStage): boolean {
-  return TERMINAL_STAGE_KINDS.has(stageKind(stage));
+export function isTerminalStage(stage: StageDefinition): boolean {
+  return TERMINAL_STAGE_KINDS.has(stage.stageType ?? 'Question');
 }
 
-export function serviceBlueprintOutgoingRoutes(serviceBlueprint: AuthoredServiceBlueprint, stageKey: string): RouteView[] {
+export function serviceBlueprintOutgoingRoutes(serviceBlueprint: ServiceBlueprint, stageKey: string): RouteView[] {
   return outgoingRouteViews(serviceBlueprint, stageKey);
 }
 
-export function serviceBlueprintInboundRoutes(serviceBlueprint: AuthoredServiceBlueprint, stageKey: string): RouteView[] {
+export function serviceBlueprintInboundRoutes(serviceBlueprint: ServiceBlueprint, stageKey: string): RouteView[] {
   return inboundRouteViews(serviceBlueprint, stageKey);
 }
 
-export function serviceBlueprintReachableStageKeys(serviceBlueprint: AuthoredServiceBlueprint): Set<string> {
-  const stageKeys = new Set(serviceBlueprintStages(serviceBlueprint).map(stage => stage.stateKey));
+export function serviceBlueprintReachableStageKeys(serviceBlueprint: ServiceBlueprint): Set<string> {
+  const stageKeys = new Set(serviceBlueprintStages(serviceBlueprint).map(stage => stage.stageKey));
   const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map(gateway => gateway.key));
   if (stageKeys.size === 0) {
     return new Set<string>();
@@ -90,7 +91,7 @@ export function serviceBlueprintReachableStageKeys(serviceBlueprint: AuthoredSer
 
   const startStageKey = stageKeys.has(serviceBlueprint.initialStage)
     ? serviceBlueprint.initialStage
-    : serviceBlueprint.stages[0]?.stateKey;
+    : serviceBlueprint.stages[0]?.stageKey;
 
   if (!startStageKey) {
     return new Set<string>();
@@ -127,31 +128,31 @@ export function serviceBlueprintReachableStageKeys(serviceBlueprint: AuthoredSer
   return reachable;
 }
 
-export function serviceBlueprintOrphanedStages(serviceBlueprint: AuthoredServiceBlueprint): AuthoredStage[] {
+export function serviceBlueprintOrphanedStages(serviceBlueprint: ServiceBlueprint): StageDefinition[] {
   return serviceBlueprint.stages.filter(stage =>
-    stage.stateKey !== serviceBlueprint.initialStage
-    && serviceBlueprintInboundRoutes(serviceBlueprint, stage.stateKey).length === 0
-    && serviceBlueprintOutgoingRoutes(serviceBlueprint, stage.stateKey).length === 0
+    stage.stageKey !== serviceBlueprint.initialStage
+    && serviceBlueprintInboundRoutes(serviceBlueprint, stage.stageKey).length === 0
+    && serviceBlueprintOutgoingRoutes(serviceBlueprint, stage.stageKey).length === 0
   );
 }
 
-export function serviceBlueprintUnreachableStages(serviceBlueprint: AuthoredServiceBlueprint): AuthoredStage[] {
+export function serviceBlueprintUnreachableStages(serviceBlueprint: ServiceBlueprint): StageDefinition[] {
   const reachable = serviceBlueprintReachableStageKeys(serviceBlueprint);
-  const orphanedKeys = new Set(serviceBlueprintOrphanedStages(serviceBlueprint).map(stage => stage.stateKey));
-  return serviceBlueprint.stages.filter(stage => !reachable.has(stage.stateKey) && !orphanedKeys.has(stage.stateKey));
+  const orphanedKeys = new Set(serviceBlueprintOrphanedStages(serviceBlueprint).map(stage => stage.stageKey));
+  return serviceBlueprint.stages.filter(stage => !reachable.has(stage.stageKey) && !orphanedKeys.has(stage.stageKey));
 }
 
-export function serviceBlueprintDeadEndStages(serviceBlueprint: AuthoredServiceBlueprint): AuthoredStage[] {
-  const orphanedKeys = new Set(serviceBlueprintOrphanedStages(serviceBlueprint).map(stage => stage.stateKey));
+export function serviceBlueprintDeadEndStages(serviceBlueprint: ServiceBlueprint): StageDefinition[] {
+  const orphanedKeys = new Set(serviceBlueprintOrphanedStages(serviceBlueprint).map(stage => stage.stageKey));
   return serviceBlueprint.stages.filter(stage =>
-    !orphanedKeys.has(stage.stateKey)
+    !orphanedKeys.has(stage.stageKey)
     && !isTerminalStage(stage)
-    && serviceBlueprintOutgoingRoutes(serviceBlueprint, stage.stateKey).length === 0
+    && serviceBlueprintOutgoingRoutes(serviceBlueprint, stage.stageKey).length === 0
   );
 }
 
-export function serviceBlueprintRoutesWithMissingStages(serviceBlueprint: AuthoredServiceBlueprint): RouteView[] {
-  const stageKeys = new Set(serviceBlueprint.stages.map(stage => stage.stateKey));
+export function serviceBlueprintRoutesWithMissingStages(serviceBlueprint: ServiceBlueprint): RouteView[] {
+  const stageKeys = new Set(serviceBlueprint.stages.map(stage => stage.stageKey));
   const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map(gateway => gateway.key));
   return flattenRoutes(serviceBlueprint).filter(route =>
     (!stageKeys.has(route.fromStage) && !gatewayKeys.has(route.fromStage))
@@ -159,17 +160,17 @@ export function serviceBlueprintRoutesWithMissingStages(serviceBlueprint: Author
   );
 }
 
-function stageLabel(serviceBlueprint: AuthoredServiceBlueprint, stageKey: string) {
-  return serviceBlueprint.stages.find(stage => stage.stateKey === stageKey)?.displayName
+function stageLabel(serviceBlueprint: ServiceBlueprint, stageKey: string) {
+  return serviceBlueprint.stages.find(stage => stage.stageKey === stageKey)?.displayName
     ?? serviceBlueprintGateways(serviceBlueprint).find(gateway => gateway.key === stageKey)?.displayName
     ?? stageKey;
 }
 
-function actionLabel(entry: ActionCatalogEntry | null, action: AuthoredAction) {
+function actionLabel(entry: ActionCatalogEntry | null, action: ActionDefinition) {
   return entry?.label ?? action.summary?.trim() ?? action.type;
 }
 
-function routeLabel(serviceBlueprint: AuthoredServiceBlueprint, view: RouteView) {
+function routeLabel(serviceBlueprint: ServiceBlueprint, view: RouteView) {
   return `${stageLabel(serviceBlueprint, view.fromStage)} → ${stageLabel(serviceBlueprint, view.toStage)}`;
 }
 
@@ -178,9 +179,9 @@ function normaliseValidationMessage(message: string) {
 }
 
 function actionValidationIssues(
-  serviceBlueprint: AuthoredServiceBlueprint,
+  serviceBlueprint: ServiceBlueprint,
   actionCatalog: ActionCatalogEntry[],
-  action: AuthoredAction,
+  action: ActionDefinition,
   location: Extract<ServiceBlueprintValidationLocation, { kind: 'action' }>,
   routeView?: RouteView
 ): ServiceBlueprintValidationIssue[] {
@@ -241,20 +242,20 @@ function actionValidationIssues(
 function supportSystemActionValidationIssues(
   supportSystemCatalog: SupportSystemDescriptor[],
   blueprintFieldKeys: Set<string>,
-  action: AuthoredAction,
-  stage: AuthoredStage,
+  action: ActionDefinition,
+  stage: StageDefinition,
   actionIndex: number
 ): ServiceBlueprintValidationIssue[] {
   const params = (action.params ?? {}) as SupportSystemCallActionParams;
-  const idPrefix = `stage-${stage.stateKey}-action-${actionIndex}`;
-  const stageLabelText = stage.displayName || stage.stateKey;
+  const idPrefix = `stage-${stage.stageKey}-action-${actionIndex}`;
+  const stageLabelText = stage.displayName || stage.stageKey;
 
   const issue = (suffix: string, message: string): ServiceBlueprintValidationIssue => ({
     id: `${idPrefix}-${suffix}`,
     code: 'action-support-system' as const,
     severity: 'error' as const,
     blocking: true,
-    location: { kind: 'action', target: 'stage', stageKey: stage.stateKey, actionIndex } as const,
+    location: { kind: 'action', target: 'stage', stageKey: stage.stageKey, actionIndex } as const,
     message: `Stage “${stageLabelText}”: ${message}`,
   });
 
@@ -317,13 +318,13 @@ const BULK_DATASET_COLUMN_ROLE_ROW_KEY = 'RowKey';
  * above, since the materialize cross-check genuinely needs every stage's actions up front.
  */
 function bulkDatasetActionValidationIssues(
-  serviceBlueprint: AuthoredServiceBlueprint,
+  serviceBlueprint: ServiceBlueprint,
   supportSystemCatalog: SupportSystemDescriptor[],
   blueprintFieldKeys: Set<string>
 ): ServiceBlueprintValidationIssue[] {
   const knownFieldKeys = new Set(blueprintFieldKeys);
   for (const stage of serviceBlueprintStages(serviceBlueprint)) {
-    for (const action of stageActions(stage)) {
+    for (const action of (stage.actions ?? [])) {
       if (action.type !== 'support-system-call') {
         continue;
       }
@@ -337,17 +338,17 @@ function bulkDatasetActionValidationIssues(
   }
 
   const issue = (
-    stage: AuthoredStage,
+    stage: StageDefinition,
     actionIndex: number,
     suffix: string,
     message: string
   ): ServiceBlueprintValidationIssue => ({
-    id: `stage-${stage.stateKey}-action-${actionIndex}-${suffix}`,
+    id: `stage-${stage.stageKey}-action-${actionIndex}-${suffix}`,
     code: 'action-bulk-dataset' as const,
     severity: 'error' as const,
     blocking: true,
-    location: { kind: 'action', target: 'stage', stageKey: stage.stateKey, actionIndex } as const,
-    message: `Stage “${stage.displayName || stage.stateKey}”: ${message}`,
+    location: { kind: 'action', target: 'stage', stageKey: stage.stageKey, actionIndex } as const,
+    message: `Stage “${stage.displayName || stage.stageKey}”: ${message}`,
   });
 
   const issues: ServiceBlueprintValidationIssue[] = [];
@@ -356,7 +357,7 @@ function bulkDatasetActionValidationIssues(
   // Pass 1: bulk-dataset-ingest actions — collect every declared datasetIdField first, so pass 2
   // validates a materialize action against the complete set regardless of iteration order.
   for (const stage of serviceBlueprintStages(serviceBlueprint)) {
-    stageActions(stage).forEach((action, actionIndex) => {
+    (stage.actions ?? []).forEach((action, actionIndex) => {
       if (action.type !== 'bulk-dataset-ingest') {
         return;
       }
@@ -391,7 +392,7 @@ function bulkDatasetActionValidationIssues(
 
   // Pass 2: bulk-dataset-materialize actions, validated against the complete set pass 1 collected.
   for (const stage of serviceBlueprintStages(serviceBlueprint)) {
-    stageActions(stage).forEach((action, actionIndex) => {
+    (stage.actions ?? []).forEach((action, actionIndex) => {
       if (action.type !== 'bulk-dataset-materialize') {
         return;
       }
@@ -422,7 +423,7 @@ function bulkDatasetActionValidationIssues(
  * so none of the three re-derives its own subset of the same rules.
  */
 function calculationValidationIssues(
-  serviceBlueprint: AuthoredServiceBlueprint,
+  serviceBlueprint: ServiceBlueprint,
   componentCatalog: ComponentDescriptor[]
 ): ServiceBlueprintValidationIssue[] {
   const calculations = serviceBlueprint.calculations;
@@ -565,13 +566,13 @@ function calculationDiagnosticToIssue(diagnostic: CalculationDiagnostic, index: 
 
 /**
  * `when`/`rule` are expressions in the same calculation language as `expr`/`showWhen` (see
- * AuthoredStageValidation's doc comment in types.ts) and CheckStageValidationExpression
+ * ServiceBlueprintStageValidationRule's doc comment in types.ts) and CheckStageValidationExpression
  * (ServiceBlueprintAuthoringService.cs) rejects a malformed one at Save time exactly like
  * CalculationEvaluator does for a calculation field — so this mirrors calculationValidationIssues
  * above rather than leaving these fields checked only by the CodeMirror lint's red squiggle, which
  * warns but never blocks Save.
  */
-function stageValidationRuleIssues(serviceBlueprint: AuthoredServiceBlueprint): ServiceBlueprintValidationIssue[] {
+function stageValidationRuleIssues(serviceBlueprint: ServiceBlueprint): ServiceBlueprintValidationIssue[] {
   return serviceBlueprint.stages.flatMap(stage =>
     (stage.validations ?? []).flatMap((validation, index) => {
       const fields: Array<{ key: 'when' | 'rule'; expression: string | undefined }> = [
@@ -590,11 +591,11 @@ function stageValidationRuleIssues(serviceBlueprint: AuthoredServiceBlueprint): 
         }
 
         return [{
-          id: `stage-validation-parse-error-${stage.stateKey}-${index}-${key}`,
+          id: `stage-validation-parse-error-${stage.stageKey}-${index}-${key}`,
           code: 'stage-validation-parse-error' as const,
           severity: 'error' as const,
           blocking: true,
-          location: { kind: 'stage', stageKey: stage.stateKey } as const,
+          location: { kind: 'stage', stageKey: stage.stageKey } as const,
           message: `Stage “${stage.displayName}” validation rule “${validation.code}” has an invalid ${key} expression: ${result.message}`,
         }];
       });
@@ -613,12 +614,12 @@ function stageValidationRuleIssues(serviceBlueprint: AuthoredServiceBlueprint): 
  * `wayfinder-service-blueprint-editor.ts`'s `_revalidate`.
  */
 export function validateServiceBlueprint(
-  serviceBlueprint: AuthoredServiceBlueprint,
+  serviceBlueprint: ServiceBlueprint,
   actionCatalog: ActionCatalogEntry[] = [],
   componentCatalog: ComponentDescriptor[] = [],
   supportSystemCatalog: SupportSystemDescriptor[] = []
 ): ServiceBlueprintValidationIssue[] {
-  const initialStageExists = serviceBlueprint.stages.some(stage => stage.stateKey === serviceBlueprint.initialStage);
+  const initialStageExists = serviceBlueprint.stages.some(stage => stage.stageKey === serviceBlueprint.initialStage);
   const initialStageIssues = initialStageExists || serviceBlueprint.stages.length === 0
     ? []
     : [{
@@ -626,36 +627,36 @@ export function validateServiceBlueprint(
         code: 'initial-stage-missing' as const,
         severity: 'error' as const,
         blocking: true,
-        location: { kind: 'stage', stageKey: serviceBlueprint.initialStage || serviceBlueprint.stages[0]?.stateKey || '' } as const,
+        location: { kind: 'stage', stageKey: serviceBlueprint.initialStage || serviceBlueprint.stages[0]?.stageKey || '' } as const,
         message: serviceBlueprint.initialStage
           ? `The service blueprint start stage “${serviceBlueprint.initialStage}” is missing. Pick an existing initial stage before you save or simulate this service blueprint.`
           : 'The service blueprint does not have an initial stage yet. Pick one before you save or simulate this service blueprint.',
       }];
 
   const orphanedIssues = serviceBlueprintOrphanedStages(serviceBlueprint).map(stage => ({
-    id: `stage-orphaned-${stage.stateKey}`,
+    id: `stage-orphaned-${stage.stageKey}`,
     code: 'stage-orphaned' as const,
     severity: 'error' as const,
     blocking: true,
-    location: { kind: 'stage', stageKey: stage.stateKey } as const,
+    location: { kind: 'stage', stageKey: stage.stageKey } as const,
     message: `Stage “${stage.displayName}” is orphaned. Connect it through a gateway so authors can reach it.`,
   }));
 
   const unreachableIssues = serviceBlueprintUnreachableStages(serviceBlueprint).map(stage => ({
-    id: `stage-unreachable-${stage.stateKey}`,
+    id: `stage-unreachable-${stage.stageKey}`,
     code: 'stage-unreachable' as const,
     severity: 'error' as const,
     blocking: true,
-    location: { kind: 'stage', stageKey: stage.stateKey } as const,
+    location: { kind: 'stage', stageKey: stage.stageKey } as const,
     message: `Stage “${stage.displayName}” is unreachable from the service blueprint start. Add or retarget a route through a gateway so authors can get there.`,
   }));
 
   const deadEndIssues = serviceBlueprintDeadEndStages(serviceBlueprint).map(stage => ({
-    id: `stage-dead-end-${stage.stateKey}`,
+    id: `stage-dead-end-${stage.stageKey}`,
     code: 'stage-dead-end' as const,
     severity: 'warning' as const,
     blocking: false,
-    location: { kind: 'stage', stageKey: stage.stateKey } as const,
+    location: { kind: 'stage', stageKey: stage.stageKey } as const,
     message: `Stage “${stage.displayName}” has no outgoing route through a gateway yet.`,
   }));
 
@@ -678,7 +679,7 @@ export function validateServiceBlueprint(
   });
 
   const missingStageRouteIssues = serviceBlueprintRoutesWithMissingStages(serviceBlueprint).map(view => {
-    const stageKeys = new Set(serviceBlueprint.stages.map(stage => stage.stateKey));
+    const stageKeys = new Set(serviceBlueprint.stages.map(stage => stage.stageKey));
     const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map(gateway => gateway.key));
     const missingSource = !stageKeys.has(view.fromStage) && !gatewayKeys.has(view.fromStage);
     const missingTarget = !stageKeys.has(view.toStage) && !gatewayKeys.has(view.toStage);
@@ -698,11 +699,11 @@ export function validateServiceBlueprint(
   });
 
   const stageActionIssues = serviceBlueprint.stages.flatMap(stage =>
-    stageActions(stage).flatMap((action, actionIndex) =>
+    (stage.actions ?? []).flatMap((action, actionIndex) =>
       actionValidationIssues(serviceBlueprint, actionCatalog, action, {
         kind: 'action',
         target: 'stage',
-        stageKey: stage.stateKey,
+        stageKey: stage.stageKey,
         actionIndex,
       })
     )
@@ -728,7 +729,7 @@ export function validateServiceBlueprint(
   );
 
   const supportSystemActionIssues = serviceBlueprint.stages.flatMap(stage =>
-    stageActions(stage).flatMap((action, actionIndex) =>
+    (stage.actions ?? []).flatMap((action, actionIndex) =>
       action.type === 'support-system-call'
         ? supportSystemActionValidationIssues(supportSystemCatalog, blueprintFieldKeys, action, stage, actionIndex)
         : []

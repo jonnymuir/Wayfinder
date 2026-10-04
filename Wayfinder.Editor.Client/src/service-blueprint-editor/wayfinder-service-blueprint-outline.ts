@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import type { AuthoredGateway, RouteView, AuthoredServiceBlueprint } from './types.js';
+import type { ServiceBlueprintGatewayDefinition, RouteView, ServiceBlueprint } from './types.js';
 import { serviceBlueprintGateways } from './types.js';
 import { deriveGatewayBindings } from './gateway-representation.js';
 import { flattenRoutes } from './route-model.js';
@@ -12,7 +12,7 @@ import { stageQueueKey, stageQueueLabel, type QueueDefinition } from './stage-as
 @customElement('wayfinder-service-blueprint-outline')
 export class WayfinderServiceBlueprintOutline extends LitElement {
   @property({ type: Object })
-  serviceBlueprint: AuthoredServiceBlueprint | null = null;
+  serviceBlueprint: ServiceBlueprint | null = null;
 
   @property({ type: Boolean, attribute: 'show-header' })
   showHeader = true;
@@ -74,13 +74,13 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
       .filter(({ transition }) => transition.fromStage === stageKey);
   }
 
-  private _splitGatewaysForStage(stageKey: string): AuthoredGateway[] {
+  private _splitGatewaysForStage(stageKey: string): ServiceBlueprintGatewayDefinition[] {
     if (!this.serviceBlueprint) {
       return [];
     }
 
     return deriveGatewayBindings(this.serviceBlueprint)
-      .filter(binding => binding.gateway.kind === 'Split' && binding.anchorStageKey === stageKey)
+      .filter(binding => binding.gateway.gatewayType === 'Split' && binding.anchorStageKey === stageKey)
       .map(binding => binding.gateway);
   }
 
@@ -90,13 +90,13 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
    * per queue instead, or they'd be silently absent from the outline
    * entirely (canvas users could tell a Join existed; outline users couldn't).
    */
-  private _joinGatewaysForQueue(queueKey: string): AuthoredGateway[] {
+  private _joinGatewaysForQueue(queueKey: string): ServiceBlueprintGatewayDefinition[] {
     if (!this.serviceBlueprint) {
       return [];
     }
 
     return deriveGatewayBindings(this.serviceBlueprint)
-      .filter(binding => binding.gateway.kind === 'Join' && binding.queueKey === queueKey)
+      .filter(binding => binding.gateway.gatewayType === 'Join' && binding.queueKey === queueKey)
       .map(binding => binding.gateway);
   }
 
@@ -105,7 +105,7 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
       return [];
     }
 
-    const groups = new Map<string, { key: string; label: string; stages: AuthoredServiceBlueprint['stages'] }>();
+    const groups = new Map<string, { key: string; label: string; stages: ServiceBlueprint['stages'] }>();
     for (const stage of this.serviceBlueprint.stages) {
       const queueKey = stageQueueKey(stage) || stage.actor || 'public';
       const existing = groups.get(queueKey);
@@ -167,19 +167,19 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                 <p class="outline-lane-meta">Read top to bottom</p>
               </div>
               <ol class="outline-stage-list">
-                ${group.stages.map((stage: AuthoredServiceBlueprint['stages'][number]) => {
-            const isSelected = this.selectedStageKey === stage.stateKey;
-            const transitions = this._stageOutboundTransitions(stage.stateKey);
-            const splitGateways = this._splitGatewaysForStage(stage.stateKey);
+                ${group.stages.map((stage: ServiceBlueprint['stages'][number]) => {
+            const isSelected = this.selectedStageKey === stage.stageKey;
+            const transitions = this._stageOutboundTransitions(stage.stageKey);
+            const splitGateways = this._splitGatewaysForStage(stage.stageKey);
 
             return html`
               <li class="outline-stage-item">
                 <button
                   type="button"
                   class="outline-stage-button ${isSelected ? 'outline-stage-button-selected' : ''}"
-                  @click=${() => this._handleStageClick(stage.stateKey)}
+                  @click=${() => this._handleStageClick(stage.stageKey)}
                   aria-current=${isSelected ? 'location' : nothing}
-                  data-wayfinder-outline-stage="${stage.stateKey}"
+                  data-wayfinder-outline-stage="${stage.stageKey}"
                 >
                   <span class="outline-stage-title">${stage.displayName}</span>
                   <span class="outline-stage-meta">${stage.actor}</span>
@@ -202,7 +202,7 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                                 <span class="outline-gateway-shape" aria-hidden="true"></span>
                                 <span class="outline-gateway-copy">
                                   <span class="outline-gateway-title">${gateway.displayName}</span>
-                                  <span class="outline-gateway-meta">${gateway.kind} gateway</span>
+                                  <span class="outline-gateway-meta">${gateway.gatewayType} gateway</span>
                                 </span>
                               </button>
                             </li>
@@ -267,7 +267,7 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                                <span class="outline-gateway-shape" aria-hidden="true"></span>
                                <span class="outline-gateway-copy">
                                  <span class="outline-gateway-title">${gateway.displayName}</span>
-                                 <span class="outline-gateway-meta">${gateway.kind} gateway</span>
+                                 <span class="outline-gateway-meta">${gateway.gatewayType} gateway</span>
                                </span>
                              </button>
                            </li>

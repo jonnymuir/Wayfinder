@@ -3,7 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type {
   ActionCatalogEntry,
   ActionFormFieldConfig,
-  AuthoredAction,
+  ActionDefinition,
   AuthoredParameterDefinition,
   ComponentPropertyDescriptor,
   SupportSystemCallActionParams,
@@ -100,7 +100,7 @@ const BULK_DATASET_MATERIALIZE_SCHEMA: ComponentPropertyDescriptor[] = [
 ];
 
 type ActionsUpdatedDetail = {
-  actions: AuthoredAction[];
+  actions: ActionDefinition[];
 };
 
 type ActionSelectedDetail = {
@@ -125,7 +125,7 @@ type DeleteActionDialogState = {
 @customElement('wayfinder-stage-action-editor')
 export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
   @property({ attribute: false })
-  actions: AuthoredAction[] = [];
+  actions: ActionDefinition[] = [];
 
   @property({ attribute: false })
   actionCatalog: ActionCatalogEntry[] = [];
@@ -212,7 +212,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
       });
   }
 
-  private _emitActionsUpdated(actions: AuthoredAction[]) {
+  private _emitActionsUpdated(actions: ActionDefinition[]) {
     this.dispatchEvent(
       new CustomEvent<ActionsUpdatedDetail>('actions-updated', {
         detail: { actions },
@@ -257,15 +257,15 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     (firstField ?? row).focus();
   }
 
-  private _actionEntry(action: AuthoredAction) {
+  private _actionEntry(action: ActionDefinition) {
     return findCatalogEntry(this.actionCatalog, action.type);
   }
 
-  private _actionLabel(action: AuthoredAction) {
+  private _actionLabel(action: ActionDefinition) {
     return this._actionEntry(action)?.label ?? action.summary ?? action.type;
   }
 
-  private _updateAction(index: number, nextAction: AuthoredAction) {
+  private _updateAction(index: number, nextAction: ActionDefinition) {
     const actions = [...this.actions];
     if (!actions[index]) {
       return;
@@ -349,7 +349,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
 
     this._updateAction(index, {
       ...action,
-      timing: (event.currentTarget as HTMLSelectElement).value as AuthoredAction['timing'],
+      timing: (event.currentTarget as HTMLSelectElement).value as ActionDefinition['timing'],
     });
   }
 
@@ -815,7 +815,7 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement {
     `;
   }
 
-  private _supportSystemCallParams(action: AuthoredAction): SupportSystemCallActionParams {
+  private _supportSystemCallParams(action: ActionDefinition): SupportSystemCallActionParams {
     const params = (action.params ?? {}) as SupportSystemCallActionParams;
     return {
       supportSystemKey: params.supportSystemKey ?? '',

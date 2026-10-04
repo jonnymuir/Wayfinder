@@ -5,21 +5,15 @@
  */
 
 import type { ActionCatalogEntry } from './types.js';
-import { STUB_ACTION_CATALOG } from './types.js';
+import { BUILT_IN_ACTION_CATALOG } from './action-catalog-entries.js';
 
 export interface ServiceBlueprintActionCatalog {
   entries(): Promise<ActionCatalogEntry[]>;
 }
 
-/**
- * Returns the generic action types Wayfinder ships out-of-the-box.
- *
- * The catalog is hand-mirrored from the C# `BuiltInActionCatalogProvider` (see
- * `STUB_ACTION_CATALOG` in `types.ts`). Drift between the C# and TS catalogs
- * shows up in MockBusinessApp's reference smoke tests.
- */
+/** The generic action types Wayfinder ships out of the box (see `action-catalog-entries.ts`). */
 export class BuiltInServiceBlueprintActionCatalog implements ServiceBlueprintActionCatalog {
   async entries(): Promise<ActionCatalogEntry[]> {
-    return STUB_ACTION_CATALOG.map(entry => JSON.parse(JSON.stringify(entry)) as ActionCatalogEntry);
+    return BUILT_IN_ACTION_CATALOG.map(entry => JSON.parse(JSON.stringify(entry)) as ActionCatalogEntry);
   }
 }

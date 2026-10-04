@@ -204,7 +204,7 @@ public class ServiceBlueprintDataDisplayBindingValidationTests
                         new ActionDefinition
                         {
                             Type = Wayfinder.Models.ServiceDesign.BulkData.BulkDataActionTypes.BulkDatasetIngest,
-                            Timing = "onEnter",
+                            Timing = ActionTiming.OnEnter,
                             Parameters = new System.Text.Json.Nodes.JsonObject
                             {
                                 ["sourceFileField"] = "contributionsResponseFile",

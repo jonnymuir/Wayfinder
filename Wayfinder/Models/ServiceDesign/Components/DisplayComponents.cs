@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
@@ -29,6 +31,7 @@ public sealed record StatItemDefinition
     public string? Qualifier { get; init; }
 
     /// <summary>Whether to render this tile with visual emphasis.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Emphasis { get; init; }
 }
 

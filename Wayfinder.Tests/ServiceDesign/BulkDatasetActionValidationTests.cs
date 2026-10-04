@@ -27,7 +27,7 @@ public class BulkDatasetActionValidationTests
     private static ActionDefinition MakeIngestAction(JsonObject? parameters = null) => new()
     {
         Type = BulkDataActionTypes.BulkDatasetIngest,
-        Timing = "onEnter",
+        Timing = ActionTiming.OnEnter,
         Parameters = parameters ?? new JsonObject
         {
             ["sourceFileField"] = "contributionsFile",
@@ -40,7 +40,7 @@ public class BulkDatasetActionValidationTests
     private static ActionDefinition MakeMaterializeAction(JsonObject? parameters = null) => new()
     {
         Type = BulkDataActionTypes.BulkDatasetMaterialize,
-        Timing = "onEnter",
+        Timing = ActionTiming.OnEnter,
         Parameters = parameters ?? new JsonObject
         {
             ["datasetIdField"] = "contributionsDatasetId",

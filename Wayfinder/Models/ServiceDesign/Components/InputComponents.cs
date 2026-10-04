@@ -52,6 +52,7 @@ public abstract record InputComponent : Component
     public string? Hint { get; init; }
 
     /// <summary>Whether this field must be completed before submission.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Required { get; init; }
 
     /// <summary>The field key this field depends on for visibility.</summary>

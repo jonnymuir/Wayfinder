@@ -1,4 +1,5 @@
-import { hydrateServiceBlueprintDefinition, type AuthoredServiceBlueprint } from '../types.js';
+import { type ServiceBlueprint } from '../types.js';
+import { hydrateServiceBlueprintDefinition } from '../blueprint-hydration.js';
 import { PLANNING_SERVICE_BLUEPRINT, cloneAuthoredServiceBlueprint } from '../fixtures/index.js';
 import {
   GATEWAY_PILL_HEIGHT,
@@ -41,18 +42,18 @@ const REVIEW_LOOP_SERVICE_BLUEPRINT: RawServiceBlueprint = {
   ],
   stages: [
     {
-      stateKey: 'draft',
+      stageKey: 'draft',
       displayName: 'Draft',
       queueKey: 'web-user',
       routes: [{ id: 'draft--submit--submit-gw', target: 'submit-gw', trigger: 'submit' }],
     },
     {
-      stateKey: 'review',
+      stageKey: 'review',
       displayName: 'Review',
       queueKey: 'admin',
       routes: [{ id: 'review--decide--decision-gw', target: 'decision-gw', trigger: 'decide' }],
     },
-    { stateKey: 'done', displayName: 'Done', queueKey: 'web-user', routes: [] },
+    { stageKey: 'done', displayName: 'Done', queueKey: 'web-user', routes: [] },
   ],
   gateways: [
     {
@@ -93,13 +94,13 @@ const CROSS_LANE_MERGE_SERVICE_BLUEPRINT: RawServiceBlueprint = {
   ],
   stages: [
     {
-      stateKey: 'start',
+      stageKey: 'start',
       displayName: 'Start',
       queueKey: 'citizen',
       routes: [{ id: 'start--submit--handoff', target: 'handoff', trigger: 'submit' }],
     },
     {
-      stateKey: 'under-review',
+      stageKey: 'under-review',
       displayName: 'Under review',
       queueKey: 'caseworker',
       routes: [
@@ -107,8 +108,8 @@ const CROSS_LANE_MERGE_SERVICE_BLUEPRINT: RawServiceBlueprint = {
         { id: 'under-review--reject--post-review', target: 'post-review', trigger: 'reject' },
       ],
     },
-    { stateKey: 'approved', displayName: 'Approved', queueKey: 'citizen', routes: [] },
-    { stateKey: 'rejected', displayName: 'Rejected', queueKey: 'citizen', routes: [] },
+    { stageKey: 'approved', displayName: 'Approved', queueKey: 'citizen', routes: [] },
+    { stageKey: 'rejected', displayName: 'Rejected', queueKey: 'citizen', routes: [] },
   ],
   gateways: [
     {
@@ -142,11 +143,11 @@ function check(name: string, condition: boolean, detail?: string) {
   }
 }
 
-function hydrate(raw: RawServiceBlueprint): AuthoredServiceBlueprint {
-  return hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(raw)) as AuthoredServiceBlueprint);
+function hydrate(raw: RawServiceBlueprint): ServiceBlueprint {
+  return hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(raw)) as ServiceBlueprint);
 }
 
-function assertCommonInvariants(name: string, serviceBlueprint: AuthoredServiceBlueprint, options: { strictRanks: boolean }) {
+function assertCommonInvariants(name: string, serviceBlueprint: ServiceBlueprint, options: { strictRanks: boolean }) {
   // Queue labels resolve from the service blueprint's own queues; the standalone
   // availableQueues list is exercised by the host component, not here.
   const { topology, layout } = computeServiceBlueprintGraphLayout(serviceBlueprint, []);
@@ -404,7 +405,7 @@ export function run(fixtures: LayoutTestFixtures): number {
 
     const pruned = pruneLayout({
       ...moved,
-      stages: moved.stages.filter(stage => stage.stateKey !== serviceBlueprint.initialStage),
+      stages: moved.stages.filter(stage => stage.stageKey !== serviceBlueprint.initialStage),
     });
     check('layout-block: pruneLayout drops entries for deleted nodes',
       pruned.layout === undefined);

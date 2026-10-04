@@ -1,6 +1,7 @@
 import { EDITOR_TOP_LEVEL_FIELDS, matchesTopLevelFieldKind } from './service-blueprint-canonical-json.js';
-import type { AuthoredComponent, AuthoredServiceBlueprint, ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
-import { hydrateServiceBlueprintDefinition } from './types.js';
+import type { Component, ServiceBlueprint, ComponentDescriptor, ComponentPropertyDescriptor } from './types.js';
+import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
+import { gatewayKindValues, stageKindValues } from './types.js';
 import { collectStageInputFields } from './component-property-references.js';
 import { inScopeInputFieldKeys } from './calculation-runtime.js';
 import { computeCalculationDiagnostics, type CalculationDiagnostic } from './calculation-diagnostics.js';
@@ -11,8 +12,8 @@ export type DefinitionLint = {
   pathHint?: string;
 };
 
-const ALLOWED_STAGE_KINDS = new Set(['Question', 'CheckAnswers', 'Confirmation', 'TaskList']);
-const ALLOWED_GATEWAY_KINDS = new Set(['Split', 'Join']);
+const ALLOWED_STAGE_KINDS: ReadonlySet<string> = new Set(stageKindValues);
+const ALLOWED_GATEWAY_KINDS: ReadonlySet<string> = new Set(gatewayKindValues);
 
 /**
  * Blueprint-wide reference data for the three dangling-reference checks below — mirrors what
@@ -264,7 +265,7 @@ function lintCalculations(
           return [];
         }
         const components = (rawState as Record<string, unknown>).components;
-        return collectStageInputFields(components as AuthoredComponent[] | undefined, componentCatalog);
+        return collectStageInputFields(components as Component[] | undefined, componentCatalog);
       })
     : [];
   const scopedInputFieldKeys = inScopeInputFieldKeys(allInputFields);
@@ -539,7 +540,7 @@ export function lintAuthoredServiceBlueprintDocument(
   if (!Array.isArray(root.stages)) {
     issues.push({ message: '"stages" must be an array.', pathHint: 'stages' });
   } else {
-    const seenStateKeys = new Set<string>();
+    const seenStageKeys = new Set<string>();
     root.stages.forEach((rawState, index) => {
       if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
         issues.push({ message: `State at index ${index} must be an object.` });
@@ -547,41 +548,41 @@ export function lintAuthoredServiceBlueprintDocument(
       }
 
       const state = rawState as Record<string, unknown>;
-      const stateKey = typeof state.stageKey === 'string'
+      const stageKey = typeof state.stageKey === 'string'
         ? state.stageKey
-        : typeof state.stateKey === 'string'
-          ? state.stateKey
+        : typeof state.stageKey === 'string'
+          ? state.stageKey
           : '';
-      if (!stateKey.trim()) {
+      if (!stageKey.trim()) {
         issues.push({ message: `State at index ${index} is missing "stageKey".` });
-      } else if (seenStateKeys.has(stateKey)) {
+      } else if (seenStageKeys.has(stageKey)) {
         issues.push({
-          message: `Duplicate stage key "${stateKey}".`,
-          line: findLine(source, `"${stateKey}"`),
+          message: `Duplicate stage key "${stageKey}".`,
+          line: findLine(source, `"${stageKey}"`),
         });
       } else {
-        seenStateKeys.add(stateKey);
+        seenStageKeys.add(stageKey);
       }
 
       const kind = typeof state.stageType === 'string' ? state.stageType : '';
       if (kind && !ALLOWED_STAGE_KINDS.has(kind)) {
         issues.push({
-          message: `State "${stateKey || index}" has unsupported stageType "${kind}". Allowed kinds: ${[...ALLOWED_STAGE_KINDS].join(', ')}.`,
+          message: `State "${stageKey || index}" has unsupported stageType "${kind}". Allowed kinds: ${[...ALLOWED_STAGE_KINDS].join(', ')}.`,
           line: findLine(source, `"${kind}"`),
         });
       }
 
       if (typeof state.queueKey !== 'string' || !state.queueKey.trim()) {
-        issues.push({ message: `State "${stateKey || index}" is missing "queueKey".` });
+        issues.push({ message: `State "${stageKey || index}" is missing "queueKey".` });
       }
 
       if (state.routes !== undefined && !Array.isArray(state.routes)) {
-        issues.push({ message: `State "${stateKey || index}" has a non-array "routes" value.` });
+        issues.push({ message: `State "${stageKey || index}" has a non-array "routes" value.` });
       }
 
       if (componentCatalog.length > 0 && state.components !== undefined) {
         const siblingFieldKeys = new Set(
-          collectStageInputFields(state.components as AuthoredComponent[], componentCatalog).map(field => field.fieldKey)
+          collectStageInputFields(state.components as Component[], componentCatalog).map(field => field.fieldKey)
         );
         lintComponentTree(state.components, componentCatalog, source, `stages[${index}].components`, issues, {
           siblingFieldKeys,
@@ -637,7 +638,7 @@ export function lintAuthoredServiceBlueprintDocument(
   return issues;
 }
 
-export function coerceParsedAuthoredServiceBlueprint(parsed: unknown): AuthoredServiceBlueprint {
+export function coerceParsedAuthoredServiceBlueprint(parsed: unknown): ServiceBlueprint {
   const root = parsed as Record<string, unknown>;
   // Copied from the field table, not field by field, so a newly declared top-level property cannot
   // be forgotten here (allowManualRestart was, and was dropped on every Definition-tab apply).
@@ -654,5 +655,5 @@ export function coerceParsedAuthoredServiceBlueprint(parsed: unknown): AuthoredS
     stages: [],
     gateways: [],
     ...owned,
-  } as unknown as AuthoredServiceBlueprint);
+  } as unknown as ServiceBlueprint);
 }

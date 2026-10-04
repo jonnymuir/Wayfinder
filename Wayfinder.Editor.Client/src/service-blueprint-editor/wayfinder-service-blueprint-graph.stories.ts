@@ -2,32 +2,33 @@ import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { expect, waitFor } from 'storybook/test';
 import './wayfinder-service-blueprint-graph.js';
 import type { WayfinderServiceBlueprintGraphElement } from './wayfinder-service-blueprint-graph.js';
-import { STUB_SERVICE_BLUEPRINT } from './types.js';
-import type { AuthoredServiceBlueprint } from './types.js';
+import { STUB_SERVICE_BLUEPRINT } from './fixtures/planning-permission-stub.js';
+import type { ServiceBlueprint } from './types.js';
 import { LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT, PAYMENT_DEMO_SERVICE_BLUEPRINT, COMMUNITY_ENQUIRY_SERVICE_BLUEPRINT, INFORMATION_REQUEST_SERVICE_BLUEPRINT, MONEY_MODELLER_SERVICE_BLUEPRINT, PLANNING_SERVICE_BLUEPRINT_MIGRATED, cloneAuthoredServiceBlueprint } from './fixtures/index.js';
 
-const WORKSPACE_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = {
+const WORKSPACE_SERVICE_BLUEPRINT: ServiceBlueprint = {
   ...STUB_SERVICE_BLUEPRINT,
 };
 
-const GATEWAY_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = cloneAuthoredServiceBlueprint(LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT);
-const PAYMENT_DEMO_GRAPH_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = cloneAuthoredServiceBlueprint(PAYMENT_DEMO_SERVICE_BLUEPRINT);
+const GATEWAY_SERVICE_BLUEPRINT: ServiceBlueprint = cloneAuthoredServiceBlueprint(LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT);
+const PAYMENT_DEMO_GRAPH_SERVICE_BLUEPRINT: ServiceBlueprint = cloneAuthoredServiceBlueprint(PAYMENT_DEMO_SERVICE_BLUEPRINT);
 
 /**
  * Same-lane fan-out — `draft` branches to two sibling stages inside the
  * same queue through a single split gateway before rejoining.
  */
-const SAME_LANE_FAN_OUT_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = {
+const SAME_LANE_FAN_OUT_SERVICE_BLUEPRINT: ServiceBlueprint = {
   ...STUB_SERVICE_BLUEPRINT,
   definitionKey: 'leave-request-same-lane-fan-out',
   displayName: 'Leave Request — Same-Lane Fan-Out',
   initialStage: 'draft',
   stages: [
     {
-      stateKey: 'draft',
+      stageKey: 'draft',
+      queueKey: '',
       displayName: 'Draft submission',
       description: 'Capture the initial applicant draft before routing starts.',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'public',
       actions: [],
       components: [],
@@ -35,30 +36,33 @@ const SAME_LANE_FAN_OUT_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = {
       routes: [{ id: 'draft--collect-evidence--evidence-route', target: 'evidence-route', trigger: 'collect evidence' }],
     },
     {
-      stateKey: 'collect-evidence',
+      stageKey: 'collect-evidence',
+      queueKey: '',
       displayName: 'Collect evidence',
       description: 'Gather the supporting evidence for the next decision.',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'public',
       actions: [],
       components: [],
       roleGates: [],
     },
     {
-      stateKey: 'book-site-visit',
+      stageKey: 'book-site-visit',
+      queueKey: '',
       displayName: 'Book site visit',
       description: 'Arrange a site visit before the decision is confirmed.',
-      kind: 'Question',
+      stageType: 'Question',
       actor: 'public',
       actions: [],
       components: [],
       roleGates: [],
     },
     {
-      stateKey: 'ready-to-decide',
+      stageKey: 'ready-to-decide',
+      queueKey: '',
       displayName: 'Ready to decide',
       description: 'The single public lane continues after both routes are complete.',
-      kind: 'Confirmation',
+      stageType: 'Confirmation',
       actor: 'public',
       actions: [],
       components: [],
@@ -93,7 +97,7 @@ const SAME_LANE_FAN_OUT_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = {
 };
 
 type StoryArgs = {
-  serviceBlueprint: AuthoredServiceBlueprint | null;
+  serviceBlueprint: ServiceBlueprint | null;
 };
 
 function makeElement(args: StoryArgs): WayfinderServiceBlueprintGraphElement {
@@ -359,17 +363,17 @@ export const GraphReadOnly: Story = {
  * a single cross-lane Join gateway at the end so the routing layer also
  * gets exercised at scale.
  */
-function buildLargeServiceBlueprint(): AuthoredServiceBlueprint {
+function buildLargeServiceBlueprint(): ServiceBlueprint {
   const lanes = ['intake', 'triage', 'review', 'decision', 'archive'];
   const stagesPerLane = 8;
-  const stages: AuthoredServiceBlueprint['stages'] = [];
-  const gateways: NonNullable<AuthoredServiceBlueprint['gateways']> = [];
+  const stages: ServiceBlueprint['stages'] = [];
+  const gateways: NonNullable<ServiceBlueprint['gateways']> = [];
 
   for (const lane of lanes) {
     for (let i = 0; i < stagesPerLane; i++) {
       const stageKey = `${lane}-step-${i + 1}`;
       stages.push({
-        stateKey: stageKey,
+        stageKey: stageKey,
         displayName: `${lane[0].toUpperCase()}${lane.slice(1)} step ${i + 1}`,
         description: `Synthetic stage ${i + 1} in the ${lane} lane.`,
         kind: i === stagesPerLane - 1 ? 'Confirmation' : 'Question',
@@ -380,7 +384,7 @@ function buildLargeServiceBlueprint(): AuthoredServiceBlueprint {
         routes: i < stagesPerLane - 1
           ? [{ id: `${stageKey}--continue--route-from-${stageKey}`, target: `route-from-${stageKey}`, trigger: 'continue' }]
           : [],
-      } as unknown as AuthoredServiceBlueprint['stages'][number]);
+      } as unknown as ServiceBlueprint['stages'][number]);
       if (i > 0) {
         const prev = `${lane}-step-${i}`;
         gateways.push({
@@ -405,10 +409,10 @@ function buildLargeServiceBlueprint(): AuthoredServiceBlueprint {
     stages: stages,
     schemaVersion: '1.0',
     gateways,
-  } as unknown as AuthoredServiceBlueprint;
+  } as unknown as ServiceBlueprint;
 }
 
-const LARGE_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = buildLargeServiceBlueprint();
+const LARGE_SERVICE_BLUEPRINT: ServiceBlueprint = buildLargeServiceBlueprint();
 
 export const LargeServiceBlueprint: Story = {
   args: { serviceBlueprint: LARGE_SERVICE_BLUEPRINT },

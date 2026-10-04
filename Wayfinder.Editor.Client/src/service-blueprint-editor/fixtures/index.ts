@@ -1,11 +1,11 @@
-import type { AuthoredServiceBlueprint } from '../types.js';
-import { hydrateServiceBlueprintDefinition } from '../types.js';
+import type { ServiceBlueprint } from '../types.js';
+import { hydrateServiceBlueprintDefinition } from '../blueprint-hydration.js';
 
-export function cloneAuthoredServiceBlueprint<T extends AuthoredServiceBlueprint>(serviceBlueprint: T): T {
-  return hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(serviceBlueprint)) as T);
+export function cloneAuthoredServiceBlueprint(serviceBlueprint: ServiceBlueprint): ServiceBlueprint {
+  return hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(serviceBlueprint)) as ServiceBlueprint);
 }
 
-export const PLANNING_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition({
+export const PLANNING_SERVICE_BLUEPRINT: ServiceBlueprint = hydrateServiceBlueprintDefinition({
   "definitionKey": "planning-application",
   "displayName": "Planning Application",
   "version": 1,
@@ -18,7 +18,6 @@ export const PLANNING_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServi
       "actor": "applicant",
       "displayName": "Applicant",
       "key": "applicant",
-      "queueName": "applicant",
       "roleGates": [],
       "tags": {}
     }
@@ -33,7 +32,7 @@ export const PLANNING_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServi
             "formDefinitionId": "planning-declaration"
           },
           "summary": "Load the declaration form.",
-          "timing": "OnEntry"
+          "timing": "onEnter"
         }
       ],
       "actor": "applicant",
@@ -62,7 +61,6 @@ export const PLANNING_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServi
       ],
       "description": "Collects applicant and site identity before the full planning form.",
       "displayName": "Declaration",
-      "editorComment": "Entry point — collects basic applicant and site identity.",
       "queueKey": "applicant",
       "roleGates": [],
       "routes": [
@@ -85,7 +83,7 @@ export const PLANNING_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServi
             "formDefinitionId": "planning-application"
           },
           "summary": "Persist the application form before moving on.",
-          "timing": "OnExit"
+          "timing": "onExit"
         }
       ],
       "actor": "applicant",
@@ -139,7 +137,6 @@ export const PLANNING_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServi
       "components": [],
       "description": "Summarises captured answers before final submission.",
       "displayName": "Check your answers",
-      "editorComment": "Summary of all answers before final submission.",
       "queueKey": "applicant",
       "roleGates": [],
       "routes": [
@@ -219,7 +216,7 @@ export const PLANNING_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServi
                 "formDefinitionId": "planning-application"
               },
               "summary": "Submit the application form to the business app.",
-              "timing": "OnTransition"
+              "timing": "onTransition"
             }
           ],
           "id": "route-submitted--submit--submitted",
@@ -229,36 +226,10 @@ export const PLANNING_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServi
         }
       ]
     }
-  ],
-  "parameterSchemas": [
-    {
-      "allowAdditionalProperties": false,
-      "appliesTo": [
-        "forms.load",
-        "forms.save",
-        "forms.submit"
-      ],
-      "description": "Shared parameter contract for load/save/submit form actions.",
-      "key": "forms-form-definition",
-      "properties": [
-        {
-          "description": "Stable forms-engine key to load or persist.",
-          "editor": "text",
-          "key": "formDefinitionId",
-          "title": "Form definition id",
-          "valueKind": "String"
-        }
-      ],
-      "required": [
-        "formDefinitionId"
-      ],
-      "title": "Forms engine definition reference",
-      "valueKind": "Object"
-    }
   ]
-} as unknown as AuthoredServiceBlueprint);
+});
 
-export const LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition({
+export const LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT: ServiceBlueprint = hydrateServiceBlueprintDefinition({
   "definitionKey": "leave-request",
   "displayName": "Leave Request",
   "version": 1,
@@ -270,7 +241,6 @@ export const LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT: AuthoredServiceBlueprint =
       "actor": "applicant",
       "displayName": "Applicant",
       "key": "applicant",
-      "queueName": "applicant",
       "roleGates": [],
       "tags": {}
     },
@@ -278,7 +248,6 @@ export const LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT: AuthoredServiceBlueprint =
       "actor": "reviewer",
       "displayName": "Reviewer",
       "key": "reviewer",
-      "queueName": "reviewer",
       "roleGates": [
         "reviewer"
       ],
@@ -433,11 +402,10 @@ export const LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT: AuthoredServiceBlueprint =
       "waitingAllowDefer": false,
       "waitingContent": "Waiting for amendments, supporting evidence, and reviewer assessment before the decision can continue."
     }
-  ],
-  "parameterSchemas": []
-} as unknown as AuthoredServiceBlueprint);
+  ]
+});
 
-export const PAYMENT_DEMO_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition({
+export const PAYMENT_DEMO_SERVICE_BLUEPRINT: ServiceBlueprint = hydrateServiceBlueprintDefinition({
   "definitionKey": "payment-demo",
   "displayName": "Payment Demo",
   "version": 1,
@@ -450,7 +418,6 @@ export const PAYMENT_DEMO_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateS
       "actor": "applicant",
       "displayName": "Applicant",
       "key": "web-user",
-      "queueName": "web-user",
       "roleGates": [],
       "tags": {}
     },
@@ -458,7 +425,6 @@ export const PAYMENT_DEMO_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateS
       "actor": "reviewer",
       "displayName": "Payments team",
       "key": "business-user",
-      "queueName": "business-user",
       "roleGates": [
         "reviewer"
       ],
@@ -587,15 +553,14 @@ export const PAYMENT_DEMO_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateS
       "waitingExpectedSeconds": 60,
       "waitingPollIntervalMs": 5000
     }
-  ],
-  "parameterSchemas": []
-} as unknown as AuthoredServiceBlueprint);
+  ]
+});
 
 /**
  * Community Enquiry serviceBlueprint — migrated to queues/gateways/routes format.
  * Single-queue (applicant), simple linear flow with one Split gateway.
  */
-export const COMMUNITY_ENQUIRY_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition({
+export const COMMUNITY_ENQUIRY_SERVICE_BLUEPRINT: ServiceBlueprint = hydrateServiceBlueprintDefinition({
   "definitionKey": "community-enquiry",
   "displayName": "Get in Touch",
   "version": 1,
@@ -608,7 +573,6 @@ export const COMMUNITY_ENQUIRY_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hyd
       "actor": "applicant",
       "displayName": "Applicant",
       "key": "applicant",
-      "queueName": "applicant",
       "roleGates": [],
       "tags": {}
     }
@@ -658,15 +622,14 @@ export const COMMUNITY_ENQUIRY_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hyd
         }
       ]
     }
-  ],
-  "parameterSchemas": []
-} as unknown as AuthoredServiceBlueprint);
+  ]
+});
 
 /**
  * Information Request serviceBlueprint — migrated to queues/gateways/routes format.
  * Two-queue (applicant + caseworker) with a Split gateway and a Join gateway.
  */
-export const INFORMATION_REQUEST_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition({
+export const INFORMATION_REQUEST_SERVICE_BLUEPRINT: ServiceBlueprint = hydrateServiceBlueprintDefinition({
   "definitionKey": "information-request",
   "displayName": "Information Request",
   "version": 1,
@@ -678,7 +641,6 @@ export const INFORMATION_REQUEST_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = h
       "actor": "applicant",
       "displayName": "Applicant",
       "key": "applicant",
-      "queueName": "applicant",
       "roleGates": [],
       "tags": {}
     },
@@ -686,7 +648,6 @@ export const INFORMATION_REQUEST_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = h
       "actor": "caseworker",
       "displayName": "Caseworker",
       "key": "caseworker",
-      "queueName": "caseworker",
       "roleGates": [],
       "tags": {}
     }
@@ -798,15 +759,14 @@ export const INFORMATION_REQUEST_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = h
       "waitingExpectedSeconds": 30,
       "waitingPollIntervalMs": 5000
     }
-  ],
-  "parameterSchemas": []
-} as unknown as AuthoredServiceBlueprint);
+  ]
+});
 
 /**
  * Planning Application serviceBlueprint — migrated to queues/gateways/routes format.
  * Single-queue (applicant), linear flow through declaration → form → check → submitted.
  */
-export const PLANNING_SERVICE_BLUEPRINT_MIGRATED: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition({
+export const PLANNING_SERVICE_BLUEPRINT_MIGRATED: ServiceBlueprint = hydrateServiceBlueprintDefinition({
   "definitionKey": "planning-application",
   "displayName": "Planning Application",
   "version": 1,
@@ -819,7 +779,6 @@ export const PLANNING_SERVICE_BLUEPRINT_MIGRATED: AuthoredServiceBlueprint = hyd
       "actor": "applicant",
       "displayName": "Applicant",
       "key": "applicant",
-      "queueName": "applicant",
       "roleGates": [],
       "tags": {}
     }
@@ -941,9 +900,8 @@ export const PLANNING_SERVICE_BLUEPRINT_MIGRATED: AuthoredServiceBlueprint = hyd
         }
       ]
     }
-  ],
-  "parameterSchemas": []
-} as unknown as AuthoredServiceBlueprint);
+  ]
+});
 
 /**
  * Money Modeller — the fully declarative pension modeller demo (see
@@ -955,7 +913,7 @@ export const PLANNING_SERVICE_BLUEPRINT_MIGRATED: AuthoredServiceBlueprint = hyd
  * this repo ships, and the one that originally surfaced the graph canvas's
  * chip-collision and edge-routing issues.
  */
-export const MONEY_MODELLER_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrateServiceBlueprintDefinition({
+export const MONEY_MODELLER_SERVICE_BLUEPRINT: ServiceBlueprint = hydrateServiceBlueprintDefinition({
   "definitionKey": "money-modeller",
   "displayName": "Money Modeller",
   "version": 1,
@@ -1133,7 +1091,6 @@ export const MONEY_MODELLER_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrat
       "description": "Scheme member exploring retirement scenarios.",
       "displayName": "Member",
       "key": "web-user",
-      "queueName": "web-user",
       "roleGates": [],
       "tags": {}
     },
@@ -1142,7 +1099,6 @@ export const MONEY_MODELLER_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrat
       "description": "Back-office queue handling formal quote requests.",
       "displayName": "Scheme administrators",
       "key": "business-user",
-      "queueName": "business-user",
       "roleGates": [],
       "tags": {}
     }
@@ -1640,6 +1596,5 @@ export const MONEY_MODELLER_SERVICE_BLUEPRINT: AuthoredServiceBlueprint = hydrat
         }
       ]
     }
-  ],
-  "parameterSchemas": []
-} as unknown as AuthoredServiceBlueprint);
+  ]
+});

@@ -1,9 +1,9 @@
 import type {
-  AuthoredGateway,
-  AuthoredStage,
-  AuthoredServiceBlueprint,
+  ServiceBlueprintGatewayDefinition,
+  StageDefinition,
+  ServiceBlueprint,
   RouteView,
-  ServiceBlueprintLayoutBlock,
+  ServiceBlueprintLayoutDefinition,
 } from '../types.js';
 import {
   deriveGatewayBindings,
@@ -60,7 +60,7 @@ export const LANE_HEADER_OFFSET = 80;
 
 export type GraphNodeKind = 'stage' | 'gateway';
 
-export const stageNodeId = (stateKey: string) => `stage:${stateKey}`;
+export const stageNodeId = (stageKey: string) => `stage:${stageKey}`;
 export const gatewayNodeId = (gatewayKey: string) => `gateway:${gatewayKey}`;
 
 export function parseGraphNodeId(id: string): { kind: GraphNodeKind; key: string } {
@@ -72,7 +72,7 @@ export function parseGraphNodeId(id: string): { kind: GraphNodeKind; key: string
 export type StageTopologyNode = {
   id: string;
   kind: 'stage';
-  stage: AuthoredStage;
+  stage: StageDefinition;
   stageIndex: number;
   surface: StageSurface;
   queueKey: string;
@@ -84,7 +84,7 @@ export type StageTopologyNode = {
 export type GatewayTopologyNode = {
   id: string;
   kind: 'gateway';
-  gateway: AuthoredGateway;
+  gateway: ServiceBlueprintGatewayDefinition;
   binding: GatewayBinding;
   surface: StageSurface;
   queueKey: string;
@@ -169,7 +169,7 @@ export type ServiceBlueprintGraphLayout = {
   bounds: { width: number; height: number };
 };
 
-export function isPillGateway(gateway: AuthoredGateway): boolean {
+export function isPillGateway(gateway: ServiceBlueprintGatewayDefinition): boolean {
   return gateway.gatewayType === 'Split' && (gateway.routes ?? []).length === 1;
 }
 
@@ -182,7 +182,7 @@ function isDecisionSplit(node: GraphTopologyNode | undefined | null): boolean {
   return node?.kind === 'gateway' && node.gateway.gatewayType === 'Split' && !isPillGateway(node.gateway);
 }
 
-export function gatewayNodeSize(gateway: AuthoredGateway): { width: number; height: number } {
+export function gatewayNodeSize(gateway: ServiceBlueprintGatewayDefinition): { width: number; height: number } {
   if (!isPillGateway(gateway)) {
     return { width: GATEWAY_SIZE, height: GATEWAY_SIZE };
   }
@@ -215,16 +215,16 @@ export function laneForPosition(lanes: LaneGeometry[], centerX: number): LaneGeo
   })[0];
 }
 
-function stageQueueKeyWithFallback(stage: AuthoredStage, surface: StageSurface): string {
+function stageQueueKeyWithFallback(stage: StageDefinition, surface: StageSurface): string {
   return stageQueueKey(stage) || (surface === 'back-stage' ? 'reviewer' : 'public');
 }
 
-function gatewayQueueKeyWithFallback(gateway: AuthoredGateway): string {
+function gatewayQueueKeyWithFallback(gateway: ServiceBlueprintGatewayDefinition): string {
   return gatewayQueueKey(gateway) || 'public';
 }
 
 export function computeTopology(
-  serviceBlueprint: AuthoredServiceBlueprint | null,
+  serviceBlueprint: ServiceBlueprint | null,
   availableQueues: QueueDefinition[] = []
 ): GraphTopology {
   const stages = serviceBlueprint?.stages ?? [];
@@ -238,7 +238,7 @@ export function computeTopology(
     const surface = stageSurface(stage);
     const queueKey = stageQueueKeyWithFallback(stage, surface);
     return {
-      id: stageNodeId(stage.stateKey),
+      id: stageNodeId(stage.stageKey),
       kind: 'stage',
       stage,
       stageIndex,
@@ -795,7 +795,7 @@ export function computeDerivedLayout(topology: GraphTopology): ServiceBlueprintG
  */
 export function mergeLayout(
   topology: GraphTopology,
-  layoutBlock?: ServiceBlueprintLayoutBlock | null
+  layoutBlock?: ServiceBlueprintLayoutDefinition | null
 ): ServiceBlueprintGraphLayout {
   const derived = computeDerivedLayout(topology);
   const stored = layoutBlock?.nodes;
@@ -842,7 +842,7 @@ export function mergeLayout(
 }
 
 export function computeServiceBlueprintGraphLayout(
-  serviceBlueprint: AuthoredServiceBlueprint | null,
+  serviceBlueprint: ServiceBlueprint | null,
   availableQueues: QueueDefinition[] = []
 ): { topology: GraphTopology; layout: ServiceBlueprintGraphLayout } {
   const topology = computeTopology(serviceBlueprint, availableQueues);

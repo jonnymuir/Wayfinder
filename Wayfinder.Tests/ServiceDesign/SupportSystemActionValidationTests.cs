@@ -48,7 +48,7 @@ public class SupportSystemActionValidationTests
     private static ActionDefinition MakeAction(JsonObject? parameters = null) => new()
     {
         Type = SupportSystemActionTypes.SupportSystemCall,
-        Timing = "onEnter",
+        Timing = ActionTiming.OnEnter,
         Parameters = parameters ?? new JsonObject
         {
             ["supportSystemKey"] = SupportSystemKey,

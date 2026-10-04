@@ -1,5 +1,5 @@
-import type { AuthoredGateway, AuthoredStage, AuthoredServiceBlueprint } from './types.js';
-import { gatewayRoleGates, serviceBlueprintGateways, serviceBlueprintQueues, withStageAssignment } from './types.js';
+import type { ServiceBlueprintGatewayDefinition, StageDefinition, ServiceBlueprint } from './types.js';
+import { serviceBlueprintGateways, serviceBlueprintQueues } from './types.js';
 
 export type StageSurface = 'front-stage' | 'back-stage';
 export interface QueueDefinition {
@@ -8,7 +8,7 @@ export interface QueueDefinition {
   description?: string;
 }
 
-type QueueAssignedNode = AuthoredStage | AuthoredGateway;
+type QueueAssignedNode = StageDefinition | ServiceBlueprintGatewayDefinition;
 
 const FRONT_STAGE_ACTORS = new Set(['applicant', 'resident', 'member', 'citizen', 'customer', 'public']);
 const BACK_STAGE_ACTORS = new Set(['reviewer', 'caseworker', 'officer', 'administrator', 'admin', 'system']);
@@ -26,7 +26,7 @@ export function humaniseAssignmentLabel(value: string): string {
 }
 
 export function stageSurface(stage: QueueAssignedNode): StageSurface {
-  const roleGates = gatewayRoleGates(stage);
+  const roleGates = stage.roleGates ?? [];
   if (roleGates.length > 0) {
     return 'back-stage';
   }
@@ -55,7 +55,7 @@ export function stageQueueKey(stage: QueueAssignedNode): string {
     return explicitQueue;
   }
 
-  const gatedRole = (gatewayRoleGates(stage)).find(value => value.trim());
+  const gatedRole = (stage.roleGates ?? []).find(value => value.trim());
   if (gatedRole) {
     return normaliseQueueKey(gatedRole);
   }
@@ -69,7 +69,7 @@ export function stageQueueKey(stage: QueueAssignedNode): string {
 }
 
 export function stageQueueLabel(
-  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'queues'> | null | undefined,
+  serviceBlueprint: Pick<ServiceBlueprint, 'queues'> | null | undefined,
   queueKey: string,
   availableQueues: ReadonlyArray<QueueDefinition> = []
 ): string {
@@ -84,7 +84,7 @@ export function stageQueueLabel(
 }
 
 export function stageQueueDescription(
-  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'queues'> | null | undefined,
+  serviceBlueprint: Pick<ServiceBlueprint, 'queues'> | null | undefined,
   queueKey: string,
   availableQueues: ReadonlyArray<QueueDefinition> = []
 ): string {
@@ -97,11 +97,11 @@ export function stageQueueDescription(
   return `Stages and gateways in the ${stageQueueLabel(serviceBlueprint, queueKey, availableQueues)} queue`;
 }
 
-export function applyQueueToStage(stage: AuthoredStage, queueKey: string): AuthoredStage {
+export function applyQueueToStage(stage: StageDefinition, queueKey: string): StageDefinition {
   const normalisedQueueKey = normaliseQueueKey(queueKey);
 
   if (!normalisedQueueKey) {
-    return withStageAssignment(stage, '', undefined, []);
+    return { ...stage, queueKey: '', actor: undefined, roleGates: [] };
   }
 
   const inferredActor = normalisedQueueKey.includes('business')
@@ -112,16 +112,11 @@ export function applyQueueToStage(stage: AuthoredStage, queueKey: string): Autho
         ? 'reviewer'
         : normalisedQueueKey;
   const usesRoleGate = !FRONT_STAGE_ACTORS.has(inferredActor);
-  return withStageAssignment(
-    stage,
-    normalisedQueueKey,
-    inferredActor,
-    usesRoleGate ? [inferredActor] : []
-  );
+  return { ...stage, queueKey: normalisedQueueKey, actor: inferredActor, roleGates: usesRoleGate ? [inferredActor] : [] };
 }
 
 export function serviceBlueprintQueueOptions(
-  serviceBlueprint: Pick<AuthoredServiceBlueprint, 'queues' | 'stages' | 'gateways'> | null | undefined,
+  serviceBlueprint: Pick<ServiceBlueprint, 'queues' | 'stages' | 'gateways'> | null | undefined,
   availableQueues: ReadonlyArray<QueueDefinition> = []
 ): string[] {
   const queueKeys = new Set<string>();

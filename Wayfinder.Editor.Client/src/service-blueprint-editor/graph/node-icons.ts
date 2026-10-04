@@ -1,4 +1,4 @@
-import type { AuthoredGateway, AuthoredStage, GatewayKind, StageKind } from '../types.js';
+import type { ServiceBlueprintGatewayDefinition, StageDefinition, GatewayKind, StageKind } from '../types.js';
 
 export type NodeIconDef = { viewBox: string; paths: string[] };
 
@@ -96,19 +96,18 @@ const GATEWAY_KIND_ICON: Record<GatewayKind, NodeIconName> = {
   Join: 'join',
 };
 
-export function defaultIconForStage(stage: Pick<AuthoredStage, 'kind'>): NodeIconName {
-  return (stage.kind && STAGE_KIND_ICON[stage.kind]) || 'form';
+export function defaultIconForStage(stage: Pick<StageDefinition, 'stageType'>): NodeIconName {
+  return (stage.stageType && STAGE_KIND_ICON[stage.stageType]) || 'form';
 }
 
-export function defaultIconForGateway(gateway: Pick<AuthoredGateway, 'gatewayType' | 'kind'>): NodeIconName {
-  const kind = gateway.gatewayType ?? gateway.kind;
-  return (kind && GATEWAY_KIND_ICON[kind]) || 'split';
+export function defaultIconForGateway(gateway: Pick<ServiceBlueprintGatewayDefinition, 'gatewayType'>): NodeIconName {
+  return GATEWAY_KIND_ICON[gateway.gatewayType] || 'split';
 }
 
-export function iconForStage(stage: Pick<AuthoredStage, 'icon' | 'kind'>): NodeIconDef {
+export function iconForStage(stage: Pick<StageDefinition, 'icon' | 'stageType'>): NodeIconDef {
   return NODE_ICONS[stage.icon ?? ''] ?? NODE_ICONS[defaultIconForStage(stage)];
 }
 
-export function iconForGateway(gateway: Pick<AuthoredGateway, 'icon' | 'gatewayType' | 'kind'>): NodeIconDef {
+export function iconForGateway(gateway: Pick<ServiceBlueprintGatewayDefinition, 'icon' | 'gatewayType'>): NodeIconDef {
   return NODE_ICONS[gateway.icon ?? ''] ?? NODE_ICONS[defaultIconForGateway(gateway)];
 }

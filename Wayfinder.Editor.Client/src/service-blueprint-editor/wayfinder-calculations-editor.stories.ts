@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { expect } from 'storybook/test';
 import './wayfinder-calculations-editor.js';
 import type { WayfinderCalculationsEditorElement } from './wayfinder-calculations-editor.js';
-import type { AuthoredServiceBlueprint, ComponentDescriptor } from './types.js';
+import type { ServiceBlueprint, ComponentDescriptor } from './types.js';
 
 const CATALOG: ComponentDescriptor[] = [
   {
@@ -16,7 +16,7 @@ const CATALOG: ComponentDescriptor[] = [
   },
 ];
 
-function fixtureBlueprint(): AuthoredServiceBlueprint {
+function fixtureBlueprint(): ServiceBlueprint {
   return {
     definitionKey: 'calc-fixture',
     displayName: 'Calculations fixture',
@@ -25,7 +25,7 @@ function fixtureBlueprint(): AuthoredServiceBlueprint {
     requestPolicy: 'single',
     stages: [
       {
-        stateKey: 'only',
+        stageKey: 'only',
         displayName: 'Only',
         queueKey: 'citizen',
         components: [
@@ -58,7 +58,7 @@ function makeElement(): WayfinderCalculationsEditorElement {
   el.serviceBlueprint = fixtureBlueprint();
   el.componentCatalog = CATALOG;
   el.addEventListener('service-blueprint-updated', event => {
-    const detail = (event as CustomEvent<{ serviceBlueprint: AuthoredServiceBlueprint }>).detail;
+    const detail = (event as CustomEvent<{ serviceBlueprint: ServiceBlueprint }>).detail;
     el.serviceBlueprint = detail.serviceBlueprint;
   });
   el.style.cssText = 'display:block;width:640px;height:720px;';

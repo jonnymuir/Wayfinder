@@ -3706,7 +3706,7 @@ public class ProcessManagerEngine : IProcessManager
         var invocations = new List<SupportSystemInvocation>();
         foreach (var action in actions)
         {
-            if (!string.Equals(action.Timing, "onEnter", StringComparison.Ordinal)
+            if (action.Timing != ActionTiming.OnEnter
                 || !string.Equals(action.Type, SupportSystemActionTypes.SupportSystemCall, StringComparison.Ordinal))
             {
                 continue;
@@ -3829,7 +3829,7 @@ public class ProcessManagerEngine : IProcessManager
 
         foreach (var action in actions)
         {
-            if (!string.Equals(action.Timing, "onEnter", StringComparison.Ordinal))
+            if (action.Timing != ActionTiming.OnEnter)
             {
                 continue;
             }

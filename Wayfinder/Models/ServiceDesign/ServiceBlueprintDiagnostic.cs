@@ -1,6 +1,9 @@
+using System.Text.Json.Serialization;
+
 namespace Wayfinder.Models.ServiceDesign;
 
 /// <summary>Severity of a <see cref="ServiceBlueprintDiagnostic"/>.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ServiceBlueprintDiagnosticSeverity>))]
 public enum ServiceBlueprintDiagnosticSeverity
 {
     /// <summary>Blocks <c>IsValid</c>/save — the blueprint is structurally or semantically broken.</summary>

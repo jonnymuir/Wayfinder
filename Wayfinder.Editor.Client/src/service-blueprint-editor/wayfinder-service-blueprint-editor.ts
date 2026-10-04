@@ -1,18 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import {
-  type ActionCatalogEntry,
-  type AuthoredAction,
-  type AuthoredGateway,
-  type AuthoredRoute,
-  type AuthoredStage,
-  type AuthoredServiceBlueprint,
-  type ComponentDescriptor,
-  type ServiceBlueprintNodePosition,
-  type SupportSystemDescriptor,
-  hydrateServiceBlueprintDefinition,
-  serviceBlueprintGateways,
-} from './types.js';
+import { type ActionCatalogEntry, type ActionDefinition, type ServiceBlueprintGatewayDefinition, type ServiceBlueprintRouteDefinition, type StageDefinition, type ServiceBlueprint, type ComponentDescriptor, type NodePosition, type SupportSystemDescriptor, serviceBlueprintGateways } from './types.js';
+import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
 import { computeServiceBlueprintGraphLayout, parseGraphNodeId } from './graph/service-blueprint-graph-layout.js';
 import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
@@ -48,7 +37,7 @@ type ServiceBlueprintSelection =
   | null;
 
 type ServiceBlueprintHistoryEntry = {
-  serviceBlueprint: AuthoredServiceBlueprint;
+  serviceBlueprint: ServiceBlueprint;
   selection: ServiceBlueprintSelection;
 };
 
@@ -58,9 +47,9 @@ type ActionSelection = {
 } | null;
 
 type ClipboardEntry =
-  | { kind: 'stage'; stage: AuthoredStage; label: string }
-  | { kind: 'subgraph'; stages: AuthoredStage[]; gateways: AuthoredGateway[]; label: string }
-  | { kind: 'action'; action: AuthoredAction; label: string; sourceTarget: 'stage' | 'transition' };
+  | { kind: 'stage'; stage: StageDefinition; label: string }
+  | { kind: 'subgraph'; stages: StageDefinition[]; gateways: ServiceBlueprintGatewayDefinition[]; label: string }
+  | { kind: 'action'; action: ActionDefinition; label: string; sourceTarget: 'stage' | 'transition' };
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -72,23 +61,23 @@ const COPY_SHORTCUT = findServiceBlueprintShortcut('copy');
 const PASTE_SHORTCUT = findServiceBlueprintShortcut('paste');
 const HELP_SHORTCUT = findServiceBlueprintShortcut('help');
 
-function cloneServiceBlueprint(serviceBlueprint: AuthoredServiceBlueprint): AuthoredServiceBlueprint {
-  return hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(serviceBlueprint)) as AuthoredServiceBlueprint);
+function cloneServiceBlueprint(serviceBlueprint: ServiceBlueprint): ServiceBlueprint {
+  return hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(serviceBlueprint)) as ServiceBlueprint);
 }
 
 function cloneSelection(selection: ServiceBlueprintSelection): ServiceBlueprintSelection {
   return selection ? { ...selection } : null;
 }
 
-function cloneStage(stage: AuthoredStage): AuthoredStage {
-  return JSON.parse(JSON.stringify(stage)) as AuthoredStage;
+function cloneStage(stage: StageDefinition): StageDefinition {
+  return JSON.parse(JSON.stringify(stage)) as StageDefinition;
 }
 
-function cloneAction(action: AuthoredAction): AuthoredAction {
-  return JSON.parse(JSON.stringify(action)) as AuthoredAction;
+function cloneAction(action: ActionDefinition): ActionDefinition {
+  return JSON.parse(JSON.stringify(action)) as ActionDefinition;
 }
 
-function serviceBlueprintsEqual(left: AuthoredServiceBlueprint | null, right: AuthoredServiceBlueprint | null): boolean {
+function serviceBlueprintsEqual(left: ServiceBlueprint | null, right: ServiceBlueprint | null): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
@@ -108,8 +97,8 @@ function selectionsEqual(left: ServiceBlueprintSelection, right: ServiceBlueprin
   return left === right;
 }
 
-function makeCopiedStageKey(baseStageKey: string, serviceBlueprint: AuthoredServiceBlueprint): string {
-  const usedKeys = new Set(serviceBlueprint.stages.map(stage => stage.stateKey));
+function makeCopiedStageKey(baseStageKey: string, serviceBlueprint: ServiceBlueprint): string {
+  const usedKeys = new Set(serviceBlueprint.stages.map(stage => stage.stageKey));
   let candidate = `${baseStageKey}-copy`;
   let suffix = 2;
   while (usedKeys.has(candidate)) {
@@ -192,9 +181,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
    * the API.  Designed for Storybook stories and offline walkthrough fixtures.
    */
   @property({ attribute: false })
-  initialServiceBlueprint: AuthoredServiceBlueprint | null = null;
+  initialServiceBlueprint: ServiceBlueprint | null = null;
 
-  @state() private _serviceBlueprint: AuthoredServiceBlueprint | null = null;
+  @state() private _serviceBlueprint: ServiceBlueprint | null = null;
   @state() private _selection: ServiceBlueprintSelection = null;
   @state() private _selectedTransitionIndex: number | null = null;
   @state() private _toastMessage: string | null = null;
@@ -245,7 +234,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _lastAppliedDefinitionCanonical = '';
   private _definitionDebounceHandle: number | null = null;
 
-  private _savedServiceBlueprintSnapshot: AuthoredServiceBlueprint | null = null;
+  private _savedServiceBlueprintSnapshot: ServiceBlueprint | null = null;
   private _helpReturnTarget: HTMLElement | null = null;
   private _lastLoadedBlueprintKey: string | null = null;
   private _serviceBlueprintLoadRequestId = 0;
@@ -425,7 +414,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  private _initialiseEditorState(serviceBlueprint: AuthoredServiceBlueprint) {
+  private _initialiseEditorState(serviceBlueprint: ServiceBlueprint) {
     this._serviceBlueprint = cloneServiceBlueprint(serviceBlueprint);
     this._reflectServiceBlueprintLoadedState();
     this._savedServiceBlueprintSnapshot = cloneServiceBlueprint(this._serviceBlueprint);
@@ -475,7 +464,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return null;
   }
 
-  private _applySelection(selection: ServiceBlueprintSelection, serviceBlueprint: AuthoredServiceBlueprint | null = this._serviceBlueprint) {
+  private _applySelection(selection: ServiceBlueprintSelection, serviceBlueprint: ServiceBlueprint | null = this._serviceBlueprint) {
     if (!serviceBlueprint) {
       this._selection = null;
       this._selectedTransitionIndex = null;
@@ -483,7 +472,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     if (selection?.kind === 'stage') {
-      const exists = serviceBlueprint.stages.some(stage => stage.stateKey === selection.stageKey);
+      const exists = serviceBlueprint.stages.some(stage => stage.stageKey === selection.stageKey);
       this._selection = exists ? { kind: 'stage', stageKey: selection.stageKey } : null;
       this._selectedTransitionIndex = null;
       this._expandInspectorForSelection();
@@ -514,7 +503,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  private _applyTransitionHighlight(transitionIndex: number, serviceBlueprint: AuthoredServiceBlueprint | null = this._serviceBlueprint) {
+  private _applyTransitionHighlight(transitionIndex: number, serviceBlueprint: ServiceBlueprint | null = this._serviceBlueprint) {
     const transitions = flattenRoutes(serviceBlueprint);
     if (!serviceBlueprint || transitionIndex < 0 || transitionIndex >= transitions.length) {
       this._selectedTransitionIndex = null;
@@ -694,7 +683,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }, WayfinderServiceBlueprintEditorElement.VALIDATION_DEBOUNCE_MS);
   }
 
-  private _fallbackValidationIssues(blueprint: AuthoredServiceBlueprint): ServiceBlueprintValidationIssue[] {
+  private _fallbackValidationIssues(blueprint: ServiceBlueprint): ServiceBlueprintValidationIssue[] {
     return validateServiceBlueprint(blueprint, this._actionCatalog, this._componentCatalog, this._supportSystemCatalog);
   }
 
@@ -826,7 +815,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return this._saveMessage ?? 'Save is ready.';
   }
 
-  private _commitServiceBlueprintUpdate(nextServiceBlueprint: AuthoredServiceBlueprint, nextSelection: ServiceBlueprintSelection) {
+  private _commitServiceBlueprintUpdate(nextServiceBlueprint: ServiceBlueprint, nextSelection: ServiceBlueprintSelection) {
     const previousSelection = this._currentSelection();
 
     if (serviceBlueprintsEqual(this._serviceBlueprint, nextServiceBlueprint)) {
@@ -854,13 +843,13 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._announceHistory(`Change recorded. ${this._historyStatusSummary}`);
   }
 
-  private _currentAction(): { action: AuthoredAction; target: 'stage' | 'transition' } | null {
+  private _currentAction(): { action: ActionDefinition; target: 'stage' | 'transition' } | null {
     if (!this._serviceBlueprint || !this._actionSelection) {
       return null;
     }
 
     if (this._actionSelection.target === 'stage' && this._selectedStageKey) {
-      const stage = this._serviceBlueprint.stages.find(candidate => candidate.stateKey === this._selectedStageKey);
+      const stage = this._serviceBlueprint.stages.find(candidate => candidate.stageKey === this._selectedStageKey);
       const action = stage?.actions?.[this._actionSelection.index];
       return action ? { action, target: 'stage' } : null;
     }
@@ -874,7 +863,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return null;
   }
 
-  private _canPasteActionIntoSelection(action: AuthoredAction) {
+  private _canPasteActionIntoSelection(action: ActionDefinition) {
     const currentSelection = this._currentSelection();
     if (!currentSelection || currentSelection.kind === 'gateway') {
       return false;
@@ -902,7 +891,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return this._canPasteActionIntoSelection(this._clipboard.action);
   }
 
-  private _normalisePastedAction(action: AuthoredAction, target: 'stage' | 'transition'): AuthoredAction | null {
+  private _normalisePastedAction(action: ActionDefinition, target: 'stage' | 'transition'): ActionDefinition | null {
     const nextAction = cloneAction(action);
     const entry = this._actionCatalog.find(candidate => candidate.type === nextAction.type) ?? null;
 
@@ -910,10 +899,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return {
         ...nextAction,
         timing: target === 'transition'
-          ? 'OnTransition'
-          : nextAction.timing === 'OnExit'
-            ? 'OnExit'
-            : 'OnEntry',
+          ? 'onTransition'
+          : nextAction.timing === 'onExit'
+            ? 'onExit'
+            : 'onEnter',
       };
     }
 
@@ -1109,7 +1098,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   private _handleServiceBlueprintUpdated(
     e: CustomEvent<{
-      serviceBlueprint: AuthoredServiceBlueprint;
+      serviceBlueprint: ServiceBlueprint;
       selection?: { kind: 'stage' | 'gateway' | 'transition'; stageKey?: string; gatewayKey?: string; transitionIndex?: number } | null;
     }>
   ) {
@@ -1332,7 +1321,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     if (this._graphMultiSelection.length >= 2) {
       const selectedKeys = this._graphMultiSelection.map(parseGraphNodeId);
       const stages = this._serviceBlueprint.stages.filter(stage =>
-        selectedKeys.some(parsed => parsed.kind === 'stage' && parsed.key === stage.stateKey));
+        selectedKeys.some(parsed => parsed.kind === 'stage' && parsed.key === stage.stageKey));
       const gateways = serviceBlueprintGateways(this._serviceBlueprint).filter(gateway =>
         selectedKeys.some(parsed => parsed.kind === 'gateway' && parsed.key === gateway.key));
       if (stages.length + gateways.length >= 2) {
@@ -1343,7 +1332,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         this._clipboard = {
           kind: 'subgraph',
           stages: stages.map(cloneStage),
-          gateways: gateways.map(gateway => JSON.parse(JSON.stringify(gateway)) as AuthoredGateway),
+          gateways: gateways.map(gateway => JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition),
           label,
         };
         this._showToast(`Copied ${label}.`);
@@ -1355,7 +1344,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return false;
     }
 
-    const stage = this._serviceBlueprint.stages.find(candidate => candidate.stateKey === this._selectedStageKey);
+    const stage = this._serviceBlueprint.stages.find(candidate => candidate.stageKey === this._selectedStageKey);
     if (!stage) {
       return false;
     }
@@ -1382,7 +1371,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     const serviceBlueprint = this._serviceBlueprint;
 
     const usedKeys = new Set<string>([
-      ...serviceBlueprint.stages.map(stage => stage.stateKey),
+      ...serviceBlueprint.stages.map(stage => stage.stageKey),
       ...serviceBlueprintGateways(serviceBlueprint).map(gateway => gateway.key),
     ]);
     const uniqueKey = (base: string) => {
@@ -1397,30 +1386,30 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     };
 
     const keyMap = new Map<string, string>();
-    entry.stages.forEach(stage => keyMap.set(stage.stateKey, uniqueKey(stage.stateKey)));
+    entry.stages.forEach(stage => keyMap.set(stage.stageKey, uniqueKey(stage.stageKey)));
     entry.gateways.forEach(gateway => keyMap.set(gateway.key, uniqueKey(gateway.key)));
 
-    const remapRoutes = (ownerNewKey: string, routes: AuthoredRoute[] | undefined): AuthoredRoute[] =>
+    const remapRoutes = (ownerNewKey: string, routes: ServiceBlueprintRouteDefinition[] | undefined): ServiceBlueprintRouteDefinition[] =>
       (routes ?? []).map(route => {
         const target = keyMap.get(route.target) ?? route.target;
         return { ...route, target, id: newRouteId(ownerNewKey, route.trigger, target) };
       });
 
-    const pastedStages: AuthoredStage[] = entry.stages.map(stage => {
-      const stateKey = keyMap.get(stage.stateKey)!;
-      return { ...cloneStage(stage), stateKey, routes: remapRoutes(stateKey, stage.routes) };
+    const pastedStages: StageDefinition[] = entry.stages.map(stage => {
+      const stageKey = keyMap.get(stage.stageKey)!;
+      return { ...cloneStage(stage), stageKey, routes: remapRoutes(stageKey, stage.routes) };
     });
-    const pastedGateways: AuthoredGateway[] = entry.gateways.map(gateway => {
+    const pastedGateways: ServiceBlueprintGatewayDefinition[] = entry.gateways.map(gateway => {
       const key = keyMap.get(gateway.key)!;
-      const clone = JSON.parse(JSON.stringify(gateway)) as AuthoredGateway;
+      const clone = JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition;
       return { ...clone, key, routes: remapRoutes(key, gateway.routes) };
     });
 
     // Copies land offset from their source's current position.
     const { layout } = computeServiceBlueprintGraphLayout(serviceBlueprint, this.availableQueues);
-    const layoutNodes: Record<string, ServiceBlueprintNodePosition> = { ...(serviceBlueprint.layout?.nodes ?? {}) };
+    const layoutNodes: Record<string, NodePosition> = { ...(serviceBlueprint.layout?.nodes ?? {}) };
     keyMap.forEach((newKey, oldKey) => {
-      const isStage = entry.stages.some(stage => stage.stateKey === oldKey);
+      const isStage = entry.stages.some(stage => stage.stageKey === oldKey);
       const placement = layout.placements.get(`${isStage ? 'stage' : 'gateway'}:${oldKey}`);
       if (placement) {
         layoutNodes[`${isStage ? 'stage' : 'gateway'}:${newKey}`] = {
@@ -1430,14 +1419,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       }
     });
 
-    const next: AuthoredServiceBlueprint = {
+    const next: ServiceBlueprint = {
       ...serviceBlueprint,
       stages: [...serviceBlueprint.stages, ...pastedStages],
       gateways: [...serviceBlueprintGateways(serviceBlueprint), ...pastedGateways],
       layout: Object.keys(layoutNodes).length > 0 ? { nodes: layoutNodes } : serviceBlueprint.layout,
     };
 
-    const firstStageKey = pastedStages[0]?.stateKey ?? null;
+    const firstStageKey = pastedStages[0]?.stageKey ?? null;
     this._commitServiceBlueprintUpdate(
       next,
       firstStageKey ? { kind: 'stage', stageKey: firstStageKey } : this._currentSelection()
@@ -1457,15 +1446,15 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     if (this._clipboard.kind === 'stage') {
       const copiedStage = cloneStage(this._clipboard.stage);
-      const stageKey = makeCopiedStageKey(copiedStage.stateKey, this._serviceBlueprint);
-      const pastedStage: AuthoredStage = {
+      const stageKey = makeCopiedStageKey(copiedStage.stageKey, this._serviceBlueprint);
+      const pastedStage: StageDefinition = {
         ...copiedStage,
-        stateKey: stageKey,
+        stageKey: stageKey,
       };
 
       const stages = [...this._serviceBlueprint.stages];
       const selectedStageIndex = this._selectedStageKey
-        ? stages.findIndex(stage => stage.stateKey === this._selectedStageKey)
+        ? stages.findIndex(stage => stage.stageKey === this._selectedStageKey)
         : -1;
       const insertIndex = selectedStageIndex >= 0 ? selectedStageIndex + 1 : stages.length;
       stages.splice(insertIndex, 0, pastedStage);
@@ -1487,7 +1476,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return false;
     }
 
-    const stageIndex = this._serviceBlueprint.stages.findIndex(stage => stage.stateKey === currentSelection.stageKey);
+    const stageIndex = this._serviceBlueprint.stages.findIndex(stage => stage.stageKey === currentSelection.stageKey);
     if (stageIndex < 0) {
       return false;
     }

@@ -6,17 +6,17 @@
  * so callers cannot mutate stored state through their own references.
  */
 
-import type { AuthoredServiceBlueprint } from './types.js';
+import type { ServiceBlueprint } from './types.js';
 import type { ServiceBlueprintSource, ServiceBlueprintSummary } from './service-blueprint-source.js';
 
-type SeedEntry = AuthoredServiceBlueprint | { blueprintKey: string; serviceBlueprint: AuthoredServiceBlueprint };
+type SeedEntry = ServiceBlueprint | { blueprintKey: string; serviceBlueprint: ServiceBlueprint };
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
 export class InMemoryServiceBlueprintSource implements ServiceBlueprintSource {
-  private readonly serviceBlueprints = new Map<string, AuthoredServiceBlueprint>();
+  private readonly serviceBlueprints = new Map<string, ServiceBlueprint>();
 
   constructor(seed: ReadonlyArray<SeedEntry> = []) {
     for (const entry of seed) {
@@ -38,7 +38,7 @@ export class InMemoryServiceBlueprintSource implements ServiceBlueprintSource {
       .sort((a, b) => a.blueprintKey.localeCompare(b.blueprintKey));
   }
 
-  async load(key: string): Promise<AuthoredServiceBlueprint> {
+  async load(key: string): Promise<ServiceBlueprint> {
     const serviceBlueprint = this.serviceBlueprints.get(key);
     if (!serviceBlueprint) {
       throw new Error(`ServiceBlueprint "${key}" not found.`);
@@ -46,12 +46,12 @@ export class InMemoryServiceBlueprintSource implements ServiceBlueprintSource {
     return deepClone(serviceBlueprint);
   }
 
-  async save(key: string, serviceBlueprint: AuthoredServiceBlueprint): Promise<void> {
+  async save(key: string, serviceBlueprint: ServiceBlueprint): Promise<void> {
     this.serviceBlueprints.set(key, deepClone(serviceBlueprint));
   }
 
   /** Returns the underlying entries — handy for tests that want to assert state. */
-  snapshot(): ReadonlyMap<string, AuthoredServiceBlueprint> {
+  snapshot(): ReadonlyMap<string, ServiceBlueprint> {
     return new Map(this.serviceBlueprints);
   }
 }

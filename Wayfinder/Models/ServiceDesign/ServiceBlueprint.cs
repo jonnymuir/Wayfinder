@@ -1262,6 +1262,7 @@ public record ServiceBlueprint
     /// tool) call <see cref="Abstractions.IProcessManager"/>'s lower-level primitives directly and
     /// are unaffected — this flag only gates the untrusted, citizen-reachable path.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool AllowManualRestart { get; init; }
 
     public IReadOnlyList<StageDefinition> Stages { get; init; } = Array.Empty<StageDefinition>();
@@ -1549,7 +1550,7 @@ public record ActionDefinition
 {
     public string Type { get; init; } = "";
 
-    public string Timing { get; init; } = "";
+    public required ActionTiming Timing { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyName("parameterSchemaKey")]
