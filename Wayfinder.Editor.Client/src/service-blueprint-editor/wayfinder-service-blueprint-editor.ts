@@ -2,6 +2,7 @@ import { LitElement, html, nothing, unsafeCSS } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import type { ActionCatalogEntry, ActionDefinition, ServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
 import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
+import { DefinitionController } from './definition-controller.js';
 import { EditHistory } from './edit-history.js';
 import { ValidationController } from './validation-controller.js';
 import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
@@ -22,12 +23,6 @@ import './wayfinder-step-inspector.js';
 import './wayfinder-calculations-editor.js';
 import './wayfinder-service-blueprint-outline.js';
 import './wayfinder-confidence-tabs.js';
-import { serializeAuthoredServiceBlueprint, authoredServiceBlueprintJsonEquals } from './service-blueprint-canonical-json.js';
-import {
-  coerceParsedAuthoredServiceBlueprint,
-  lintAuthoredServiceBlueprintDocument,
-  type DefinitionLint,
-} from './service-blueprint-lint.js';
 import type { ConfidenceTab } from './wayfinder-confidence-tabs.js';
 import { renderToolbarIcon } from './graph/toolbar-icons.js';
 import editorStyles from './wayfinder-service-blueprint-editor.css?inline';
@@ -196,14 +191,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
   @state() private _graphZoom = 1;
   @query('.graph-panel') private _graphElement?: HTMLElementTagNameMap['wayfinder-service-blueprint-graph'];
-  @state() private _definitionEditorLoaded = false;
-  @state() private _definitionText = '';
-  @state() private _definitionParseError: string | null = null;
-  @state() private _definitionSchemaIssues: DefinitionLint[] = [];
-  @state() private _definitionAnnouncement = '';
-  /** Canonical JSON of the service blueprint at the moment a Definition→Visual sync was committed. */
-  private _lastAppliedDefinitionCanonical = '';
-  private _definitionDebounceHandle: number | null = null;
+  private readonly _definition = new DefinitionController(this, {
+    blueprint: () => this._serviceBlueprint,
+    componentCatalog: () => this._componentCatalog,
+    apply: (next) => this._commitServiceBlueprintUpdate(next, this._currentSelection()),
+  });
 
   private _savedServiceBlueprintSnapshot: ServiceBlueprint | null = null;
   private _helpReturnTarget: HTMLElement | null = null;
@@ -262,7 +254,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   updated(_changedProperties: Map<string, unknown>) {
-    this._refreshDefinitionTextFromServiceBlueprint();
+    this._definition.syncFromBlueprint();
     if (_changedProperties.has('_saveError') && this._saveError) {
       this.updateComplete.then(() => {
         this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-save-error]')?.focus();
@@ -273,8 +265,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     // who opens the Definition tab before it resolves would otherwise see component-schema
     // issues only after their next keystroke. Re-lint the already-loaded text once the catalog
     // actually arrives, so it isn't silently skipped for however long that race happens to last.
-    if (_changedProperties.has('_componentCatalog') && this._definitionText) {
-      this._tryApplyDefinitionText();
+    if (_changedProperties.has('_componentCatalog')) {
+      this._definition.relint();
     }
 
     // Recompute the validation rail whenever the blueprint, a catalog the fallback validator
@@ -384,9 +376,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._saveMessage = null;
     this._saveError = null;
     this._saveErrorCopyStatus = null;
-    this._lastAppliedDefinitionCanonical = '';
-    this._definitionParseError = null;
-    this._definitionSchemaIssues = [];
+    this._definition.reset();
     this._applySelection(null, this._serviceBlueprint);
     this._announceHistory('Service blueprint loaded. Undo history is ready for your next edit.');
     this._serviceBlueprintStale = false;
@@ -893,7 +883,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _handleConfidenceTabChanged = (e: CustomEvent<{ tab: ConfidenceTab }>) => {
     this._activeConfidenceTab = e.detail.tab;
     if (e.detail.tab === 'definition') {
-      void this._ensureDefinitionEditorLoaded();
+      void this._definition.ensureEditorLoaded();
     }
   };
 
@@ -901,148 +891,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   // Definition tab — JSON twin-pane sync
   // ---------------------------------------------------------------------------
 
-  private async _ensureDefinitionEditorLoaded() {
-    if (this._definitionEditorLoaded) {
-      return;
-    }
-    await import('./wayfinder-definition-editor.js');
-    this._definitionEditorLoaded = true;
-  }
-
-  private _refreshDefinitionTextFromServiceBlueprint() {
-    if (!this._serviceBlueprint) {
-      if (this._definitionText !== '') {
-        this._definitionText = '';
-      }
-      if (this._definitionParseError !== null) {
-        this._definitionParseError = null;
-      }
-      if (this._definitionSchemaIssues.length > 0) {
-        this._definitionSchemaIssues = [];
-      }
-      this._lastAppliedDefinitionCanonical = '';
-      return;
-    }
-    const canonical = serializeAuthoredServiceBlueprint(this._serviceBlueprint);
-    if (canonical === this._lastAppliedDefinitionCanonical) {
-      return;
-    }
-    this._definitionText = canonical;
-    this._lastAppliedDefinitionCanonical = canonical;
-    if (this._definitionParseError !== null) {
-      this._definitionParseError = null;
-    }
-    if (this._definitionSchemaIssues.length > 0) {
-      this._definitionSchemaIssues = [];
-    }
-  }
-
-  private _handleDefinitionInput = (e: CustomEvent<{ value: string }>) => {
-    this._definitionText = e.detail.value;
-    if (this._definitionDebounceHandle !== null) {
-      window.clearTimeout(this._definitionDebounceHandle);
-    }
-    this._definitionDebounceHandle = window.setTimeout(() => {
-      this._definitionDebounceHandle = null;
-      this._tryApplyDefinitionText();
-    }, 250);
-  };
-
-  private _tryApplyDefinitionText() {
-    const source = this._definitionText;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(source);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this._definitionParseError = message;
-      this._definitionSchemaIssues = [];
-      return;
-    }
-
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, source, this._componentCatalog);
-    if (issues.length > 0) {
-      this._definitionParseError = null;
-      this._definitionSchemaIssues = issues;
-      return;
-    }
-
-    const next = coerceParsedAuthoredServiceBlueprint(parsed);
-    this._definitionParseError = null;
-    this._definitionSchemaIssues = [];
-
-    if (authoredServiceBlueprintJsonEquals(this._serviceBlueprint, next)) {
-      // No semantic change — just remember the text the user typed.
-      this._lastAppliedDefinitionCanonical = serializeAuthoredServiceBlueprint(next);
-      return;
-    }
-
-    // Mark the canonical so the visual→definition sync doesn't echo this back.
-    this._lastAppliedDefinitionCanonical = serializeAuthoredServiceBlueprint(next);
-    this._commitServiceBlueprintUpdate(next, this._currentSelection());
-    const stageCount = next.stages.length;
-    const gatewayCount = next.gateways?.length ?? 0;
-    this._announceDefinition(
-      `Definition updated. ${stageCount} ${stageCount === 1 ? 'stage' : 'stages'}, ${gatewayCount} ${gatewayCount === 1 ? 'gateway' : 'gateways'}.`
-    );
-  }
-
-  private _announceDefinition(message: string) {
-    this._definitionAnnouncement = '';
-    requestAnimationFrame(() => {
-      this._definitionAnnouncement = message;
-    });
-  }
-
-  private _revertDefinitionText() {
-    if (!this._serviceBlueprint) {
-      return;
-    }
-    if (this._definitionDebounceHandle !== null) {
-      window.clearTimeout(this._definitionDebounceHandle);
-      this._definitionDebounceHandle = null;
-    }
-    const canonical = serializeAuthoredServiceBlueprint(this._serviceBlueprint);
-    this._definitionText = canonical;
-    this._lastAppliedDefinitionCanonical = canonical;
-    this._definitionParseError = null;
-    this._definitionSchemaIssues = [];
-    this._announceDefinition('Definition reverted to the current service blueprint.');
-  }
-
-  private _applyDefinitionTextImmediately() {
-    if (this._definitionDebounceHandle !== null) {
-      window.clearTimeout(this._definitionDebounceHandle);
-      this._definitionDebounceHandle = null;
-    }
-    this._tryApplyDefinitionText();
-  }
   // Public hook for tests/host: flush debounce and apply if valid.
   applyDefinitionPending() {
-    this._applyDefinitionTextImmediately();
-  }
-
-  private get _definitionHasIssues() {
-    return this._definitionParseError !== null || this._definitionSchemaIssues.length > 0;
-  }
-
-  private get _definitionDiagnostics() {
-    const out: Array<{ line: number; severity: 'error' | 'warning'; message: string }> = [];
-    if (this._definitionParseError) {
-      // Try to pull a "line N column M" hint out of JSON.parse errors.
-      const lineMatch = /line (\d+)/i.exec(this._definitionParseError);
-      out.push({
-        line: lineMatch ? Number(lineMatch[1]) : 1,
-        severity: 'error',
-        message: this._definitionParseError,
-      });
-    }
-    for (const issue of this._definitionSchemaIssues) {
-      if (issue.line) {
-        out.push({ line: issue.line, severity: 'error', message: issue.message });
-      }
-    }
-    return out;
+    this._definition.flush();
   }
 
   private get _clipboardContext(): ClipboardContext {
@@ -1386,88 +1237,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             `
         }
       </section>
-    `;
-  }
-
-  private _renderDefinitionPanel() {
-    if (!this._serviceBlueprint) {
-      return html`<div class="definition-empty" data-wayfinder-definition-empty>
-        Loading the service blueprint definition…
-      </div>`;
-    }
-
-    const banner = this._renderDefinitionBanner();
-
-    return html`
-      <div class="definition-panel" data-wayfinder-definition-panel>
-        ${banner}
-        <div class="definition-editor-frame">
-          ${
-            this._definitionEditorLoaded
-              ? html`
-                <wayfinder-definition-editor
-                  data-wayfinder-definition-editor
-                  .value=${this._definitionText}
-                  .diagnostics=${this._definitionDiagnostics}
-                  @definition-input=${this._handleDefinitionInput}
-                ></wayfinder-definition-editor>
-              `
-              : html`<p class="definition-loading" role="status" data-wayfinder-definition-tab-loading>
-                Preparing the JSON editor…
-              </p>`
-          }
-        </div>
-        <div class="sr-only" role="status" aria-live="polite" data-wayfinder-definition-announcement>
-          ${this._definitionAnnouncement}
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderDefinitionBanner() {
-    if (!this._definitionHasIssues) {
-      return nothing;
-    }
-    const summary = this._definitionParseError
-      ? `JSON is not valid: ${this._definitionParseError}`
-      : (this._definitionSchemaIssues[0]?.message ?? 'Definition does not match the service blueprint schema.');
-    const additional =
-      !this._definitionParseError && this._definitionSchemaIssues.length > 1
-        ? html`<ul class="definition-banner-list">
-          ${this._definitionSchemaIssues.slice(1, 5).map((issue) => html`<li>${issue.message}</li>`)}
-        </ul>`
-        : nothing;
-
-    return html`
-      <div
-        class="definition-banner"
-        role="alert"
-        data-wayfinder-definition-banner
-      >
-        <p class="definition-banner-summary">
-          <strong>Definition can't be applied:</strong> ${summary}
-        </p>
-        ${additional}
-        <div class="definition-banner-actions">
-          <button
-            type="button"
-            class="govuk-button"
-            data-wayfinder-definition-apply
-            disabled
-            aria-disabled="true"
-          >
-            Apply when valid
-          </button>
-          <button
-            type="button"
-            class="govuk-button govuk-button--secondary"
-            data-wayfinder-definition-revert
-            @click=${this._revertDefinitionText}
-          >
-            Revert to current
-          </button>
-        </div>
-      </div>
     `;
   }
 
@@ -1982,7 +1751,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           <!-- Other tabs -->
           <div slot="calculations">${this._renderCalculationsPanel()}</div>
           <div slot="validation">${this._renderValidationPanel()}</div>
-          <div slot="definition">${this._renderDefinitionPanel()}</div>
+          <div slot="definition">${this._definition.renderPanel()}</div>
         </wayfinder-confidence-tabs>
         </div>
 
