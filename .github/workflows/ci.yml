@@ -133,6 +133,10 @@ jobs:
         working-directory: Wayfinder.Editor.Client
         run: npm run lint
 
+      - name: Editor unit tests
+        working-directory: Wayfinder.Editor.Client
+        run: npm run test:units
+
       - name: No legacy blueprint shapes
         working-directory: Wayfinder.Editor.Client
         run: npm run test:no-legacy-shapes

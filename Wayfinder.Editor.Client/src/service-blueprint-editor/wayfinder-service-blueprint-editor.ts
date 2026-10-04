@@ -1,19 +1,9 @@
 import { LitElement, html, nothing, unsafeCSS } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import {
-  type ActionCatalogEntry,
-  type ActionDefinition,
-  type ServiceBlueprintGatewayDefinition,
-  type ServiceBlueprintRouteDefinition,
-  type StageDefinition,
-  type ServiceBlueprint,
-  type ComponentDescriptor,
-  type NodePosition,
-  type SupportSystemDescriptor,
-  serviceBlueprintGateways,
-} from './types.js';
+import type { ActionCatalogEntry, ActionDefinition, ServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
+import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
+import { EditHistory } from './edit-history.js';
 import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
-import { computeServiceBlueprintGraphLayout, parseGraphNodeId } from './graph/service-blueprint-graph-layout.js';
 import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import { BuiltInServiceBlueprintActionCatalog } from './action-catalog.js';
@@ -23,10 +13,9 @@ import type { ServiceBlueprintSupportSystemCatalog } from './support-system-cata
 import { HttpServiceBlueprintSupportSystemCatalog } from './support-system-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
-import { availableContexts, contextForTiming, timingForContext, updateActionSummary } from './action-editing.js';
 import { validateServiceBlueprint, type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
 import { mapServerDiagnosticsToIssues } from './server-diagnostic-location.js';
-import { flattenRoutes, newRouteId } from './route-model.js';
+import { flattenRoutes } from './route-model.js';
 import { findServiceBlueprintShortcut, matchesShortcut, SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
 import './wayfinder-service-blueprint-graph.js';
 import './wayfinder-step-inspector.js';
@@ -55,14 +44,8 @@ type ActionSelection = {
   index: number;
 } | null;
 
-type ClipboardEntry =
-  | { kind: 'stage'; stage: StageDefinition; label: string }
-  | { kind: 'subgraph'; stages: StageDefinition[]; gateways: ServiceBlueprintGatewayDefinition[]; label: string }
-  | { kind: 'action'; action: ActionDefinition; label: string; sourceTarget: 'stage' | 'transition' };
-
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
-const HISTORY_LIMIT = 50;
 const SAVE_SHORTCUT = findServiceBlueprintShortcut('save');
 const UNDO_SHORTCUT = findServiceBlueprintShortcut('undo');
 const REDO_SHORTCUT = findServiceBlueprintShortcut('redo');
@@ -76,14 +59,6 @@ function cloneServiceBlueprint(serviceBlueprint: ServiceBlueprint): ServiceBluep
 
 function cloneSelection(selection: ServiceBlueprintSelection): ServiceBlueprintSelection {
   return selection ? { ...selection } : null;
-}
-
-function cloneStage(stage: StageDefinition): StageDefinition {
-  return JSON.parse(JSON.stringify(stage)) as StageDefinition;
-}
-
-function cloneAction(action: ActionDefinition): ActionDefinition {
-  return JSON.parse(JSON.stringify(action)) as ActionDefinition;
 }
 
 function serviceBlueprintsEqual(left: ServiceBlueprint | null, right: ServiceBlueprint | null): boolean {
@@ -104,18 +79,6 @@ function selectionsEqual(left: ServiceBlueprintSelection, right: ServiceBlueprin
   }
 
   return left === right;
-}
-
-function makeCopiedStageKey(baseStageKey: string, serviceBlueprint: ServiceBlueprint): string {
-  const usedKeys = new Set(serviceBlueprint.stages.map((stage) => stage.stageKey));
-  let candidate = `${baseStageKey}-copy`;
-  let suffix = 2;
-  while (usedKeys.has(candidate)) {
-    candidate = `${baseStageKey}-copy-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
 }
 
 /**
@@ -205,11 +168,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @state() private _actionCatalog: ActionCatalogEntry[] = [];
   @state() private _componentCatalog: ComponentDescriptor[] = [];
   @state() private _supportSystemCatalog: SupportSystemDescriptor[] = [];
-  @state() private _undoHistory: ServiceBlueprintHistoryEntry[] = [];
-  @state() private _redoHistory: ServiceBlueprintHistoryEntry[] = [];
+  private readonly _history = new EditHistory<ServiceBlueprintHistoryEntry>();
   @state() private _historyAnnouncement = '';
   @state() private _actionSelection: ActionSelection = null;
-  @state() private _clipboard: ClipboardEntry | null = null;
+  private readonly _clipboard = new BlueprintClipboard();
 
   /** Prefixed node ids from the canvas's shift-marquee multi-selection. */
   @state() private _graphMultiSelection: string[] = [];
@@ -423,8 +385,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._serviceBlueprint = cloneServiceBlueprint(serviceBlueprint);
     this._reflectServiceBlueprintLoadedState();
     this._savedServiceBlueprintSnapshot = cloneServiceBlueprint(this._serviceBlueprint);
-    this._undoHistory = [];
-    this._redoHistory = [];
+    this._history.clear();
     this._actionSelection = null;
     this._saveState = 'idle';
     this._saveMessage = null;
@@ -627,30 +588,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     });
   }
 
-  private get _canUndo() {
-    return this._undoHistory.length > 0;
-  }
-
-  private get _canRedo() {
-    return this._redoHistory.length > 0;
-  }
-
   private get _historyStatusSummary() {
-    if (!this._serviceBlueprint) {
-      return 'History unavailable until the service blueprint loads.';
-    }
-
-    if (this._undoHistory.length === 0 && this._redoHistory.length === 0) {
-      return 'No editor changes yet. Undo and redo will appear as you edit.';
-    }
-
-    const undoLabel = `${this._undoHistory.length} change${this._undoHistory.length === 1 ? '' : 's'} available to undo`;
-    const redoLabel =
-      this._redoHistory.length > 0
-        ? `${this._redoHistory.length} change${this._redoHistory.length === 1 ? '' : 's'} available to redo`
-        : 'Redo disabled — you are at the latest change';
-
-    return `${undoLabel}. ${redoLabel}.`;
+    return this._serviceBlueprint ? this._history.summary : 'History unavailable until the service blueprint loads.';
   }
 
   private get _selectedActionIndex() {
@@ -660,16 +599,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     return currentSelection.kind === 'stage' && this._actionSelection.target === 'stage' ? this._actionSelection.index : null;
-  }
-
-  private get _clipboardSummary() {
-    if (!this._clipboard) {
-      return 'Clipboard empty — copy a stage or action to paste it elsewhere.';
-    }
-
-    return this._clipboard.kind === 'stage'
-      ? `Clipboard: stage “${this._clipboard.label}” ready to paste.`
-      : `Clipboard: action “${this._clipboard.label}” ready to paste.`;
   }
 
   /** ~400ms after the last edit the rail refreshes; long enough that a fast typist isn't firing a validate per keystroke. */
@@ -831,14 +760,13 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     const currentState = this._snapshotCurrentState();
     if (currentState) {
-      this._undoHistory = [...this._undoHistory, currentState].slice(-HISTORY_LIMIT);
+      this._history.record(currentState);
     }
 
     if (!selectionsEqual(previousSelection, nextSelection)) {
       this._actionSelection = null;
     }
 
-    this._redoHistory = [];
     this._serviceBlueprint = nextServiceBlueprint;
     this._saveState = 'idle';
     this._saveMessage = null;
@@ -866,91 +794,24 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return null;
   }
 
-  private _canPasteActionIntoSelection(action: ActionDefinition) {
-    const currentSelection = this._currentSelection();
-    if (!currentSelection || currentSelection.kind === 'gateway') {
-      return false;
-    }
-
-    const target = currentSelection.kind === 'stage' ? 'stage' : 'transition';
-    const entry = this._actionCatalog.find((candidate) => candidate.type === action.type) ?? null;
-    return entry ? availableContexts(entry, target).length > 0 : true;
-  }
-
-  private get _canCopy() {
-    return this._currentAction() !== null || this._currentSelection()?.kind === 'stage' || this._graphMultiSelection.length >= 2;
-  }
-
-  private get _canPaste() {
-    if (!this._serviceBlueprint || !this._clipboard) {
-      return false;
-    }
-
-    if (this._clipboard.kind === 'stage' || this._clipboard.kind === 'subgraph') {
-      return true;
-    }
-    return this._canPasteActionIntoSelection(this._clipboard.action);
-  }
-
-  private _normalisePastedAction(action: ActionDefinition, target: 'stage' | 'transition'): ActionDefinition | null {
-    const nextAction = cloneAction(action);
-    const entry = this._actionCatalog.find((candidate) => candidate.type === nextAction.type) ?? null;
-
-    if (!entry) {
-      return {
-        ...nextAction,
-        timing: target === 'transition' ? 'onTransition' : nextAction.timing === 'onExit' ? 'onExit' : 'onEnter',
-      };
-    }
-
-    const contexts = availableContexts(entry, target);
-    if (contexts.length === 0) {
-      return null;
-    }
-
-    const preferredContext =
-      target === 'transition'
-        ? 'transition'
-        : contexts.includes(contextForTiming(nextAction.timing, 'stage'))
-          ? contextForTiming(nextAction.timing, 'stage')
-          : contexts[0];
-
-    return updateActionSummary(entry, {
-      ...nextAction,
-      timing: timingForContext(preferredContext),
-    });
-  }
-
   private _undo = () => {
-    if (!this._canUndo) {
-      return;
-    }
-
-    const previous = this._undoHistory[this._undoHistory.length - 1];
     const current = this._snapshotCurrentState();
-    if (!current) {
+    const previous = current && this._history.undo(current);
+    if (!previous) {
       return;
     }
 
-    this._undoHistory = this._undoHistory.slice(0, -1);
-    this._redoHistory = [...this._redoHistory, current].slice(-HISTORY_LIMIT);
     this._restoreHistoryEntry(previous);
     this._announceHistory(`Undid the last serviceBlueprint change. ${this._historyStatusSummary}`);
   };
 
   private _redo = () => {
-    if (!this._canRedo) {
-      return;
-    }
-
-    const next = this._redoHistory[this._redoHistory.length - 1];
     const current = this._snapshotCurrentState();
-    if (!current) {
+    const next = current && this._history.redo(current);
+    if (!next) {
       return;
     }
 
-    this._redoHistory = this._redoHistory.slice(0, -1);
-    this._undoHistory = [...this._undoHistory, current].slice(-HISTORY_LIMIT);
     this._restoreHistoryEntry(next);
     this._announceHistory(`Redid the service blueprint change. ${this._historyStatusSummary}`);
   };
@@ -1008,7 +869,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     if (REDO_SHORTCUT && matchesShortcut(event, REDO_SHORTCUT)) {
       event.preventDefault();
-      if (this._canRedo) {
+      if (this._history.canRedo) {
         this._redo();
       }
       return;
@@ -1019,7 +880,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     event.preventDefault();
-    if (this._canUndo) {
+    if (this._history.canUndo) {
       this._undo();
     }
   };
@@ -1295,199 +1156,57 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return out;
   }
 
-  private _copySelection() {
-    const selectedAction = this._currentAction();
-    if (selectedAction) {
-      const label =
-        selectedAction.action.summary?.trim() ||
-        this._actionCatalog.find((entry) => entry.type === selectedAction.action.type)?.label ||
-        selectedAction.action.type;
-      this._clipboard = {
-        kind: 'action',
-        action: cloneAction(selectedAction.action),
-        label,
-        sourceTarget: selectedAction.target,
-      };
-      this._showToast(`Copied action ${label}.`);
-      return true;
-    }
-
-    if (!this._serviceBlueprint) {
-      return false;
-    }
-
-    if (this._graphMultiSelection.length >= 2) {
-      const selectedKeys = this._graphMultiSelection.map(parseGraphNodeId);
-      const stages = this._serviceBlueprint.stages.filter((stage) =>
-        selectedKeys.some((parsed) => parsed.kind === 'stage' && parsed.key === stage.stageKey)
-      );
-      const gateways = serviceBlueprintGateways(this._serviceBlueprint).filter((gateway) =>
-        selectedKeys.some((parsed) => parsed.kind === 'gateway' && parsed.key === gateway.key)
-      );
-      if (stages.length + gateways.length >= 2) {
-        const label = [
-          stages.length > 0 ? `${stages.length} stage${stages.length === 1 ? '' : 's'}` : null,
-          gateways.length > 0 ? `${gateways.length} gateway${gateways.length === 1 ? '' : 's'}` : null,
-        ]
-          .filter(Boolean)
-          .join(' and ');
-        this._clipboard = {
-          kind: 'subgraph',
-          stages: stages.map(cloneStage),
-          gateways: gateways.map((gateway) => JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition),
-          label,
-        };
-        this._showToast(`Copied ${label}.`);
-        return true;
-      }
-    }
-
-    if (!this._selectedStageKey) {
-      return false;
-    }
-
-    const stage = this._serviceBlueprint.stages.find((candidate) => candidate.stageKey === this._selectedStageKey);
-    if (!stage) {
-      return false;
-    }
-
-    this._clipboard = {
-      kind: 'stage',
-      stage: cloneStage(stage),
-      label: stage.displayName,
+  private get _clipboardContext(): ClipboardContext {
+    return {
+      blueprint: this._serviceBlueprint,
+      selectedStageKey: this._selectedStageKey,
+      multiSelection: this._graphMultiSelection,
+      selectedAction: this._currentAction(),
+      actionCatalog: this._actionCatalog,
+      availableQueues: this.availableQueues,
     };
-    this._showToast(`Copied stage ${stage.displayName}.`);
-    return true;
   }
 
-  /**
-   * Paste a copied subgraph: every stage and gateway gets a fresh unique key,
-   * routes between members of the copied set are remapped to the new keys
-   * (routes leaving the set keep their original targets), and the copies are
-   * positioned at a small offset from their sources.
-   */
-  private _pasteSubgraph(entry: Extract<ClipboardEntry, { kind: 'subgraph' }>): boolean {
-    if (!this._serviceBlueprint) {
+  private get _canCopy() {
+    return this._clipboard.canCopy(this._clipboardContext);
+  }
+
+  private get _canPaste() {
+    return this._clipboard.canPaste(this._clipboardContext);
+  }
+
+  private get _clipboardSummary() {
+    return this._clipboard.summary;
+  }
+
+  private _copySelection() {
+    const message = this._clipboard.copy(this._clipboardContext);
+    if (!message) {
       return false;
     }
-    const serviceBlueprint = this._serviceBlueprint;
-
-    const usedKeys = new Set<string>([
-      ...serviceBlueprint.stages.map((stage) => stage.stageKey),
-      ...serviceBlueprintGateways(serviceBlueprint).map((gateway) => gateway.key),
-    ]);
-    const uniqueKey = (base: string) => {
-      let candidate = `${base}-copy`;
-      let suffix = 2;
-      while (usedKeys.has(candidate)) {
-        candidate = `${base}-copy-${suffix}`;
-        suffix += 1;
-      }
-      usedKeys.add(candidate);
-      return candidate;
-    };
-
-    const keyMap = new Map<string, string>();
-    for (const stage of entry.stages) {
-      keyMap.set(stage.stageKey, uniqueKey(stage.stageKey));
-    }
-    for (const gateway of entry.gateways) {
-      keyMap.set(gateway.key, uniqueKey(gateway.key));
-    }
-
-    const remapRoutes = (ownerNewKey: string, routes: ServiceBlueprintRouteDefinition[] | undefined): ServiceBlueprintRouteDefinition[] =>
-      (routes ?? []).map((route) => {
-        const target = keyMap.get(route.target) ?? route.target;
-        return { ...route, target, id: newRouteId(ownerNewKey, route.trigger, target) };
-      });
-
-    const pastedStages: StageDefinition[] = entry.stages.map((stage) => {
-      const stageKey = keyMap.get(stage.stageKey)!;
-      return { ...cloneStage(stage), stageKey, routes: remapRoutes(stageKey, stage.routes) };
-    });
-    const pastedGateways: ServiceBlueprintGatewayDefinition[] = entry.gateways.map((gateway) => {
-      const key = keyMap.get(gateway.key)!;
-      const clone = JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition;
-      return { ...clone, key, routes: remapRoutes(key, gateway.routes) };
-    });
-
-    // Copies land offset from their source's current position.
-    const { layout } = computeServiceBlueprintGraphLayout(serviceBlueprint, this.availableQueues);
-    const layoutNodes: Record<string, NodePosition> = { ...(serviceBlueprint.layout?.nodes ?? {}) };
-    keyMap.forEach((newKey, oldKey) => {
-      const isStage = entry.stages.some((stage) => stage.stageKey === oldKey);
-      const placement = layout.placements.get(`${isStage ? 'stage' : 'gateway'}:${oldKey}`);
-      if (placement) {
-        layoutNodes[`${isStage ? 'stage' : 'gateway'}:${newKey}`] = {
-          x: Math.round(placement.x + 48),
-          y: Math.round(placement.y + 48),
-        };
-      }
-    });
-
-    const next: ServiceBlueprint = {
-      ...serviceBlueprint,
-      stages: [...serviceBlueprint.stages, ...pastedStages],
-      gateways: [...serviceBlueprintGateways(serviceBlueprint), ...pastedGateways],
-      layout: Object.keys(layoutNodes).length > 0 ? { nodes: layoutNodes } : serviceBlueprint.layout,
-    };
-
-    const firstStageKey = pastedStages[0]?.stageKey ?? null;
-    this._commitServiceBlueprintUpdate(next, firstStageKey ? { kind: 'stage', stageKey: firstStageKey } : this._currentSelection());
-    this._showToast(`Pasted ${entry.label}.`);
+    this._showToast(message);
+    this.requestUpdate();
     return true;
   }
 
   private _pasteClipboard() {
-    if (!this._serviceBlueprint || !this._clipboard) {
+    const outcome = this._clipboard.paste(this._clipboardContext);
+    if (!outcome.ok) {
+      if (outcome.message) {
+        this._showToast(outcome.message);
+      }
       return false;
     }
 
-    if (this._clipboard.kind === 'subgraph') {
-      return this._pasteSubgraph(this._clipboard);
+    const selection = outcome.selectStageKey ? { kind: 'stage' as const, stageKey: outcome.selectStageKey } : this._currentSelection();
+    this._commitServiceBlueprintUpdate(outcome.blueprint, selection);
+    if (outcome.selectActionIndex !== undefined) {
+      this._actionSelection = { target: 'stage', index: outcome.selectActionIndex };
     }
-
-    if (this._clipboard.kind === 'stage') {
-      const copiedStage = cloneStage(this._clipboard.stage);
-      const stageKey = makeCopiedStageKey(copiedStage.stageKey, this._serviceBlueprint);
-      const pastedStage: StageDefinition = {
-        ...copiedStage,
-        stageKey: stageKey,
-      };
-
-      const stages = [...this._serviceBlueprint.stages];
-      const selectedStageIndex = this._selectedStageKey ? stages.findIndex((stage) => stage.stageKey === this._selectedStageKey) : -1;
-      const insertIndex = selectedStageIndex >= 0 ? selectedStageIndex + 1 : stages.length;
-      stages.splice(insertIndex, 0, pastedStage);
-
-      this._commitServiceBlueprintUpdate({ ...this._serviceBlueprint, stages: stages }, { kind: 'stage', stageKey });
-      this._showToast(`Pasted stage ${pastedStage.displayName}.`);
+    this._showToast(outcome.message);
+    if (outcome.revealInspector) {
       this._handleInspectorRequested();
-      return true;
     }
-
-    const currentSelection = this._currentSelection();
-    if (currentSelection?.kind !== 'stage') {
-      return false;
-    }
-
-    const pastedAction = this._normalisePastedAction(this._clipboard.action, 'stage');
-    if (!pastedAction) {
-      this._showToast(`Action ${this._clipboard.label} cannot be pasted into the current stage.`);
-      return false;
-    }
-
-    const stageIndex = this._serviceBlueprint.stages.findIndex((stage) => stage.stageKey === currentSelection.stageKey);
-    if (stageIndex < 0) {
-      return false;
-    }
-
-    const stages = [...this._serviceBlueprint.stages];
-    const nextActions = [...(stages[stageIndex].actions ?? []), pastedAction];
-    stages[stageIndex] = { ...stages[stageIndex], actions: nextActions };
-    this._commitServiceBlueprintUpdate({ ...this._serviceBlueprint, stages: stages }, currentSelection);
-    this._actionSelection = { target: 'stage', index: nextActions.length - 1 };
-    this._showToast(`Pasted action ${this._clipboard.label} into ${stages[stageIndex].displayName}.`);
     return true;
   }
 
@@ -2055,7 +1774,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             <button
               class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
               data-wayfinder-undo
-              ?disabled=${!this._canUndo}
+              ?disabled=${!this._history.canUndo}
               aria-label="Undo"
               title=${`Undo${UNDO_SHORTCUT ? ` (${UNDO_SHORTCUT.labels[0]})` : ''}`}
               aria-keyshortcuts=${UNDO_SHORTCUT?.ariaKeys ?? nothing}
@@ -2066,7 +1785,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             <button
               class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
               data-wayfinder-redo
-              ?disabled=${!this._canRedo}
+              ?disabled=${!this._history.canRedo}
               aria-label="Redo"
               title=${`Redo${REDO_SHORTCUT ? ` (${REDO_SHORTCUT.labels[0]})` : ''}`}
               aria-keyshortcuts=${REDO_SHORTCUT?.ariaKeys ?? nothing}
