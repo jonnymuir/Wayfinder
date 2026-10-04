@@ -2,7 +2,7 @@ namespace Wayfinder.Models.ServiceDesign;
 
 /// <summary>
 /// A queue work item's status, derived by <see cref="Services.ProcessManagerEngine.GetQueueWorkItems"/>
-/// from the actor-relative <c>AccessibleWorkItem</c> it was built from — never independently set.
+/// from the actor-relative <c>ActorWorkItem</c> it was built from — never independently set.
 /// A row that is none of these (the actor lacks permission to act in that queue at all, or every
 /// outgoing route is <c>showWhen</c>-hidden — genuinely zero eligible routes, not merely zero
 /// available ones) has no <see cref="QueueWorkItemStatus"/> at all and stays invisible under every
@@ -51,7 +51,7 @@ public enum QueueWorkItemStatus
 /// "assign-to-initiator" queue (nothing to pick up — it's always already owned) has nothing to
 /// pick up. A row held by someone else — an individual on a queue with no declared team, or a
 /// different team member on a team-owned one — never produces a row at all for anyone but its
-/// holder (see <c>ProcessManagerEngine.FindAccessibleWorkItems</c>'s ownership filter), so there is
+/// holder (see <c>ProcessManagerEngine.FindActorWorkItems</c>'s ownership filter), so there is
 /// no third "picked up by someone else" value here to enumerate. See docs/guides/work-allocation.md
 /// and docs/guides/team-assignment.md — and note this is unrelated to
 /// <c>IQueueCapabilitiesProvider</c>'s own pre-existing, differently-scoped use of the word

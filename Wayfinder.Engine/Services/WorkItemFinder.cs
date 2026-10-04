@@ -8,13 +8,13 @@ namespace Wayfinder.Engine.Services;
 /// <summary>Works out which rows of an instance (stages it is at, join gateways it waits behind) a given actor can see, and what they can do.</summary>
 internal sealed class WorkItemFinder(StageCalculations calculations)
 {
-    public IReadOnlyList<AccessibleWorkItem> FindAccessibleWorkItems(
+    public IReadOnlyList<ActorWorkItem> FindActorWorkItems(
         ServiceRequest instance,
         ServiceBlueprint definition,
         ActorProfile accessProfile,
         string? userId = null)
     {
-        var items = new List<AccessibleWorkItem>();
+        var items = new List<ActorWorkItem>();
 
         if (instance.Cursors.Count == 0)
         {
@@ -35,7 +35,7 @@ internal sealed class WorkItemFinder(StageCalculations calculations)
                         var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
                         var availableActions = IsEntitledToActNow(accessProfile, assignedTo, userId) ? eligibleActions : [];
 
-                        items.Add(new AccessibleWorkItem(
+                        items.Add(new ActorWorkItem(
                             stage.StageKey,
                             stage.DisplayName,
                             queueName,
@@ -87,7 +87,7 @@ internal sealed class WorkItemFinder(StageCalculations calculations)
             var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
             var availableActions = IsEntitledToActNow(accessProfile, assignedTo, userId) ? eligibleActions : [];
 
-            items.Add(new AccessibleWorkItem(
+            items.Add(new ActorWorkItem(
                 stage.StageKey,
                 stage.DisplayName,
                 queueName,
@@ -115,7 +115,7 @@ internal sealed class WorkItemFinder(StageCalculations calculations)
                 continue;
             }
 
-            items.Add(new AccessibleWorkItem(
+            items.Add(new ActorWorkItem(
                 gateway.Key,
                 gateway.DisplayName,
                 queueName,
@@ -138,7 +138,7 @@ internal sealed class WorkItemFinder(StageCalculations calculations)
 
     /// <summary>
     /// Assignment-agnostic — route/role/showWhen-gated only. See
-    /// <see cref="AccessibleWorkItem.EligibleActions"/>'s own remarks for why this is a distinct
+    /// <see cref="ActorWorkItem.EligibleActions"/>'s own remarks for why this is a distinct
     /// concept from what actually renders/what <c>Advance</c> accepts.
     /// </summary>
     public ServiceRequestAction[] BuildEligibleActions(
@@ -170,7 +170,7 @@ internal sealed class WorkItemFinder(StageCalculations calculations)
         // ServiceBlueprintRouteDefinition.ShowWhen excludes a route from AvailableActions
         // entirely (not merely disables it) — the same mechanism a stage's own components use via
         // Component.ShowWhen. The Any() guard is deliberate: this runs once per stage per queue
-        // render (FindAccessibleWorkItems calls it for every visible cursor across every instance
+        // render (FindActorWorkItems calls it for every visible cursor across every instance
         // a queue lists), so a blueprint that never uses ShowWhen on a route — everything shipped
         // before this — pays nothing extra for it.
         if (transitions.Any(transition => !string.IsNullOrWhiteSpace(transition.ShowWhen)))

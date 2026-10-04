@@ -375,7 +375,7 @@ public class TeamAssignmentTests
 
         // The exact shape ResolveSupportSystemOutcome's own webhook-resolution recursion uses: a
         // real userId (the instance's owning user), but the synthetic ActorProfile.UnrestrictedOwner
-        // rather than a real resolved profile — see FindAccessibleWorkItems' own IsVisibleToActor.
+        // rather than a real resolved profile — see FindActorWorkItems' own IsVisibleToActor.
         // Without the bypass, this would incorrectly hide the very row this call just caused to
         // materialize, since UnrestrictedOwner carries no real team membership.
         var escalated = engine.Advance(

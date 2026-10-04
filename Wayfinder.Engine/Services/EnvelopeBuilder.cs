@@ -33,7 +33,7 @@ internal sealed class EnvelopeBuilder(
             return Envelopes.Aborted(instance);
         }
 
-        var accessible = workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId);
+        var accessible = workItems.FindActorWorkItems(instance, definition, accessProfile, userId);
         var visibleItem = accessible is [var firstItem, ..] ? firstItem : null;
 
         if (visibleItem is null)

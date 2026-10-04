@@ -1,20 +1,18 @@
-import { LitElement, html, css, nothing } from 'lit';
+import { LitElement, html, nothing, unsafeCSS } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import {
-  type ActionCatalogEntry,
-  type ActionDefinition,
-  type ServiceBlueprintGatewayDefinition,
-  type ServiceBlueprintRouteDefinition,
-  type StageDefinition,
-  type ServiceBlueprint,
-  type ComponentDescriptor,
-  type NodePosition,
-  type SupportSystemDescriptor,
-  serviceBlueprintGateways,
-} from './types.js';
-import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
-import { computeServiceBlueprintGraphLayout, parseGraphNodeId } from './graph/service-blueprint-graph-layout.js';
-import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
+import type { ActionCatalogEntry, ActionDefinition, ServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
+import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
+import { DefinitionController } from './definition-controller.js';
+import { cloneServiceBlueprint, serviceBlueprintsEqual } from './blueprint-snapshot.js';
+import { EditorKeyboard } from './editor-keyboard.js';
+import { EditHistory } from './edit-history.js';
+import { PanelLayoutController } from './panel-layout-controller.js';
+import { ShortcutGuideController } from './shortcut-guide-controller.js';
+import { SaveController } from './save-controller.js';
+import { ToastController } from './toast-controller.js';
+import { StalenessController } from './staleness-controller.js';
+import { ValidationController } from './validation-controller.js';
+import type { ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import { BuiltInServiceBlueprintActionCatalog } from './action-catalog.js';
 import type { ServiceBlueprintComponentCatalog } from './component-catalog.js';
@@ -23,24 +21,17 @@ import type { ServiceBlueprintSupportSystemCatalog } from './support-system-cata
 import { HttpServiceBlueprintSupportSystemCatalog } from './support-system-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
-import { availableContexts, contextForTiming, timingForContext, updateActionSummary } from './action-editing.js';
-import { validateServiceBlueprint, type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
-import { mapServerDiagnosticsToIssues } from './server-diagnostic-location.js';
-import { flattenRoutes, newRouteId } from './route-model.js';
-import { findServiceBlueprintShortcut, matchesShortcut, SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
+import type { ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
+import { flattenRoutes } from './route-model.js';
 import './wayfinder-service-blueprint-graph.js';
 import './wayfinder-step-inspector.js';
 import './wayfinder-calculations-editor.js';
 import './wayfinder-service-blueprint-outline.js';
 import './wayfinder-confidence-tabs.js';
-import { serializeAuthoredServiceBlueprint, authoredServiceBlueprintJsonEquals } from './service-blueprint-canonical-json.js';
-import {
-  coerceParsedAuthoredServiceBlueprint,
-  lintAuthoredServiceBlueprintDocument,
-  type DefinitionLint,
-} from './service-blueprint-lint.js';
 import type { ConfidenceTab } from './wayfinder-confidence-tabs.js';
 import { renderToolbarIcon } from './graph/toolbar-icons.js';
+import editorStyles from './wayfinder-service-blueprint-editor.css?inline';
+import { COPY_SHORTCUT, HELP_SHORTCUT, PASTE_SHORTCUT, REDO_SHORTCUT, SAVE_SHORTCUT, UNDO_SHORTCUT } from './editor-shortcut-bindings.js';
 
 type ServiceBlueprintSelection = { kind: 'stage'; stageKey: string } | { kind: 'gateway'; gatewayKey: string } | null;
 
@@ -54,39 +45,8 @@ type ActionSelection = {
   index: number;
 } | null;
 
-type ClipboardEntry =
-  | { kind: 'stage'; stage: StageDefinition; label: string }
-  | { kind: 'subgraph'; stages: StageDefinition[]; gateways: ServiceBlueprintGatewayDefinition[]; label: string }
-  | { kind: 'action'; action: ActionDefinition; label: string; sourceTarget: 'stage' | 'transition' };
-
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-
-const HISTORY_LIMIT = 50;
-const SAVE_SHORTCUT = findServiceBlueprintShortcut('save');
-const UNDO_SHORTCUT = findServiceBlueprintShortcut('undo');
-const REDO_SHORTCUT = findServiceBlueprintShortcut('redo');
-const COPY_SHORTCUT = findServiceBlueprintShortcut('copy');
-const PASTE_SHORTCUT = findServiceBlueprintShortcut('paste');
-const HELP_SHORTCUT = findServiceBlueprintShortcut('help');
-
-function cloneServiceBlueprint(serviceBlueprint: ServiceBlueprint): ServiceBlueprint {
-  return hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(serviceBlueprint)) as ServiceBlueprint);
-}
-
 function cloneSelection(selection: ServiceBlueprintSelection): ServiceBlueprintSelection {
   return selection ? { ...selection } : null;
-}
-
-function cloneStage(stage: StageDefinition): StageDefinition {
-  return JSON.parse(JSON.stringify(stage)) as StageDefinition;
-}
-
-function cloneAction(action: ActionDefinition): ActionDefinition {
-  return JSON.parse(JSON.stringify(action)) as ActionDefinition;
-}
-
-function serviceBlueprintsEqual(left: ServiceBlueprint | null, right: ServiceBlueprint | null): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function selectionsEqual(left: ServiceBlueprintSelection, right: ServiceBlueprintSelection): boolean {
@@ -103,18 +63,6 @@ function selectionsEqual(left: ServiceBlueprintSelection, right: ServiceBlueprin
   }
 
   return left === right;
-}
-
-function makeCopiedStageKey(baseStageKey: string, serviceBlueprint: ServiceBlueprint): string {
-  const usedKeys = new Set(serviceBlueprint.stages.map((stage) => stage.stageKey));
-  let candidate = `${baseStageKey}-copy`;
-  let suffix = 2;
-  while (usedKeys.has(candidate)) {
-    candidate = `${baseStageKey}-copy-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
 }
 
 /**
@@ -194,71 +142,73 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @state() private _serviceBlueprint: ServiceBlueprint | null = null;
   @state() private _selection: ServiceBlueprintSelection = null;
   @state() private _selectedTransitionIndex: number | null = null;
-  @state() private _toastMessage: string | null = null;
-  private _toastDismissTimer: number | null = null;
-  @state() private _serviceBlueprintStale = false;
-  @state() private _staleCurrentVersion: number | null = null;
-  @state() private _staleBannerDismissed = false;
+  private readonly _toast = new ToastController(this);
+  private readonly _staleness = new StalenessController(this, {
+    source: () => this.serviceBlueprintSource,
+    blueprintKey: () => this.blueprintKey,
+    loadedVersion: () => this._serviceBlueprint?.version ?? null,
+    reload: () => this._handleReloadAfterConflict(),
+  });
   @state() private _loading = false;
   @state() private _error: string | null = null;
   @state() private _actionCatalog: ActionCatalogEntry[] = [];
   @state() private _componentCatalog: ComponentDescriptor[] = [];
   @state() private _supportSystemCatalog: SupportSystemDescriptor[] = [];
-  @state() private _undoHistory: ServiceBlueprintHistoryEntry[] = [];
-  @state() private _redoHistory: ServiceBlueprintHistoryEntry[] = [];
+  private readonly _history = new EditHistory<ServiceBlueprintHistoryEntry>();
   @state() private _historyAnnouncement = '';
   @state() private _actionSelection: ActionSelection = null;
-  @state() private _clipboard: ClipboardEntry | null = null;
+  private readonly _clipboard = new BlueprintClipboard();
 
   /** Prefixed node ids from the canvas's shift-marquee multi-selection. */
   @state() private _graphMultiSelection: string[] = [];
-  @state() private _saveState: SaveState = 'idle';
-  @state() private _saveMessage: string | null = null;
-  @state() private _saveError: ServiceBlueprintSaveError | null = null;
-  @state() private _saveErrorCopyStatus: string | null = null;
-  @state() private _helpOpen = false;
+  private readonly _save = new SaveController(this, {
+    blueprint: () => this._serviceBlueprint,
+    blueprintKey: () => this.blueprintKey,
+    source: () => this.serviceBlueprintSource,
+    hasBlockingIssues: () => this._validation.hasBlocking,
+    allowedByContext: () => this._canSaveByContext,
+    adopt: (saved) => {
+      this._serviceBlueprint = saved;
+    },
+    conflict: (version) => this._staleness.markStale(version),
+    toast: (message) => this._toast.show(message),
+    jumpToStage: (stageKey) => this._jumpToStage(stageKey),
+  });
+  private readonly _help = new ShortcutGuideController(this);
+  /** Registers itself with the element; nothing else needs to call it. */
+  readonly keyboard = new EditorKeyboard(this, {
+    save: () => void this._save.save(),
+    undo: () => this._undo(),
+    redo: () => this._redo(),
+    copy: () => this._copySelection(),
+    paste: () => this._pasteClipboard(),
+    canUndo: () => this._history.canUndo,
+    canRedo: () => this._history.canRedo,
+    openHelp: () => this._help.open(this.shadowRoot?.activeElement as HTMLElement | null),
+    isHelpOpen: () => this._help.isOpen,
+  });
   @state() private _activeConfidenceTab: ConfidenceTab = 'canvas';
-  // Both start collapsed — the canvas is the primary surface, and either panel is one click
-  // away via its own toggle. The inspector auto-expands the moment something is selected (see
-  // _applySelection/_applyTransitionHighlight) since a closed Properties panel right after
-  // selecting a stage/gateway would just look broken; the outline has no equivalent trigger,
-  // so it stays exactly as the author left it.
-  @state() private _outlineCollapsed = true;
-  @state() private _inspectorCollapsed = true;
-  /** Expanded width of the Properties panel in px — dragged via .panel-resize-handle. */
-  @state() private _inspectorWidth = 380;
-  @state() private _inspectorResizing = false;
-  private _inspectorResizeStartX = 0;
-  private _inspectorResizeStartWidth = 0;
+  private readonly _layout = new PanelLayoutController(this);
   /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
   @state() private _graphZoom = 1;
   @query('.graph-panel') private _graphElement?: HTMLElementTagNameMap['wayfinder-service-blueprint-graph'];
-  @state() private _definitionEditorLoaded = false;
-  @state() private _definitionText = '';
-  @state() private _definitionParseError: string | null = null;
-  @state() private _definitionSchemaIssues: DefinitionLint[] = [];
-  @state() private _definitionAnnouncement = '';
-  /** Canonical JSON of the service blueprint at the moment a Definition→Visual sync was committed. */
-  private _lastAppliedDefinitionCanonical = '';
-  private _definitionDebounceHandle: number | null = null;
+  private readonly _definition = new DefinitionController(this, {
+    blueprint: () => this._serviceBlueprint,
+    componentCatalog: () => this._componentCatalog,
+    apply: (next) => this._commitServiceBlueprintUpdate(next, this._currentSelection()),
+  });
 
-  private _savedServiceBlueprintSnapshot: ServiceBlueprint | null = null;
-  private _helpReturnTarget: HTMLElement | null = null;
   private _lastLoadedBlueprintKey: string | null = null;
   private _serviceBlueprintLoadRequestId = 0;
-  private _versionPollTimer: number | null = null;
 
-  /**
-   * The validation-rail issue list. When the host's `ServiceBlueprintSource` implements
-   * `validate`, this holds the *server's* authoritative diagnostics (debounced via
-   * `_revalidate`); otherwise the in-browser `validateServiceBlueprint` fallback. Read by every
-   * `_*ValidationIssues` getter, the rail, the status line and the minimap counts.
-   */
-  @state() private _validationIssues: ServiceBlueprintValidationIssue[] = [];
-  /** A server `validate` call is in flight — the rail shows a "checking…" hint; Save stays gated on the last result. */
-  @state() private _validationPending = false;
-  private _validationDebounceHandle: number | null = null;
-  private _validationRequestId = 0;
+  private readonly _validation = new ValidationController(this, () => ({
+    blueprint: this._serviceBlueprint,
+    blueprintKey: this.blueprintKey,
+    source: this.serviceBlueprintSource,
+    actionCatalog: this._actionCatalog,
+    componentCatalog: this._componentCatalog,
+    supportSystemCatalog: this._supportSystemCatalog,
+  }));
 
   private get _selectedStageKey(): string | null {
     return this._selection?.kind === 'stage' ? this._selection.stageKey : null;
@@ -270,7 +220,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.addEventListener('keydown', this._handleEditorKeydown, true);
     this._reflectServiceBlueprintLoadedState();
 
     // Honour ?serviceBlueprint= URL param when running as a standalone page
@@ -302,19 +251,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   updated(_changedProperties: Map<string, unknown>) {
-    this._refreshDefinitionTextFromServiceBlueprint();
-    if (_changedProperties.has('_saveError') && this._saveError) {
-      this.updateComplete.then(() => {
-        this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-save-error]')?.focus();
-      });
-    }
+    this._definition.syncFromBlueprint();
     // The component catalog fetch (component-catalog.ts) resolves asynchronously, independent
     // of the Definition tab's own debounced re-lint (which only re-runs on text edits) — a user
     // who opens the Definition tab before it resolves would otherwise see component-schema
     // issues only after their next keystroke. Re-lint the already-loaded text once the catalog
     // actually arrives, so it isn't silently skipped for however long that race happens to last.
-    if (_changedProperties.has('_componentCatalog') && this._definitionText) {
-      this._tryApplyDefinitionText();
+    if (_changedProperties.has('_componentCatalog')) {
+      this._definition.relint();
     }
 
     // Recompute the validation rail whenever the blueprint, a catalog the fallback validator
@@ -330,25 +274,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       _changedProperties.has('serviceBlueprintSource')
     ) {
       if (_changedProperties.has('_serviceBlueprint') && !_changedProperties.get('_serviceBlueprint') && this._serviceBlueprint) {
-        void this._revalidate();
+        void this._validation.run();
       } else {
-        this._scheduleRevalidate();
+        this._validation.schedule();
       }
     }
   }
 
   disconnectedCallback() {
-    this.removeEventListener('keydown', this._handleEditorKeydown, true);
-    this._clearVersionPollTimer();
-    if (this._validationDebounceHandle !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._validationDebounceHandle);
-      this._validationDebounceHandle = null;
-    }
-    if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._toastDismissTimer);
-    }
-    window.removeEventListener('pointermove', this._handleInspectorResizeMove);
-    window.removeEventListener('pointerup', this._handleInspectorResizeEnd);
     super.disconnectedCallback();
   }
 
@@ -421,23 +354,13 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _initialiseEditorState(serviceBlueprint: ServiceBlueprint) {
     this._serviceBlueprint = cloneServiceBlueprint(serviceBlueprint);
     this._reflectServiceBlueprintLoadedState();
-    this._savedServiceBlueprintSnapshot = cloneServiceBlueprint(this._serviceBlueprint);
-    this._undoHistory = [];
-    this._redoHistory = [];
+    this._history.clear();
     this._actionSelection = null;
-    this._saveState = 'idle';
-    this._saveMessage = null;
-    this._saveError = null;
-    this._saveErrorCopyStatus = null;
-    this._lastAppliedDefinitionCanonical = '';
-    this._definitionParseError = null;
-    this._definitionSchemaIssues = [];
+    this._save.loaded(this._serviceBlueprint);
+    this._definition.reset();
     this._applySelection(null, this._serviceBlueprint);
     this._announceHistory('Service blueprint loaded. Undo history is ready for your next edit.');
-    this._serviceBlueprintStale = false;
-    this._staleCurrentVersion = null;
-    this._staleBannerDismissed = false;
-    this._scheduleVersionPoll();
+    this._staleness.reset();
   }
 
   private _reflectServiceBlueprintLoadedState() {
@@ -479,7 +402,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       const exists = serviceBlueprint.stages.some((stage) => stage.stageKey === selection.stageKey);
       this._selection = exists ? { kind: 'stage', stageKey: selection.stageKey } : null;
       this._selectedTransitionIndex = null;
-      this._expandInspectorForSelection();
+      if (this._selection) {
+        this._layout.expandInspector();
+      }
       return;
     }
 
@@ -487,24 +412,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       const exists = serviceBlueprint.gateways?.some((gateway) => gateway.key === selection.gatewayKey) ?? false;
       this._selection = exists ? { kind: 'gateway', gatewayKey: selection.gatewayKey } : null;
       this._selectedTransitionIndex = null;
-      this._expandInspectorForSelection();
+      if (this._selection) {
+        this._layout.expandInspector();
+      }
       return;
     }
 
     this._selection = null;
     this._selectedTransitionIndex = null;
-  }
-
-  /**
-   * The Properties panel starts collapsed (see _outlineCollapsed/_inspectorCollapsed's
-   * comment) — expand it the moment a selection actually resolves to something real, so
-   * selecting a stage/gateway/route doesn't leave its own details panel closed. Never
-   * re-collapses on its own; the user's explicit toggle is the only way back.
-   */
-  private _expandInspectorForSelection() {
-    if (this._selection && this._inspectorCollapsed) {
-      this._inspectorCollapsed = false;
-    }
   }
 
   private _applyTransitionHighlight(transitionIndex: number, serviceBlueprint: ServiceBlueprint | null = this._serviceBlueprint) {
@@ -523,82 +438,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     const route = transitions[transitionIndex];
     this._selection = route.fromGateway ? { kind: 'gateway', gatewayKey: route.fromGateway } : { kind: 'stage', stageKey: route.fromStage };
     this._selectedTransitionIndex = transitionIndex;
-    this._expandInspectorForSelection();
-  }
-
-  /**
-   * Proactive staleness check, not just reactive-on-save: while a service blueprint is open, poll
-   * every 15s for whether someone else (a human, or an AI agent) has saved a newer version.
-   * MVP — a `checkVersion(key) => { version }` scalar poll is cheap enough that it doesn't
-   * need push infrastructure; Server-Sent Events is the natural upgrade path if that ever
-   * stops being true. Only fires if the host's ServiceBlueprintSource implements `checkVersion` —
-   * hosts that don't wire up versioning simply don't get this (no error, no polling).
-   */
-  private static readonly VERSION_POLL_INTERVAL_MS = 15_000;
-
-  private _clearVersionPollTimer() {
-    if (this._versionPollTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._versionPollTimer);
-    }
-    this._versionPollTimer = null;
-  }
-
-  private _scheduleVersionPoll() {
-    this._clearVersionPollTimer();
-
-    // No point polling once we already know it's stale — nothing more to learn until reload.
-    if (
-      typeof window === 'undefined' ||
-      !this.serviceBlueprintSource?.checkVersion ||
-      !this._serviceBlueprint ||
-      this._serviceBlueprintStale
-    ) {
-      return;
-    }
-
-    this._versionPollTimer = window.setTimeout(() => {
-      void this._pollServiceBlueprintVersion();
-    }, WayfinderServiceBlueprintEditorElement.VERSION_POLL_INTERVAL_MS);
-  }
-
-  /**
-   * Single source of truth for "someone else saved a newer version" — set proactively by
-   * polling or reactively by a failed save's 409. Locks the editor read-only (see
-   * `_renderStaleServiceBlueprintOverlay`) until `_handleReloadAfterConflict` runs: any further edit
-   * would just be heading toward another guaranteed conflict, so there's no honest "keep
-   * working" option. The overlay always carries its own Reload action regardless of whether
-   * the more detailed banner (`_renderStaleServiceBlueprintBanner`) has been dismissed — dismissing
-   * that banner only hides the extra detail, it doesn't give back editing or lose Reload.
-   */
-  private _markServiceBlueprintStale(currentVersion: number | null) {
-    this._serviceBlueprintStale = true;
-    this._staleCurrentVersion = currentVersion;
-    this._staleBannerDismissed = false;
-    this._clearVersionPollTimer();
-  }
-
-  private async _pollServiceBlueprintVersion() {
-    if (!this.serviceBlueprintSource?.checkVersion || !this._serviceBlueprint) {
-      return;
-    }
-
-    const key = this.blueprintKey;
-    const loadedVersion = this._serviceBlueprint.version;
-
-    try {
-      const currentVersion = await this.serviceBlueprintSource.checkVersion(key);
-      // The user may have navigated to a different serviceBlueprint, or reloaded, while this was in flight.
-      if (key !== this.blueprintKey || !this._serviceBlueprint) {
-        return;
-      }
-
-      if (currentVersion !== null && currentVersion !== loadedVersion && !this._serviceBlueprintStale) {
-        this._markServiceBlueprintStale(currentVersion);
-      }
-    } catch {
-      // Best-effort — a transient poll failure shouldn't disrupt editing.
-    } finally {
-      this._scheduleVersionPoll();
+    if (this._selection) {
+      this._layout.expandInspector();
     }
   }
 
@@ -626,30 +467,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     });
   }
 
-  private get _canUndo() {
-    return this._undoHistory.length > 0;
-  }
-
-  private get _canRedo() {
-    return this._redoHistory.length > 0;
-  }
-
   private get _historyStatusSummary() {
-    if (!this._serviceBlueprint) {
-      return 'History unavailable until the service blueprint loads.';
-    }
-
-    if (this._undoHistory.length === 0 && this._redoHistory.length === 0) {
-      return 'No editor changes yet. Undo and redo will appear as you edit.';
-    }
-
-    const undoLabel = `${this._undoHistory.length} change${this._undoHistory.length === 1 ? '' : 's'} available to undo`;
-    const redoLabel =
-      this._redoHistory.length > 0
-        ? `${this._redoHistory.length} change${this._redoHistory.length === 1 ? '' : 's'} available to redo`
-        : 'Redo disabled — you are at the latest change';
-
-    return `${undoLabel}. ${redoLabel}.`;
+    return this._serviceBlueprint ? this._history.summary : 'History unavailable until the service blueprint loads.';
   }
 
   private get _selectedActionIndex() {
@@ -661,160 +480,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return currentSelection.kind === 'stage' && this._actionSelection.target === 'stage' ? this._actionSelection.index : null;
   }
 
-  private get _clipboardSummary() {
-    if (!this._clipboard) {
-      return 'Clipboard empty — copy a stage or action to paste it elsewhere.';
-    }
-
-    return this._clipboard.kind === 'stage'
-      ? `Clipboard: stage “${this._clipboard.label}” ready to paste.`
-      : `Clipboard: action “${this._clipboard.label}” ready to paste.`;
-  }
-
-  /** ~400ms after the last edit the rail refreshes; long enough that a fast typist isn't firing a validate per keystroke. */
-  private static readonly VALIDATION_DEBOUNCE_MS = 400;
-
-  private _scheduleRevalidate() {
-    if (typeof window === 'undefined') {
-      void this._revalidate();
-      return;
-    }
-    if (this._validationDebounceHandle !== null) {
-      window.clearTimeout(this._validationDebounceHandle);
-    }
-    this._validationDebounceHandle = window.setTimeout(() => {
-      this._validationDebounceHandle = null;
-      void this._revalidate();
-    }, WayfinderServiceBlueprintEditorElement.VALIDATION_DEBOUNCE_MS);
-  }
-
-  private _fallbackValidationIssues(blueprint: ServiceBlueprint): ServiceBlueprintValidationIssue[] {
-    return validateServiceBlueprint(blueprint, this._actionCatalog, this._componentCatalog, this._supportSystemCatalog);
-  }
-
-  /**
-   * Refresh `_validationIssues`. If the host's source implements `validate`, that server call is
-   * authoritative — its diagnostics are exactly what Save enforces and what the
-   * `validate_service_blueprint` tool reports. Otherwise, and if that call fails, fall back to
-   * the in-browser `validateServiceBlueprint`. A stale in-flight response is discarded via
-   * `_validationRequestId`.
-   */
-  private async _revalidate() {
-    const blueprint = this._serviceBlueprint;
-    if (!blueprint) {
-      this._validationIssues = [];
-      this._validationPending = false;
-      return;
-    }
-
-    const source = this.serviceBlueprintSource;
-    if (!source || typeof source.validate !== 'function') {
-      this._validationIssues = this._fallbackValidationIssues(blueprint);
-      this._validationPending = false;
-      return;
-    }
-
-    const requestId = ++this._validationRequestId;
-    this._validationPending = true;
-    try {
-      const outcome = await source.validate(this.blueprintKey || blueprint.definitionKey, blueprint);
-      if (requestId !== this._validationRequestId) {
-        return;
-      }
-      this._validationIssues = mapServerDiagnosticsToIssues(outcome);
-    } catch {
-      if (requestId !== this._validationRequestId) {
-        return;
-      }
-      // Host/server unreachable — never wedge the rail or gate Save on a stale-blank result;
-      // show the best-effort in-browser check for this cycle.
-      this._validationIssues = this._fallbackValidationIssues(blueprint);
-    } finally {
-      if (requestId === this._validationRequestId) {
-        this._validationPending = false;
-      }
-    }
-  }
-
   /** Public hook for tests/host: run the pending revalidation now instead of after the debounce. */
   async flushValidationPending() {
-    if (this._validationDebounceHandle !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._validationDebounceHandle);
-      this._validationDebounceHandle = null;
-    }
-    await this._revalidate();
+    await this._validation.flush();
     await this.updateComplete;
-  }
-
-  private get _blockingValidationIssues() {
-    return this._validationIssues.filter((issue) => issue.blocking);
-  }
-
-  private get _warningValidationIssues() {
-    return this._validationIssues.filter((issue) => !issue.blocking);
-  }
-
-  private get _hasBlockingValidationIssues() {
-    return this._blockingValidationIssues.length > 0;
-  }
-
-  private get _isDirty() {
-    return !serviceBlueprintsEqual(this._serviceBlueprint, this._savedServiceBlueprintSnapshot);
-  }
-
-  private get _canSave() {
-    return Boolean(this._serviceBlueprint) && !this._hasBlockingValidationIssues && this._saveState !== 'saving' && this._canSaveByContext;
-  }
-
-  private get _dirtyStateSummary() {
-    if (!this._serviceBlueprint) {
-      return 'Service blueprint not loaded yet.';
-    }
-
-    return this._isDirty ? 'Unsaved changes' : 'All changes saved';
-  }
-
-  private get _validationStatusSummary() {
-    if (!this._serviceBlueprint) {
-      return 'Validation will appear when the service blueprint loads.';
-    }
-
-    if (this._validationPending && this._validationIssues.length === 0) {
-      return 'Checking the service blueprint…';
-    }
-
-    if (this._validationIssues.length === 0) {
-      return 'No validation issues. The service blueprint is ready to save.';
-    }
-
-    const parts: string[] = [];
-    if (this._blockingValidationIssues.length > 0) {
-      parts.push(`${this._blockingValidationIssues.length} blocking error${this._blockingValidationIssues.length === 1 ? '' : 's'}`);
-    }
-    if (this._warningValidationIssues.length > 0) {
-      parts.push(`${this._warningValidationIssues.length} warning${this._warningValidationIssues.length === 1 ? '' : 's'}`);
-    }
-    return `${parts.join(' and ')} in the validation rail.`;
-  }
-
-  private get _saveStatusSummary() {
-    if (this._saveState === 'saving') {
-      return 'Saving serviceBlueprint changes…';
-    }
-
-    if (this._saveState === 'saved') {
-      return this._saveMessage ?? 'Service blueprint changes saved.';
-    }
-
-    if (this._saveState === 'error') {
-      return this._saveMessage ?? 'Save failed.';
-    }
-
-    if (this._hasBlockingValidationIssues) {
-      return 'Save is blocked until the blocking validation errors are fixed.';
-    }
-
-    return this._saveMessage ?? 'Save is ready.';
   }
 
   private _commitServiceBlueprintUpdate(nextServiceBlueprint: ServiceBlueprint, nextSelection: ServiceBlueprintSelection) {
@@ -830,17 +499,15 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     const currentState = this._snapshotCurrentState();
     if (currentState) {
-      this._undoHistory = [...this._undoHistory, currentState].slice(-HISTORY_LIMIT);
+      this._history.record(currentState);
     }
 
     if (!selectionsEqual(previousSelection, nextSelection)) {
       this._actionSelection = null;
     }
 
-    this._redoHistory = [];
     this._serviceBlueprint = nextServiceBlueprint;
-    this._saveState = 'idle';
-    this._saveMessage = null;
+    this._save.edited();
     this._applySelection(nextSelection, nextServiceBlueprint);
     this._announceHistory(`Change recorded. ${this._historyStatusSummary}`);
   }
@@ -865,208 +532,27 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return null;
   }
 
-  private _canPasteActionIntoSelection(action: ActionDefinition) {
-    const currentSelection = this._currentSelection();
-    if (!currentSelection || currentSelection.kind === 'gateway') {
-      return false;
-    }
-
-    const target = currentSelection.kind === 'stage' ? 'stage' : 'transition';
-    const entry = this._actionCatalog.find((candidate) => candidate.type === action.type) ?? null;
-    return entry ? availableContexts(entry, target).length > 0 : true;
-  }
-
-  private get _canCopy() {
-    return this._currentAction() !== null || this._currentSelection()?.kind === 'stage' || this._graphMultiSelection.length >= 2;
-  }
-
-  private get _canPaste() {
-    if (!this._serviceBlueprint || !this._clipboard) {
-      return false;
-    }
-
-    if (this._clipboard.kind === 'stage' || this._clipboard.kind === 'subgraph') {
-      return true;
-    }
-    return this._canPasteActionIntoSelection(this._clipboard.action);
-  }
-
-  private _normalisePastedAction(action: ActionDefinition, target: 'stage' | 'transition'): ActionDefinition | null {
-    const nextAction = cloneAction(action);
-    const entry = this._actionCatalog.find((candidate) => candidate.type === nextAction.type) ?? null;
-
-    if (!entry) {
-      return {
-        ...nextAction,
-        timing: target === 'transition' ? 'onTransition' : nextAction.timing === 'onExit' ? 'onExit' : 'onEnter',
-      };
-    }
-
-    const contexts = availableContexts(entry, target);
-    if (contexts.length === 0) {
-      return null;
-    }
-
-    const preferredContext =
-      target === 'transition'
-        ? 'transition'
-        : contexts.includes(contextForTiming(nextAction.timing, 'stage'))
-          ? contextForTiming(nextAction.timing, 'stage')
-          : contexts[0];
-
-    return updateActionSummary(entry, {
-      ...nextAction,
-      timing: timingForContext(preferredContext),
-    });
-  }
-
   private _undo = () => {
-    if (!this._canUndo) {
-      return;
-    }
-
-    const previous = this._undoHistory[this._undoHistory.length - 1];
     const current = this._snapshotCurrentState();
-    if (!current) {
+    const previous = current && this._history.undo(current);
+    if (!previous) {
       return;
     }
 
-    this._undoHistory = this._undoHistory.slice(0, -1);
-    this._redoHistory = [...this._redoHistory, current].slice(-HISTORY_LIMIT);
     this._restoreHistoryEntry(previous);
     this._announceHistory(`Undid the last serviceBlueprint change. ${this._historyStatusSummary}`);
   };
 
   private _redo = () => {
-    if (!this._canRedo) {
-      return;
-    }
-
-    const next = this._redoHistory[this._redoHistory.length - 1];
     const current = this._snapshotCurrentState();
-    if (!current) {
+    const next = current && this._history.redo(current);
+    if (!next) {
       return;
     }
 
-    this._redoHistory = this._redoHistory.slice(0, -1);
-    this._undoHistory = [...this._undoHistory, current].slice(-HISTORY_LIMIT);
     this._restoreHistoryEntry(next);
     this._announceHistory(`Redid the service blueprint change. ${this._historyStatusSummary}`);
   };
-
-  private _isEditableTarget(event: KeyboardEvent) {
-    return event
-      .composedPath()
-      .some(
-        (target) =>
-          target instanceof HTMLElement &&
-          (target instanceof HTMLInputElement ||
-            target instanceof HTMLTextAreaElement ||
-            target instanceof HTMLSelectElement ||
-            target.isContentEditable)
-      );
-  }
-
-  private _handleEditorKeydown = (event: KeyboardEvent) => {
-    if (!event.defaultPrevented && HELP_SHORTCUT && matchesShortcut(event, HELP_SHORTCUT)) {
-      event.preventDefault();
-      this._openShortcutGuide(this.shadowRoot?.activeElement as HTMLElement | null);
-      return;
-    }
-
-    if (this._helpOpen || event.defaultPrevented || event.altKey) {
-      return;
-    }
-
-    if (SAVE_SHORTCUT && matchesShortcut(event, SAVE_SHORTCUT)) {
-      event.preventDefault();
-      void this._handleSave();
-      return;
-    }
-
-    if (
-      ((COPY_SHORTCUT && matchesShortcut(event, COPY_SHORTCUT)) || (PASTE_SHORTCUT && matchesShortcut(event, PASTE_SHORTCUT))) &&
-      this._isEditableTarget(event)
-    ) {
-      return;
-    }
-
-    if (COPY_SHORTCUT && matchesShortcut(event, COPY_SHORTCUT)) {
-      if (this._copySelection()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (PASTE_SHORTCUT && matchesShortcut(event, PASTE_SHORTCUT)) {
-      if (this._pasteClipboard()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (REDO_SHORTCUT && matchesShortcut(event, REDO_SHORTCUT)) {
-      event.preventDefault();
-      if (this._canRedo) {
-        this._redo();
-      }
-      return;
-    }
-
-    if (!UNDO_SHORTCUT || !matchesShortcut(event, UNDO_SHORTCUT)) {
-      return;
-    }
-
-    event.preventDefault();
-    if (this._canUndo) {
-      this._undo();
-    }
-  };
-
-  private _openShortcutGuide(activator?: HTMLElement | null) {
-    this._helpReturnTarget = activator ?? null;
-    this._helpOpen = true;
-    requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-help-close]')?.focus();
-    });
-  }
-
-  private _closeShortcutGuide() {
-    this._helpOpen = false;
-    this._helpReturnTarget?.focus();
-    this._helpReturnTarget = null;
-  }
-
-  private _handleDialogKeydown(event: KeyboardEvent, onClose: () => void) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-
-    if (event.key !== 'Tab') {
-      return;
-    }
-
-    const root = event.currentTarget as HTMLElement;
-    const focusable = Array.from(
-      root.querySelectorAll<HTMLElement>('button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])')
-    ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex >= 0);
-    if (focusable.length === 0) {
-      return;
-    }
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const activeElement = this.shadowRoot?.activeElement as HTMLElement | null;
-    if (event.shiftKey && activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Event handlers
@@ -1114,7 +600,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   private _handleInspectorRequested() {
-    this._inspectorCollapsed = false;
+    this._layout.expandInspector();
     requestAnimationFrame(() => {
       this.shadowRoot?.querySelector<HTMLElement>('wayfinder-step-inspector')?.focus();
     });
@@ -1142,7 +628,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _handleConfidenceTabChanged = (e: CustomEvent<{ tab: ConfidenceTab }>) => {
     this._activeConfidenceTab = e.detail.tab;
     if (e.detail.tab === 'definition') {
-      void this._ensureDefinitionEditorLoaded();
+      void this._definition.ensureEditorLoaded();
     }
   };
 
@@ -1150,365 +636,68 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   // Definition tab — JSON twin-pane sync
   // ---------------------------------------------------------------------------
 
-  private async _ensureDefinitionEditorLoaded() {
-    if (this._definitionEditorLoaded) {
-      return;
-    }
-    await import('./wayfinder-definition-editor.js');
-    this._definitionEditorLoaded = true;
-  }
-
-  private _refreshDefinitionTextFromServiceBlueprint() {
-    if (!this._serviceBlueprint) {
-      if (this._definitionText !== '') {
-        this._definitionText = '';
-      }
-      if (this._definitionParseError !== null) {
-        this._definitionParseError = null;
-      }
-      if (this._definitionSchemaIssues.length > 0) {
-        this._definitionSchemaIssues = [];
-      }
-      this._lastAppliedDefinitionCanonical = '';
-      return;
-    }
-    const canonical = serializeAuthoredServiceBlueprint(this._serviceBlueprint);
-    if (canonical === this._lastAppliedDefinitionCanonical) {
-      return;
-    }
-    this._definitionText = canonical;
-    this._lastAppliedDefinitionCanonical = canonical;
-    if (this._definitionParseError !== null) {
-      this._definitionParseError = null;
-    }
-    if (this._definitionSchemaIssues.length > 0) {
-      this._definitionSchemaIssues = [];
-    }
-  }
-
-  private _handleDefinitionInput = (e: CustomEvent<{ value: string }>) => {
-    this._definitionText = e.detail.value;
-    if (this._definitionDebounceHandle !== null) {
-      window.clearTimeout(this._definitionDebounceHandle);
-    }
-    this._definitionDebounceHandle = window.setTimeout(() => {
-      this._definitionDebounceHandle = null;
-      this._tryApplyDefinitionText();
-    }, 250);
-  };
-
-  private _tryApplyDefinitionText() {
-    const source = this._definitionText;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(source);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this._definitionParseError = message;
-      this._definitionSchemaIssues = [];
-      return;
-    }
-
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, source, this._componentCatalog);
-    if (issues.length > 0) {
-      this._definitionParseError = null;
-      this._definitionSchemaIssues = issues;
-      return;
-    }
-
-    const next = coerceParsedAuthoredServiceBlueprint(parsed);
-    this._definitionParseError = null;
-    this._definitionSchemaIssues = [];
-
-    if (authoredServiceBlueprintJsonEquals(this._serviceBlueprint, next)) {
-      // No semantic change — just remember the text the user typed.
-      this._lastAppliedDefinitionCanonical = serializeAuthoredServiceBlueprint(next);
-      return;
-    }
-
-    // Mark the canonical so the visual→definition sync doesn't echo this back.
-    this._lastAppliedDefinitionCanonical = serializeAuthoredServiceBlueprint(next);
-    this._commitServiceBlueprintUpdate(next, this._currentSelection());
-    const stageCount = next.stages.length;
-    const gatewayCount = next.gateways?.length ?? 0;
-    this._announceDefinition(
-      `Definition updated. ${stageCount} ${stageCount === 1 ? 'stage' : 'stages'}, ${gatewayCount} ${gatewayCount === 1 ? 'gateway' : 'gateways'}.`
-    );
-  }
-
-  private _announceDefinition(message: string) {
-    this._definitionAnnouncement = '';
-    requestAnimationFrame(() => {
-      this._definitionAnnouncement = message;
-    });
-  }
-
-  private _revertDefinitionText() {
-    if (!this._serviceBlueprint) {
-      return;
-    }
-    if (this._definitionDebounceHandle !== null) {
-      window.clearTimeout(this._definitionDebounceHandle);
-      this._definitionDebounceHandle = null;
-    }
-    const canonical = serializeAuthoredServiceBlueprint(this._serviceBlueprint);
-    this._definitionText = canonical;
-    this._lastAppliedDefinitionCanonical = canonical;
-    this._definitionParseError = null;
-    this._definitionSchemaIssues = [];
-    this._announceDefinition('Definition reverted to the current service blueprint.');
-  }
-
-  private _applyDefinitionTextImmediately() {
-    if (this._definitionDebounceHandle !== null) {
-      window.clearTimeout(this._definitionDebounceHandle);
-      this._definitionDebounceHandle = null;
-    }
-    this._tryApplyDefinitionText();
-  }
   // Public hook for tests/host: flush debounce and apply if valid.
   applyDefinitionPending() {
-    this._applyDefinitionTextImmediately();
+    this._definition.flush();
   }
 
-  private get _definitionHasIssues() {
-    return this._definitionParseError !== null || this._definitionSchemaIssues.length > 0;
+  private get _clipboardContext(): ClipboardContext {
+    return {
+      blueprint: this._serviceBlueprint,
+      selectedStageKey: this._selectedStageKey,
+      multiSelection: this._graphMultiSelection,
+      selectedAction: this._currentAction(),
+      actionCatalog: this._actionCatalog,
+      availableQueues: this.availableQueues,
+    };
   }
 
-  private get _definitionDiagnostics() {
-    const out: Array<{ line: number; severity: 'error' | 'warning'; message: string }> = [];
-    if (this._definitionParseError) {
-      // Try to pull a "line N column M" hint out of JSON.parse errors.
-      const lineMatch = /line (\d+)/i.exec(this._definitionParseError);
-      out.push({
-        line: lineMatch ? Number(lineMatch[1]) : 1,
-        severity: 'error',
-        message: this._definitionParseError,
-      });
-    }
-    for (const issue of this._definitionSchemaIssues) {
-      if (issue.line) {
-        out.push({ line: issue.line, severity: 'error', message: issue.message });
-      }
-    }
-    return out;
+  private get _canCopy() {
+    return this._clipboard.canCopy(this._clipboardContext);
+  }
+
+  private get _canPaste() {
+    return this._clipboard.canPaste(this._clipboardContext);
+  }
+
+  private get _clipboardSummary() {
+    return this._clipboard.summary;
   }
 
   private _copySelection() {
-    const selectedAction = this._currentAction();
-    if (selectedAction) {
-      const label =
-        selectedAction.action.summary?.trim() ||
-        this._actionCatalog.find((entry) => entry.type === selectedAction.action.type)?.label ||
-        selectedAction.action.type;
-      this._clipboard = {
-        kind: 'action',
-        action: cloneAction(selectedAction.action),
-        label,
-        sourceTarget: selectedAction.target,
-      };
-      this._showToast(`Copied action ${label}.`);
-      return true;
-    }
-
-    if (!this._serviceBlueprint) {
+    const message = this._clipboard.copy(this._clipboardContext);
+    if (!message) {
       return false;
     }
-
-    if (this._graphMultiSelection.length >= 2) {
-      const selectedKeys = this._graphMultiSelection.map(parseGraphNodeId);
-      const stages = this._serviceBlueprint.stages.filter((stage) =>
-        selectedKeys.some((parsed) => parsed.kind === 'stage' && parsed.key === stage.stageKey)
-      );
-      const gateways = serviceBlueprintGateways(this._serviceBlueprint).filter((gateway) =>
-        selectedKeys.some((parsed) => parsed.kind === 'gateway' && parsed.key === gateway.key)
-      );
-      if (stages.length + gateways.length >= 2) {
-        const label = [
-          stages.length > 0 ? `${stages.length} stage${stages.length === 1 ? '' : 's'}` : null,
-          gateways.length > 0 ? `${gateways.length} gateway${gateways.length === 1 ? '' : 's'}` : null,
-        ]
-          .filter(Boolean)
-          .join(' and ');
-        this._clipboard = {
-          kind: 'subgraph',
-          stages: stages.map(cloneStage),
-          gateways: gateways.map((gateway) => JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition),
-          label,
-        };
-        this._showToast(`Copied ${label}.`);
-        return true;
-      }
-    }
-
-    if (!this._selectedStageKey) {
-      return false;
-    }
-
-    const stage = this._serviceBlueprint.stages.find((candidate) => candidate.stageKey === this._selectedStageKey);
-    if (!stage) {
-      return false;
-    }
-
-    this._clipboard = {
-      kind: 'stage',
-      stage: cloneStage(stage),
-      label: stage.displayName,
-    };
-    this._showToast(`Copied stage ${stage.displayName}.`);
-    return true;
-  }
-
-  /**
-   * Paste a copied subgraph: every stage and gateway gets a fresh unique key,
-   * routes between members of the copied set are remapped to the new keys
-   * (routes leaving the set keep their original targets), and the copies are
-   * positioned at a small offset from their sources.
-   */
-  private _pasteSubgraph(entry: Extract<ClipboardEntry, { kind: 'subgraph' }>): boolean {
-    if (!this._serviceBlueprint) {
-      return false;
-    }
-    const serviceBlueprint = this._serviceBlueprint;
-
-    const usedKeys = new Set<string>([
-      ...serviceBlueprint.stages.map((stage) => stage.stageKey),
-      ...serviceBlueprintGateways(serviceBlueprint).map((gateway) => gateway.key),
-    ]);
-    const uniqueKey = (base: string) => {
-      let candidate = `${base}-copy`;
-      let suffix = 2;
-      while (usedKeys.has(candidate)) {
-        candidate = `${base}-copy-${suffix}`;
-        suffix += 1;
-      }
-      usedKeys.add(candidate);
-      return candidate;
-    };
-
-    const keyMap = new Map<string, string>();
-    for (const stage of entry.stages) {
-      keyMap.set(stage.stageKey, uniqueKey(stage.stageKey));
-    }
-    for (const gateway of entry.gateways) {
-      keyMap.set(gateway.key, uniqueKey(gateway.key));
-    }
-
-    const remapRoutes = (ownerNewKey: string, routes: ServiceBlueprintRouteDefinition[] | undefined): ServiceBlueprintRouteDefinition[] =>
-      (routes ?? []).map((route) => {
-        const target = keyMap.get(route.target) ?? route.target;
-        return { ...route, target, id: newRouteId(ownerNewKey, route.trigger, target) };
-      });
-
-    const pastedStages: StageDefinition[] = entry.stages.map((stage) => {
-      const stageKey = keyMap.get(stage.stageKey)!;
-      return { ...cloneStage(stage), stageKey, routes: remapRoutes(stageKey, stage.routes) };
-    });
-    const pastedGateways: ServiceBlueprintGatewayDefinition[] = entry.gateways.map((gateway) => {
-      const key = keyMap.get(gateway.key)!;
-      const clone = JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition;
-      return { ...clone, key, routes: remapRoutes(key, gateway.routes) };
-    });
-
-    // Copies land offset from their source's current position.
-    const { layout } = computeServiceBlueprintGraphLayout(serviceBlueprint, this.availableQueues);
-    const layoutNodes: Record<string, NodePosition> = { ...(serviceBlueprint.layout?.nodes ?? {}) };
-    keyMap.forEach((newKey, oldKey) => {
-      const isStage = entry.stages.some((stage) => stage.stageKey === oldKey);
-      const placement = layout.placements.get(`${isStage ? 'stage' : 'gateway'}:${oldKey}`);
-      if (placement) {
-        layoutNodes[`${isStage ? 'stage' : 'gateway'}:${newKey}`] = {
-          x: Math.round(placement.x + 48),
-          y: Math.round(placement.y + 48),
-        };
-      }
-    });
-
-    const next: ServiceBlueprint = {
-      ...serviceBlueprint,
-      stages: [...serviceBlueprint.stages, ...pastedStages],
-      gateways: [...serviceBlueprintGateways(serviceBlueprint), ...pastedGateways],
-      layout: Object.keys(layoutNodes).length > 0 ? { nodes: layoutNodes } : serviceBlueprint.layout,
-    };
-
-    const firstStageKey = pastedStages[0]?.stageKey ?? null;
-    this._commitServiceBlueprintUpdate(next, firstStageKey ? { kind: 'stage', stageKey: firstStageKey } : this._currentSelection());
-    this._showToast(`Pasted ${entry.label}.`);
+    this._toast.show(message);
+    this.requestUpdate();
     return true;
   }
 
   private _pasteClipboard() {
-    if (!this._serviceBlueprint || !this._clipboard) {
+    const outcome = this._clipboard.paste(this._clipboardContext);
+    if (!outcome.ok) {
+      if (outcome.message) {
+        this._toast.show(outcome.message);
+      }
       return false;
     }
 
-    if (this._clipboard.kind === 'subgraph') {
-      return this._pasteSubgraph(this._clipboard);
+    const selection = outcome.selectStageKey ? { kind: 'stage' as const, stageKey: outcome.selectStageKey } : this._currentSelection();
+    this._commitServiceBlueprintUpdate(outcome.blueprint, selection);
+    if (outcome.selectActionIndex !== undefined) {
+      this._actionSelection = { target: 'stage', index: outcome.selectActionIndex };
     }
-
-    if (this._clipboard.kind === 'stage') {
-      const copiedStage = cloneStage(this._clipboard.stage);
-      const stageKey = makeCopiedStageKey(copiedStage.stageKey, this._serviceBlueprint);
-      const pastedStage: StageDefinition = {
-        ...copiedStage,
-        stageKey: stageKey,
-      };
-
-      const stages = [...this._serviceBlueprint.stages];
-      const selectedStageIndex = this._selectedStageKey ? stages.findIndex((stage) => stage.stageKey === this._selectedStageKey) : -1;
-      const insertIndex = selectedStageIndex >= 0 ? selectedStageIndex + 1 : stages.length;
-      stages.splice(insertIndex, 0, pastedStage);
-
-      this._commitServiceBlueprintUpdate({ ...this._serviceBlueprint, stages: stages }, { kind: 'stage', stageKey });
-      this._showToast(`Pasted stage ${pastedStage.displayName}.`);
+    this._toast.show(outcome.message);
+    if (outcome.revealInspector) {
       this._handleInspectorRequested();
-      return true;
     }
-
-    const currentSelection = this._currentSelection();
-    if (currentSelection?.kind !== 'stage') {
-      return false;
-    }
-
-    const pastedAction = this._normalisePastedAction(this._clipboard.action, 'stage');
-    if (!pastedAction) {
-      this._showToast(`Action ${this._clipboard.label} cannot be pasted into the current stage.`);
-      return false;
-    }
-
-    const stageIndex = this._serviceBlueprint.stages.findIndex((stage) => stage.stageKey === currentSelection.stageKey);
-    if (stageIndex < 0) {
-      return false;
-    }
-
-    const stages = [...this._serviceBlueprint.stages];
-    const nextActions = [...(stages[stageIndex].actions ?? []), pastedAction];
-    stages[stageIndex] = { ...stages[stageIndex], actions: nextActions };
-    this._commitServiceBlueprintUpdate({ ...this._serviceBlueprint, stages: stages }, currentSelection);
-    this._actionSelection = { target: 'stage', index: nextActions.length - 1 };
-    this._showToast(`Pasted action ${this._clipboard.label} into ${stages[stageIndex].displayName}.`);
     return true;
-  }
-
-  private _showToast(message: string) {
-    if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._toastDismissTimer);
-    }
-
-    this._toastMessage = message;
-
-    const dismiss = () => {
-      this._toastMessage = null;
-      this._toastDismissTimer = null;
-    };
-
-    this._toastDismissTimer =
-      typeof window !== 'undefined' ? window.setTimeout(dismiss, 5000) : (setTimeout(dismiss, 5000) as unknown as number);
   }
 
   private _focusInspectorForValidationIssue(issue: ServiceBlueprintValidationIssue) {
     const actionLocation = issue.location.kind === 'action' ? issue.location : null;
-    this._inspectorCollapsed = false;
+    this._layout.expandInspector();
     requestAnimationFrame(() => {
       const inspector = this.shadowRoot?.querySelector<HTMLElement>('wayfinder-step-inspector');
       inspector?.focus();
@@ -1543,7 +732,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     this._activeConfidenceTab = 'canvas';
-    this._inspectorCollapsed = false;
+    this._layout.expandInspector();
     this._applySelection({ kind: 'stage', stageKey }, this._serviceBlueprint);
     this._actionSelection = null;
   }
@@ -1564,7 +753,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     this._activeConfidenceTab = 'canvas';
-    this._inspectorCollapsed = false;
+    this._layout.expandInspector();
 
     if (issue.location.kind === 'stage') {
       this._applySelection({ kind: 'stage', stageKey: issue.location.stageKey }, this._serviceBlueprint);
@@ -1604,113 +793,16 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  private async _handleSave() {
-    if (!this._serviceBlueprint) {
-      return;
-    }
-
-    if (this._hasBlockingValidationIssues) {
-      this._saveState = 'error';
-      this._saveError = new ServiceBlueprintSaveError({
-        title: 'Can’t save this service blueprint yet',
-        summary: 'Fix the blocking validation errors first.',
-        detailLines: ['Open Validation to review each blocking error before trying again.'],
-      });
-      this._saveMessage = this._saveError.summary;
-      this._saveErrorCopyStatus = null;
-      return;
-    }
-
-    this._saveState = 'saving';
-    this._saveMessage = null;
-    this._saveErrorCopyStatus = null;
-
-    if (!this.serviceBlueprintSource) {
-      this._saveState = 'error';
-      this._saveError = new ServiceBlueprintSaveError({
-        title: 'Save unavailable',
-        summary: 'No service blueprint source is wired to the editor.',
-        detailLines: ['Connect a service blueprint source before trying to save.'],
-      });
-      this._saveMessage = this._saveError.summary;
-      this._saveErrorCopyStatus = null;
-      return;
-    }
-
-    try {
-      await this.serviceBlueprintSource.save(this.blueprintKey, this._serviceBlueprint);
-      // A successful save (no conflict thrown) means expectedVersion — this._serviceBlueprint.version at
-      // the time of the call — matched what the store had, and every IServiceBlueprintSourceStore
-      // increments by exactly 1 on that path. serviceBlueprintSource.save() returns void, not the new
-      // version, so bump it locally rather than leaving _serviceBlueprint.version stale: left unbumped,
-      // the next _pollServiceBlueprintVersion (15s later) compares that stale local version against the
-      // real server version and false-positives "someone else changed this" against the editor's
-      // own save.
-      this._serviceBlueprint = cloneServiceBlueprint({ ...this._serviceBlueprint, version: this._serviceBlueprint.version + 1 });
-      this._savedServiceBlueprintSnapshot = cloneServiceBlueprint(this._serviceBlueprint);
-      this._saveState = 'saved';
-      this._saveMessage = 'Service blueprint saved.';
-      this._saveError = null;
-      this._saveErrorCopyStatus = null;
-      this._showToast(this._saveMessage);
-    } catch (error) {
-      const normalised = normaliseServiceBlueprintSaveError(
-        error,
-        'The editor couldn’t save your changes. Review the details below and try again.'
-      );
-
-      if (normalised.isConflict) {
-        // Same treatment as a proactively-detected staleness — one consistent path (read-only
-        // overlay + banner) regardless of whether we found out via polling or via this failed save.
-        this._saveState = 'idle';
-        this._saveMessage = null;
-        this._saveError = null;
-        this._saveErrorCopyStatus = null;
-        this._markServiceBlueprintStale(normalised.currentVersion);
-        return;
-      }
-
-      this._saveState = 'error';
-      this._saveError = normalised;
-      this._saveMessage = this._saveError.summary;
-      this._saveErrorCopyStatus = null;
-    }
-  }
-
   private async _handleReloadAfterConflict() {
-    this._saveState = 'idle';
-    this._saveMessage = null;
-    this._saveError = null;
-    this._saveErrorCopyStatus = null;
+    this._save.clearOutcome();
     // Deliberately NOT clearing _serviceBlueprintStale here — that must stay true (read-only
     // overlay up, banner's Reload button available) until _loadServiceBlueprint actually succeeds.
     // _initialiseEditorState clears it on success. If the reload itself fails, we're
     // correctly still stale/read-only rather than briefly unlocked with old content.
     await this._loadServiceBlueprint();
-    if (!this._serviceBlueprintStale) {
-      this._showToast('Reloaded the latest version.');
+    if (!this._staleness.stale) {
+      this._toast.show('Reloaded the latest version.');
     }
-  }
-
-  private async _copySaveErrorDetails() {
-    if (!this._saveError) {
-      return;
-    }
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(this._saveError.copyText);
-        this._saveErrorCopyStatus = 'Save error details copied.';
-        return;
-      }
-    } catch {
-      // Fall through to manual copy support below.
-    }
-
-    const copyField = this.shadowRoot?.querySelector<HTMLTextAreaElement>('[data-wayfinder-save-error-details]');
-    copyField?.focus();
-    copyField?.select();
-    this._saveErrorCopyStatus = 'Clipboard access is unavailable. Select and copy the details manually.';
   }
 
   private _renderCalculationsPanel() {
@@ -1723,291 +815,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     `;
   }
 
-  private _renderValidationPanel() {
-    if (!this._serviceBlueprint) {
-      return html`<div class="validation-empty-panel">No serviceBlueprint loaded</div>`;
-    }
-
-    const issues = this._validationIssues;
-    const errorCount = this._blockingValidationIssues.length;
-    const warningCount = this._warningValidationIssues.length;
-
-    return html`
-      <section class="validation-panel" aria-labelledby="service-blueprint-validation-panel-title" data-wayfinder-validation-rail>
-        <div class="validation-panel-header">
-          <div>
-            <h2 id="service-blueprint-validation-panel-title" class="validation-panel-title">Service Blueprint validation</h2>
-            <p class="validation-panel-summary">${this._validationStatusSummary}</p>
-          </div>
-          <div class="validation-panel-meta">
-            ${this._validationPending ? html`<span class="validation-count" data-wayfinder-validation-pending>checking…</span>` : nothing}
-            <span class="validation-count validation-count-error" data-wayfinder-validation-errors>${errorCount} errors</span>
-            <span class="validation-count validation-count-warning" data-wayfinder-validation-warnings>${warningCount} warnings</span>
-          </div>
-        </div>
-
-        <div class="validation-panel-save-status" data-wayfinder-save-status>
-          <span class="validation-save-label">Save status</span>
-          <span>${this._saveStatusSummary}</span>
-        </div>
-
-        ${
-          issues.length === 0
-            ? html`<p class="validation-empty">No validation issues. You can save whenever you are ready.</p>`
-            : html`
-              <ol class="validation-issue-list">
-                ${issues.map(
-                  (issue) => html`
-                  <li>
-                    <button
-                      type="button"
-                      class="validation-issue-link"
-                      data-wayfinder-validation-issue=${issue.id}
-                      @click=${() => this._jumpToValidationIssue(issue)}
-                    >
-                      <span class=${`validation-issue-badge validation-issue-badge-${issue.severity}`}>
-                        ${issue.severity === 'error' ? 'Error' : 'Warning'}
-                      </span>
-                      <span>${issue.message}</span>
-                    </button>
-                  </li>
-                `
-                )}
-              </ol>
-            `
-        }
-      </section>
-    `;
-  }
-
-  private _renderDefinitionPanel() {
-    if (!this._serviceBlueprint) {
-      return html`<div class="definition-empty" data-wayfinder-definition-empty>
-        Loading the service blueprint definition…
-      </div>`;
-    }
-
-    const banner = this._renderDefinitionBanner();
-
-    return html`
-      <div class="definition-panel" data-wayfinder-definition-panel>
-        ${banner}
-        <div class="definition-editor-frame">
-          ${
-            this._definitionEditorLoaded
-              ? html`
-                <wayfinder-definition-editor
-                  data-wayfinder-definition-editor
-                  .value=${this._definitionText}
-                  .diagnostics=${this._definitionDiagnostics}
-                  @definition-input=${this._handleDefinitionInput}
-                ></wayfinder-definition-editor>
-              `
-              : html`<p class="definition-loading" role="status" data-wayfinder-definition-tab-loading>
-                Preparing the JSON editor…
-              </p>`
-          }
-        </div>
-        <div class="sr-only" role="status" aria-live="polite" data-wayfinder-definition-announcement>
-          ${this._definitionAnnouncement}
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderDefinitionBanner() {
-    if (!this._definitionHasIssues) {
-      return nothing;
-    }
-    const summary = this._definitionParseError
-      ? `JSON is not valid: ${this._definitionParseError}`
-      : (this._definitionSchemaIssues[0]?.message ?? 'Definition does not match the service blueprint schema.');
-    const additional =
-      !this._definitionParseError && this._definitionSchemaIssues.length > 1
-        ? html`<ul class="definition-banner-list">
-          ${this._definitionSchemaIssues.slice(1, 5).map((issue) => html`<li>${issue.message}</li>`)}
-        </ul>`
-        : nothing;
-
-    return html`
-      <div
-        class="definition-banner"
-        role="alert"
-        data-wayfinder-definition-banner
-      >
-        <p class="definition-banner-summary">
-          <strong>Definition can't be applied:</strong> ${summary}
-        </p>
-        ${additional}
-        <div class="definition-banner-actions">
-          <button
-            type="button"
-            class="govuk-button"
-            data-wayfinder-definition-apply
-            disabled
-            aria-disabled="true"
-          >
-            Apply when valid
-          </button>
-          <button
-            type="button"
-            class="govuk-button govuk-button--secondary"
-            data-wayfinder-definition-revert
-            @click=${this._revertDefinitionText}
-          >
-            Revert to current
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderShortcutGuide() {
-    if (!this._helpOpen) {
-      return nothing;
-    }
-
-    return html`
-      <div
-        class="modal-backdrop"
-        role="presentation"
-        @click=${(event: MouseEvent) => {
-          if (event.target === event.currentTarget) {
-            this._closeShortcutGuide();
-          }
-        }}
-      >
-        <section
-          class="shortcut-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="service-blueprint-shortcut-title"
-          aria-describedby="service-blueprint-shortcut-copy"
-          data-wayfinder-shortcut-dialog
-          @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeShortcutGuide())}
-        >
-          <div class="shortcut-dialog-header">
-            <div>
-              <p class="shortcut-dialog-eyebrow">Help and shortcuts</p>
-              <h2 id="service-blueprint-shortcut-title" class="shortcut-dialog-title">Service Blueprint editor keyboard reference</h2>
-              <p id="service-blueprint-shortcut-copy" class="shortcut-dialog-copy">
-                These shortcuts stay visible in the editor so authors do not have to memorise them. Open this guide any time with F1.
-              </p>
-            </div>
-            <button
-              type="button"
-              class="toolbar-btn shortcut-dialog-close"
-              data-wayfinder-help-close
-              @click=${() => this._closeShortcutGuide()}
-            >
-              Close
-            </button>
-          </div>
-
-          <div class="shortcut-groups">
-            ${SERVICE_BLUEPRINT_SHORTCUT_GROUPS.map(
-              (group) => html`
-              <section class="shortcut-group" data-wayfinder-shortcut-group=${group.id}>
-                <h3 class="shortcut-group-title">${group.title}</h3>
-                <ol class="shortcut-list">
-                  ${group.shortcuts.map(
-                    (shortcut) => html`
-                    <li class="shortcut-item" data-wayfinder-shortcut=${shortcut.id}>
-                      <div class="shortcut-copy">
-                        <p class="shortcut-command">${shortcut.command}</p>
-                        <p class="shortcut-description">${shortcut.description}</p>
-                      </div>
-                      <div class="shortcut-keys" aria-label=${`${shortcut.command} shortcuts`}>
-                        ${shortcut.labels.map((label) => html`<kbd>${label}</kbd>`)}
-                      </div>
-                      <p class="shortcut-context">${shortcut.context}</p>
-                    </li>
-                  `
-                  )}
-                </ol>
-              </section>
-            `
-            )}
-          </div>
-
-          <section class="shortcut-group" data-wayfinder-shortcut-group="quick-tips">
-            <h3 class="shortcut-group-title">Quick tips</h3>
-            <ul class="help-tip-list">
-              <li>Each queue is one <strong>vertical service column</strong>. Read the service blueprint <strong>top to bottom</strong>.</li>
-              <li>Stages are the work cards. Gateways are the diamond routing points between them.</li>
-              <li>Use the <strong>Outline</strong> panel on the left to jump between queue columns and stages quickly.</li>
-              <li>Reorder stages in <strong>List view</strong> with <strong>Move up</strong>, <strong>Move down</strong>, or <strong>Alt + Arrow</strong>. The canvas keeps its automatic layout in this first pass.</li>
-              <li>Use the <strong>Validation</strong> tab to check for issues before you save.</li>
-              <li>All structural changes support <strong>Undo/Redo</strong> — experiment safely.</li>
-            </ul>
-          </section>
-
-          <section class="shortcut-group" data-wayfinder-shortcut-group="getting-started">
-            <h3 class="shortcut-group-title">Getting started</h3>
-            <ol class="help-tip-list">
-              <li>Start on the <strong>Canvas</strong> tab and add the first stage for the queue that owns the work.</li>
-              <li>Add the next stage that should happen in the service flow, then open the <strong>Inspector</strong> to shape its details.</li>
-              <li>Add a <strong>routing gateway</strong> when the service blueprint needs to branch or wait for multiple paths to join.</li>
-              <li>Create routes so the canvas reads as <strong>stage → gateway → stage</strong> or <strong>gateway → gateway</strong>.</li>
-              <li>Check <strong>Validation</strong> before saving.</li>
-              <li>Save your service blueprint when ready — changes will be published to the runtime.</li>
-            </ol>
-          </section>
-        </section>
-      </div>
-    `;
-  }
-
   private get _canSaveByContext(): boolean {
     return this.authorContext?.canSave !== false;
   }
-
-  private _toggleOutlineCollapsed = () => {
-    this._outlineCollapsed = !this._outlineCollapsed;
-  };
-
-  private _toggleInspectorCollapsed = () => {
-    this._inspectorCollapsed = !this._inspectorCollapsed;
-  };
-
-  private _clampInspectorWidth(width: number): number {
-    const minWidth = 280;
-    const maxWidth = 720;
-    return Math.min(maxWidth, Math.max(minWidth, width));
-  }
-
-  // The Properties panel sits on the right, so dragging the handle left (a shrinking clientX)
-  // should widen it — width tracks the *negative* of the pointer's horizontal movement.
-  private _handleInspectorResizeStart = (event: PointerEvent) => {
-    event.preventDefault();
-    this._inspectorResizeStartX = event.clientX;
-    this._inspectorResizeStartWidth = this._inspectorWidth;
-    this._inspectorResizing = true;
-    window.addEventListener('pointermove', this._handleInspectorResizeMove);
-    window.addEventListener('pointerup', this._handleInspectorResizeEnd);
-  };
-
-  private _handleInspectorResizeMove = (event: PointerEvent) => {
-    const delta = this._inspectorResizeStartX - event.clientX;
-    this._inspectorWidth = this._clampInspectorWidth(this._inspectorResizeStartWidth + delta);
-  };
-
-  private _handleInspectorResizeEnd = () => {
-    this._inspectorResizing = false;
-    window.removeEventListener('pointermove', this._handleInspectorResizeMove);
-    window.removeEventListener('pointerup', this._handleInspectorResizeEnd);
-  };
-
-  private _handleInspectorResizeKeydown = (event: KeyboardEvent) => {
-    const step = 16;
-    if (event.key === 'ArrowLeft') {
-      event.preventDefault();
-      this._inspectorWidth = this._clampInspectorWidth(this._inspectorWidth + step);
-    } else if (event.key === 'ArrowRight') {
-      event.preventDefault();
-      this._inspectorWidth = this._clampInspectorWidth(this._inspectorWidth - step);
-    }
-  };
 
   // ---------------------------------------------------------------------------
   // Render
@@ -2020,11 +830,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         data-wayfinder-service-blueprint-loaded="${this.blueprintKey || this._serviceBlueprint?.definitionKey || ''}"
         class="editor-root"
       >
-        ${this._renderToast()}
+        ${this._toast.render()}
         ${this._loading ? html`<div class="loading-banner" role="status">Loading serviceBlueprint…</div>` : nothing}
         ${this._error ? html`<div class="error-banner" role="alert">${this._error}</div>` : nothing}
-        ${this._renderSaveErrorSurface()}
-        ${this._renderStaleServiceBlueprintBanner()}
+        ${this._save.renderError()}
+        ${this._staleness.renderBanner()}
 
         <!-- Toolbar header: sits above the whole tabbed area (not slotted into any one tab), so
              save/undo/redo — which act on the whole serviceBlueprint, not just the canvas — stay
@@ -2037,24 +847,24 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           </h1>
           <div class="toolbar-actions" role="toolbar" aria-label="ServiceBlueprint editor tools">
             <button
-              class="toolbar-btn toolbar-btn--icon govuk-button${this._saveState === 'saving' ? ' toolbar-btn--spinning' : ''}"
+              class="toolbar-btn toolbar-btn--icon govuk-button${this._save.isSaving ? ' toolbar-btn--spinning' : ''}"
               data-wayfinder-save
-              ?disabled=${!this._canSave}
-              aria-label=${this._saveState === 'saving' ? 'Saving' : 'Save'}
+              ?disabled=${!this._save.canSave}
+              aria-label=${this._save.isSaving ? 'Saving' : 'Save'}
               title=${
                 !this._canSaveByContext
                   ? 'Saving is disabled for the current author.'
-                  : `${this._dirtyStateSummary} — ${this._saveState === 'saving' ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`
+                  : `${this._save.dirtySummary} — ${this._save.isSaving ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`
               }
               aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
-              @click=${this._handleSave}
+              @click=${() => void this._save.save()}
             >
-              ${this._saveState === 'saving' ? renderToolbarIcon('saving') : renderToolbarIcon('save')}
+              ${this._save.isSaving ? renderToolbarIcon('saving') : renderToolbarIcon('save')}
             </button>
             <button
               class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
               data-wayfinder-undo
-              ?disabled=${!this._canUndo}
+              ?disabled=${!this._history.canUndo}
               aria-label="Undo"
               title=${`Undo${UNDO_SHORTCUT ? ` (${UNDO_SHORTCUT.labels[0]})` : ''}`}
               aria-keyshortcuts=${UNDO_SHORTCUT?.ariaKeys ?? nothing}
@@ -2065,7 +875,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             <button
               class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
               data-wayfinder-redo
-              ?disabled=${!this._canRedo}
+              ?disabled=${!this._history.canRedo}
               aria-label="Redo"
               title=${`Redo${REDO_SHORTCUT ? ` (${REDO_SHORTCUT.labels[0]})` : ''}`}
               aria-keyshortcuts=${REDO_SHORTCUT?.ariaKeys ?? nothing}
@@ -2107,7 +917,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       aria-label="Help"
                       title=${`Help${HELP_SHORTCUT ? ` (${HELP_SHORTCUT.labels[0]})` : ''}`}
                       aria-keyshortcuts=${HELP_SHORTCUT?.ariaKeys ?? nothing}
-                      @click=${(event: Event) => this._openShortcutGuide(event.currentTarget as HTMLElement)}
+                      @click=${(event: Event) => this._help.open(event.currentTarget as HTMLElement)}
                     >
                       ${renderToolbarIcon('help')}
                     </button>
@@ -2188,27 +998,27 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
         <!-- Tab-based navigation -->
         <div class="editor-content-wrapper">
-        ${this._renderStaleServiceBlueprintOverlay()}
+        ${this._staleness.renderOverlay()}
         <wayfinder-confidence-tabs
           class="editor-tabs"
           active-tab="${this._activeConfidenceTab}"
-          error-count="${this._blockingValidationIssues.length}"
-          warning-count="${this._warningValidationIssues.length}"
+          error-count="${this._validation.blocking.length}"
+          warning-count="${this._validation.warnings.length}"
           @tab-changed=${this._handleConfidenceTabChanged}
         >
           <!-- Canvas tab: main workspace -->
           <div slot="canvas" class="canvas-workspace">
             <div
-              class=${`editor-shell ${this._inspectorResizing ? 'editor-shell-resizing' : ''}`}
-              style=${`--outline-width:${this._outlineCollapsed ? '3.5rem' : '240px'};--inspector-width:${this._inspectorCollapsed ? '3.5rem' : `${this._inspectorWidth}px`};`}
+              class=${`editor-shell ${this._layout.resizing ? 'editor-shell-resizing' : ''}`}
+              style=${this._layout.shellStyle}
             >
               <!-- Left: outline -->
-              <section class=${`editor-outline-shell ${this._outlineCollapsed ? 'panel-collapsed' : ''}`}>
+              <section class=${`editor-outline-shell ${this._layout.outlineCollapsed ? 'panel-collapsed' : ''}`}>
                 <div class="panel-header">
                   <div class="panel-header-copy">
                     <h2 class="panel-title">Outline</h2>
                     ${
-                      this._outlineCollapsed
+                      this._layout.outlineCollapsed
                         ? nothing
                         : html`
                           <p class="panel-subtitle">
@@ -2223,18 +1033,18 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     class="panel-toggle"
                     data-wayfinder-outline-toggle
                     aria-controls="service-blueprint-editor-outline-panel"
-                    aria-expanded=${String(!this._outlineCollapsed)}
-                    aria-label=${this._outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
-                    @click=${this._toggleOutlineCollapsed}
+                    aria-expanded=${String(!this._layout.outlineCollapsed)}
+                    aria-label=${this._layout.outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
+                    @click=${this._layout.toggleOutline}
                   >
-                    ${this._outlineCollapsed ? renderToolbarIcon('chevronRight') : renderToolbarIcon('chevronLeft')}
-                    <span class="sr-only">${this._outlineCollapsed ? 'Expand outline' : 'Collapse outline'}</span>
+                    ${this._layout.outlineCollapsed ? renderToolbarIcon('chevronRight') : renderToolbarIcon('chevronLeft')}
+                    <span class="sr-only">${this._layout.outlineCollapsed ? 'Expand outline' : 'Collapse outline'}</span>
                   </button>
                 </div>
                 <div
                   id="service-blueprint-editor-outline-panel"
                   class="panel-body"
-                  ?hidden=${this._outlineCollapsed}
+                  ?hidden=${this._layout.outlineCollapsed}
                 >
                   <wayfinder-service-blueprint-outline
                     class="editor-outline"
@@ -2255,8 +1065,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               <!-- Center: graph workspace -->
               <div class="editor-center">
                 ${(() => {
-                  const errorCount = this._blockingValidationIssues.length;
-                  const warningCount = this._warningValidationIssues.length;
+                  const errorCount = this._validation.blocking.length;
+                  const warningCount = this._validation.warnings.length;
                   const total = errorCount + warningCount;
                   if (total === 0) return nothing;
                   const summary =
@@ -2308,9 +1118,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               </div>
 
               <!-- Right: inspector -->
-              <section class=${`editor-right ${this._inspectorCollapsed ? 'panel-collapsed' : ''}`}>
+              <section class=${`editor-right ${this._layout.inspectorCollapsed ? 'panel-collapsed' : ''}`}>
                 ${
-                  this._inspectorCollapsed
+                  this._layout.inspectorCollapsed
                     ? nothing
                     : html`
                       <div
@@ -2318,37 +1128,37 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                         role="separator"
                         aria-orientation="vertical"
                         aria-label="Resize properties panel"
-                        aria-valuenow=${this._inspectorWidth}
+                        aria-valuenow=${this._layout.inspectorWidth}
                         aria-valuemin="280"
                         aria-valuemax="720"
                         tabindex="0"
-                        @pointerdown=${this._handleInspectorResizeStart}
-                        @keydown=${this._handleInspectorResizeKeydown}
+                        @pointerdown=${this._layout.startResize}
+                        @keydown=${this._layout.resizeWithKeyboard}
                       ></div>
                     `
                 }
                 <div class="panel-header">
                   <div class="panel-header-copy">
                     <h2 class="panel-title">Properties</h2>
-                    ${this._inspectorCollapsed ? nothing : html`<p class="panel-subtitle">Selected stage, gateway, or route details</p>`}
+                    ${this._layout.inspectorCollapsed ? nothing : html`<p class="panel-subtitle">Selected stage, gateway, or route details</p>`}
                   </div>
                   <button
                     type="button"
                     class="panel-toggle"
                     data-wayfinder-inspector-toggle
                     aria-controls="service-blueprint-editor-inspector-panel"
-                    aria-expanded=${String(!this._inspectorCollapsed)}
-                    aria-label=${this._inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}
-                    @click=${this._toggleInspectorCollapsed}
+                    aria-expanded=${String(!this._layout.inspectorCollapsed)}
+                    aria-label=${this._layout.inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}
+                    @click=${this._layout.toggleInspector}
                   >
-                    ${this._inspectorCollapsed ? renderToolbarIcon('chevronLeft') : renderToolbarIcon('chevronRight')}
-                    <span class="sr-only">${this._inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}</span>
+                    ${this._layout.inspectorCollapsed ? renderToolbarIcon('chevronLeft') : renderToolbarIcon('chevronRight')}
+                    <span class="sr-only">${this._layout.inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}</span>
                   </button>
                 </div>
                 <div
                   id="service-blueprint-editor-inspector-panel"
                   class="panel-body"
-                  ?hidden=${this._inspectorCollapsed}
+                  ?hidden=${this._layout.inspectorCollapsed}
                 >
                   <wayfinder-step-inspector
                     class="inspector-panel"
@@ -2372,1263 +1182,17 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
           <!-- Other tabs -->
           <div slot="calculations">${this._renderCalculationsPanel()}</div>
-          <div slot="validation">${this._renderValidationPanel()}</div>
-          <div slot="definition">${this._renderDefinitionPanel()}</div>
+          <div slot="validation">${this._validation.renderPanel({ saveStatus: this._save.statusSummary, onJump: (issue) => this._jumpToValidationIssue(issue) })}</div>
+          <div slot="definition">${this._definition.renderPanel()}</div>
         </wayfinder-confidence-tabs>
         </div>
 
-        ${this._renderShortcutGuide()}
+        ${this._help.render()}
       </div>
     `;
   }
 
-  private _renderToast() {
-    if (!this._toastMessage) return nothing;
-    return html`
-      <div
-        class="toast-banner"
-        role="status"
-        aria-live="assertive"
-        data-wayfinder-toast
-      >
-        ${this._toastMessage}
-      </div>
-    `;
-  }
-
-  /**
-   * Detailed, dismissible notice at the top of the editor. Dismissing this only hides the
-   * detail — it does not clear `_serviceBlueprintStale`, so the read-only overlay (which has its own,
-   * always-present Reload action) stays in effect. The only reason to dismiss without
-   * reloading is to look at your own in-progress changes first, per the read-only overlay
-   * leaving content visible rather than hiding it.
-   */
-  private _renderStaleServiceBlueprintBanner() {
-    if (!this._serviceBlueprintStale || this._staleBannerDismissed) {
-      return nothing;
-    }
-
-    return html`
-      <section
-        class="stale-service-blueprint-banner"
-        aria-labelledby="service-blueprint-stale-title"
-        tabindex="-1"
-        data-wayfinder-stale-service-blueprint-banner
-      >
-        <div class="stale-service-blueprint-header">
-          <p class="stale-service-blueprint-eyebrow">Changed elsewhere</p>
-          <h2 id="service-blueprint-stale-title" class="stale-service-blueprint-title">This service blueprint was updated elsewhere</h2>
-          <p class="stale-service-blueprint-summary" role="alert">
-            Someone else — a person in the editor, or an AI agent — saved a newer version
-            ${this._staleCurrentVersion != null ? html`(now at version ${this._staleCurrentVersion})` : ''}
-            while you were editing. The editor is read-only until you reload; reloading
-            replaces your current view with the latest version, so copy anything you want to
-            keep first.
-          </p>
-        </div>
-        <div class="stale-service-blueprint-actions">
-          <button
-            type="button"
-            class="toolbar-btn govuk-button"
-            data-wayfinder-reload-after-conflict
-            @click=${this._handleReloadAfterConflict}
-          >
-            Reload latest version
-          </button>
-          <button
-            type="button"
-            class="toolbar-btn govuk-button govuk-button--secondary"
-            aria-label="Dismiss — I just want to look at my changes first"
-            data-wayfinder-dismiss-stale-banner
-            @click=${() => {
-              this._staleBannerDismissed = true;
-            }}
-          >
-            Dismiss
-          </button>
-        </div>
-      </section>
-    `;
-  }
-
-  /**
-   * Blocks interaction with the canvas/inspector while `_serviceBlueprintStale` — any edit made now
-   * would just be heading toward another conflict. Deliberately a translucent scrim, not an
-   * opaque one: the whole point of letting someone dismiss the detailed banner above is so
-   * they can still see their own in-progress content before reloading over it. Always carries
-   * its own Reload action so it's reachable regardless of whether that banner was dismissed.
-   */
-  private _renderStaleServiceBlueprintOverlay() {
-    if (!this._serviceBlueprintStale) {
-      return nothing;
-    }
-
-    return html`
-      <div class="stale-service-blueprint-overlay" data-wayfinder-stale-service-blueprint-overlay>
-        <div class="stale-service-blueprint-overlay-ribbon" role="status">
-          <span>Read-only — this service blueprint changed elsewhere.</span>
-          <button
-            type="button"
-            class="toolbar-btn govuk-button stale-service-blueprint-overlay-reload"
-            data-wayfinder-reload-after-conflict-overlay
-            @click=${this._handleReloadAfterConflict}
-          >
-            Reload latest version
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderSaveErrorSurface() {
-    if (!this._saveError) {
-      return nothing;
-    }
-
-    return html`
-      <section
-        class="save-error-surface"
-        aria-labelledby="service-blueprint-save-error-title"
-        tabindex="-1"
-        data-wayfinder-save-error
-      >
-        <div class="save-error-header">
-          <p class="save-error-eyebrow">Save problem</p>
-          <h2 id="service-blueprint-save-error-title" class="save-error-title">${this._saveError.title}</h2>
-          ${
-            this._saveError.summaryStageKey
-              ? html`
-                <p class="save-error-summary" role="alert">
-                  <button
-                    type="button"
-                    class="save-error-detail-link"
-                    data-wayfinder-save-error-jump
-                    @click=${() => this._jumpToStage(this._saveError!.summaryStageKey!)}
-                  >
-                    ${this._saveError.summary}
-                    <span class="save-error-detail-link-hint">Go to stage</span>
-                  </button>
-                </p>
-              `
-              : html`<p class="save-error-summary" role="alert">${this._saveError.summary}</p>`
-          }
-        </div>
-
-        ${
-          this._saveError.details.length > 0
-            ? html`
-              <ul class="save-error-list">
-                ${this._saveError.details.map(
-                  (detail) => html`
-                  <li>
-                    ${
-                      detail.stageKey
-                        ? html`
-                          <button
-                            type="button"
-                            class="save-error-detail-link"
-                            data-wayfinder-save-error-jump
-                            @click=${() => this._jumpToStage(detail.stageKey!)}
-                          >
-                            ${detail.message}
-                            <span class="save-error-detail-link-hint">Go to stage</span>
-                          </button>
-                        `
-                        : detail.message
-                    }
-                  </li>
-                `
-                )}
-              </ul>
-            `
-            : nothing
-        }
-
-        ${this._saveError.traceId ? html`<p class="save-error-trace"><strong>Reference:</strong> ${this._saveError.traceId}</p>` : nothing}
-
-        <label class="save-error-copy-label" for="service-blueprint-save-error-details">Copyable save error details</label>
-        <textarea
-          id="service-blueprint-save-error-details"
-          class="save-error-copy-field"
-          readonly
-          rows="6"
-          .value=${this._saveError.copyText}
-          data-wayfinder-save-error-details
-        ></textarea>
-
-        <div class="save-error-actions">
-          <button
-            type="button"
-            class="toolbar-btn govuk-button govuk-button--secondary save-error-copy-button"
-            data-wayfinder-copy-save-error
-            @click=${this._copySaveErrorDetails}
-          >
-            Copy details
-          </button>
-          <button
-            type="button"
-            class="toolbar-btn govuk-button govuk-button--secondary"
-            aria-label="Dismiss save error"
-            data-wayfinder-dismiss-save-error
-            @click=${() => {
-              this._saveError = null;
-              this._saveErrorCopyStatus = null;
-            }}
-          >
-            Dismiss
-          </button>
-          <p class="save-error-copy-status" role="status" aria-live="polite" data-wayfinder-save-error-copy-status>
-            ${this._saveErrorCopyStatus ?? ''}
-          </p>
-        </div>
-      </section>
-    `;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Styles
-  // ---------------------------------------------------------------------------
-
-  static styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      min-height: 0;
-      overflow: hidden;
-      font-family: "GDS Transport", arial, sans-serif;
-      font-size: 1rem;
-      color: #0b0c0c;
-      background: #f3f2f1;
-    }
-
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    .editor-root {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      position: relative;
-    }
-
-    /* ---- Banners ---- */
-
-    .loading-banner,
-    .error-banner {
-      padding: 0.5rem 1rem;
-      font-size: 0.875rem;
-    }
-
-    .loading-banner {
-      background: #f0f4f9;
-      color: #1d70b8;
-    }
-
-    .error-banner {
-      background: #fce8e6;
-      color: #d4351c;
-    }
-
-    .toast-banner {
-      position: fixed;
-      top: 1rem;
-      right: 1rem;
-      z-index: 200;
-      background: #00703c;
-      color: #fff;
-      padding: 0.75rem 1.25rem;
-      border-radius: 4px;
-      font-size: 1rem;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-    }
-
-    .save-error-surface {
-      margin: 1rem;
-      padding: 1rem 1.25rem 1.25rem;
-      border: 4px solid #d4351c;
-      background: #ffffff;
-      display: grid;
-      gap: 0.875rem;
-      box-shadow: 0 1px 4px rgba(11, 12, 12, 0.08);
-    }
-
-    .save-error-surface:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 0;
-    }
-
-    .save-error-header,
-    .save-error-actions {
-      display: grid;
-      gap: 0.5rem;
-    }
-
-    .save-error-eyebrow,
-    .save-error-summary,
-    .save-error-trace,
-    .save-error-copy-label,
-    .save-error-copy-status {
-      margin: 0;
-    }
-
-    .save-error-eyebrow {
-      font-size: 0.875rem;
-      font-weight: 700;
-      color: #b10e1e;
-    }
-
-    .save-error-title {
-      margin: 0;
-      font-size: 1.1875rem;
-      font-weight: 700;
-      color: #0b0c0c;
-    }
-
-    .save-error-summary,
-    .save-error-trace,
-    .save-error-copy-label,
-    .save-error-copy-status {
-      font-size: 0.9375rem;
-      line-height: 1.5;
-      color: #0b0c0c;
-    }
-
-    .save-error-list {
-      margin: 0;
-      padding-left: 1.25rem;
-      display: grid;
-      gap: 0.375rem;
-    }
-
-    .save-error-detail-link {
-      display: flex;
-      align-items: baseline;
-      gap: 0.5rem;
-      border: none;
-      background: none;
-      padding: 0;
-      color: #1d70b8;
-      text-decoration: underline;
-      text-align: left;
-      cursor: pointer;
-      font: inherit;
-    }
-
-    .save-error-detail-link:hover {
-      color: #003078;
-    }
-
-    .save-error-detail-link:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 2px;
-    }
-
-    .save-error-detail-link-hint {
-      flex-shrink: 0;
-      font-size: 0.8125rem;
-      text-decoration: none;
-      color: #505a5f;
-    }
-
-    .save-error-copy-label {
-      font-weight: 700;
-    }
-
-    .save-error-copy-field {
-      width: 100%;
-      min-height: 8.5rem;
-      resize: vertical;
-      padding: 0.75rem;
-      border: 2px solid #0b0c0c;
-      border-radius: 4px;
-      font: inherit;
-      line-height: 1.5;
-      color: #0b0c0c;
-      background: #f8f8f8;
-      box-sizing: border-box;
-    }
-
-    .save-error-copy-field:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 0;
-    }
-
-    .save-error-actions {
-      align-items: start;
-    }
-
-    .save-error-copy-button {
-      justify-self: start;
-    }
-
-    /* ---- Stale serviceBlueprint (version conflict) ---- */
-
-    .stale-service-blueprint-banner {
-      margin: 1rem;
-      padding: 1rem 1.25rem 1.25rem;
-      border: 4px solid #f47738;
-      background: #fff7f0;
-      display: grid;
-      gap: 0.875rem;
-      box-shadow: 0 1px 4px rgba(11, 12, 12, 0.08);
-    }
-
-    .stale-service-blueprint-banner:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 0;
-    }
-
-    .stale-service-blueprint-header {
-      display: grid;
-      gap: 0.5rem;
-    }
-
-    .stale-service-blueprint-eyebrow,
-    .stale-service-blueprint-summary {
-      margin: 0;
-    }
-
-    .stale-service-blueprint-eyebrow {
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 0.8rem;
-      letter-spacing: 0.03em;
-      color: #b35900;
-    }
-
-    .stale-service-blueprint-title {
-      margin: 0;
-      font-size: 1.2rem;
-    }
-
-    .stale-service-blueprint-actions {
-      display: flex;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .editor-content-wrapper {
-      position: relative;
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .stale-service-blueprint-overlay {
-      position: absolute;
-      inset: 0;
-      z-index: 150;
-      background: rgba(255, 247, 240, 0.55);
-      cursor: not-allowed;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .stale-service-blueprint-overlay-ribbon {
-      margin-top: 0.75rem;
-      background: #f47738;
-      color: #0b0c0c;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      font-weight: 600;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-      cursor: default;
-    }
-
-    .stale-service-blueprint-overlay-reload {
-      flex-shrink: 0;
-    }
-
-    /* ---- Tabs ---- */
-
-    .editor-tabs {
-      flex: 1;
-      min-height: 0;
-    }
-
-    .canvas-workspace {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* ---- Shell ---- */
-
-    .editor-shell {
-      display: grid;
-      grid-template-columns: var(--outline-width, 240px) 1fr var(--inspector-width, 380px);
-      flex: 1;
-      overflow: hidden;
-      min-height: 0;
-    }
-
-    /* ---- Left panel ---- */
-
-    .editor-outline-shell,
-    .editor-right {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      background: #fff;
-    }
-
-    .editor-outline-shell {
-      border-right: 2px solid #b1b4b6;
-    }
-
-    .panel-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.75rem;
-      padding: 0.875rem 0.875rem 0.75rem;
-      border-bottom: 1px solid #d8dde3;
-      background: #ffffff;
-      flex-shrink: 0;
-    }
-
-    .panel-header-copy {
-      min-width: 0;
-    }
-
-    .panel-title {
-      margin: 0;
-      font-size: 1rem;
-      font-weight: 700;
-      color: #0b0c0c;
-    }
-
-    .panel-subtitle {
-      margin: 0.25rem 0 0;
-      font-size: 0.8125rem;
-      color: #505a5f;
-      line-height: 1.4;
-    }
-
-    .panel-toggle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 2.25rem;
-      min-width: 2.25rem;
-      min-height: 2.25rem;
-      border: 1px solid #b1b4b6;
-      border-radius: 999px;
-      background: #ffffff;
-      color: #0b0c0c;
-      cursor: pointer;
-      font: inherit;
-      font-weight: 700;
-    }
-
-    .panel-toggle:hover {
-      background: #f3f2f1;
-    }
-
-    .panel-toggle:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 2px;
-    }
-
-    .panel-body {
-      flex: 1;
-      min-height: 0;
-      overflow: hidden;
-    }
-
-    .panel-collapsed .panel-header {
-      align-items: center;
-      justify-content: center;
-      padding: 0.75rem 0.5rem;
-      min-height: 100%;
-      border-bottom: none;
-      writing-mode: vertical-rl;
-      transform: rotate(180deg);
-    }
-
-    .panel-collapsed .panel-header-copy {
-      display: contents;
-    }
-
-    .panel-collapsed .panel-title {
-      font-size: 0.875rem;
-    }
-
-    .panel-collapsed .panel-toggle {
-      transform: rotate(180deg);
-    }
-
-    .editor-outline {
-      height: 100%;
-    }
-
-    .editor-center {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    /* Sits above the whole tabbed area (canvas/calculations/validation/definition), not nested
-       inside any one tab's own content — save/undo/redo act on the whole serviceBlueprint, so
-       they need to stay reachable no matter which tab is active. */
-    .toolbar-header {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.75rem 1rem;
-      background: #1d70b8;
-      color: #fff;
-      flex-shrink: 0;
-    }
-
-    .editor-title {
-      margin: 0;
-      font-size: 1.125rem;
-      font-weight: 700;
-      flex: 1;
-    }
-
-    .toolbar-actions {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 0.5rem;
-    }
-
-    /* The canvas-specific tool group (copy/paste, add stage/gateway, zoom) nested inside
-       .toolbar-actions, shown only while the Canvas tab is active — unlike save/undo/redo,
-       these only make sense with the graph on screen. */
-    .editor-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .toolbar-btn,
-    .mode-toggle-btn {
-      font-size: 0.875rem;
-      padding: 0.4rem 0.75rem;
-      background: #fff;
-      color: #1d70b8;
-      border: 2px solid #fff;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 600;
-      white-space: nowrap;
-      margin: 0;
-    }
-
-    .toolbar-btn[disabled],
-    .mode-toggle-btn[disabled] {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .toolbar-btn:hover:not([disabled]),
-    .mode-toggle-btn:hover:not([disabled]) {
-      background: #e8f0fb;
-    }
-
-    .toolbar-btn:focus-visible,
-    .mode-toggle-btn:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 2px;
-    }
-
-    /* Square icon buttons — the toolbar's own accessible name comes from aria-label (kept
-       identical to the pre-icon button text, e.g. "Save"/"Undo"), and title gives every
-       mouse/trackpad user the same hover tooltip a screen reader gets from aria-label, usually
-       with its keyboard shortcut appended. */
-    .toolbar-btn--icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 2.25rem;
-      min-width: 2.25rem;
-      height: 2.25rem;
-      padding: 0;
-      font-size: 1.125rem;
-      line-height: 1;
-    }
-
-    /* Bootstrap Icons path data rendered inline (see graph/toolbar-icons.ts) — sized to sit
-       comfortably inside the 2.25rem toolbar/panel-toggle buttons, colour inherited from the
-       button's own color via currentColor so hover/disabled states need no separate rule. */
-    .toolbar-icon-glyph {
-      width: 1.125rem;
-      height: 1.125rem;
-      flex-shrink: 0;
-    }
-
-    .panel-toggle .toolbar-icon-glyph {
-      width: 1rem;
-      height: 1rem;
-    }
-
-    @keyframes toolbar-btn-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    .toolbar-btn--spinning .toolbar-icon-glyph {
-      animation: toolbar-btn-spin 0.9s linear infinite;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .toolbar-btn--spinning .toolbar-icon-glyph {
-        animation: none;
-      }
-    }
-
-    /* Separates the toolbar's logical groups (save/undo/history — canvas authoring — zoom/fit)
-       without a full visual break; this is one continuous toolbar, not several. */
-    .toolbar-divider {
-      width: 1px;
-      align-self: stretch;
-      margin: 0.25rem 0.125rem;
-      background: rgba(255, 255, 255, 0.35);
-    }
-
-    .zoom-indicator {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 2.75rem;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: #ffffff;
-    }
-
-    .canvas-health-hint {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.6rem 1rem;
-      border-bottom: 1px solid #b1b4b6;
-      font-size: 0.875rem;
-      flex-shrink: 0;
-    }
-
-    .canvas-health-hint.is-error {
-      background: #fef2f2;
-      color: #7a1f1f;
-    }
-
-    .canvas-health-hint.is-warning {
-      background: #fff7e6;
-      color: #594400;
-    }
-
-    .canvas-health-summary {
-      font-weight: 600;
-    }
-
-    .canvas-health-action {
-      margin-left: auto;
-      background: #ffffff;
-      border: 2px solid currentColor;
-      color: inherit;
-      font-weight: 700;
-      padding: 0.3rem 0.75rem;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-
-    .canvas-health-action:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 2px;
-    }
-
-    .graph-panel {
-      flex: 1;
-      overflow: hidden;
-    }
-
-    /* ---- Right panel ---- */
-
-    .editor-right {
-      position: relative;
-      border-left: 2px solid #b1b4b6;
-    }
-
-    /* Sits astride the left border of .editor-right — a wider invisible hit area than the
-       visible 2px line it's centred on, since a bare 2px strip is too thin to reliably grab. */
-    .panel-resize-handle {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: -5px;
-      width: 10px;
-      cursor: col-resize;
-      touch-action: none;
-      z-index: 1;
-    }
-
-    .panel-resize-handle::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 4px;
-      width: 2px;
-      background: transparent;
-    }
-
-    .panel-resize-handle:hover::after,
-    .panel-resize-handle:focus-visible::after {
-      background: #1d70b8;
-    }
-
-    .panel-resize-handle:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 2px;
-    }
-
-    /* Applied to .editor-shell for the duration of a drag so the cursor stays col-resize and
-       text elsewhere on the canvas doesn't get selected while the pointer sweeps across it. */
-    .editor-shell-resizing {
-      cursor: col-resize;
-      user-select: none;
-    }
-
-    .editor-shell-resizing .panel-resize-handle::after {
-      background: #1d70b8;
-    }
-
-    /* ---- Confidence panel ---- */
-
-    .validation-panel {
-      padding: 1.5rem;
-      background: #ffffff;
-      display: grid;
-      gap: 1rem;
-      overflow-y: auto;
-      height: 100%;
-    }
-
-    .inspector-panel {
-      flex: 1;
-      overflow: hidden;
-      min-height: 0;
-    }
-
-    .validation-panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 1rem;
-    }
-
-    .validation-panel-title {
-      margin: 0;
-      font-size: 1.125rem;
-      font-weight: 700;
-    }
-
-    .validation-panel-summary,
-    .validation-empty,
-    .validation-empty-panel,
-    .validation-panel-save-status {
-      margin: 0;
-      color: #505a5f;
-      font-size: 0.875rem;
-      line-height: 1.5;
-    }
-
-    .validation-empty-panel {
-      padding: 2rem 1.5rem;
-      text-align: center;
-      color: #626a6e;
-    }
-
-    .validation-panel-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 1rem;
-    }
-
-    .validation-count,
-    .validation-save-label,
-    .validation-issue-badge {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 999px;
-      padding: 0.2rem 0.55rem;
-      font-size: 0.75rem;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .validation-count-error,
-    .validation-issue-badge-error {
-      background: #f8d7da;
-      color: #6f1d1b;
-    }
-
-    .validation-count-warning,
-    .validation-issue-badge-warning {
-      background: #fff1cc;
-      color: #594100;
-    }
-
-    .validation-panel-save-status {
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .validation-save-label {
-      background: #d8dde3;
-      color: #0b0c0c;
-    }
-
-    .validation-issue-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: grid;
-      gap: 0.625rem;
-    }
-
-    .validation-issue-link {
-      width: 100%;
-      display: flex;
-      align-items: flex-start;
-      gap: 0.75rem;
-      padding: 0.75rem 0.875rem;
-      border: 1px solid #b1b4b6;
-      border-radius: 6px;
-      background: #ffffff;
-      color: #0b0c0c;
-      text-align: left;
-      cursor: pointer;
-      font: inherit;
-    }
-
-    .validation-issue-link:hover {
-      background: #f8f8f8;
-    }
-
-    .validation-issue-link:focus-visible {
-      outline: 3px solid #ffdd00;
-      outline-offset: 2px;
-    }
-
-    /* ---- Modal overlay ---- */
-
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(11, 12, 12, 0.65);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      padding: 1rem;
-    }
-
-    .shortcut-dialog {
-      width: min(64rem, 100%);
-      max-height: 90vh;
-      overflow: auto;
-      padding: 1.25rem;
-      border-radius: 16px;
-      background: #ffffff;
-      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
-      display: grid;
-      gap: 1rem;
-    }
-
-    .shortcut-dialog-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 1rem;
-    }
-
-    .shortcut-dialog-eyebrow {
-      margin: 0 0 0.25rem;
-      color: #1d4ed8;
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .shortcut-dialog-title {
-      margin: 0;
-      color: #0b0c0c;
-      font-size: 1.35rem;
-      line-height: 1.3;
-    }
-
-    .shortcut-dialog-copy {
-      margin: 0.5rem 0 0;
-      color: #505a5f;
-      font-size: 0.9375rem;
-      line-height: 1.5;
-      max-width: 48rem;
-    }
-
-    .shortcut-dialog-close {
-      flex-shrink: 0;
-    }
-
-    .shortcut-groups {
-      display: grid;
-      gap: 1rem;
-    }
-
-    .shortcut-group {
-      border: 1px solid #d8dde3;
-      border-radius: 12px;
-      padding: 1rem;
-      background: #f8f8f8;
-    }
-
-    .shortcut-group-title {
-      margin: 0 0 0.875rem;
-      font-size: 1rem;
-      color: #0b0c0c;
-    }
-
-    .shortcut-list {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      display: grid;
-      gap: 0.75rem;
-    }
-
-    .help-tip-list {
-      margin: 0;
-      padding-left: 1.5rem;
-      color: #0b0c0c;
-      line-height: 1.6;
-    }
-
-    .help-tip-list li {
-      margin-bottom: 0.75rem;
-      font-size: 0.9375rem;
-    }
-
-    .help-tip-list li:last-child {
-      margin-bottom: 0;
-    }
-
-    .shortcut-item {
-      display: grid;
-      grid-template-columns: minmax(0, 2.2fr) minmax(12rem, 1fr) minmax(0, 1.3fr);
-      gap: 0.875rem;
-      align-items: start;
-      padding: 0.875rem;
-      border-radius: 10px;
-      background: #ffffff;
-      border: 1px solid #e5e7eb;
-    }
-
-    .shortcut-command,
-    .shortcut-description,
-    .shortcut-context {
-      margin: 0;
-    }
-
-    .shortcut-command {
-      color: #0b0c0c;
-      font-weight: 700;
-    }
-
-    .shortcut-description,
-    .shortcut-context {
-      color: #505a5f;
-      font-size: 0.875rem;
-      line-height: 1.5;
-    }
-
-    .shortcut-description {
-      margin-top: 0.25rem;
-    }
-
-    .shortcut-keys {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      align-items: center;
-    }
-
-    .shortcut-keys kbd {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 2rem;
-      padding: 0.25rem 0.625rem;
-      border: 1px solid #b1b4b6;
-      border-bottom-width: 3px;
-      border-radius: 6px;
-      background: #ffffff;
-      color: #0b0c0c;
-      font-size: 0.8125rem;
-      font-weight: 700;
-      line-height: 1;
-      white-space: nowrap;
-    }
-
-    @media (max-width: 960px) {
-      .shortcut-item {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* Responsive: Narrow viewports (tablets, small laptops) */
-    @media (max-width: 1024px) {
-      .editor-shell {
-        grid-template-columns: var(--outline-width, 240px) 1fr var(--inspector-width, 320px);
-      }
-
-      .toolbar-header {
-        flex-direction: column;
-        gap: 0.75rem;
-        align-items: stretch;
-      }
-
-      .toolbar-actions,
-      .editor-toolbar {
-        flex-wrap: wrap;
-      }
-    }
-
-    /* Responsive: Mobile/narrow screens */
-    @media (max-width: 640px) {
-      .editor-shell {
-        grid-template-columns: var(--outline-width, 3.5rem) 1fr var(--inspector-width, 3.5rem);
-      }
-
-      .panel-collapsed {
-        min-width: 3.5rem;
-      }
-
-      .panel-collapsed .panel-body {
-        display: none;
-      }
-
-      .panel-collapsed .panel-header-copy {
-        display: none;
-      }
-
-      .panel-toggle {
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
-        min-height: 8rem;
-      }
-
-      .toolbar-header {
-        padding: 0.625rem 0.875rem;
-      }
-
-      .editor-title {
-        font-size: 1.125rem;
-      }
-
-      .toolbar-actions,
-      .editor-toolbar {
-        gap: 0.375rem;
-      }
-
-      .toolbar-btn {
-        padding: 0.5rem 0.75rem;
-        font-size: 0.875rem;
-      }
-    }
-
-    /* ---- Definition tab ---- */
-
-    .definition-panel {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      min-height: 0;
-      background: #ffffff;
-    }
-
-    .definition-banner {
-      margin: 0.75rem 1.25rem;
-      padding: 0.875rem 1rem;
-      background: #fbeaec;
-      border-left: 4px solid #b10e1e;
-      color: #0b0c0c;
-      border-radius: 4px;
-    }
-
-    .definition-banner-summary {
-      margin: 0 0 0.5rem;
-      font-size: 0.9375rem;
-    }
-
-    .definition-banner-list {
-      margin: 0 0 0.5rem 1.25rem;
-      padding: 0;
-      font-size: 0.875rem;
-    }
-
-    .definition-banner-actions {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .definition-banner-actions button:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .definition-editor-frame {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      padding: 1.25rem;
-    }
-
-    .definition-editor-frame wayfinder-definition-editor {
-      flex: 1;
-      min-height: 0;
-      border: 1px solid #b1b4b6;
-      border-radius: 4px;
-      /* overflow: hidden removed — was blocking mouse wheel events from reaching CodeMirror */
-    }
-
-    .definition-loading,
-    .definition-empty {
-      margin: 1rem 1.25rem;
-      font-size: 0.9375rem;
-      color: #505a5f;
-    }
-  `;
+  static styles = unsafeCSS(editorStyles);
 }
 
 declare global {

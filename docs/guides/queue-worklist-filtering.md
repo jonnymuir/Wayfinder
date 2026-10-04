@@ -97,4 +97,4 @@ point for either today, on the same "add one when a concrete need drives it" pri
 this toolkit follows. If a host needs its own notion of "done" or its own searchable field beyond
 raw `FieldValues`, that's a genuine gap to raise, not something to work around by post-processing
 `QueueWorkListEnvelope.Items`, the status/search logic needs the underlying `ServiceRequest` and
-`AccessibleWorkItem`, which the envelope's projection deliberately doesn't expose.
+`ActorWorkItem`, which the envelope's projection deliberately doesn't expose.

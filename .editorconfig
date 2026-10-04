@@ -26,3 +26,111 @@ csharp_style_var_when_type_is_apparent = true:suggestion
 # Tests name behaviours with underscores (Behaviour_Under_Condition_Outcome).
 [Wayfinder.Tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
+
+# Complexity budgets (policy: keep members and classes small). Thresholds live in CodeMetricsConfig.txt.
+# Existing offenders are listed in the baseline block at the end of this file; it may only shrink
+# (scripts/check-policies.mjs fails on a stale entry).
+[*.cs]
+dotnet_diagnostic.CA1502.severity = warning
+dotnet_diagnostic.CA1506.severity = warning
+
+# Tests wire a lot of types on purpose.
+[Wayfinder.Tests/**.cs]
+dotnet_diagnostic.CA1506.severity = none
+
+# BEGIN complexity baseline: fix a file, then delete its section
+[SafetyNetUnderwriting/ContributionsValidation.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[SafetyNetUnderwriting/Program.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine.Worklist/WorklistExtensions.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/BulkDatasetActions.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/ComponentPropertyValidator.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/GatewayAdvancer.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/InstanceAdvancer.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/ProcessManagerEngine.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/ServiceBlueprintAuthoringService.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/StageRenderer.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/WorkAllocation.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/WorkItemFinder.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Services/WorkQueues.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Engine/Stores/InMemoryBulkDatasetStore.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.ReferenceApp/Program.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder.Rendering.GovUk/GovUkComponents.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Services/Calculations/CalculationEvaluator.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Services/Calculations/CalculationExpression.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Services/Validation/FieldValueValidator.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.BulkDatasetActions.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.DataDisplayBindings.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.GatewayRouting.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.Reachability.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.SupportSystemActions.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+# END complexity baseline

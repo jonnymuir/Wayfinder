@@ -117,7 +117,7 @@ internal static class QueueAccess
     /// <paramref name="accessProfile"/>.<see cref="ActorProfile.RestrictToInstanceOwner"/> — an
     /// owner-restricted (citizen-style) profile's own instance has exactly one possible actor by
     /// construction, so "assignment" isn't a concept that applies there at all (the same
-    /// discriminator <see cref="AccessibleWorkItem.ResolvePickupState"/> already uses for the
+    /// discriminator <see cref="ActorWorkItem.ResolvePickupState"/> already uses for the
     /// identical reason). Internal peeks (no <paramref name="userId"/>) are always entitled too.
     /// </summary>
     public static bool IsEntitledToActNow(ActorProfile accessProfile, string? assignedTo, string? userId) =>
