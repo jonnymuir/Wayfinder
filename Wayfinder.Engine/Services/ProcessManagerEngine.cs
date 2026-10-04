@@ -14,6 +14,7 @@ using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign.BulkData;
 using Wayfinder.Models.ServiceDesign.SupportSystems;
 using static Wayfinder.Engine.Services.BlueprintLookup;
+using static Wayfinder.Engine.Services.FieldValueMerge;
 
 namespace Wayfinder.Engine.Services;
 
@@ -25,6 +26,7 @@ public class ProcessManagerEngine : IProcessManager
     private readonly IServiceContentSanitizer _sanitizer;
     private readonly BlueprintRegistry _registry;
     private readonly InstanceRepository _instances;
+    private readonly StageCalculations _calculations;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly Dictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
@@ -55,6 +57,7 @@ public class ProcessManagerEngine : IProcessManager
             instanceStore ?? new InMemoryServiceRequestStore(),
             auditLogStore ?? new InMemoryAuditLogStore(),
             _registry);
+        _calculations = new StageCalculations(logger, _instances, ResolveServiceInputs);
     }
 
     protected ILogger Logger { get; }
@@ -456,7 +459,7 @@ public class ProcessManagerEngine : IProcessManager
         var currentStage = definition.Stages.FirstOrDefault(s => s.StageKey == visibleWorkItem.StageKey);
         if (currentStage is not null)
         {
-            var currentCalc = EvaluateDefinitionCalculations(instance, definition, currentStage);
+            var currentCalc = _calculations.EvaluateDefinitionCalculations(instance, definition, currentStage);
             var currentComponents = BuildComponents(currentStage.Components, instance.FieldValues, currentCalc);
             var authoritativeFields = currentComponents.SelectMany(c => c.Fields).ToArray();
             var hiddenFieldKeys = currentComponents
@@ -502,7 +505,7 @@ public class ProcessManagerEngine : IProcessManager
             // field-level validation has already passed. Evaluated on the same merge of
             // persisted + just-submitted values FieldValueValidator above just accepted, never
             // on stale persisted data or on anything the client could claim was pre-checked.
-            var stageValidationProblems = EvaluateStageValidations(instance, definition, currentStage, fieldValues, action);
+            var stageValidationProblems = _calculations.EvaluateStageValidations(instance, definition, currentStage, fieldValues, action);
             if (stageValidationProblems.Count > 0)
             {
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
@@ -1756,11 +1759,11 @@ public class ProcessManagerEngine : IProcessManager
         }
 
         var renderData = BuildRenderData(instance, definition, stage);
-        var calc = EvaluateDefinitionCalculations(instance, definition, stage);
+        var calc = _calculations.EvaluateDefinitionCalculations(instance, definition, stage);
         if (calc is not null)
         {
             renderData ??= new JsonObject();
-            renderData["live"] = BuildLiveModel(definition, calc);
+            renderData["live"] = StageCalculations.BuildLiveModel(definition, calc);
         }
 
         var components = BuildComponents(stage.Components, instance.FieldValues, calc);
@@ -2093,9 +2096,9 @@ public class ProcessManagerEngine : IProcessManager
                 string.Equals(candidate.StageKey, stageKey, StringComparison.Ordinal));
             if (stage is not null)
             {
-                var scope = BuildCalculationScope(instance, definition, stage, pendingFieldValues: null);
+                var scope = _calculations.BuildCalculationScope(instance, definition, stage, pendingFieldValues: null);
                 transitions = transitions
-                    .Where(transition => EvaluateShowWhen(transition.ShowWhen, scope, definition.Calculations))
+                    .Where(transition => _calculations.EvaluateShowWhen(transition.ShowWhen, scope, definition.Calculations))
                     .ToArray();
             }
         }
@@ -2286,289 +2289,6 @@ public class ProcessManagerEngine : IProcessManager
     /// resolution its own request pipeline already performs.
     /// </summary>
     protected virtual bool ResolveIsAuthenticated(string tenantId, string userId) => false;
-
-    /// <summary>Evaluated calculation stage for one render pass.</summary>
-    protected sealed record CalculationRenderContext(
-        ServiceBlueprintCalculationSet Set,
-        IReadOnlyDictionary<string, object?> Scope,
-        CalculationResult Result,
-        IReadOnlyDictionary<string, object?> DisplayValues);
-
-    private readonly CalculationEvaluator _calculationEvaluator = new();
-
-    private CalculationRenderContext? EvaluateDefinitionCalculations(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        StageDefinition stage)
-    {
-        if (definition.Calculations is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var serviceInputs = ResolveServiceInputs(instance, definition, stage);
-            var scope = CalculationScopeBuilder.Build(definition, instance.FieldValues, serviceInputs);
-            var result = _calculationEvaluator.Evaluate(definition.Calculations, scope);
-
-            // Full scope (inputs + calculated fields) for showWhen evaluation.
-            var fullScope = new Dictionary<string, object?>(scope, StringComparer.Ordinal);
-            foreach (var (name, value) in result.Fields)
-            {
-                fullScope[name] = value;
-            }
-
-            // Display overlay: saved values, then calculated fields formatted per their
-            // declared format — this is what stat-groups and summary-lists resolve from.
-            var display = new Dictionary<string, object?>(instance.FieldValues, StringComparer.Ordinal);
-            foreach (var (name, value) in result.Fields)
-            {
-                var format = definition.Calculations.Fields.TryGetValue(name, out var field) ? field.Format : null;
-                display[name] = FormatCalculatedValue(value, format);
-            }
-
-            // Last computed result is kept on the instance so a composed caller (e.g. the
-            // simulation runner, which builds this engine rather than subclassing it) can
-            // read raw calculated values without duplicating evaluation itself.
-            _instances.Save(instance with { LastCalculationResult = result }, instance.UserId);
-
-            return new CalculationRenderContext(definition.Calculations, fullScope, result, display);
-        }
-        catch (CalculationException exception)
-        {
-            Logger.LogWarning(
-                exception,
-                "Calculation evaluation failed for blueprint {Key}, stage {State}; rendering without calculated values.",
-                definition.DefinitionKey,
-                stage.StageKey);
-            return null;
-        }
-    }
-
-    private static string? FormatCalculatedValue(object? value, string? format) => value switch
-    {
-        null => null,
-        decimal d when string.Equals(format, "gbp", StringComparison.OrdinalIgnoreCase) =>
-            string.Create(
-                System.Globalization.CultureInfo.GetCultureInfo("en-GB"),
-                $"£{Math.Round(d, 0, MidpointRounding.AwayFromZero):N0}"),
-        decimal d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        bool b => b ? "true" : "false",
-        _ => value.ToString()
-    };
-
-    private static JsonObject BuildLiveModel(ServiceBlueprint definition, CalculationRenderContext calc)
-    {
-        var inputTypes = new JsonObject();
-        var defaults = new JsonObject();
-        foreach (var (fieldKey, (type, defaultValue)) in CalculationScopeBuilder.DescribeInputs(definition))
-        {
-            inputTypes[fieldKey] = type;
-            if (defaultValue is not null)
-            {
-                defaults[fieldKey] = defaultValue;
-            }
-        }
-
-        var serviceValues = new JsonObject();
-        foreach (var (name, field) in calc.Set.Fields)
-        {
-            if (string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase)
-                && calc.Scope.TryGetValue(name, out var value))
-            {
-                serviceValues[name] = ScopeValueToJson(value);
-            }
-        }
-
-        return new JsonObject
-        {
-            ["calculations"] = JsonSerializer.SerializeToNode(calc.Set, LiveModelJsonOptions),
-            ["inputTypes"] = inputTypes,
-            ["defaults"] = defaults,
-            ["service"] = serviceValues
-        };
-    }
-
-    private static readonly JsonSerializerOptions LiveModelJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
-    private static JsonNode? ScopeValueToJson(object? value) => value switch
-    {
-        null => null,
-        decimal d => JsonValue.Create(d),
-        bool b => JsonValue.Create(b),
-        // Any other plain CLR numeric type a host's own serviceInputsResolver might reasonably
-        // return (e.g. a plain `int Age` on its own member-record type, not pre-cast to
-        // decimal) — found live: without these, an int fell through to the string.ToString()
-        // case below and silently produced a JSON *string* ("47") instead of a JSON number
-        // (47) in the embedded [data-wayfinder-live-model] payload. The client's own
-        // toScope/calculation engine (UmbracoPrism.Client) only type-converts genuine JSON
-        // numbers into evaluator Dec values, so every expression referencing the field (e.g.
-        // "max(55, member.age + 1)") threw "Expected a number but got '47'" — which silently
-        // aborted the client-side live-form's entire re-evaluation, leaving whatever the
-        // server happened to render (a chart's bars/legend included) stuck uncorrected.
-        int i => JsonValue.Create((decimal)i),
-        long l => JsonValue.Create((decimal)l),
-        short s => JsonValue.Create((decimal)s),
-        byte by => JsonValue.Create((decimal)by),
-        double db => JsonValue.Create((decimal)db),
-        float f => JsonValue.Create((decimal)f),
-        string text => JsonValue.Create(text),
-        IReadOnlyDictionary<string, object?> map => new JsonObject(
-            map.Select(pair => new KeyValuePair<string, JsonNode?>(pair.Key, ScopeValueToJson(pair.Value)))),
-        _ => JsonValue.Create(value.ToString())
-    };
-
-    /// <summary>
-    /// Shared by <see cref="Components.Component.ShowWhen"/> (component visibility) and
-    /// <see cref="ServiceBlueprintRouteDefinition.ShowWhen"/> (route/action availability) — takes
-    /// a raw scope rather than a <see cref="CalculationRenderContext"/> so a caller with no other
-    /// use for the fuller context (route gating doesn't need <c>Result</c>/<c>Display</c>) isn't
-    /// forced to build one just to call this.
-    /// </summary>
-    private bool EvaluateShowWhen(
-        string? showWhen,
-        IReadOnlyDictionary<string, object?>? scope,
-        ServiceBlueprintCalculationSet? calculations)
-    {
-        if (string.IsNullOrWhiteSpace(showWhen) || scope is null)
-        {
-            return true;
-        }
-
-        try
-        {
-            return _calculationEvaluator.EvaluateExpression(showWhen, scope, calculations) is not false;
-        }
-        catch (CalculationException exception)
-        {
-            Logger.LogWarning(exception, "showWhen expression '{Expr}' failed; stays visible.", showWhen);
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// The scope a <c>showWhen</c>/stage-validation expression evaluates against: declared inputs
-    /// plus calculated fields, exactly what <see cref="EvaluateDefinitionCalculations"/> also
-    /// builds — but without that method's side effect of persisting
-    /// <see cref="ServiceRequest.LastCalculationResult"/>, so it's safe to call from a hot,
-    /// no-writes path like <see cref="BuildAvailableActions"/> (once per stage per queue render)
-    /// without multiplying instance-store writes.
-    /// </summary>
-    /// <param name="pendingFieldValues">
-    /// A submission in progress, merged over <paramref name="instance"/>'s already-persisted
-    /// values before evaluating — <see langword="null"/> to evaluate against persisted state
-    /// alone (what a caller deciding what to *render*, rather than validating a submission,
-    /// wants).
-    /// </param>
-    private Dictionary<string, object?> BuildCalculationScope(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        StageDefinition stage,
-        Dictionary<string, object?>? pendingFieldValues)
-    {
-        var serviceInputs = ResolveServiceInputs(instance, definition, stage);
-        var mergedFieldValues = pendingFieldValues is null
-            ? instance.FieldValues
-            : Merge(instance.FieldValues, pendingFieldValues);
-        var baseScope = CalculationScopeBuilder.Build(definition, mergedFieldValues, serviceInputs);
-
-        if (definition.Calculations is null)
-        {
-            return baseScope;
-        }
-
-        var evaluation = _calculationEvaluator.EvaluateCollectingErrors(definition.Calculations, baseScope);
-        var fullScope = new Dictionary<string, object?>(baseScope, StringComparer.Ordinal);
-        foreach (var (name, value) in evaluation.Result.Fields)
-        {
-            fullScope[name] = value;
-        }
-        return fullScope;
-    }
-
-    /// <summary>
-    /// Evaluates <paramref name="stage"/>'s declarative <see cref="StageDefinition.Validations"/>
-    /// against the merge of persisted + just-submitted field values — the same trust boundary
-    /// <see cref="Advance(string, string, string, ActorProfile, string, int, Dictionary{string, object?})"/>
-    /// already applies to field-level validation: never the stale persisted instance alone, never
-    /// anything the client could claim was pre-validated.
-    ///
-    /// Failure is deliberately biased toward blocking, not toward permissiveness, unlike
-    /// <see cref="EvaluateShowWhen"/>'s "stays visible" default: a <c>when</c> that doesn't
-    /// evaluate to exactly <c>false</c> is treated as applying (ambiguous → check it), a
-    /// <c>rule</c> that doesn't evaluate to exactly <c>true</c> is treated as failed (ambiguous →
-    /// block), and a rule whose expressions throw is treated as failed rather than skipped — this
-    /// is a hard gate, not a display hint, so an expression this engine can't confirm holds must
-    /// never silently let a submission through. This should be rare in practice:
-    /// <c>ServiceBlueprintAuthoringService.Validate</c> already statically checks every
-    /// <c>when</c>/<c>rule</c> expression before a blueprint can be saved. A calculated field that
-    /// fails only affects the specific rules that actually reference it (via
-    /// <see cref="CalculationEvaluator.EvaluateCollectingErrors"/>), not every validation on the
-    /// stage.
-    /// </summary>
-    private List<ServiceRequestProblem> EvaluateStageValidations(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        StageDefinition stage,
-        Dictionary<string, object?>? fieldValues,
-        string action)
-    {
-        // A rule naming no actions guards every way out of the stage (the default, and what a
-        // data-completeness rule wants). A rule naming actions guards only those — see
-        // ServiceBlueprintStageValidationRule.Actions for why a stage with genuinely different
-        // exits needs this to be expressible at all.
-        var rules = (stage.Validations ?? [])
-            .Where(rule => rule.Actions is not { Count: > 0 } scoped
-                || scoped.Contains(action, StringComparer.Ordinal))
-            .ToArray();
-
-        if (rules.Length == 0)
-        {
-            return [];
-        }
-
-        var scope = BuildCalculationScope(instance, definition, stage, fieldValues);
-
-        var problems = new List<ServiceRequestProblem>();
-        foreach (var rule in rules)
-        {
-            bool failed;
-            try
-            {
-                var applies = string.IsNullOrWhiteSpace(rule.When)
-                    || _calculationEvaluator.EvaluateExpression(rule.When, scope, definition.Calculations) is not false;
-                failed = applies
-                    && _calculationEvaluator.EvaluateExpression(rule.Rule, scope, definition.Calculations) is not true;
-            }
-            catch (CalculationException exception)
-            {
-                Logger.LogWarning(
-                    exception,
-                    "Stage validation rule '{Code}' failed to evaluate for blueprint {Key}, stage {State}; treating as failed.",
-                    rule.Code,
-                    definition.DefinitionKey,
-                    stage.StageKey);
-                failed = true;
-            }
-
-            if (failed)
-            {
-                problems.Add(new ServiceRequestProblem
-                {
-                    FieldKey = rule.Field ?? stage.StageKey,
-                    Message = rule.Message,
-                    Code = rule.Code
-                });
-            }
-        }
-
-        return problems;
-    }
 
     private ComponentRenderPayload[] BuildComponents(
         IReadOnlyList<Component> componentDefinitions,
@@ -2793,7 +2513,7 @@ public class ProcessManagerEngine : IProcessManager
 
             if (component.ShowWhen is { Length: > 0 } showWhen)
             {
-                var visible = EvaluateShowWhen(showWhen, calc?.Scope, calc?.Set);
+                var visible = _calculations.EvaluateShowWhen(showWhen, calc?.Scope, calc?.Set);
                 for (var i = payloadsBefore; i < result.Count; i++)
                 {
                     result[i] = result[i] with { ShowWhen = showWhen, Hidden = !visible };
@@ -2825,7 +2545,7 @@ public class ProcessManagerEngine : IProcessManager
                 var row = new JsonObject();
                 foreach (var (column, value) in seriesRow)
                 {
-                    row[column] = ScopeValueToJson(value);
+                    row[column] = StageCalculations.ScopeValueToJson(value);
                 }
 
                 rows.Add(row);
@@ -3087,7 +2807,7 @@ public class ProcessManagerEngine : IProcessManager
         }
 
         return TryReadScopePath(calc.Scope, input.DefaultFrom, out var scoped)
-            ? FormatCalculatedValue(scoped, format: null)
+            ? StageCalculations.FormatCalculatedValue(scoped, format: null)
             : null;
     }
 
@@ -4198,24 +3918,6 @@ public class ProcessManagerEngine : IProcessManager
             .OrderByDescending(instance => instance.UpdatedAt)
             .ThenByDescending(instance => instance.CreatedAt)
             .FirstOrDefault();
-    }
-
-    private static Dictionary<string, object?> Merge(
-        Dictionary<string, object?> existing,
-        Dictionary<string, object?>? incoming)
-    {
-        if (incoming == null || incoming.Count == 0)
-        {
-            return existing;
-        }
-
-        var merged = new Dictionary<string, object?>(existing);
-        foreach (var kvp in incoming)
-        {
-            merged[kvp.Key] = kvp.Value;
-        }
-
-        return merged;
     }
 
     private static string ActionLabel(string key) => key switch
