@@ -31,7 +31,7 @@ public sealed partial class FilesystemServiceBlueprintStore(string blueprintSeed
                 }
 
                 definitions[definition.DefinitionKey] = definition;
-                BlueprintLoaded(logger, definition.DefinitionKey, Path.GetFileName(file));
+                BlueprintLoaded(logger, definition.DefinitionKey, file);
             }
             catch (Exception ex)
             {

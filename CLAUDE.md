@@ -67,7 +67,9 @@ The build treats every warning as an error (`TreatWarningsAsErrors`, .NET analyz
 new analyzer finding fails the build rather than accumulating. Fix the finding; suppress only with a written
 justification (`SuppressMessage(..., Justification = ...)` or a commented, narrowly scoped `.editorconfig` entry).
 NuGet versions live once in `Directory.Packages.props` (central package management); projects reference packages by
-name only. `.editorconfig` holds formatting; `global.json` pins the SDK.
+name only. `.editorconfig` holds formatting. `global.json` pins the exact SDK band (analyzer rules change between SDK
+releases, so an unpinned SDK turns a green build red on its own); CI reads it, and `dast.yml` repeats the version —
+bump both together.
 
 CI (`.github/workflows/ci.yml`) also runs the reference app's own Playwright journeys (`reference-app-e2e`;
 the `-live` specs need Aspire and stay local-only). It runs the editor client build → `dotnet` restore/build/test/pack →
