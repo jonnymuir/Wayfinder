@@ -13,6 +13,7 @@ using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign.BulkData;
 using Wayfinder.Models.ServiceDesign.SupportSystems;
+using static Wayfinder.Engine.Services.BlueprintLookup;
 
 namespace Wayfinder.Engine.Services;
 
@@ -22,13 +23,12 @@ namespace Wayfinder.Engine.Services;
 public class ProcessManagerEngine : IProcessManager
 {
     private readonly IServiceContentSanitizer _sanitizer;
-    private readonly Dictionary<string, ServiceBlueprint> _definitions = new(StringComparer.OrdinalIgnoreCase);
-    private readonly IServiceRequestStore _instanceStore;
+    private readonly BlueprintRegistry _registry;
+    private readonly InstanceRepository _instances;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly Dictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
     private readonly Dictionary<string, IRequestConcurrencyPolicy> _requestConcurrencyPolicies;
-    private readonly IAuditLogStore _auditLogStore;
 
     public ProcessManagerEngine(
         ILogger logger,
@@ -44,28 +44,17 @@ public class ProcessManagerEngine : IProcessManager
         Logger = logger;
         _sanitizer = sanitizer;
         _serviceInputsResolver = serviceInputsResolver;
-        _instanceStore = instanceStore ?? new InMemoryServiceRequestStore();
         _supportSystemClients = (supportSystemClients ?? [])
             .ToDictionary(client => client.SupportSystemKey, StringComparer.Ordinal);
         _bulkDatasetStore = bulkDatasetStore;
         _requestConcurrencyPolicies = (requestConcurrencyPolicies ?? [])
             .SelectMany(policy => policy.DefinitionKeys.Select(key => (key, policy)))
             .ToDictionary(pair => pair.key, pair => pair.policy, StringComparer.OrdinalIgnoreCase);
-        _auditLogStore = auditLogStore ?? new InMemoryAuditLogStore();
-
-        foreach (var (lookupKey, definition) in definitionStore.LoadDefinitions(logger))
-        {
-            var runtimeLookupKey = !string.IsNullOrWhiteSpace(lookupKey)
-                ? lookupKey
-                : definition.DefinitionKey;
-
-            if (!string.IsNullOrWhiteSpace(runtimeLookupKey))
-            {
-                _definitions[runtimeLookupKey] = definition;
-            }
-        }
-
-        Logger.LogInformation("Blueprint runtime ready: {Defs} definition(s).", _definitions.Count);
+        _registry = new BlueprintRegistry(definitionStore, logger);
+        _instances = new InstanceRepository(
+            instanceStore ?? new InMemoryServiceRequestStore(),
+            auditLogStore ?? new InMemoryAuditLogStore(),
+            _registry);
     }
 
     protected ILogger Logger { get; }
@@ -92,7 +81,7 @@ public class ProcessManagerEngine : IProcessManager
         string? instanceId = null,
         string? action = null)
     {
-        if (!_definitions.TryGetValue(blueprintKey, out var definition))
+        if (!_registry.TryGet(blueprintKey, out var definition))
         {
             Logger.LogWarning("Service blueprint not found: {Key}", blueprintKey);
             return ErrorEnvelope(
@@ -102,7 +91,7 @@ public class ProcessManagerEngine : IProcessManager
 
         if (!string.IsNullOrEmpty(instanceId))
         {
-            if (!_instanceStore.TryGet(instanceId, out var specificInstance))
+            if (!_instances.TryGet(instanceId, out var specificInstance))
             {
                 return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
             }
@@ -160,7 +149,7 @@ public class ProcessManagerEngine : IProcessManager
         // policy, matching how the built-in single/multiple/prompt switch already treats them.
         if (_requestConcurrencyPolicies.TryGetValue(blueprintKey, out var customPolicy))
         {
-            var candidateInstances = _instanceStore.GetAll()
+            var candidateInstances = _instances.GetAll()
                 .Where(instance =>
                     string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal)
                     && string.Equals(instance.BlueprintKey, blueprintKey, StringComparison.OrdinalIgnoreCase))
@@ -290,7 +279,7 @@ public class ProcessManagerEngine : IProcessManager
     {
         var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey, accessProfile);
         if (existingInstance is not null
-            && _definitions.TryGetValue(blueprintKey, out var definition)
+            && _registry.TryGet(blueprintKey, out var definition)
             && IsTerminalInstance(existingInstance, definition, accessProfile))
         {
             return GetCurrent(blueprintKey, tenantId, userId, accessProfile, action: "start-new");
@@ -319,7 +308,7 @@ public class ProcessManagerEngine : IProcessManager
     public ServiceRequestResponseEnvelope GetCurrentOrManualRestart(
         string blueprintKey, string tenantId, string userId, ActorProfile accessProfile)
     {
-        if (!_definitions.TryGetValue(blueprintKey, out var definition) || !definition.AllowManualRestart)
+        if (!_registry.TryGet(blueprintKey, out var definition) || !definition.AllowManualRestart)
         {
             Logger.LogWarning(
                 "Manual restart (action=start-new) requested for blueprint '{Key}', which does not " +
@@ -356,7 +345,7 @@ public class ProcessManagerEngine : IProcessManager
         int expectedStateVersion,
         Dictionary<string, object?>? fieldValues)
     {
-        if (!_instanceStore.TryGet(instanceId, out var instance))
+        if (!_instances.TryGet(instanceId, out var instance))
         {
             return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
         }
@@ -378,7 +367,7 @@ public class ProcessManagerEngine : IProcessManager
             return AbortedInstanceEnvelope(instance);
         }
 
-        if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+        if (!_registry.TryGet(instance.BlueprintKey, out var definition))
         {
             return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
         }
@@ -419,10 +408,10 @@ public class ProcessManagerEngine : IProcessManager
             // Atomic against a concurrent writer between the version check above and this save —
             // unlike a plain SaveInstance, which would silently overwrite whatever another caller
             // just wrote in that window. See IServiceRequestStore.TrySaveIfVersionMatches.
-            var jumpAuditEvent = TransitionAuditEvent(
+            var jumpAuditEvent = AuditEvents.Transition(
                 instance.InstanceId, userId, cursorId: null,
                 fromStageKey: instance.CurrentStage, toStageKey: targetStageKey, action: action, detail: "admin change-link jump");
-            var savedJumped = TrySaveInstanceIfVersionMatches(jumped, userId, instance.StateVersion, jumpAuditEvent);
+            var savedJumped = _instances.TrySaveIfVersionMatches(jumped, userId, instance.StateVersion, jumpAuditEvent);
             if (savedJumped is null)
             {
                 return ErrorEnvelope(
@@ -568,10 +557,10 @@ public class ProcessManagerEngine : IProcessManager
                 FieldValues = mergedMultiFieldValues,
                 SupportSystemInvocations = instance.SupportSystemInvocations.Concat(newInvocations).ToArray()
             };
-            var multiAuditEvent = TransitionAuditEvent(
+            var multiAuditEvent = AuditEvents.Transition(
                 instance.InstanceId, userId, cursorId: sourceCursor?.CursorId,
                 fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
-            var savedMulti = TrySaveInstanceIfVersionMatches(updatedMulti, userId, instance.StateVersion, multiAuditEvent);
+            var savedMulti = _instances.TrySaveIfVersionMatches(updatedMulti, userId, instance.StateVersion, multiAuditEvent);
             if (savedMulti is null)
             {
                 return ErrorEnvelope(
@@ -593,10 +582,10 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = Merge(instance.FieldValues, fieldValues)
         };
 
-        var advanceAuditEvent = TransitionAuditEvent(
+        var advanceAuditEvent = AuditEvents.Transition(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: visibleWorkItem.StageKey, toStageKey: transition.ToState, action: transition.Action);
-        var savedUpdated = TrySaveInstanceIfVersionMatches(updated, userId, instance.StateVersion, advanceAuditEvent);
+        var savedUpdated = _instances.TrySaveIfVersionMatches(updated, userId, instance.StateVersion, advanceAuditEvent);
         if (savedUpdated is null)
         {
             return ErrorEnvelope(
@@ -616,7 +605,7 @@ public class ProcessManagerEngine : IProcessManager
     /// <inheritdoc cref="IProcessManager.TryGetAccessibleInstance"/>
     public ServiceRequest? TryGetAccessibleInstance(string instanceId, string tenantId, string userId, ActorProfile accessProfile)
     {
-        if (!_instanceStore.TryGet(instanceId, out var instance))
+        if (!_instances.TryGet(instanceId, out var instance))
         {
             return null;
         }
@@ -624,7 +613,7 @@ public class ProcessManagerEngine : IProcessManager
         return CanAccessInstance(instance, tenantId, userId, accessProfile) ? instance : null;
     }
 
-    public IEnumerable<ServiceRequest> GetAllInstances() => _instanceStore.GetAll();
+    public IEnumerable<ServiceRequest> GetAllInstances() => _instances.GetAll();
 
     /// <inheritdoc cref="IProcessManager.SearchInstancesForAdmin"/>
     public ServiceRequestAdminListEnvelope SearchInstancesForAdmin(ServiceRequestAdminQuery query)
@@ -633,7 +622,7 @@ public class ProcessManagerEngine : IProcessManager
         var effectivePageIndex = Math.Max(query.PageIndex, 0);
         var effectivePageSize = Math.Clamp(query.PageSize, 1, 100);
 
-        var matched = _instanceStore.GetAll()
+        var matched = _instances.GetAll()
             .Where(instance => query.IncludeAborted || !instance.IsAborted)
             .Where(instance => query.BlueprintKey is null
                 || string.Equals(instance.BlueprintKey, query.BlueprintKey, StringComparison.Ordinal))
@@ -657,7 +646,7 @@ public class ProcessManagerEngine : IProcessManager
 
     private ServiceRequestAdminSummary ToAdminSummary(ServiceRequest instance)
     {
-        _definitions.TryGetValue(instance.BlueprintKey, out var definition);
+        _registry.TryGet(instance.BlueprintKey, out var definition);
         var stage = definition?.Stages.FirstOrDefault(s => s.StageKey == instance.CurrentStage);
         var stepType = stage?.Components.InferStepType() ?? "question";
 
@@ -712,7 +701,7 @@ public class ProcessManagerEngine : IProcessManager
     /// <inheritdoc cref="IProcessManager.AbortInstance"/>
     public bool AbortInstance(string instanceId, string reason, string abortedByUserId)
     {
-        if (!_instanceStore.TryGet(instanceId, out var instance))
+        if (!_instances.TryGet(instanceId, out var instance))
         {
             return false;
         }
@@ -731,7 +720,7 @@ public class ProcessManagerEngine : IProcessManager
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
-        _instanceStore.Save(aborted);
+        _instances.SaveAsIs(aborted);
         Logger.LogInformation(
             "Instance {Id} aborted by {AbortedBy}: {Reason}", instanceId, abortedByUserId, reason);
         return true;
@@ -739,12 +728,12 @@ public class ProcessManagerEngine : IProcessManager
 
     public ServiceRequestListEnvelope GetInstances(string tenantId, string userId)
     {
-        var userInstances = _instanceStore.GetAll()
+        var userInstances = _instances.GetAll()
             .Where(i => string.Equals(i.TenantId, tenantId, StringComparison.Ordinal)
                      && string.Equals(i.UserId, userId, StringComparison.Ordinal))
             .Select(instance =>
             {
-                _definitions.TryGetValue(instance.BlueprintKey, out var definition);
+                _registry.TryGet(instance.BlueprintKey, out var definition);
                 var stage = definition?.Stages.FirstOrDefault(s => s.StageKey == instance.CurrentStage);
                 var stepType = stage?.Components.InferStepType() ?? "question";
 
@@ -781,7 +770,7 @@ public class ProcessManagerEngine : IProcessManager
             return [];
         }
 
-        var allInstances = _instanceStore.GetAll().ToList();
+        var allInstances = _instances.GetAll().ToList();
         var blueprintsAlreadyOwned = allInstances
             .Where(i => string.Equals(i.TenantId, tenantId, StringComparison.Ordinal)
                      && string.Equals(i.UserId, toUserId, StringComparison.Ordinal))
@@ -812,7 +801,7 @@ public class ProcessManagerEngine : IProcessManager
                 ? toUserId
                 : instance.ConcurrencyScopeKey;
 
-            SaveInstance(instance with
+            _instances.Save(instance with
             {
                 UserId = toUserId,
                 ConcurrencyScopeKey = concurrencyScopeKey,
@@ -841,7 +830,7 @@ public class ProcessManagerEngine : IProcessManager
         const int maxAttempts = 5;
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            if (!_instanceStore.TryGet(instanceId, out var instance))
+            if (!_instances.TryGet(instanceId, out var instance))
             {
                 return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
             }
@@ -851,7 +840,7 @@ public class ProcessManagerEngine : IProcessManager
                 return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
             }
 
-            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            if (!_registry.TryGet(instance.BlueprintKey, out var definition))
             {
                 return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
             }
@@ -875,7 +864,7 @@ public class ProcessManagerEngine : IProcessManager
             }
 
             ServiceRequest updatedInstance;
-            if (item.AssignmentPolicy == AssignToInitiatorPolicy)
+            if (item.AssignmentPolicy == AssignmentPolicies.AssignToInitiator)
             {
                 // Always already owned by whoever started it — see docs/guides/team-assignment.md's
                 // reassignment scope note.
@@ -883,7 +872,7 @@ public class ProcessManagerEngine : IProcessManager
                     "This item is always assigned to whoever started it — there's nothing to pick up.", "PICKUP_NOT_AVAILABLE");
             }
 
-            if (item.AssignmentPolicy == TeamTrayPolicy)
+            if (item.AssignmentPolicy == AssignmentPolicies.TeamTray)
             {
                 if (!accessProfile.IsTeamMember(item.AssignedTeamId))
                 {
@@ -970,8 +959,8 @@ public class ProcessManagerEngine : IProcessManager
                     };
             }
 
-            var savedPickup = TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
-                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PickedUp, "picked up"));
+            var savedPickup = _instances.TrySaveIfVersionMatches(updatedInstance, userId, instance.StateVersion,
+                    AuditEvents.WorkItem(instance.InstanceId, userId, cursorId, AuditEventType.PickedUp, "picked up"));
             if (savedPickup is not null)
             {
                 return BuildEnvelope(savedPickup, definition, accessProfile, userId);
@@ -995,7 +984,7 @@ public class ProcessManagerEngine : IProcessManager
         const int maxAttempts = 5;
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            if (!_instanceStore.TryGet(instanceId, out var instance))
+            if (!_instances.TryGet(instanceId, out var instance))
             {
                 return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
             }
@@ -1005,7 +994,7 @@ public class ProcessManagerEngine : IProcessManager
                 return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
             }
 
-            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            if (!_registry.TryGet(instance.BlueprintKey, out var definition))
             {
                 return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
             }
@@ -1019,7 +1008,7 @@ public class ProcessManagerEngine : IProcessManager
             var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
 
             ServiceRequest updatedInstance;
-            if (queueDef?.AssignmentPolicy == TeamTrayPolicy)
+            if (queueDef?.AssignmentPolicy == AssignmentPolicies.TeamTray)
             {
                 var queueKey = cursor.QueueKey;
                 var existingAssignment = instance.QueueAssignments.GetValueOrDefault(queueKey);
@@ -1043,7 +1032,7 @@ public class ProcessManagerEngine : IProcessManager
                     UpdatedAt = DateTimeOffset.UtcNow
                 };
             }
-            else if (queueDef?.AssignmentPolicy == AssignToInitiatorPolicy)
+            else if (queueDef?.AssignmentPolicy == AssignmentPolicies.AssignToInitiator)
             {
                 return ErrorEnvelope(
                     "This item is always assigned to whoever started it and can't be put back.", "PICKUP_NOT_AVAILABLE");
@@ -1074,8 +1063,8 @@ public class ProcessManagerEngine : IProcessManager
                 };
             }
 
-            var savedPutback = TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion,
-                    WorkItemAuditEvent(instance.InstanceId, userId, cursorId, AuditEventType.PutBack, "put back in the pool"));
+            var savedPutback = _instances.TrySaveIfVersionMatches(updatedInstance, userId, instance.StateVersion,
+                    AuditEvents.WorkItem(instance.InstanceId, userId, cursorId, AuditEventType.PutBack, "put back in the pool"));
             if (savedPutback is not null)
             {
                 return BuildEnvelope(savedPutback, definition, accessProfile, userId);
@@ -1086,18 +1075,6 @@ public class ProcessManagerEngine : IProcessManager
             $"Could not put back '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
             "PICKUP_CONFLICT");
     }
-
-    private static AuditEvent WorkItemAuditEvent(string instanceId, string actor, string cursorId, AuditEventType eventType, string detail) => new()
-    {
-        EventId = Guid.NewGuid().ToString("N"),
-        InstanceId = instanceId,
-        CursorId = cursorId,
-        EventType = eventType,
-        Actor = actor,
-        Detail = detail,
-        Severity = AuditEventSeverity.Info,
-        OccurredAt = DateTimeOffset.UtcNow
-    };
 
     /// <summary>
     /// See <see cref="IProcessManager.SyncServiceFields"/>. Every key in <paramref name="updates"/>
@@ -1112,7 +1089,7 @@ public class ProcessManagerEngine : IProcessManager
         const int maxAttempts = 5;
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            if (!_instanceStore.TryGet(instanceId, out var instance))
+            if (!_instances.TryGet(instanceId, out var instance))
             {
                 return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
             }
@@ -1122,7 +1099,7 @@ public class ProcessManagerEngine : IProcessManager
                 return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
             }
 
-            if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+            if (!_registry.TryGet(instance.BlueprintKey, out var definition))
             {
                 return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
             }
@@ -1147,7 +1124,7 @@ public class ProcessManagerEngine : IProcessManager
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            var savedSync = TrySaveInstanceIfVersionMatches(updatedInstance, userId, instance.StateVersion, auditEvent: null);
+            var savedSync = _instances.TrySaveIfVersionMatches(updatedInstance, userId, instance.StateVersion, auditEvent: null);
             if (savedSync is not null)
             {
                 return BuildEnvelope(savedSync, definition, accessProfile, userId);
@@ -1163,12 +1140,12 @@ public class ProcessManagerEngine : IProcessManager
     public ServiceRequestResponseEnvelope SyncBulkDatasetSyncState(
         string instanceId, string tenantId, string userId, ActorProfile accessProfile, string datasetId)
     {
-        if (!_instanceStore.TryGet(instanceId, out var instance))
+        if (!_instances.TryGet(instanceId, out var instance))
         {
             return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
         }
 
-        if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+        if (!_registry.TryGet(instance.BlueprintKey, out var definition))
         {
             return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
         }
@@ -1236,11 +1213,11 @@ public class ProcessManagerEngine : IProcessManager
     /// </summary>
     public QueueWorkItem? PickupNextAvailableWorkItem(string tenantId, string userId, ActorProfile accessProfile)
     {
-        var candidates = _instanceStore.GetAll()
+        var candidates = _instances.GetAll()
             .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
             .SelectMany(instance =>
             {
-                if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+                if (!_registry.TryGet(instance.BlueprintKey, out var definition))
                 {
                     return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
                 }
@@ -1262,7 +1239,7 @@ public class ProcessManagerEngine : IProcessManager
                     .Where(item => item.AssignedTo is null
                         && item.EligibleActions.Count > 0
                         && (item.AssignmentPolicy is null
-                            || item.AssignmentPolicy == TeamTrayPolicy && accessProfile.IsTeamMember(item.AssignedTeamId)))
+                            || item.AssignmentPolicy == AssignmentPolicies.TeamTray && accessProfile.IsTeamMember(item.AssignedTeamId)))
                     .Select(item => (Instance: instance, Definition: definition, Item: item))
                     .ToArray();
             })
@@ -1273,7 +1250,7 @@ public class ProcessManagerEngine : IProcessManager
         foreach (var (instance, definition, item) in candidates)
         {
             var pickedUp = PickupWorkItem(instance.InstanceId, item.CursorId, tenantId, userId, accessProfile);
-            if (pickedUp.ResponseState != "error" && TryGetInstance(instance.InstanceId, out var refreshedInstance))
+            if (pickedUp.ResponseState != "error" && _instances.TryGet(instance.InstanceId, out var refreshedInstance))
             {
                 // Resolved from refreshedInstance, not the pre-pickup `instance` this loop iterates
                 // over — AssignedTo only reflects the pickup just performed once read fresh.
@@ -1396,11 +1373,11 @@ public class ProcessManagerEngine : IProcessManager
         var effectivePageIndex = Math.Max(pageIndex, 0);
         var effectivePageSize = Math.Clamp(pageSize, 1, 100);
 
-        var matched = _instanceStore.GetAll()
+        var matched = _instances.GetAll()
             .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
             .SelectMany(instance =>
             {
-                if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+                if (!_registry.TryGet(instance.BlueprintKey, out var definition))
                 {
                     return Array.Empty<QueueWorkItem>();
                 }
@@ -1456,11 +1433,11 @@ public class ProcessManagerEngine : IProcessManager
             return new QueueWorkListEnvelope { PageIndex = effectivePageIndex, PageSize = effectivePageSize };
         }
 
-        var matched = _instanceStore.GetAll()
+        var matched = _instances.GetAll()
             .Where(instance => string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
             .SelectMany(instance =>
             {
-                if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
+                if (!_registry.TryGet(instance.BlueprintKey, out var definition))
                 {
                     return Array.Empty<QueueWorkItem>();
                 }
@@ -1626,7 +1603,7 @@ public class ProcessManagerEngine : IProcessManager
         var joinGateway = FindGateway(definition, visibleItem.StageKey);
         if (joinGateway is null
             || !TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
-            || !TryGetInstance(instance.InstanceId, out var refreshed))
+            || !_instances.TryGet(instance.InstanceId, out var refreshed))
         {
             return instance;
         }
@@ -1634,10 +1611,9 @@ public class ProcessManagerEngine : IProcessManager
         return refreshed;
     }
 
-    public IEnumerable<ServiceBlueprint> GetAllDefinitions() => _definitions.Values;
+    public IEnumerable<ServiceBlueprint> GetAllDefinitions() => _registry.All;
 
-    public ServiceBlueprint? GetDefinition(string key) =>
-        _definitions.TryGetValue(key, out var definition) ? definition : null;
+    public ServiceBlueprint? GetDefinition(string key) => _registry.Find(key);
 
     /// <summary>
     /// Registers or updates a definition in the live engine — an upsert, not update-only. A brand
@@ -1648,9 +1624,7 @@ public class ProcessManagerEngine : IProcessManager
     /// </summary>
     public bool UpdateDefinition(string key, ServiceBlueprint updated)
     {
-        var isNewKey = !_definitions.ContainsKey(key);
-        _definitions[key] = updated;
-        Logger.LogInformation("Service blueprint {Outcome} in-memory: {Key}", isNewKey ? "registered" : "updated", key);
+        _registry.Upsert(key, updated);
         return true;
     }
 
@@ -1662,11 +1636,11 @@ public class ProcessManagerEngine : IProcessManager
     /// will simply start failing with DEFINITION_NOT_FOUND) — deleting a service blueprint that
     /// still has active instances is a host-authoring concern to guard against, not this engine's.
     /// </summary>
-    public bool RemoveDefinition(string key) => _definitions.Remove(key);
+    public bool RemoveDefinition(string key) => _registry.Remove(key);
 
     public bool Reset(string instanceId)
     {
-        if (!_instanceStore.Remove(instanceId))
+        if (!_instances.Remove(instanceId))
         {
             return false;
         }
@@ -1677,7 +1651,7 @@ public class ProcessManagerEngine : IProcessManager
 
     public void ResetAll()
     {
-        _instanceStore.Clear();
+        _instances.Clear();
         Logger.LogInformation("ResetAll: all service requests cleared");
     }
 
@@ -1717,157 +1691,6 @@ public class ProcessManagerEngine : IProcessManager
         ServiceBlueprint definition,
         StageDefinition stage) => _serviceInputsResolver?.Invoke(instance, definition, stage);
 
-    protected bool TryGetInstance(string instanceId, out ServiceRequest instance) =>
-        _instanceStore.TryGet(instanceId, out instance!);
-
-    /// <summary>Queue-level assignment policy: whoever's action lands work here becomes its
-    /// individual owner immediately. See docs/guides/team-assignment.md.</summary>
-    private const string AssignToInitiatorPolicy = "assign-to-initiator";
-
-    /// <summary>Queue-level assignment policy: work lands owned by the team as a whole, pickable
-    /// by any member, actionable only once picked up. See docs/guides/team-assignment.md.</summary>
-    private const string TeamTrayPolicy = "team-tray";
-
-    /// <summary>
-    /// Returns the actually-persisted instance (post <see cref="EstablishQueueAssignmentsIfNeeded"/>),
-    /// not the pre-save argument — a caller building a render envelope from the return value (not
-    /// the stale local it passed in) sees a queue assignment established by this very save, e.g. an
-    /// <c>assign-to-initiator</c> queue's very first stage rendering its action buttons on the same
-    /// response that created the instance, rather than only from the *next* request. Confirmed live:
-    /// building the envelope from the pre-save argument instead left a brand-new instance on such a
-    /// queue with zero available actions until a second page load re-read the store fresh.
-    /// </summary>
-    protected ServiceRequest SaveInstance(ServiceRequest instance, string actingUserId, AuditEvent? auditEvent = null)
-    {
-        var established = EstablishQueueAssignmentsIfNeeded(instance, actingUserId);
-        _instanceStore.Save(established);
-        if (auditEvent is not null)
-        {
-            _auditLogStore.Record(auditEvent);
-        }
-
-        return established;
-    }
-
-    /// <summary>
-    /// The audited counterpart to <see cref="IServiceRequestStore.TrySaveIfVersionMatches"/> — used
-    /// by <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>'s
-    /// own plain (non-gateway) mutation paths, where two callers racing against the same
-    /// not-yet-picked-up item is a real, user-facing concern (see docs/guides/work-allocation.md). Records
-    /// <paramref name="auditEvent"/> only when the save actually lands. Returns the established,
-    /// actually-persisted instance on success (see <see cref="SaveInstance"/>'s own remarks on why a
-    /// caller must render from this, not its pre-save argument) — <see langword="null"/> on a CAS
-    /// conflict.
-    /// </summary>
-    private ServiceRequest? TrySaveInstanceIfVersionMatches(ServiceRequest instance, string actingUserId, int expectedStateVersion, AuditEvent? auditEvent)
-    {
-        var established = EstablishQueueAssignmentsIfNeeded(instance, actingUserId);
-        if (!_instanceStore.TrySaveIfVersionMatches(established, expectedStateVersion))
-        {
-            return null;
-        }
-
-        if (auditEvent is not null)
-        {
-            _auditLogStore.Record(auditEvent);
-        }
-
-        return established;
-    }
-
-    /// <summary>
-    /// Establishes a durable <see cref="QueueAssignment"/> the first time any of this instance's
-    /// current cursors (or, pre-first-gateway, its own <see cref="ServiceRequest.CurrentStage"/>)
-    /// lands in a team-owned queue (<see cref="QueueDefinition.AssignmentPolicy"/> declared) it has
-    /// no existing record for — add-if-absent, never overwritten, so a later re-entry into the same
-    /// queue key reuses the same record rather than re-running that queue's policy. This is the one
-    /// hook every <see cref="SaveInstance"/>/<see cref="TrySaveInstanceIfVersionMatches"/> call goes
-    /// through — deliberately not threaded into each individual cursor-minting call site (Split
-    /// fan-out, Join arrival/release) so a future new mint site can't silently skip establishment.
-    /// A queue without an assignment policy (no <see cref="QueueDefinition.AssignmentPolicy"/>) is never touched here —
-    /// see <see cref="RequestCursor.AssignedTo"/> for that case. See docs/guides/team-assignment.md.
-    /// </summary>
-    private ServiceRequest EstablishQueueAssignmentsIfNeeded(ServiceRequest instance, string actingUserId)
-    {
-        if (!_definitions.TryGetValue(instance.BlueprintKey, out var definition))
-        {
-            return instance;
-        }
-
-        Dictionary<string, QueueAssignment>? additions = null;
-
-        void TryAddAssignment(string? queueKey)
-        {
-            if (string.IsNullOrWhiteSpace(queueKey)
-                || instance.QueueAssignments.ContainsKey(queueKey)
-                || additions?.ContainsKey(queueKey) == true)
-            {
-                return;
-            }
-
-            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
-            if (queueDef?.AssignmentPolicy is null)
-            {
-                return;
-            }
-
-            var now = DateTimeOffset.UtcNow;
-            additions ??= new Dictionary<string, QueueAssignment>();
-            additions[queueKey] = queueDef.AssignmentPolicy == AssignToInitiatorPolicy
-                ? new QueueAssignment
-                {
-                    QueueKey = queueKey,
-                    TeamId = queueDef.OwningTeamId,
-                    AssignedUserId = actingUserId,
-                    AssignedAt = now,
-                    EstablishedAt = now
-                }
-                : new QueueAssignment { QueueKey = queueKey, TeamId = queueDef.OwningTeamId, EstablishedAt = now };
-        }
-
-        if (instance.Cursors.Count == 0)
-        {
-            var stage = definition.Stages.FirstOrDefault(s => string.Equals(s.StageKey, instance.CurrentStage, StringComparison.Ordinal));
-            TryAddAssignment(GetQueueKey(stage));
-        }
-        else
-        {
-            foreach (var cursor in instance.Cursors.Where(c => !c.IsAtGateway))
-            {
-                TryAddAssignment(cursor.QueueKey);
-            }
-        }
-
-        if (additions is null)
-        {
-            return instance;
-        }
-
-        var merged = new Dictionary<string, QueueAssignment>(instance.QueueAssignments);
-        foreach (var (key, value) in additions)
-        {
-            merged[key] = value;
-        }
-
-        return instance with { QueueAssignments = merged };
-    }
-
-    private static AuditEvent TransitionAuditEvent(
-        string instanceId, string actor, string? cursorId, string? fromStageKey, string? toStageKey, string? action, string? detail = null) => new()
-    {
-        EventId = Guid.NewGuid().ToString("N"),
-        InstanceId = instanceId,
-        CursorId = cursorId,
-        EventType = AuditEventType.Transition,
-        Actor = actor,
-        FromStageKey = fromStageKey,
-        ToStageKey = toStageKey,
-        Action = action,
-        Detail = detail,
-        Severity = AuditEventSeverity.Info,
-        OccurredAt = DateTimeOffset.UtcNow
-    };
-
     /// <summary>
     /// The most recently computed <see cref="CalculationResult"/> for an instance, if its
     /// current stage has a calculations block and it evaluated cleanly — <c>null</c> if the
@@ -1876,7 +1699,7 @@ public class ProcessManagerEngine : IProcessManager
     /// without duplicating evaluation itself.
     /// </summary>
     public CalculationResult? GetLastCalculationResult(string instanceId) =>
-        TryGetInstance(instanceId, out var instance) ? instance.LastCalculationResult : null;
+        _instances.TryGet(instanceId, out var instance) ? instance.LastCalculationResult : null;
 
     protected ServiceRequestResponseEnvelope BuildEnvelope(
         ServiceRequest instance,
@@ -1915,7 +1738,7 @@ public class ProcessManagerEngine : IProcessManager
                 // from that fresh state rather than the now-stale `instance` this method started
                 // with.
                 if (TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
-                    && TryGetInstance(instance.InstanceId, out var refreshed))
+                    && _instances.TryGet(instance.InstanceId, out var refreshed))
                 {
                     return BuildEnvelope(refreshed, definition, accessProfile, userId);
                 }
@@ -2293,96 +2116,6 @@ public class ProcessManagerEngine : IProcessManager
     }
 
     /// <summary>
-    /// A route's trigger can be authored blank (an AI agent leaving it empty rather than omitting
-    /// it, so it survives as "" not null) — default it to "continue" here, the single place raw
-    /// route.Trigger values are read into a transition's Action, so the rendered button's value
-    /// and the action-matching in <see cref="Advance"/> always agree on the same non-empty key.
-    /// </summary>
-    private static string ResolveTrigger(string? trigger) =>
-        string.IsNullOrWhiteSpace(trigger) ? "continue" : trigger;
-
-    protected static string? ResolveQueueName(ServiceBlueprint definition, string? queueKey)
-    {
-        if (string.IsNullOrWhiteSpace(queueKey))
-        {
-            return null;
-        }
-
-        var queue = GetQueues(definition).FirstOrDefault(candidate =>
-            string.Equals(candidate.Key, queueKey, StringComparison.Ordinal));
-
-        return queue?.Key ?? queueKey;
-    }
-
-    protected static string? ResolveQueueName(ServiceBlueprint definition, StageDefinition? stage) =>
-        stage is null
-            ? null
-            : ResolveQueueName(definition, GetQueueKey(stage));
-
-    protected static string? ResolveQueueName(ServiceBlueprint definition, ServiceBlueprintGatewayDefinition? gateway) =>
-        gateway is null
-            ? null
-            : ResolveQueueName(definition, gateway.QueueKey);
-
-    protected static string? GetQueueKey(StageDefinition? stage) =>
-        stage?.QueueKey;
-
-    protected static IReadOnlyList<QueueDefinition> GetQueues(ServiceBlueprint definition) =>
-        definition.Queues ?? [];
-
-    protected static IReadOnlyList<ServiceBlueprintGatewayDefinition> GetGateways(ServiceBlueprint definition) =>
-        definition.Gateways ?? [];
-
-    protected static IReadOnlyList<RouteFile> GetOutgoingTransitions(
-        ServiceBlueprint definition,
-        string sourceKey)
-    {
-        var stage = definition.Stages.FirstOrDefault(candidate =>
-            string.Equals(candidate.StageKey, sourceKey, StringComparison.Ordinal));
-        if (stage?.Routes is { Count: > 0 })
-        {
-            return stage.Routes
-                .Select(route => new RouteFile
-                {
-                    FromState = sourceKey,
-                    ToState = route.Target,
-                    Action = ResolveTrigger(route.Trigger),
-                    Label = route.Label,
-                    Style = route.Style,
-                    RequiresRole = route.RequiresRole,
-                    ShowWhen = route.ShowWhen,
-                    Actions = route.Actions
-                })
-                .OrderBy(transition => transition.ToState, StringComparer.Ordinal)
-                .ThenBy(transition => transition.Action, StringComparer.Ordinal)
-                .ToArray();
-        }
-
-        var gateway = FindGateway(definition, sourceKey);
-        if (gateway?.Routes is { Count: > 0 })
-        {
-            return gateway.Routes
-                .Select(route => new RouteFile
-                {
-                    FromState = gateway.Key,
-                    ToState = route.Target,
-                    Action = ResolveTrigger(route.Trigger),
-                    Label = route.Label,
-                    Style = route.Style,
-                    RequiresRole = route.RequiresRole,
-                    ShowWhen = route.ShowWhen,
-                    Actions = route.Actions
-                })
-                .OrderBy(transition => transition.ToState, StringComparer.Ordinal)
-                .ThenBy(transition => transition.Action, StringComparer.Ordinal)
-                .ToArray();
-        }
-
-        return [];
-    }
-
-
-    /// <summary>
     /// <paramref name="EligibleActions"/> is route/role/showWhen-gated only — assignment-agnostic,
     /// feeds <see cref="ClassifyStatus"/>. <paramref name="AvailableActions"/> narrows that to
     /// nothing unless the caller is individually entitled to act on this row *right now* — feeds
@@ -2449,7 +2182,7 @@ public class ProcessManagerEngine : IProcessManager
 
             return AssignmentPolicy switch
             {
-                null or TeamTrayPolicy => status switch
+                null or AssignmentPolicies.TeamTray => status switch
                 {
                     QueueWorkItemStatus.Unassigned => QueueWorkItemPickupState.NotPickedUp,
                     QueueWorkItemStatus.Actionable => QueueWorkItemPickupState.PickedUpByMe,
@@ -2515,7 +2248,7 @@ public class ProcessManagerEngine : IProcessManager
             return error;
         }
 
-        instance = SaveInstance(instance, userId);
+        instance = _instances.Save(instance, userId);
 
         Logger.LogInformation("Created service request {Id} for key={Key} ({Reason})", instance.InstanceId, blueprintKey, reason);
         return BuildEnvelope(instance, definition, accessProfile, userId);
@@ -2598,7 +2331,7 @@ public class ProcessManagerEngine : IProcessManager
             // Last computed result is kept on the instance so a composed caller (e.g. the
             // simulation runner, which builds this engine rather than subclassing it) can
             // read raw calculated values without duplicating evaluation itself.
-            SaveInstance(instance with { LastCalculationResult = result }, instance.UserId);
+            _instances.Save(instance with { LastCalculationResult = result }, instance.UserId);
 
             return new CalculationRenderContext(definition.Calculations, fullScope, result, display);
         }
@@ -3378,10 +3111,6 @@ public class ProcessManagerEngine : IProcessManager
 
     // ─── Gateway helpers ──────────────────────────────────────────────────────
 
-    protected static ServiceBlueprintGatewayDefinition? FindGateway(ServiceBlueprint definition, string nodeKey) =>
-        GetGateways(definition).FirstOrDefault(g =>
-            string.Equals(g.Key, nodeKey, StringComparison.Ordinal));
-
     protected ServiceRequestResponseEnvelope HandleSplitGatewayAdvance(
         ServiceRequest instance,
         ServiceBlueprint definition,
@@ -3518,7 +3247,7 @@ public class ProcessManagerEngine : IProcessManager
             }
         }
 
-        updated = SaveInstance(updated, userId, TransitionAuditEvent(
+        updated = _instances.Save(updated, userId, AuditEvents.Transition(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: arrivingTransition.FromState, toStageKey: splitGateway.Key, action: arrivingTransition.Action,
             detail: $"split gateway fanned out to {newCursors.Count} cursors"));
@@ -3599,7 +3328,7 @@ public class ProcessManagerEngine : IProcessManager
                 FieldValues = Merge(instance.FieldValues, fieldValues)
             };
 
-            waitingInstance = SaveInstance(waitingInstance, userId, TransitionAuditEvent(
+            waitingInstance = _instances.Save(waitingInstance, userId, AuditEvents.Transition(
                 instance.InstanceId, userId, cursorId: arrivingCursorId,
                 fromStageKey: arrivingTransition.FromState, toStageKey: gatewayKey, action: arrivingTransition.Action,
                 detail: $"arrived at join, waiting ({arrivedQueues.Count}/{requiredQueues.Count} queues)"));
@@ -4157,7 +3886,7 @@ public class ProcessManagerEngine : IProcessManager
         const int maxAttempts = 5;
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            var owner = _instanceStore.GetAll().FirstOrDefault(
+            var owner = _instances.GetAll().FirstOrDefault(
                 i => i.SupportSystemInvocations.Any(inv => inv.InvocationId == invocationId && !inv.Resolved));
 
             if (owner is null)
@@ -4202,7 +3931,7 @@ public class ProcessManagerEngine : IProcessManager
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            SaveInstance(withResolvedInvocation, withResolvedInvocation.UserId);
+            _instances.Save(withResolvedInvocation, withResolvedInvocation.UserId);
 
             var advanced = Advance(
                 withResolvedInvocation.InstanceId,
@@ -4374,7 +4103,7 @@ public class ProcessManagerEngine : IProcessManager
             FieldValues = releasedFieldValues
         };
 
-        releasedInstance = SaveInstance(releasedInstance, userId, TransitionAuditEvent(
+        releasedInstance = _instances.Save(releasedInstance, userId, AuditEvents.Transition(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: gatewayKey, toStageKey: selectedOutgoing[0].ToState, action: selectedOutgoing[0].Action,
             detail: "join released"));
@@ -4407,11 +4136,6 @@ public class ProcessManagerEngine : IProcessManager
 
     private static string? FirstActiveStageCursorKey(IReadOnlyList<RequestCursor> cursors) =>
         cursors.FirstOrDefault(c => !c.IsAtGateway)?.CurrentNodeKey;
-
-    private static string? FirstNonEmpty(params string?[] values) =>
-        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-
-    // ─── end Gateway helpers ──────────────────────────────────────────────────
 
     /// <summary>
     /// "Terminal" from <paramref name="accessProfile"/>'s own point of view — deliberately not a
@@ -4466,7 +4190,7 @@ public class ProcessManagerEngine : IProcessManager
     private ServiceRequest? FindLatestInstance(string tenantId, string userId, string blueprintKey, ActorProfile accessProfile)
     {
         var scopeKey = accessProfile.ConcurrencyScopeKey ?? userId;
-        return _instanceStore.GetAll()
+        return _instances.GetAll()
             .Where(instance =>
                 string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal)
                 && string.Equals(instance.ConcurrencyScopeKey, scopeKey, StringComparison.Ordinal)
