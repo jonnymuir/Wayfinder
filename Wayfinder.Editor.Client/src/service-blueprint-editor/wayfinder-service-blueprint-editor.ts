@@ -4,8 +4,10 @@ import type { ActionCatalogEntry, ActionDefinition, ServiceBlueprint, ComponentD
 import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
 import { DefinitionController } from './definition-controller.js';
 import { cloneServiceBlueprint, serviceBlueprintsEqual } from './blueprint-snapshot.js';
+import { EditorKeyboard } from './editor-keyboard.js';
 import { EditHistory } from './edit-history.js';
 import { PanelLayoutController } from './panel-layout-controller.js';
+import { ShortcutGuideController } from './shortcut-guide-controller.js';
 import { SaveController } from './save-controller.js';
 import { ToastController } from './toast-controller.js';
 import { StalenessController } from './staleness-controller.js';
@@ -21,7 +23,6 @@ import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-c
 import type { QueueDefinition } from './stage-assignment.js';
 import { type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
 import { flattenRoutes } from './route-model.js';
-import { findServiceBlueprintShortcut, matchesShortcut, SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
 import './wayfinder-service-blueprint-graph.js';
 import './wayfinder-step-inspector.js';
 import './wayfinder-calculations-editor.js';
@@ -30,6 +31,7 @@ import './wayfinder-confidence-tabs.js';
 import type { ConfidenceTab } from './wayfinder-confidence-tabs.js';
 import { renderToolbarIcon } from './graph/toolbar-icons.js';
 import editorStyles from './wayfinder-service-blueprint-editor.css?inline';
+import { COPY_SHORTCUT, HELP_SHORTCUT, PASTE_SHORTCUT, REDO_SHORTCUT, SAVE_SHORTCUT, UNDO_SHORTCUT } from './editor-shortcut-bindings.js';
 
 type ServiceBlueprintSelection = { kind: 'stage'; stageKey: string } | { kind: 'gateway'; gatewayKey: string } | null;
 
@@ -42,13 +44,6 @@ type ActionSelection = {
   target: 'stage' | 'transition';
   index: number;
 } | null;
-
-const SAVE_SHORTCUT = findServiceBlueprintShortcut('save');
-const UNDO_SHORTCUT = findServiceBlueprintShortcut('undo');
-const REDO_SHORTCUT = findServiceBlueprintShortcut('redo');
-const COPY_SHORTCUT = findServiceBlueprintShortcut('copy');
-const PASTE_SHORTCUT = findServiceBlueprintShortcut('paste');
-const HELP_SHORTCUT = findServiceBlueprintShortcut('help');
 
 function cloneSelection(selection: ServiceBlueprintSelection): ServiceBlueprintSelection {
   return selection ? { ...selection } : null;
@@ -179,7 +174,19 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     toast: (message) => this._toast.show(message),
     jumpToStage: (stageKey) => this._jumpToStage(stageKey),
   });
-  @state() private _helpOpen = false;
+  private readonly _help = new ShortcutGuideController(this);
+  /** Registers itself with the element; nothing else needs to call it. */
+  readonly keyboard = new EditorKeyboard(this, {
+    save: () => void this._save.save(),
+    undo: () => this._undo(),
+    redo: () => this._redo(),
+    copy: () => this._copySelection(),
+    paste: () => this._pasteClipboard(),
+    canUndo: () => this._history.canUndo,
+    canRedo: () => this._history.canRedo,
+    openHelp: () => this._help.open(this.shadowRoot?.activeElement as HTMLElement | null),
+    isHelpOpen: () => this._help.isOpen,
+  });
   @state() private _activeConfidenceTab: ConfidenceTab = 'canvas';
   private readonly _layout = new PanelLayoutController(this);
   /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
@@ -191,7 +198,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     apply: (next) => this._commitServiceBlueprintUpdate(next, this._currentSelection()),
   });
 
-  private _helpReturnTarget: HTMLElement | null = null;
   private _lastLoadedBlueprintKey: string | null = null;
   private _serviceBlueprintLoadRequestId = 0;
 
@@ -214,7 +220,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.addEventListener('keydown', this._handleEditorKeydown, true);
     this._reflectServiceBlueprintLoadedState();
 
     // Honour ?serviceBlueprint= URL param when running as a standalone page
@@ -277,7 +282,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   disconnectedCallback() {
-    this.removeEventListener('keydown', this._handleEditorKeydown, true);
     super.disconnectedCallback();
   }
 
@@ -549,120 +553,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._restoreHistoryEntry(next);
     this._announceHistory(`Redid the service blueprint change. ${this._historyStatusSummary}`);
   };
-
-  private _isEditableTarget(event: KeyboardEvent) {
-    return event
-      .composedPath()
-      .some(
-        (target) =>
-          target instanceof HTMLElement &&
-          (target instanceof HTMLInputElement ||
-            target instanceof HTMLTextAreaElement ||
-            target instanceof HTMLSelectElement ||
-            target.isContentEditable)
-      );
-  }
-
-  private _handleEditorKeydown = (event: KeyboardEvent) => {
-    if (!event.defaultPrevented && HELP_SHORTCUT && matchesShortcut(event, HELP_SHORTCUT)) {
-      event.preventDefault();
-      this._openShortcutGuide(this.shadowRoot?.activeElement as HTMLElement | null);
-      return;
-    }
-
-    if (this._helpOpen || event.defaultPrevented || event.altKey) {
-      return;
-    }
-
-    if (SAVE_SHORTCUT && matchesShortcut(event, SAVE_SHORTCUT)) {
-      event.preventDefault();
-      void this._save.save();
-      return;
-    }
-
-    if (
-      ((COPY_SHORTCUT && matchesShortcut(event, COPY_SHORTCUT)) || (PASTE_SHORTCUT && matchesShortcut(event, PASTE_SHORTCUT))) &&
-      this._isEditableTarget(event)
-    ) {
-      return;
-    }
-
-    if (COPY_SHORTCUT && matchesShortcut(event, COPY_SHORTCUT)) {
-      if (this._copySelection()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (PASTE_SHORTCUT && matchesShortcut(event, PASTE_SHORTCUT)) {
-      if (this._pasteClipboard()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (REDO_SHORTCUT && matchesShortcut(event, REDO_SHORTCUT)) {
-      event.preventDefault();
-      if (this._history.canRedo) {
-        this._redo();
-      }
-      return;
-    }
-
-    if (!UNDO_SHORTCUT || !matchesShortcut(event, UNDO_SHORTCUT)) {
-      return;
-    }
-
-    event.preventDefault();
-    if (this._history.canUndo) {
-      this._undo();
-    }
-  };
-
-  private _openShortcutGuide(activator?: HTMLElement | null) {
-    this._helpReturnTarget = activator ?? null;
-    this._helpOpen = true;
-    requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-help-close]')?.focus();
-    });
-  }
-
-  private _closeShortcutGuide() {
-    this._helpOpen = false;
-    this._helpReturnTarget?.focus();
-    this._helpReturnTarget = null;
-  }
-
-  private _handleDialogKeydown(event: KeyboardEvent, onClose: () => void) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-
-    if (event.key !== 'Tab') {
-      return;
-    }
-
-    const root = event.currentTarget as HTMLElement;
-    const focusable = Array.from(
-      root.querySelectorAll<HTMLElement>('button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])')
-    ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex >= 0);
-    if (focusable.length === 0) {
-      return;
-    }
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const activeElement = this.shadowRoot?.activeElement as HTMLElement | null;
-    if (event.shiftKey && activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Event handlers
@@ -982,102 +872,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     `;
   }
 
-  private _renderShortcutGuide() {
-    if (!this._helpOpen) {
-      return nothing;
-    }
-
-    return html`
-      <div
-        class="modal-backdrop"
-        role="presentation"
-        @click=${(event: MouseEvent) => {
-          if (event.target === event.currentTarget) {
-            this._closeShortcutGuide();
-          }
-        }}
-      >
-        <section
-          class="shortcut-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="service-blueprint-shortcut-title"
-          aria-describedby="service-blueprint-shortcut-copy"
-          data-wayfinder-shortcut-dialog
-          @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeShortcutGuide())}
-        >
-          <div class="shortcut-dialog-header">
-            <div>
-              <p class="shortcut-dialog-eyebrow">Help and shortcuts</p>
-              <h2 id="service-blueprint-shortcut-title" class="shortcut-dialog-title">Service Blueprint editor keyboard reference</h2>
-              <p id="service-blueprint-shortcut-copy" class="shortcut-dialog-copy">
-                These shortcuts stay visible in the editor so authors do not have to memorise them. Open this guide any time with F1.
-              </p>
-            </div>
-            <button
-              type="button"
-              class="toolbar-btn shortcut-dialog-close"
-              data-wayfinder-help-close
-              @click=${() => this._closeShortcutGuide()}
-            >
-              Close
-            </button>
-          </div>
-
-          <div class="shortcut-groups">
-            ${SERVICE_BLUEPRINT_SHORTCUT_GROUPS.map(
-              (group) => html`
-              <section class="shortcut-group" data-wayfinder-shortcut-group=${group.id}>
-                <h3 class="shortcut-group-title">${group.title}</h3>
-                <ol class="shortcut-list">
-                  ${group.shortcuts.map(
-                    (shortcut) => html`
-                    <li class="shortcut-item" data-wayfinder-shortcut=${shortcut.id}>
-                      <div class="shortcut-copy">
-                        <p class="shortcut-command">${shortcut.command}</p>
-                        <p class="shortcut-description">${shortcut.description}</p>
-                      </div>
-                      <div class="shortcut-keys" aria-label=${`${shortcut.command} shortcuts`}>
-                        ${shortcut.labels.map((label) => html`<kbd>${label}</kbd>`)}
-                      </div>
-                      <p class="shortcut-context">${shortcut.context}</p>
-                    </li>
-                  `
-                  )}
-                </ol>
-              </section>
-            `
-            )}
-          </div>
-
-          <section class="shortcut-group" data-wayfinder-shortcut-group="quick-tips">
-            <h3 class="shortcut-group-title">Quick tips</h3>
-            <ul class="help-tip-list">
-              <li>Each queue is one <strong>vertical service column</strong>. Read the service blueprint <strong>top to bottom</strong>.</li>
-              <li>Stages are the work cards. Gateways are the diamond routing points between them.</li>
-              <li>Use the <strong>Outline</strong> panel on the left to jump between queue columns and stages quickly.</li>
-              <li>Reorder stages in <strong>List view</strong> with <strong>Move up</strong>, <strong>Move down</strong>, or <strong>Alt + Arrow</strong>. The canvas keeps its automatic layout in this first pass.</li>
-              <li>Use the <strong>Validation</strong> tab to check for issues before you save.</li>
-              <li>All structural changes support <strong>Undo/Redo</strong> — experiment safely.</li>
-            </ul>
-          </section>
-
-          <section class="shortcut-group" data-wayfinder-shortcut-group="getting-started">
-            <h3 class="shortcut-group-title">Getting started</h3>
-            <ol class="help-tip-list">
-              <li>Start on the <strong>Canvas</strong> tab and add the first stage for the queue that owns the work.</li>
-              <li>Add the next stage that should happen in the service flow, then open the <strong>Inspector</strong> to shape its details.</li>
-              <li>Add a <strong>routing gateway</strong> when the service blueprint needs to branch or wait for multiple paths to join.</li>
-              <li>Create routes so the canvas reads as <strong>stage → gateway → stage</strong> or <strong>gateway → gateway</strong>.</li>
-              <li>Check <strong>Validation</strong> before saving.</li>
-              <li>Save your service blueprint when ready — changes will be published to the runtime.</li>
-            </ol>
-          </section>
-        </section>
-      </div>
-    `;
-  }
-
   private get _canSaveByContext(): boolean {
     return this.authorContext?.canSave !== false;
   }
@@ -1180,7 +974,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       aria-label="Help"
                       title=${`Help${HELP_SHORTCUT ? ` (${HELP_SHORTCUT.labels[0]})` : ''}`}
                       aria-keyshortcuts=${HELP_SHORTCUT?.ariaKeys ?? nothing}
-                      @click=${(event: Event) => this._openShortcutGuide(event.currentTarget as HTMLElement)}
+                      @click=${(event: Event) => this._help.open(event.currentTarget as HTMLElement)}
                     >
                       ${renderToolbarIcon('help')}
                     </button>
@@ -1450,7 +1244,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         </wayfinder-confidence-tabs>
         </div>
 
-        ${this._renderShortcutGuide()}
+        ${this._help.render()}
       </div>
     `;
   }
