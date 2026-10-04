@@ -38,6 +38,7 @@ public class ProcessManagerEngine : IProcessManager
     private readonly WorkAllocation _allocation;
     private readonly GatewayAdvancer _gateways;
     private readonly SupportSystemOutcomes _outcomes;
+    private readonly InstanceEntry _entry;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly Dictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
@@ -75,6 +76,9 @@ public class ProcessManagerEngine : IProcessManager
         _envelopes = new EnvelopeBuilder(
             _instances, _workItems, _calculations, _renderer, BuildRenderData,
             _outcomes.TryPollResolveSupportSystemInvocations);
+        _entry = new InstanceEntry(
+            _registry, _instances, _workItems, _envelopes, _requestConcurrencyPolicies,
+            ResolveIsAuthenticated, logger);
         _bulkDatasets = new BulkDatasetActions(bulkDatasetStore, logger);
         _supportSystems = new SupportSystemActions(_supportSystemClients, logger);
         _admin = new InstanceAdmin(_instances, _registry, logger);
@@ -105,246 +109,16 @@ public class ProcessManagerEngine : IProcessManager
         string userId,
         ActorProfile accessProfile,
         string? instanceId = null,
-        string? action = null)
-    {
-        if (!_registry.TryGet(blueprintKey, out var definition))
-        {
-            Logger.LogWarning("Service blueprint not found: {Key}", blueprintKey);
-            return Envelopes.Error(
-                $"Blueprint '{blueprintKey}' is not registered with this application.",
-                "DEFINITION_NOT_FOUND");
-        }
+        string? action = null) =>
+        _entry.GetCurrent(blueprintKey, tenantId, userId, accessProfile, instanceId, action);
 
-        if (!string.IsNullOrEmpty(instanceId))
-        {
-            if (!_instances.TryGet(instanceId, out var specificInstance))
-            {
-                return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
-            }
-
-            if (!CanAccessInstance(specificInstance, tenantId, userId, accessProfile))
-            {
-                return Envelopes.Error("Access denied to this service request.", "ACCESS_DENIED");
-            }
-
-            Logger.LogInformation("Resuming specific instance {Id}", instanceId);
-            return _envelopes.BuildEnvelope(specificInstance, definition, accessProfile, userId);
-        }
-
-        var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey, accessProfile);
-
-        if (!CanStartInitialState(definition, accessProfile))
-        {
-            return Envelopes.Error("Access denied to start this queue.", "ACCESS_DENIED");
-        }
-
-        if (string.Equals(action, "start-new", StringComparison.OrdinalIgnoreCase))
-        {
-            return CreateAndRegisterNewInstance(
-                blueprintKey,
-                tenantId,
-                userId,
-                definition,
-                accessProfile,
-                action,
-                "action=start-new");
-        }
-
-        if (string.Equals(action, "resume", StringComparison.OrdinalIgnoreCase))
-        {
-            if (existingInstance is not null)
-            {
-                Logger.LogInformation("Resuming existing instance {Id} (action=resume)", existingInstance.InstanceId);
-                return _envelopes.BuildEnvelope(existingInstance, definition, accessProfile, userId);
-            }
-
-            return CreateAndRegisterNewInstance(
-                blueprintKey,
-                tenantId,
-                userId,
-                definition,
-                accessProfile,
-                action,
-                "action=resume, no existing");
-        }
-
-        // A host-registered custom policy (see IRequestConcurrencyPolicy's own remarks) takes over
-        // entirely for the blueprints it names — every other blueprint never touches this
-        // dictionary lookup at all and falls straight through to the built-in switch below,
-        // completely unaffected. Explicit start-new/resume already returned above regardless of
-        // policy, matching how the built-in single/multiple/prompt switch already treats them.
-        if (_requestConcurrencyPolicies.TryGetValue(blueprintKey, out var customPolicy))
-        {
-            var candidateInstances = _instances.GetAll()
-                .Where(instance =>
-                    string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal)
-                    && string.Equals(instance.BlueprintKey, blueprintKey, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            var decision = customPolicy
-                .EvaluateAsync(definition, tenantId, userId, accessProfile, candidateInstances)
-                .GetAwaiter().GetResult();
-
-            switch (decision.Outcome)
-            {
-                case RequestConcurrencyOutcome.ReuseExisting:
-                    return _envelopes.BuildEnvelope(
-                        decision.ExistingInstance ?? throw new InvalidOperationException(
-                            $"{customPolicy.GetType().Name} returned ReuseExisting with no ExistingInstance."),
-                        definition, accessProfile, userId);
-                case RequestConcurrencyOutcome.Deny:
-                    return Envelopes.Error(
-                        decision.DenyReason ?? "This request was denied by a registered concurrency policy.",
-                        "CONCURRENCY_POLICY_DENIED");
-                case RequestConcurrencyOutcome.AllowNew:
-                default:
-                    return CreateAndRegisterNewInstance(
-                        blueprintKey,
-                        tenantId,
-                        userId,
-                        definition,
-                        accessProfile,
-                        action,
-                        "custom concurrency policy: AllowNew");
-            }
-        }
-
-        var policy = definition.RequestPolicy;
-
-        if (string.Equals(policy, "multiple", StringComparison.OrdinalIgnoreCase))
-        {
-            return CreateAndRegisterNewInstance(
-                blueprintKey,
-                tenantId,
-                userId,
-                definition,
-                accessProfile,
-                action,
-                "policy=multiple");
-        }
-
-        if (string.Equals(policy, "prompt", StringComparison.OrdinalIgnoreCase))
-        {
-            if (existingInstance is not null)
-            {
-                var currentStage = definition.Stages.FirstOrDefault(s => s.StageKey == existingInstance.CurrentStage);
-
-                if (!IsTerminalInstance(existingInstance, definition, accessProfile))
-                {
-                    Logger.LogInformation(
-                        "Active instance {Id} exists for key={Key}; returning instance_picker",
-                        existingInstance.InstanceId,
-                        blueprintKey);
-
-                    return new ServiceRequestResponseEnvelope
-                    {
-                        InstanceId = existingInstance.InstanceId,
-                        ResponseState = "instance_picker",
-                        StateVersion = existingInstance.StateVersion,
-                        CorrelationId = existingInstance.InstanceId,
-                        ServerTimeUtc = DateTimeOffset.UtcNow,
-                        RequestPolicy = "prompt",
-                        AllowManualRestart = definition.AllowManualRestart,
-                        Render = new StepContent
-                        {
-                            StepType = currentStage?.Components.InferStepType() ?? "question",
-                            StateDisplayName = currentStage?.DisplayName ?? definition.DisplayName,
-                            Components = Array.Empty<ComponentRenderPayload>(),
-                            AvailableActions = Array.Empty<ServiceRequestAction>()
-                        }
-                    };
-                }
-            }
-
-            return CreateAndRegisterNewInstance(
-                blueprintKey,
-                tenantId,
-                userId,
-                definition,
-                accessProfile,
-                action,
-                "policy=prompt, no active");
-        }
-
-        if (existingInstance is null)
-        {
-            return CreateAndRegisterNewInstance(
-                blueprintKey,
-                tenantId,
-                userId,
-                definition,
-                accessProfile,
-                action,
-                "no existing instance");
-        }
-
-        // "single" means at most one instance per user for this blueprint, full stop — once it
-        // reaches a terminal stage it keeps being shown on every subsequent visit (the community
-        // enquiry demo depends on this: a member returning to the page sees "Thank you", not a
-        // silently-reset blank form). ServiceRequestPageController's PRG redirect after a POST
-        // relies on this same fallthrough to show the confirmation page for the visit that just
-        // submitted it.
-        return _envelopes.BuildEnvelope(existingInstance, definition, accessProfile, userId);
-    }
-
-    /// <summary>
-    /// The "start" affordance a genuine ambient <see cref="GetCurrent(string,string,string,ActorProfile,string?,string?)"/>
-    /// (a "continue where I left off" link) deliberately isn't: an ordinary visit must keep
-    /// showing a terminal instance forever under "single" (a returning citizen sees "Thank you",
-    /// not a silently-reset blank form — see the comment just above this method), but a distinct
-    /// "start a new one" link shouldn't hand back a stale confirmation from months ago either. A
-    /// non-terminal existing instance is reinstated exactly as ambient <c>GetCurrent</c> already
-    /// does — never abandons in-progress work; only a genuinely terminal (or absent) existing
-    /// instance triggers a real fresh one, via the same explicit <c>action: "start-new"</c> that
-    /// already exists for this (<see cref="ServiceBlueprintSimulationRunner"/> is the other caller
-    /// of that action, and needs it to stay unconditionally-always-fresh — that's exactly why this
-    /// is a new method rather than a change to what "start-new" itself means).
-    /// </summary>
     public ServiceRequestResponseEnvelope GetCurrentOrStartFresh(
-        string blueprintKey, string tenantId, string userId, ActorProfile accessProfile)
-    {
-        var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey, accessProfile);
-        if (existingInstance is not null
-            && _registry.TryGet(blueprintKey, out var definition)
-            && IsTerminalInstance(existingInstance, definition, accessProfile))
-        {
-            return GetCurrent(blueprintKey, tenantId, userId, accessProfile, action: "start-new");
-        }
+        string blueprintKey, string tenantId, string userId, ActorProfile accessProfile) =>
+        _entry.GetCurrentOrStartFresh(blueprintKey, tenantId, userId, accessProfile);
 
-        return GetCurrent(blueprintKey, tenantId, userId, accessProfile);
-    }
-
-    /// <summary>
-    /// The gated entry point a citizen-facing surface must use for an untrusted <c>action:
-    /// "start-new"</c> request (e.g. a "Start again" link's query string, or the "prompt"-policy
-    /// instance picker's own "Start a new request" choice) — refuses it outright unless
-    /// <see cref="ServiceBlueprint.AllowManualRestart"/> is set, falling back to plain ambient
-    /// <c>GetCurrent</c> (never an error — a disallowed or stale <c>?action=start-new</c> link must
-    /// not break the page, it must just not do anything special). Once allowed, this hands off to
-    /// the same raw, unconditional <c>action: "start-new"</c> handling <c>GetCurrent</c> has always
-    /// had — deliberately NOT <see cref="GetCurrentOrStartFresh"/>'s own "never abandon a
-    /// non-terminal instance" restriction, which would silently turn the "prompt" policy's own
-    /// picker choice into a no-op (it exists specifically to let a citizen abandon a genuinely
-    /// in-progress instance when they consciously choose to, having just been shown it exists —
-    /// that terminal-only restriction solves a different problem: an *ambient*, no-explicit-action
-    /// render must never surprise-abandon work nobody asked to abandon). See
-    /// <see cref="ServiceBlueprint.AllowManualRestart"/>'s own remarks for why this needs to be an
-    /// explicit opt-in rather than available to every blueprint by default.
-    /// </summary>
     public ServiceRequestResponseEnvelope GetCurrentOrManualRestart(
-        string blueprintKey, string tenantId, string userId, ActorProfile accessProfile)
-    {
-        if (!_registry.TryGet(blueprintKey, out var definition) || !definition.AllowManualRestart)
-        {
-            Logger.LogWarning(
-                "Manual restart (action=start-new) requested for blueprint '{Key}', which does not " +
-                "declare allowManualRestart — ignoring and resuming ambient state instead.",
-                blueprintKey);
-            return GetCurrent(blueprintKey, tenantId, userId, accessProfile);
-        }
-
-        return GetCurrent(blueprintKey, tenantId, userId, accessProfile, action: "start-new");
-    }
+        string blueprintKey, string tenantId, string userId, ActorProfile accessProfile) =>
+        _entry.GetCurrentOrManualRestart(blueprintKey, tenantId, userId, accessProfile);
 
     public virtual ServiceRequestResponseEnvelope Advance(
         string instanceId,
@@ -524,7 +298,7 @@ public class ProcessManagerEngine : IProcessManager
             }
 
             // Declarative cross-field business rules (StageDefinition.Validations) — the
-            // engine-native alternative to a host's ValidateAdvance override, checked once
+            // checked once
             // field-level validation has already passed. Evaluated on the same merge of
             // persisted + just-submitted values FieldValueValidator above just accepted, never
             // on stale persisted data or on anything the client could claim was pre-checked.
@@ -534,11 +308,6 @@ public class ProcessManagerEngine : IProcessManager
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
                 return _envelopes.BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = stageValidationProblems };
             }
-        }
-
-        if (ValidateAdvance(instance, definition, fieldValues) is { } validationEnvelope)
-        {
-            return validationEnvelope;
         }
 
         // Check if the target is a gateway rather than a plain stage.
@@ -842,16 +611,6 @@ public class ProcessManagerEngine : IProcessManager
         Logger.LogInformation("ResetAll: all service requests cleared");
     }
 
-    protected virtual ServiceRequestResponseEnvelope? ValidateAdvance(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        Dictionary<string, object?>? fieldValues) => null;
-
-    protected virtual ServiceRequestResponseEnvelope? InitializeNewInstance(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        string? action) => null;
-
     /// <summary>
     /// Host hook invoked before a stage's components are rendered. Returns structured
     /// display data for the step (surfaced as <see cref="StepContent.Data"/> and resolved
@@ -888,53 +647,6 @@ public class ProcessManagerEngine : IProcessManager
     public CalculationResult? GetLastCalculationResult(string instanceId) =>
         _instances.TryGet(instanceId, out var instance) ? instance.LastCalculationResult : null;
 
-    private ServiceRequestResponseEnvelope CreateAndRegisterNewInstance(
-        string blueprintKey,
-        string tenantId,
-        string userId,
-        ServiceBlueprint definition,
-        ActorProfile accessProfile,
-        string? action,
-        string reason)
-    {
-        var instance = CreateNewInstance(
-            blueprintKey, tenantId, userId, definition.InitialStage, ResolveIsAuthenticated(tenantId, userId),
-            accessProfile.ConcurrencyScopeKey ?? userId);
-        if (InitializeNewInstance(instance, definition, action) is { } error)
-        {
-            return error;
-        }
-
-        instance = _instances.Save(instance, userId);
-
-        Logger.LogInformation("Created service request {Id} for key={Key} ({Reason})", instance.InstanceId, blueprintKey, reason);
-        return _envelopes.BuildEnvelope(instance, definition, accessProfile, userId);
-    }
-
-    private static ServiceRequest CreateNewInstance(
-        string blueprintKey,
-        string tenantId,
-        string userId,
-        string initialStage,
-        bool isAuthenticated,
-        string concurrencyScopeKey)
-    {
-        var now = DateTimeOffset.UtcNow;
-        return new ServiceRequest
-        {
-            InstanceId = Guid.NewGuid().ToString(),
-            BlueprintKey = blueprintKey,
-            TenantId = tenantId,
-            UserId = userId,
-            ConcurrencyScopeKey = concurrencyScopeKey,
-            IsAuthenticated = isAuthenticated,
-            CurrentStage = initialStage,
-            StateVersion = 0,
-            CreatedAt = now,
-            UpdatedAt = now
-        };
-    }
-
     /// <summary>
     /// Whether <paramref name="userId"/> identifies a signed-in user, for a store that wants
     /// to apply a different retention policy for authenticated vs anonymous instances (see
@@ -943,51 +655,5 @@ public class ProcessManagerEngine : IProcessManager
     /// resolution its own request pipeline already performs.
     /// </summary>
     protected virtual bool ResolveIsAuthenticated(string tenantId, string userId) => false;
-
-    /// <summary>
-    /// "Terminal" from <paramref name="accessProfile"/>'s own point of view — deliberately not a
-    /// blind read of <see cref="ServiceRequest.CurrentStage"/>, which is a single field
-    /// covering every cursor a multi-queue instance has (see its own remarks:
-    /// "reflects the first active stage cursor", not any *particular* one). A caseworker's cursor
-    /// waiting at a join gateway is never terminal, no matter what some other queue's cursor
-    /// (e.g. an automation-queue "please wait" stage, itself rendered as a bare panel — the exact
-    /// same shape a genuine confirmation stage uses) happens to be sitting on. Found live: an
-    /// in-progress njf-contributions submission was misclassified as terminal purely because its
-    /// automation-queue cursor had already reached such a stage while the caseworker's own cursor
-    /// was still waiting at the join — reuses the same actor-relative resolution
-    /// <see cref="BuildEnvelope"/> already gets right via <see cref="FindAccessibleWorkItems"/>,
-    /// rather than the older, simpler check this replaced.
-    /// </summary>
-    private bool IsTerminalInstance(ServiceRequest instance, ServiceBlueprint definition, ActorProfile accessProfile)
-    {
-        if (instance.IsAborted)
-        {
-            return true;
-        }
-
-        var visibleItem = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
-        return visibleItem is not null && visibleItem.IsTerminal(definition);
-    }
-
-    /// <summary>
-    /// Groups "is there already one?" by <paramref name="accessProfile"/>'s own
-    /// <see cref="ActorProfile.ConcurrencyScopeKey"/> when set, falling back to
-    /// <paramref name="userId"/> otherwise — matching how each candidate instance's own
-    /// <see cref="ServiceRequest.ConcurrencyScopeKey"/> was resolved at creation time
-    /// (<see cref="CreateAndRegisterNewInstance"/>), so this stays exactly today's per-user
-    /// behaviour for every caller that never sets a scope key.
-    /// </summary>
-    private ServiceRequest? FindLatestInstance(string tenantId, string userId, string blueprintKey, ActorProfile accessProfile)
-    {
-        var scopeKey = accessProfile.ConcurrencyScopeKey ?? userId;
-        return _instances.GetAll()
-            .Where(instance =>
-                string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal)
-                && string.Equals(instance.ConcurrencyScopeKey, scopeKey, StringComparison.Ordinal)
-                && string.Equals(instance.BlueprintKey, blueprintKey, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(instance => instance.UpdatedAt)
-            .ThenByDescending(instance => instance.CreatedAt)
-            .FirstOrDefault();
-    }
 
 }
