@@ -13,5 +13,6 @@
   <Project Path="Wayfinder.ServiceDefaults/Wayfinder.ServiceDefaults.csproj" />
   <Project Path="SafetyNetUnderwriting/SafetyNetUnderwriting.csproj" />
   <Project Path="Wayfinder.Tests/Wayfinder.Tests.csproj" />
+  <Project Path="Wayfinder.TypeGen/Wayfinder.TypeGen.csproj" />
   <Project Path="Wayfinder/Wayfinder.csproj" />
 </Solution>

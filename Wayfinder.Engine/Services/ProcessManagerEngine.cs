@@ -530,7 +530,7 @@ public class ProcessManagerEngine : IProcessManager
         var nextGateway = FindGateway(definition, transition.ToState);
         if (nextGateway != null)
         {
-            return string.Equals(nextGateway.GatewayType, "Split", StringComparison.Ordinal)
+            return nextGateway.GatewayType == GatewayKind.Split
                 ? HandleSplitGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile, userId)
                 : HandleJoinGatewayAdvance(instance, definition, transition, nextGateway, fieldValues, accessProfile, userId);
         }
@@ -1571,7 +1571,7 @@ public class ProcessManagerEngine : IProcessManager
         foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
         {
             var gateway = FindGateway(definition, cursor.CurrentNodeKey);
-            if (gateway is null || !string.Equals(gateway.GatewayType, "Join", StringComparison.Ordinal))
+            if (gateway is null || gateway.GatewayType != GatewayKind.Join)
             {
                 continue;
             }
@@ -2116,7 +2116,7 @@ public class ProcessManagerEngine : IProcessManager
         foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
         {
             var gateway = FindGateway(definition, cursor.CurrentNodeKey);
-            if (gateway is null || !string.Equals(gateway.GatewayType, "Join", StringComparison.Ordinal))
+            if (gateway is null || gateway.GatewayType != GatewayKind.Join)
             {
                 continue;
             }
@@ -3428,7 +3428,7 @@ public class ProcessManagerEngine : IProcessManager
         {
             var targetGateway = FindGateway(definition, t.ToState);
             var targetQueueKey = FirstNonEmpty(
-                string.Equals(targetGateway?.GatewayType, "Join", StringComparison.OrdinalIgnoreCase)
+                targetGateway?.GatewayType == GatewayKind.Join
                     ? sourceCursor?.QueueKey
                     : targetGateway?.QueueKey,
                 GetQueueKey(definition.Stages.FirstOrDefault(stage => stage.StageKey == t.ToState)),
@@ -3474,7 +3474,7 @@ public class ProcessManagerEngine : IProcessManager
                      .GroupBy(cursor => cursor.CurrentNodeKey, StringComparer.Ordinal))
         {
             var gateway = FindGateway(definition, joinGroup.Key);
-            if (!string.Equals(gateway?.GatewayType, "Join", StringComparison.Ordinal))
+            if (gateway?.GatewayType != GatewayKind.Join)
                 continue;
 
             var existingArrivals = joinArrivals.TryGetValue(joinGroup.Key, out var existing)

@@ -79,7 +79,7 @@ public class ServiceBlueprintAuthoringServiceServiceFieldTests
             {
                 Key = "to-done",
                 DisplayName = "Continue to done",
-                GatewayType = "Split",
+                GatewayType = GatewayKind.Split,
                 QueueKey = "caseworker",
                 Routes =
                 [
@@ -183,7 +183,7 @@ public class ServiceBlueprintAuthoringServiceServiceFieldTests
                 {
                     Key = "to-done",
                     DisplayName = "Continue to done",
-                    GatewayType = "Split",
+                    GatewayType = GatewayKind.Split,
                     QueueKey = "caseworker",
                     Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
                 },
@@ -300,7 +300,7 @@ public class ServiceBlueprintAuthoringServiceServiceFieldTests
                 {
                     Key = "to-done",
                     DisplayName = "Continue to done",
-                    GatewayType = "Split",
+                    GatewayType = GatewayKind.Split,
                     QueueKey = "caseworker",
                     Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
                 },
@@ -362,7 +362,7 @@ public class ServiceBlueprintAuthoringServiceServiceFieldTests
                 {
                     Key = "to-done",
                     DisplayName = "Continue to done",
-                    GatewayType = "Split",
+                    GatewayType = GatewayKind.Split,
                     QueueKey = "caseworker",
                     Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
                 },
@@ -422,7 +422,7 @@ public class ServiceBlueprintAuthoringServiceServiceFieldTests
                 {
                     Key = "to-done",
                     DisplayName = "Continue to done",
-                    GatewayType = "Split",
+                    GatewayType = GatewayKind.Split,
                     QueueKey = "caseworker",
                     Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
                 },
@@ -576,7 +576,7 @@ public class ServiceBlueprintAuthoringServiceServiceFieldTests
                     {
                         Key = "to-done",
                         DisplayName = "Continue to done",
-                        GatewayType = "Split",
+                        GatewayType = GatewayKind.Split,
                         QueueKey = "caseworker",
                         Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--accept", Target = "done", Trigger = "accept" }],
                     },

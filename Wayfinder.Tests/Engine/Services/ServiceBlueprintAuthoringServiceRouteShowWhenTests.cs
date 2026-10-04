@@ -61,7 +61,7 @@ public class ServiceBlueprintAuthoringServiceRouteShowWhenTests
             {
                 Key = "to-done",
                 DisplayName = "Continue to done",
-                GatewayType = "Split",
+                GatewayType = GatewayKind.Split,
                 QueueKey = "caseworker",
                 Routes = [new ServiceBlueprintRouteDefinition { Id = "to-done--continue", Target = "done", Trigger = "continue" }],
             },
@@ -131,7 +131,7 @@ public class ServiceBlueprintAuthoringServiceRouteShowWhenTests
             {
                 Key = "fan-out",
                 DisplayName = "Fan out",
-                GatewayType = "Split",
+                GatewayType = GatewayKind.Split,
                 QueueKey = "caseworker",
                 Routes =
                 [
