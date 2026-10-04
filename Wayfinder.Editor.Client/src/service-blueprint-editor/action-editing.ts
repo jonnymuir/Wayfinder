@@ -3,7 +3,7 @@ import type {
   ActionFormFieldConfig,
   ActionFormFieldType,
   ActionTiming,
-  AuthoredAction,
+  ActionDefinition,
   AuthoredParameterDefinition,
 } from './types.js';
 
@@ -45,12 +45,12 @@ export function contextLabel(context: ActionEditorContext): string {
 export function timingForContext(context: ActionEditorContext): ActionTiming {
   switch (context) {
     case 'stage.onExit':
-      return 'OnExit';
+      return 'onExit';
     case 'transition':
-      return 'OnTransition';
+      return 'onTransition';
     case 'stage.onEntry':
     default:
-      return 'OnEntry';
+      return 'onEnter';
   }
 }
 
@@ -59,7 +59,7 @@ export function contextForTiming(timing: ActionTiming, target: ActionEditorTarge
     return 'transition';
   }
 
-  return timing === 'OnExit' ? 'stage.onExit' : 'stage.onEntry';
+  return timing === 'onExit' ? 'stage.onExit' : 'stage.onEntry';
 }
 
 export function entrySupportsContext(entry: ActionCatalogEntry, context: ActionEditorContext): boolean {
@@ -201,7 +201,7 @@ function validateFormFields(fields: ActionFormFieldConfig[]): ActionValidationRe
   return errors;
 }
 
-export function validateAction(entry: ActionCatalogEntry | null, action: AuthoredAction): ActionValidationResult {
+export function validateAction(entry: ActionCatalogEntry | null, action: ActionDefinition): ActionValidationResult {
   const propertyErrors: Record<string, string> = {};
   const messages: string[] = [];
 
@@ -241,7 +241,7 @@ export function validateAction(entry: ActionCatalogEntry | null, action: Authore
   return { messages, propertyErrors, formFieldErrors };
 }
 
-export function summariseAction(entry: ActionCatalogEntry | null, action: AuthoredAction): string {
+export function summariseAction(entry: ActionCatalogEntry | null, action: ActionDefinition): string {
   const params = action.params ?? {};
   switch (action.type) {
     case 'forms.load':
@@ -283,7 +283,7 @@ export function summariseAction(entry: ActionCatalogEntry | null, action: Author
   }
 }
 
-export function updateActionSummary(entry: ActionCatalogEntry | null, action: AuthoredAction): AuthoredAction {
+export function updateActionSummary(entry: ActionCatalogEntry | null, action: ActionDefinition): ActionDefinition {
   return {
     ...action,
     summary: summariseAction(entry, action),

@@ -17,15 +17,15 @@ export { WayfinderServiceBlueprintEditorShellElement } from './service-blueprint
 export { WayfinderServiceBlueprintGraphElement } from './service-blueprint-editor/wayfinder-service-blueprint-graph.js';
 
 export type {
-  AuthoredServiceBlueprint,
-  AuthoredStage,
-  AuthoredGateway,
+  ServiceBlueprint,
+  StageDefinition,
+  ServiceBlueprintGatewayDefinition,
   AuthoredParameterSchema,
   QueueDefinition,
-  ServiceBlueprintLayoutBlock,
-  ServiceBlueprintCalculationsBlock,
+  ServiceBlueprintLayoutDefinition,
+  ServiceBlueprintCalculationSet,
 } from './service-blueprint-editor/types.js';
-export { hydrateServiceBlueprintDefinition } from './service-blueprint-editor/types.js';
+export { hydrateServiceBlueprintDefinition } from './service-blueprint-editor/blueprint-hydration.js';
 export { serializeAuthoredServiceBlueprint } from './service-blueprint-editor/service-blueprint-canonical-json.js';
 
 export type {

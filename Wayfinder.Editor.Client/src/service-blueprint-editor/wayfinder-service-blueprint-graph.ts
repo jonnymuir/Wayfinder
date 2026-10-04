@@ -1,13 +1,13 @@
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type {
-  AuthoredGateway,
-  AuthoredStage,
+  ServiceBlueprintGatewayDefinition,
+  StageDefinition,
+  StageKind,
   RouteView,
-  AuthoredServiceBlueprint,
-  EditorStageType,
+  ServiceBlueprint,
 } from './types.js';
-import { editorStageTypeToStageKind } from './types.js';
+import { STAGE_KIND_OPTIONS } from './stage-kind-options.js';
 import {
   applyQueueToStage,
   stageQueueKey,
@@ -41,7 +41,7 @@ type GraphSelectionDetail = {
 };
 
 type ServiceBlueprintUpdatedDetail = {
-  serviceBlueprint: AuthoredServiceBlueprint;
+  serviceBlueprint: ServiceBlueprint;
   selection?: GraphSelectionDetail | null;
 };
 
@@ -63,7 +63,7 @@ type CreateStageDialogState = {
   title: string;
   stageKey: string;
   queueKey: string;
-  stageType: EditorStageType;
+  stageType: StageKind;
   keyTouched: boolean;
   error: string | null;
 };
@@ -104,7 +104,7 @@ const EDGE_LABEL_HEIGHT = 22;
 @customElement('wayfinder-service-blueprint-graph')
 export class WayfinderServiceBlueprintGraphElement extends LitElement {
   @property({ attribute: false })
-  serviceBlueprint: AuthoredServiceBlueprint | null = null;
+  serviceBlueprint: ServiceBlueprint | null = null;
 
   @property({ attribute: false })
   availableQueues: QueueDefinition[] = [];
@@ -212,7 +212,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   protected updated(changed: Map<string, unknown>) {
     if (changed.has('serviceBlueprintJson') && this.serviceBlueprintJson) {
       try {
-        const parsed = JSON.parse(this.serviceBlueprintJson) as AuthoredServiceBlueprint;
+        const parsed = JSON.parse(this.serviceBlueprintJson) as ServiceBlueprint;
         this.serviceBlueprint = parsed;
       } catch (error) {
         console.error('wayfinder-service-blueprint-graph: service-blueprint-json could not be parsed.', error);
@@ -235,7 +235,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     const transitions = flattenRoutes(this.serviceBlueprint);
     const gateways = this.serviceBlueprint?.gateways ?? [];
 
-    if (this._selectedStageKey && !stages.some(stage => stage.stateKey === this._selectedStageKey)) {
+    if (this._selectedStageKey && !stages.some(stage => stage.stageKey === this._selectedStageKey)) {
       this._selectedStageKey = null;
     }
 
@@ -438,7 +438,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
         next = {
           ...next,
           stages: next.stages.map(stage =>
-            stage.stateKey === parsed.key ? applyQueueToStage(stage, move.queueKey!) : stage
+            stage.stageKey === parsed.key ? applyQueueToStage(stage, move.queueKey!) : stage
           ),
         };
       } else {
@@ -513,7 +513,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       serviceBlueprint = {
         ...serviceBlueprint,
         stages: serviceBlueprint.stages.map(stage =>
-          stage.stateKey === source.key
+          stage.stageKey === source.key
             ? { ...stage, routes: [...(stage.routes ?? []), route] }
             : stage
         ),
@@ -548,7 +548,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
    * events, since a host toolbar button needs to *trigger* these, not just react to them.
    */
   addStage(returnTarget?: HTMLElement | null) {
-    const selectedStage = this.serviceBlueprint?.stages.find(stage => stage.stateKey === this._selectedStageKey) ?? null;
+    const selectedStage = this.serviceBlueprint?.stages.find(stage => stage.stageKey === this._selectedStageKey) ?? null;
     this._openCreateStageDialog(
       selectedStage ? this._surfaceForStage(selectedStage) : 'front-stage',
       this._selectedStageKey ? 'after' : 'append',
@@ -584,11 +584,11 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     this._announce('Canvas fit to the diagram’s width.');
   }
 
-  private _surfaceForStage(stage: AuthoredStage): StageSurface {
+  private _surfaceForStage(stage: StageDefinition): StageSurface {
     return stageSurface(stage);
   }
 
-  private _queueKeyForGateway(gateway: AuthoredGateway) {
+  private _queueKeyForGateway(gateway: ServiceBlueprintGatewayDefinition) {
     return gatewayQueueKey(gateway) || 'public';
   }
 
@@ -704,7 +704,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     );
   }
 
-  private _emitServiceBlueprintUpdated(serviceBlueprint: AuthoredServiceBlueprint, selection?: GraphSelectionDetail | null) {
+  private _emitServiceBlueprintUpdated(serviceBlueprint: ServiceBlueprint, selection?: GraphSelectionDetail | null) {
     this.serviceBlueprint = serviceBlueprint;
     this.dispatchEvent(
       new CustomEvent<ServiceBlueprintUpdatedDetail>('service-blueprint-updated', {
@@ -716,13 +716,13 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   }
 
   private _labelForStage(stageKey: string): string {
-    return this.serviceBlueprint?.stages.find(stage => stage.stateKey === stageKey)?.displayName
+    return this.serviceBlueprint?.stages.find(stage => stage.stageKey === stageKey)?.displayName
       ?? this.serviceBlueprint?.gateways?.find(gateway => gateway.key === stageKey)?.displayName
       ?? stageKey;
   }
 
   private _makeUniqueStageKey(base: string) {
-    const usedKeys = new Set(this.serviceBlueprint?.stages.map(stage => stage.stateKey) ?? []);
+    const usedKeys = new Set(this.serviceBlueprint?.stages.map(stage => stage.stageKey) ?? []);
     let candidate = base;
     let suffix = 2;
     while (usedKeys.has(candidate)) {
@@ -753,7 +753,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     returnTarget?: HTMLElement | null
   ) {
     const referenceStage = referenceStageKey
-      ? this.serviceBlueprint?.stages.find(stage => stage.stateKey === referenceStageKey) ?? null
+      ? this.serviceBlueprint?.stages.find(stage => stage.stageKey === referenceStageKey) ?? null
       : null;
     const defaultQueueKey = referenceStage ? stageQueueKey(referenceStage) : this._defaultQueueForSurface(surfaceHint);
     const baseTitle = 'New stage';
@@ -765,7 +765,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       title: baseTitle,
       stageKey: this._slugifyStageKey(baseTitle, 'new-stage'),
       queueKey: defaultQueueKey,
-      stageType: 'form',
+      stageType: 'Question',
       keyTouched: false,
       error: null,
     };
@@ -811,8 +811,9 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     }
 
     const previewStage = applyQueueToStage({
-      stateKey: '',
+      stageKey: '',
       displayName: '',
+      queueKey: '',
       roleGates: [],
       actions: [],
       components: [],
@@ -851,50 +852,48 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       return;
     }
 
-    if (this.serviceBlueprint.stages.some(stage => stage.stateKey === stageKey)) {
+    if (this.serviceBlueprint.stages.some(stage => stage.stageKey === stageKey)) {
       this._createStageDialog = { ...this._createStageDialog, error: 'Stage key must be unique.' };
       return;
     }
 
     const newStage = applyQueueToStage({
-      stateKey: stageKey,
+      stageKey: stageKey,
       displayName: title,
       components: [],
-      metadata: {
-        stageType: editorStageTypeToStageKind(dialog.stageType),
-        actions: [],
-        roleGates: [],
-        editorComment: 'Created from the graph workspace.',
-      },
-    } as unknown as AuthoredStage, dialog.queueKey);
+      stageType: dialog.stageType,
+      queueKey: '',
+      actions: [],
+      roleGates: [],
+    }, dialog.queueKey);
 
     const stages = [...this.serviceBlueprint.stages];
     let insertIndex = stages.length;
     if (dialog.referenceStageKey) {
-      const referenceIndex = stages.findIndex(stage => stage.stateKey === dialog.referenceStageKey);
+      const referenceIndex = stages.findIndex(stage => stage.stageKey === dialog.referenceStageKey);
       if (referenceIndex >= 0) {
         insertIndex = dialog.position === 'before' ? referenceIndex : referenceIndex + 1;
       }
     }
     stages.splice(insertIndex, 0, newStage);
 
-    const serviceBlueprint: AuthoredServiceBlueprint = {
+    const serviceBlueprint: ServiceBlueprint = {
       ...this.serviceBlueprint,
-      initialStage: this.serviceBlueprint.initialStage || newStage.stateKey,
+      initialStage: this.serviceBlueprint.initialStage || newStage.stageKey,
       stages: stages,
     };
 
-    this._selectedStageKey = newStage.stateKey;
+    this._selectedStageKey = newStage.stageKey;
     this._selectedTransitionIndex = null;
-    this._emitSelectionChange({ kind: 'stage', stageKey: newStage.stateKey });
-    this._emitServiceBlueprintUpdated(serviceBlueprint, { kind: 'stage', stageKey: newStage.stateKey });
-    this._requestInspector({ kind: 'stage', stageKey: newStage.stateKey });
+    this._emitSelectionChange({ kind: 'stage', stageKey: newStage.stageKey });
+    this._emitServiceBlueprintUpdated(serviceBlueprint, { kind: 'stage', stageKey: newStage.stageKey });
+    this._requestInspector({ kind: 'stage', stageKey: newStage.stageKey });
     this._announce(`${newStage.displayName} added to the workspace.`);
     this._closeCreateStageDialog();
     // New stage starts with no routes, so nothing anchors it near existing
     // content — pan/zoom to it so the author can see where it actually
     // landed instead of hunting for it off-viewport.
-    requestAnimationFrame(() => this._bridge?.centerOnNode(stageNodeId(newStage.stateKey)));
+    requestAnimationFrame(() => this._bridge?.centerOnNode(stageNodeId(newStage.stageKey)));
   }
 
   private _openCreateGatewayDialog(returnTarget?: HTMLElement | null) {
@@ -949,7 +948,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     }
 
     const usedKeys = [
-      ...this.serviceBlueprint.stages.map(s => s.stateKey),
+      ...this.serviceBlueprint.stages.map(s => s.stageKey),
       ...(this.serviceBlueprint.gateways ?? []).map(g => g.key),
     ];
     if (usedKeys.includes(key)) {
@@ -957,7 +956,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       return;
     }
 
-    const newGateway: AuthoredGateway = {
+    const newGateway: ServiceBlueprintGatewayDefinition = {
       key,
       displayName: title,
       gatewayType: dialog.kind,
@@ -966,7 +965,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       roleGates: [],
     };
 
-    const serviceBlueprint: AuthoredServiceBlueprint = {
+    const serviceBlueprint: ServiceBlueprint = {
       ...this.serviceBlueprint,
       gateways: [...serviceBlueprintGateways(this.serviceBlueprint), newGateway],
     };
@@ -1014,7 +1013,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     const stageKey = this._deleteStageDialog.stageKey;
     const deletedLabel = this._labelForStage(stageKey);
     const transitionCount = this._deleteStageDialog.affectedTransitions.length;
-    const stages = this.serviceBlueprint.stages.filter(stage => stage.stateKey !== stageKey);
+    const stages = this.serviceBlueprint.stages.filter(stage => stage.stageKey !== stageKey);
 
     // Drop any gateway whose source was this stage, and remove any route
     // that targeted this stage. The derived `transitions` view is rebuilt
@@ -1030,13 +1029,13 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       routes: (stage.routes ?? []).filter(route => route.target !== stageKey),
     }));
 
-    const serviceBlueprint: AuthoredServiceBlueprint = pruneLayout({
+    const serviceBlueprint: ServiceBlueprint = pruneLayout({
       ...this.serviceBlueprint,
       stages: stagesWithRoutes,
       gateways,
       initialStage:
         this.serviceBlueprint.initialStage === stageKey
-          ? stages[0]?.stateKey ?? ''
+          ? stages[0]?.stageKey ?? ''
           : this.serviceBlueprint.initialStage,
     });
 
@@ -1094,7 +1093,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       routes: (stage.routes ?? []).filter(route => route.target !== gatewayKey),
     }));
 
-    const serviceBlueprint: AuthoredServiceBlueprint = pruneLayout({
+    const serviceBlueprint: ServiceBlueprint = pruneLayout({
       ...this.serviceBlueprint,
       stages: stagesWithRoutes,
       gateways: gatewaysWithRoutes,
@@ -1128,7 +1127,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   }
 
   private async _copyStage(stageKey: string) {
-    const stage = this.serviceBlueprint?.stages.find(candidate => candidate.stateKey === stageKey);
+    const stage = this.serviceBlueprint?.stages.find(candidate => candidate.stageKey === stageKey);
     if (!stage) {
       return;
     }
@@ -1178,7 +1177,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     if (!gatewayKey || !routeId) {
       return;
     }
-    const serviceBlueprint: AuthoredServiceBlueprint = deleteRoute(this.serviceBlueprint, { gatewayKey, routeId });
+    const serviceBlueprint: ServiceBlueprint = deleteRoute(this.serviceBlueprint, { gatewayKey, routeId });
 
     this._selectedTransitionIndex = null;
     this._emitServiceBlueprintUpdated(serviceBlueprint, null);
@@ -1241,7 +1240,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     if (action === 'add-stage') {
       const referenceStageKey = target.kind === 'stage' ? target.stageKey : this._selectedStageKey;
       const referenceStage = referenceStageKey
-        ? this.serviceBlueprint?.stages.find(stage => stage.stateKey === referenceStageKey) ?? null
+        ? this.serviceBlueprint?.stages.find(stage => stage.stageKey === referenceStageKey) ?? null
         : null;
       this._openCreateStageDialog(
         referenceStage ? this._surfaceForStage(referenceStage) : 'front-stage',
@@ -1464,16 +1463,15 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
                 class="dialog-control"
                 data-wayfinder-create-stage-type
                 @change=${(event: Event) => {
-                  const stageType = (event.currentTarget as HTMLSelectElement).value as EditorStageType;
+                  const stageType = (event.currentTarget as HTMLSelectElement).value as StageKind;
                   this._createStageDialog = this._createStageDialog
                     ? { ...this._createStageDialog, stageType }
                     : null;
                 }}
               >
-                <option value="form" ?selected=${dialog.stageType === 'form'}>Form</option>
-                <option value="review" ?selected=${dialog.stageType === 'review'}>Review</option>
-                <option value="decision" ?selected=${dialog.stageType === 'decision'}>Decision</option>
-                <option value="confirmation" ?selected=${dialog.stageType === 'confirmation'}>Confirmation</option>
+                ${STAGE_KIND_OPTIONS.map(option => html`
+                  <option value=${option.value} ?selected=${dialog.stageType === option.value}>${option.label}</option>
+                `)}
               </select>
             </label>
           </div>

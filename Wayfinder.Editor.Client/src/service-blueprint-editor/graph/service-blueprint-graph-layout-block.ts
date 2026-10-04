@@ -1,4 +1,4 @@
-import type { AuthoredServiceBlueprint, ServiceBlueprintNodePosition } from '../types.js';
+import type { ServiceBlueprint, NodePosition } from '../types.js';
 import { serviceBlueprintGateways } from '../types.js';
 import type { QueueDefinition } from '../stage-assignment.js';
 import {
@@ -14,23 +14,23 @@ import {
  * the stages/gateways themselves.
  */
 
-function roundPosition(position: ServiceBlueprintNodePosition): ServiceBlueprintNodePosition {
+function roundPosition(position: NodePosition): NodePosition {
   return { x: Math.round(position.x), y: Math.round(position.y) };
 }
 
 export function getNodePosition(
-  serviceBlueprint: AuthoredServiceBlueprint,
+  serviceBlueprint: ServiceBlueprint,
   nodeId: string
-): ServiceBlueprintNodePosition | null {
+): NodePosition | null {
   return serviceBlueprint.layout?.nodes?.[nodeId] ?? null;
 }
 
 /** Returns a new serviceBlueprint with the given node positions written into the layout block. */
 export function setNodePositions(
-  serviceBlueprint: AuthoredServiceBlueprint,
-  positions: Record<string, ServiceBlueprintNodePosition>
-): AuthoredServiceBlueprint {
-  const nodes: Record<string, ServiceBlueprintNodePosition> = { ...(serviceBlueprint.layout?.nodes ?? {}) };
+  serviceBlueprint: ServiceBlueprint,
+  positions: Record<string, NodePosition>
+): ServiceBlueprint {
+  const nodes: Record<string, NodePosition> = { ...(serviceBlueprint.layout?.nodes ?? {}) };
   for (const [nodeId, position] of Object.entries(positions)) {
     nodes[nodeId] = roundPosition(position);
   }
@@ -43,11 +43,11 @@ export function setNodePositions(
  * Keyed by the same graph edge key ("fromId->toId") RouteEdge renders with.
  */
 export function setRouteWaypoint(
-  serviceBlueprint: AuthoredServiceBlueprint,
+  serviceBlueprint: ServiceBlueprint,
   edgeKey: string,
-  position: ServiceBlueprintNodePosition | null
-): AuthoredServiceBlueprint {
-  const routes: Record<string, ServiceBlueprintNodePosition> = { ...(serviceBlueprint.layout?.routes ?? {}) };
+  position: NodePosition | null
+): ServiceBlueprint {
+  const routes: Record<string, NodePosition> = { ...(serviceBlueprint.layout?.routes ?? {}) };
   if (position) {
     routes[edgeKey] = roundPosition(position);
   } else {
@@ -57,7 +57,7 @@ export function setRouteWaypoint(
 }
 
 /** Drops layout entries whose stage/gateway, or route endpoint, no longer exists. */
-export function pruneLayout(serviceBlueprint: AuthoredServiceBlueprint): AuthoredServiceBlueprint {
+export function pruneLayout(serviceBlueprint: ServiceBlueprint): ServiceBlueprint {
   const nodeEntries = Object.entries(serviceBlueprint.layout?.nodes ?? {});
   const routeEntries = Object.entries(serviceBlueprint.layout?.routes ?? {});
   if (nodeEntries.length === 0 && routeEntries.length === 0) {
@@ -65,16 +65,16 @@ export function pruneLayout(serviceBlueprint: AuthoredServiceBlueprint): Authore
   }
 
   const liveIds = new Set<string>([
-    ...serviceBlueprint.stages.map(stage => stageNodeId(stage.stateKey)),
+    ...serviceBlueprint.stages.map(stage => stageNodeId(stage.stageKey)),
     ...serviceBlueprintGateways(serviceBlueprint).map(gateway => gatewayNodeId(gateway.key)),
   ]);
-  const nodes: Record<string, ServiceBlueprintNodePosition> = {};
+  const nodes: Record<string, NodePosition> = {};
   for (const [nodeId, position] of nodeEntries) {
     if (liveIds.has(nodeId)) {
       nodes[nodeId] = position;
     }
   }
-  const routes: Record<string, ServiceBlueprintNodePosition> = {};
+  const routes: Record<string, NodePosition> = {};
   for (const [edgeKey, position] of routeEntries) {
     const [fromId, toIdWithSuffix] = edgeKey.split('->');
     // Edges shared by more than one transition to the same target (e.g. approve/reject) get a
@@ -108,11 +108,11 @@ export function pruneLayout(serviceBlueprint: AuthoredServiceBlueprint): Authore
  * arrangement is deterministic and each node stays individually adjustable.
  */
 export function applyAutoArrange(
-  serviceBlueprint: AuthoredServiceBlueprint,
+  serviceBlueprint: ServiceBlueprint,
   availableQueues: QueueDefinition[] = []
-): AuthoredServiceBlueprint {
+): ServiceBlueprint {
   const layout = computeDerivedLayout(computeTopology(serviceBlueprint, availableQueues));
-  const nodes: Record<string, ServiceBlueprintNodePosition> = {};
+  const nodes: Record<string, NodePosition> = {};
   layout.placements.forEach(placement => {
     nodes[placement.id] = roundPosition({ x: placement.x, y: placement.y });
   });

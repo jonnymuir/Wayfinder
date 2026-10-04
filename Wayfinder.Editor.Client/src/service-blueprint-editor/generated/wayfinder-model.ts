@@ -11,11 +11,14 @@ export interface AccordionSection {
 
 export interface ActionDefinition {
   type: string;
-  timing: string;
+  timing: ActionTiming;
   parameterSchemaKey?: string;
   summary?: string;
-  params: Record<string, unknown>;
+  params?: Record<string, unknown>;
 }
+
+export const actionTimingValues = ['onEnter', 'onExit', 'onTransition'] as const;
+export type ActionTiming = (typeof actionTimingValues)[number];
 
 export interface ChartBand {
   key: string;
@@ -38,7 +41,7 @@ export interface BooleanComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -73,7 +76,7 @@ export interface CheckboxesComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -86,7 +89,7 @@ export interface DateInputComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -102,7 +105,7 @@ export interface DecimalInputComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -122,7 +125,7 @@ export interface EmailComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -144,7 +147,7 @@ export interface FileUploadComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -158,7 +161,7 @@ export interface GuidanceChecklistComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -192,7 +195,7 @@ export interface NumberInputComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -212,7 +215,7 @@ export interface RadiosComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -226,7 +229,7 @@ export interface SelectComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -244,7 +247,7 @@ export interface SliderComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -279,7 +282,7 @@ export interface TextInputComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -294,7 +297,7 @@ export interface TextareaComponent {
   fieldKey: string;
   label: string;
   hint?: string;
-  required: boolean;
+  required?: boolean;
   conditionalOn?: string;
   visibleWhen?: string;
   default?: string;
@@ -434,7 +437,7 @@ export interface ServiceBlueprint {
   authoredServiceBlueprintId?: string;
   initialStage: string;
   requestPolicy: string;
-  allowManualRestart: boolean;
+  allowManualRestart?: boolean;
   stages: StageDefinition[];
   queues?: QueueDefinition[];
   gateways?: ServiceBlueprintGatewayDefinition[];
@@ -477,6 +480,16 @@ export interface ServiceBlueprintCalculationTable {
   values: Record<string, number>;
 }
 
+export interface ServiceBlueprintDiagnostic {
+  code: string;
+  path: string;
+  message: string;
+  severity: ServiceBlueprintDiagnosticSeverity;
+}
+
+export const serviceBlueprintDiagnosticSeverityValues = ['Error', 'Warning'] as const;
+export type ServiceBlueprintDiagnosticSeverity = (typeof serviceBlueprintDiagnosticSeverityValues)[number];
+
 export interface ServiceBlueprintGatewayDefinition {
   key: string;
   displayName: string;
@@ -487,9 +500,9 @@ export interface ServiceBlueprintGatewayDefinition {
   roleGates?: string[];
   routes?: ServiceBlueprintRouteDefinition[];
   waitingContent?: string;
-  waitingExpectedSeconds: number;
-  waitingPollIntervalMs: number;
-  waitingAllowDefer: boolean;
+  waitingExpectedSeconds?: number;
+  waitingPollIntervalMs?: number;
+  waitingAllowDefer?: boolean;
   waitingDeferMessage?: string;
   requiredIncomingQueues?: string[];
   icon?: string;
@@ -511,6 +524,17 @@ export interface ServiceBlueprintRouteDefinition {
   actions?: ActionDefinition[];
 }
 
+export interface ServiceBlueprintSaveOutcome {
+  status: ServiceBlueprintSaveStatus;
+  diagnostics: ServiceBlueprintDiagnostic[];
+  currentVersion?: number;
+  newVersion?: number;
+  isSaved: boolean;
+}
+
+export const serviceBlueprintSaveStatusValues = ['Saved', 'Invalid', 'Conflict'] as const;
+export type ServiceBlueprintSaveStatus = (typeof serviceBlueprintSaveStatusValues)[number];
+
 export interface ServiceBlueprintStageValidationRule {
   code: string;
   rule: string;
@@ -518,6 +542,11 @@ export interface ServiceBlueprintStageValidationRule {
   when?: string;
   field?: string;
   actions?: string[];
+}
+
+export interface ServiceBlueprintValidationOutcome {
+  isValid: boolean;
+  diagnostics: ServiceBlueprintDiagnostic[];
 }
 
 export interface StageDefinition {
@@ -542,7 +571,7 @@ export interface StatItemDefinition {
   label: string;
   fieldKey: string;
   qualifier?: string;
-  emphasis: boolean;
+  emphasis?: boolean;
 }
 
 export interface SupportSystemCapabilityDescriptor {

@@ -1,5 +1,6 @@
 import { serializeAuthoredServiceBlueprint, authoredServiceBlueprintJsonEquals } from './service-blueprint-canonical-json.js';
-import { hydrateServiceBlueprintDefinition, type AuthoredServiceBlueprint } from './types.js';
+import { type ServiceBlueprint } from './types.js';
+import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
 
 let failures = 0;
 
@@ -12,14 +13,14 @@ function check(name: string, condition: boolean, detail?: string) {
   }
 }
 
-function minimalBlueprint(overrides: Partial<AuthoredServiceBlueprint> = {}): AuthoredServiceBlueprint {
+function minimalBlueprint(overrides: Partial<ServiceBlueprint> = {}): ServiceBlueprint {
   return {
     definitionKey: 'fixture',
     displayName: 'Fixture',
     version: 1,
     initialStage: 'only',
     requestPolicy: 'single',
-    stages: [{ stateKey: 'only', displayName: 'Only', queueKey: 'citizen', components: [] }],
+    stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', components: [] }],
     ...overrides,
   };
 }
@@ -77,11 +78,11 @@ export function run(): number {
     const blueprint = minimalBlueprint({
       stages: [
         {
-          stateKey: 'only',
+          stageKey: 'only',
           displayName: 'Only',
           queueKey: 'citizen',
           components: [{ type: 'text', zzz: 'last', aaa: 'first' }],
-        } as unknown as AuthoredServiceBlueprint['stages'][0],
+        } as unknown as ServiceBlueprint['stages'][0],
       ],
     });
     const json = serializeAuthoredServiceBlueprint(blueprint);
@@ -98,7 +99,7 @@ export function run(): number {
   // ── Equality comparison stays deterministic with calculations present ────
   {
     const blueprint = minimalBlueprint({ calculations: { fields: { b: { expr: '1' }, a: { expr: 'b + 1' } } } });
-    const clone: AuthoredServiceBlueprint = JSON.parse(JSON.stringify(blueprint));
+    const clone: ServiceBlueprint = JSON.parse(JSON.stringify(blueprint));
     check('two structurally-identical blueprints (including calculations) compare equal', authoredServiceBlueprintJsonEquals(blueprint, clone));
   }
 
@@ -107,7 +108,7 @@ export function run(): number {
     const blueprint = minimalBlueprint({
       stages: [
         {
-          stateKey: 'only',
+          stageKey: 'only',
           displayName: 'Only',
           queueKey: 'citizen',
           components: [],
@@ -141,7 +142,7 @@ export function run(): number {
 
   {
     const loaded = hydrateServiceBlueprintDefinition(
-      JSON.parse(JSON.stringify(minimalBlueprint({ allowManualRestart: true }))) as AuthoredServiceBlueprint
+      JSON.parse(JSON.stringify(minimalBlueprint({ allowManualRestart: true }))) as ServiceBlueprint
     );
     const parsed = JSON.parse(serializeAuthoredServiceBlueprint(loaded));
     check('allowManualRestart survives a load and save round trip', parsed.allowManualRestart === true, JSON.stringify(parsed.allowManualRestart));
@@ -158,7 +159,7 @@ export function run(): number {
       authoredServiceBlueprintId: '2c1b6f1e-0000-4000-8000-000000000001',
       handoffs: [handoff],
       tags: { demo: 'x' },
-    }))) as AuthoredServiceBlueprint);
+    }))) as ServiceBlueprint);
     const parsed = JSON.parse(serializeAuthoredServiceBlueprint(loaded));
     check('tags survive a load and save round trip', parsed.tags?.demo === 'x', JSON.stringify(parsed.tags));
     check('handoffs survive a load and save round trip',

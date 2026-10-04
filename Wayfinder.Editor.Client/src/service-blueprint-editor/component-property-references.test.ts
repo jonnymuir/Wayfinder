@@ -1,4 +1,4 @@
-import type { AuthoredComponent, AuthoredServiceBlueprint, ComponentDescriptor } from './types.js';
+import type { Component, ServiceBlueprint, ComponentDescriptor } from './types.js';
 import { buildPropertyReferenceContext, collectStageInputFields } from './component-property-references.js';
 
 const CATALOG: ComponentDescriptor[] = [
@@ -68,7 +68,7 @@ export function run(): number {
     const components = [
       { type: 'text', fieldKey: 'name', label: 'Full name' },
       { type: 'heading', content: 'Section heading' },
-    ] as unknown as AuthoredComponent[];
+    ] as unknown as Component[];
     const fields = collectStageInputFields(components, CATALOG);
     check('top-level input fields are collected', fields.length === 1 && fields[0].fieldKey === 'name');
     check('content-only components are excluded', !fields.some(f => f.fieldKey === undefined));
@@ -81,7 +81,7 @@ export function run(): number {
         legend: 'Group',
         children: [{ type: 'text', fieldKey: 'nested', label: 'Nested field' }],
       },
-    ] as unknown as AuthoredComponent[];
+    ] as unknown as Component[];
     const fields = collectStageInputFields(components, CATALOG);
     check('fields nested inside a ChildList container are found', fields.some(f => f.fieldKey === 'nested'));
   }
@@ -94,7 +94,7 @@ export function run(): number {
           { heading: 'One', children: [{ type: 'text', fieldKey: 'inSection', label: 'In section' }] },
         ],
       },
-    ] as unknown as AuthoredComponent[];
+    ] as unknown as Component[];
     const fields = collectStageInputFields(components, CATALOG);
     check('fields nested inside a NamedSections container are found', fields.some(f => f.fieldKey === 'inSection'));
   }
@@ -110,7 +110,7 @@ export function run(): number {
           yes: [{ type: 'text', fieldKey: 'why', label: 'Why' }],
         },
       },
-    ] as unknown as AuthoredComponent[];
+    ] as unknown as Component[];
     const fields = collectStageInputFields(components, CATALOG);
     check('the radio itself is collected with its options',
       fields.some(f => f.fieldKey === 'choice' && JSON.stringify(f.options) === JSON.stringify(['yes', 'no'])));
@@ -126,13 +126,13 @@ export function run(): number {
   {
     const blueprint = {
       stages: [
-        { stateKey: 'first', displayName: 'First stage', components: [{ type: 'text', fieldKey: 'a', label: 'A' }] },
-        { stateKey: 'second', displayName: 'Second stage', components: [{ type: 'text', fieldKey: 'b', label: 'B' }] },
+        { stageKey: 'first', displayName: 'First stage', components: [{ type: 'text', fieldKey: 'a', label: 'A' }] },
+        { stageKey: 'second', displayName: 'Second stage', components: [{ type: 'text', fieldKey: 'b', label: 'B' }] },
       ],
       calculations: { fields: { premium: { expr: '1' }, excess: { expr: '2' } } },
-    } as unknown as AuthoredServiceBlueprint;
+    } as unknown as ServiceBlueprint;
 
-    const context = buildPropertyReferenceContext(blueprint, [{ type: 'text', fieldKey: 'a', label: 'A' }] as unknown as AuthoredComponent[], CATALOG);
+    const context = buildPropertyReferenceContext(blueprint, [{ type: 'text', fieldKey: 'a', label: 'A' }] as unknown as Component[], CATALOG);
 
     check('stageOptions lists every stage', context.stageOptions.length === 2);
     check('stageOptions labels combine displayName and key',

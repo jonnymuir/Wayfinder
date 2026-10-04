@@ -1,5 +1,5 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
-import type { AuthoredServiceBlueprint, RouteView } from '../types.js';
+import type { ServiceBlueprint, RouteView } from '../types.js';
 import type { GraphProps } from './graph-callbacks.js';
 import { declutterChips, type ChipBox } from './chip-declutter.js';
 import {
@@ -94,13 +94,13 @@ export type GraphModel = {
   layout: ServiceBlueprintGraphLayout;
 };
 
-function labelForNodeKey(serviceBlueprint: AuthoredServiceBlueprint | null, key: string): string {
-  return serviceBlueprint?.stages.find(stage => stage.stateKey === key)?.displayName
+function labelForNodeKey(serviceBlueprint: ServiceBlueprint | null, key: string): string {
+  return serviceBlueprint?.stages.find(stage => stage.stageKey === key)?.displayName
     ?? serviceBlueprint?.gateways?.find(gateway => gateway.key === key)?.displayName
     ?? key;
 }
 
-function transitionDescriptor(serviceBlueprint: AuthoredServiceBlueprint | null, transition: RouteView): string {
+function transitionDescriptor(serviceBlueprint: ServiceBlueprint | null, transition: RouteView): string {
   return `${labelForNodeKey(serviceBlueprint, transition.fromStage)} to ${labelForNodeKey(serviceBlueprint, transition.toStage)}`;
 }
 
@@ -308,9 +308,9 @@ export function buildGraphModel(props: GraphProps): GraphModel {
           rowRank,
           sourceHandles: handles.source,
           targetHandles: handles.target,
-          selected: props.selectedStageKey === topologyNode.stage.stateKey,
-          simulationPath: simulationStageKeys.has(topologyNode.stage.stateKey),
-          simulationCurrent: props.simulationCurrentStageKey === topologyNode.stage.stateKey,
+          selected: props.selectedStageKey === topologyNode.stage.stageKey,
+          simulationPath: simulationStageKeys.has(topologyNode.stage.stageKey),
+          simulationCurrent: props.simulationCurrentStageKey === topologyNode.stage.stageKey,
           readOnly: props.readOnly,
         },
       } satisfies StageFlowNode;

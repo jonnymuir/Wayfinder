@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import './wayfinder-service-blueprint-editor-shell.js';
 import type { WayfinderServiceBlueprintEditorShellElement } from './wayfinder-service-blueprint-editor-shell.js';
 import { PAYMENT_DEMO_SERVICE_BLUEPRINT, PLANNING_SERVICE_BLUEPRINT, cloneAuthoredServiceBlueprint } from './fixtures/index.js';
-import type { AuthoredStage, AuthoredServiceBlueprint } from './types.js';
+import type { StageDefinition, ServiceBlueprint } from './types.js';
 import { InMemoryServiceBlueprintSource } from './in-memory-service-blueprint-source.js';
 import type { QueueDefinition } from './stage-assignment.js';
 
@@ -11,10 +11,10 @@ type ServiceBlueprintSeed = {
   definitionKey: string;
   displayName: string;
   stages: Array<{
-    stateKey: string;
+    stageKey: string;
     displayName: string;
-    actor?: AuthoredStage['actor'];
-    kind?: AuthoredStage['kind'];
+    actor?: StageDefinition['actor'];
+    stageType?: StageDefinition['stageType'];
     roleGates?: string[];
   }>;
   transitionActions: string[];
@@ -24,16 +24,16 @@ function cloneServiceBlueprint<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function buildServiceBlueprint(seed: ServiceBlueprintSeed): AuthoredServiceBlueprint {
+function buildServiceBlueprint(seed: ServiceBlueprintSeed): ServiceBlueprint {
   const serviceBlueprint = cloneServiceBlueprint(PLANNING_SERVICE_BLUEPRINT);
   const stages = seed.stages.map((stageSeed, index) => {
     const baseStage = serviceBlueprint.stages[Math.min(index, serviceBlueprint.stages.length - 1)];
     return {
       ...baseStage,
-      stateKey: stageSeed.stateKey,
+      stageKey: stageSeed.stageKey,
       displayName: stageSeed.displayName,
       actor: stageSeed.actor ?? baseStage.actor,
-      kind: stageSeed.kind ?? baseStage.kind,
+      stageType: stageSeed.stageType ?? baseStage.stageType,
       roleGates: stageSeed.roleGates ?? [],
     };
   });
@@ -42,29 +42,29 @@ function buildServiceBlueprint(seed: ServiceBlueprintSeed): AuthoredServiceBluep
   const builtStages = stages.map((stage, index) => ({
     ...stage,
     routes: index < stages.length - 1
-      ? [{ id: `${stage.stateKey}--route--${gatewayKeyFor(stage.stateKey)}`, target: gatewayKeyFor(stage.stateKey), trigger: 'route' }]
+      ? [{ id: `${stage.stageKey}--route--${gatewayKeyFor(stage.stageKey)}`, target: gatewayKeyFor(stage.stageKey), trigger: 'route' }]
       : [],
   }));
   return {
     ...serviceBlueprint,
     definitionKey: seed.definitionKey,
     displayName: seed.displayName,
-    initialStage: builtStages[0]?.stateKey ?? serviceBlueprint.initialStage,
+    initialStage: builtStages[0]?.stageKey ?? serviceBlueprint.initialStage,
     stages: builtStages,
     gateways: builtStages.slice(0, -1).map((stage, index) => {
-      const targetKey = builtStages[index + 1].stateKey;
+      const targetKey = builtStages[index + 1].stageKey;
       const trigger = seed.transitionActions[index] ?? 'continue';
       return {
-        key: gatewayKeyFor(stage.stateKey),
+        key: gatewayKeyFor(stage.stageKey),
         displayName: `Route from ${stage.displayName}`,
         gatewayType: 'Split' as const,
         queueKey: stage.queueKey ?? 'public',
         actor: stage.actor,
         roleGates: [],
-        routes: [{ id: `${gatewayKeyFor(stage.stateKey)}--${trigger}--${targetKey}`, target: targetKey, trigger }],
+        routes: [{ id: `${gatewayKeyFor(stage.stageKey)}--${trigger}--${targetKey}`, target: targetKey, trigger }],
       };
     }),
-  } as unknown as AuthoredServiceBlueprint;
+  } as unknown as ServiceBlueprint;
 }
 
 function buildShellSource(): InMemoryServiceBlueprintSource {
@@ -74,20 +74,20 @@ function buildShellSource(): InMemoryServiceBlueprintSource {
     definitionKey: 'community-enquiry',
     displayName: 'Community Enquiry',
     stages: [
-      { stateKey: 'raise-enquiry', displayName: 'Raise enquiry', actor: 'public' },
-      { stateKey: 'share-supporting-detail', displayName: 'Share supporting detail', actor: 'public' },
+      { stageKey: 'raise-enquiry', displayName: 'Raise enquiry', actor: 'public' },
+      { stageKey: 'share-supporting-detail', displayName: 'Share supporting detail', actor: 'public' },
       {
-        stateKey: 'review-enquiry',
+        stageKey: 'review-enquiry',
         displayName: 'Review enquiry',
         actor: 'reviewer',
-        kind: 'TaskList',
+        stageType: 'TaskList',
         roleGates: ['reviewer'],
       },
       {
-        stateKey: 'enquiry-closed',
+        stageKey: 'enquiry-closed',
         displayName: 'Enquiry closed',
         actor: 'reviewer',
-        kind: 'Confirmation',
+        stageType: 'Confirmation',
         roleGates: ['reviewer'],
       },
     ],
@@ -98,20 +98,20 @@ function buildShellSource(): InMemoryServiceBlueprintSource {
     definitionKey: 'information-request',
     displayName: 'Information Request',
     stages: [
-      { stateKey: 'request-summary', displayName: 'Request summary', actor: 'public' },
-      { stateKey: 'upload-evidence', displayName: 'Upload evidence', actor: 'public' },
+      { stageKey: 'request-summary', displayName: 'Request summary', actor: 'public' },
+      { stageKey: 'upload-evidence', displayName: 'Upload evidence', actor: 'public' },
       {
-        stateKey: 'review-response-pack',
+        stageKey: 'review-response-pack',
         displayName: 'Review response pack',
         actor: 'reviewer',
-        kind: 'TaskList',
+        stageType: 'TaskList',
         roleGates: ['reviewer'],
       },
       {
-        stateKey: 'response-sent',
+        stageKey: 'response-sent',
         displayName: 'Response sent',
         actor: 'system',
-        kind: 'Confirmation',
+        stageType: 'Confirmation',
         roleGates: ['reviewer'],
       },
     ],

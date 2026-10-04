@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { AuthoredServiceBlueprint } from '../types.js';
+import type { ServiceBlueprint } from '../types.js';
 import type { QueueDefinition } from '../stage-assignment.js';
 
 /**
@@ -7,7 +7,7 @@ import type { QueueDefinition } from '../stage-assignment.js';
  * Lit update. Mirrors the public properties of <wayfinder-service-blueprint-graph>.
  */
 export type GraphProps = {
-  serviceBlueprint: AuthoredServiceBlueprint | null;
+  serviceBlueprint: ServiceBlueprint | null;
   availableQueues: QueueDefinition[];
   readOnly: boolean;
   selectedStageKey: string | null;
@@ -25,7 +25,7 @@ export type GraphContextMenuTarget =
   | { kind: 'transition'; transitionIndex: number };
 
 export type GraphNodeMove = {
-  /** Prefixed node id: `stage:<stateKey>` or `gateway:<key>`. */
+  /** Prefixed node id: `stage:<stageKey>` or `gateway:<key>`. */
   nodeId: string;
   x: number;
   y: number;

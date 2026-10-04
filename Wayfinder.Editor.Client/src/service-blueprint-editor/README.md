@@ -72,19 +72,19 @@ Full authoring experience.
 | `actionCatalog` | `ServiceBlueprintActionCatalog \| undefined` | Host-supplied catalog of action types the editor can render. Falls back to `BuiltInServiceBlueprintActionCatalog` when unset. |
 | `authorContext` | `ServiceBlueprintAuthorContext \| undefined` | Optional UX hint about the current author (`{ canSave?: boolean }`). Never authoritative, server-side authorization stays in the host application. |
 | `availableQueues` | `QueueDefinition[]` | Host-supplied queue catalog used for queue labels and queue pickers. Shared editor code stays generic; the host decides which queues exist. |
-| `initialServiceBlueprint` | `AuthoredServiceBlueprint \| null` | If set, bypasses `serviceBlueprintSource.load` and uses this serviceBlueprint directly. Designed for Storybook / fixtures. |
+| `initialServiceBlueprint` | `ServiceBlueprint \| null` | If set, bypasses `serviceBlueprintSource.load` and uses this serviceBlueprint directly. Designed for Storybook / fixtures. |
 
 The editor has **no built-in HTTP client and no opinion about authentication**.
 Hosts are responsible for implementing the `ServiceBlueprintSource` contract
 (`list / load / save`) against their own persistence, the editor only sees
-typed `AuthoredServiceBlueprint` values. A reference implementation that talks to the
+typed `ServiceBlueprint` values. A reference implementation that talks to the
 MockBusinessApp's `/mockapp/serviceBlueprints/*` endpoints lives at
 [`integrations/mockapp-service-blueprint-source.ts`](./integrations/mockapp-service-blueprint-source.ts).
 
 **Definition tab, JSON twin-pane**
 
 Alongside Canvas / Calculations / Validation, the editor exposes a **Definition**
-tab containing an editable JSON view of the current `AuthoredServiceBlueprint`.
+tab containing an editable JSON view of the current `ServiceBlueprint`.
 Author-facing copy uses "Definition", JSON is the implementation detail.
 
 * **Editor library:** [CodeMirror 6](https://codemirror.net/) (modules
@@ -102,7 +102,7 @@ Author-facing copy uses "Definition", JSON is the implementation detail.
   indent) and pushes the new text into the editor.
 * **Definition → Visual sync:** typing is debounced by **250 ms**. On
   settling:
-  - **Valid JSON + schema-clean** → coerced to `AuthoredServiceBlueprint`, applied
+  - **Valid JSON + schema-clean** → coerced to `ServiceBlueprint`, applied
     through the host's normal commit path (so the change lands on the
     document-level undo stack), and announced to a polite live region
     ("Definition updated. N stages, M gateways.").
@@ -175,7 +175,7 @@ the cards.
 
 | Property | Type | Notes |
 |----------|------|-------|
-| `serviceBlueprint` | `AuthoredServiceBlueprint \| null` | Programmatic form of `service-blueprint-json`. |
+| `serviceBlueprint` | `ServiceBlueprint \| null` | Programmatic form of `service-blueprint-json`. |
 | `selectedStageKey` | `string \| null` | Inbound selection, host sets this to drive the graph's highlight. |
 | `selectedGatewayKey` | `string \| null` | Inbound selection. |
 | `selectedTransitionIndex` | `number \| null` | Inbound transition highlight. |

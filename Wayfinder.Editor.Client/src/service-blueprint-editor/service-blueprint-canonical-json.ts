@@ -1,4 +1,7 @@
-import type { AuthoredGateway, AuthoredRoute, AuthoredStage, AuthoredStageValidation, AuthoredServiceBlueprint, QueueDefinition } from './types.js';
+import type { NodePosition, ServiceBlueprintGatewayDefinition, ServiceBlueprintLayoutDefinition, ServiceBlueprintRouteDefinition, StageDefinition, ServiceBlueprintStageValidationRule, ServiceBlueprint, QueueDefinition } from './types.js';
+
+/** A serialiser must name every property of the model it writes, so a property added to the C# model cannot be dropped silently. */
+type Serialised<T> = { [K in keyof T]-?: unknown };
 
 /**
  * Stable, deterministic JSON serialization for the flattened serviceBlueprint definition
@@ -14,7 +17,7 @@ export type TopLevelFieldKind = 'string' | 'number' | 'boolean' | 'array' | 'obj
  * is dropped anywhere along that path, or if the C# ServiceBlueprint gains a property nobody
  * has decided about.
  */
-export const EDITOR_TOP_LEVEL_FIELDS: Readonly<Record<string, TopLevelFieldKind>> = {
+export const EDITOR_TOP_LEVEL_FIELDS = {
   definitionKey: 'string',
   displayName: 'string',
   version: 'number',
@@ -28,11 +31,10 @@ export const EDITOR_TOP_LEVEL_FIELDS: Readonly<Record<string, TopLevelFieldKind>
   queues: 'array',
   stages: 'array',
   gateways: 'array',
-  parameterSchemas: 'array',
   layout: 'object',
   handoffs: 'array',
   tags: 'object',
-};
+} as const satisfies Record<keyof ServiceBlueprint, TopLevelFieldKind>;
 
 export function matchesTopLevelFieldKind(value: unknown, kind: TopLevelFieldKind): boolean {
   switch (kind) {
@@ -47,7 +49,7 @@ export function matchesTopLevelFieldKind(value: unknown, kind: TopLevelFieldKind
 
 const TOP_LEVEL_KEY_ORDER: readonly string[] = Object.keys(EDITOR_TOP_LEVEL_FIELDS);
 
-function serialisableRoute(route: AuthoredRoute): Record<string, unknown> {
+function serialisableRoute(route: ServiceBlueprintRouteDefinition): Serialised<ServiceBlueprintRouteDefinition> {
   return {
     id: route.id,
     target: route.target,
@@ -57,21 +59,21 @@ function serialisableRoute(route: AuthoredRoute): Record<string, unknown> {
     showWhen: route.showWhen,
     requiresRole: route.requiresRole,
     actions: route.actions,
-    editorComment: route.editorComment,
   };
 }
 
-function serialisableStageValidation(rule: AuthoredStageValidation): Record<string, unknown> {
+function serialisableStageValidation(rule: ServiceBlueprintStageValidationRule): Serialised<ServiceBlueprintStageValidationRule> {
   return {
     code: rule.code,
     when: rule.when,
     rule: rule.rule,
     field: rule.field,
     message: rule.message,
+    actions: rule.actions,
   };
 }
 
-function serialisableQueue(queue: QueueDefinition): Record<string, unknown> {
+function serialisableQueue(queue: QueueDefinition): Serialised<QueueDefinition> {
   return {
     key: queue.key,
     displayName: queue.displayName,
@@ -84,19 +86,18 @@ function serialisableQueue(queue: QueueDefinition): Record<string, unknown> {
   };
 }
 
-function serialisableState(stage: AuthoredStage): Record<string, unknown> {
+function serialisableState(stage: StageDefinition): Serialised<StageDefinition> {
   return {
-    stageKey: stage.stateKey,
+    stageKey: stage.stageKey,
     displayName: stage.displayName,
     components: stage.components ?? [],
     description: stage.description,
-    stageType: stage.kind,
+    stageType: stage.stageType,
     actor: stage.actor,
     queueKey: stage.queueKey,
     routes: (stage.routes ?? []).map(serialisableRoute),
     actions: stage.actions,
     roleGates: stage.roleGates,
-    editorComment: stage.editorComment,
     icon: stage.icon,
     validations: (stage.validations ?? []).length > 0
       ? (stage.validations ?? []).map(serialisableStageValidation)
@@ -104,12 +105,12 @@ function serialisableState(stage: AuthoredStage): Record<string, unknown> {
   };
 }
 
-function serialisableGateway(gateway: AuthoredGateway): Record<string, unknown> {
+function serialisableGateway(gateway: ServiceBlueprintGatewayDefinition): Serialised<ServiceBlueprintGatewayDefinition> {
   return {
     key: gateway.key,
     displayName: gateway.displayName,
     description: gateway.description,
-    gatewayType: gateway.gatewayType ?? gateway.kind,
+    gatewayType: gateway.gatewayType,
     queueKey: gateway.queueKey,
     actor: gateway.actor,
     roleGates: gateway.roleGates,
@@ -124,7 +125,7 @@ function serialisableGateway(gateway: AuthoredGateway): Record<string, unknown> 
   };
 }
 
-function serialisableServiceBlueprint(serviceBlueprint: AuthoredServiceBlueprint): Record<string, unknown> {
+function serialisableServiceBlueprint(serviceBlueprint: ServiceBlueprint): Serialised<ServiceBlueprint> {
   return {
     definitionKey: serviceBlueprint.definitionKey,
     displayName: serviceBlueprint.displayName,
@@ -139,24 +140,25 @@ function serialisableServiceBlueprint(serviceBlueprint: AuthoredServiceBlueprint
     stages: serviceBlueprint.stages.map(serialisableState),
     gateways: (serviceBlueprint.gateways ?? []).map(serialisableGateway),
     calculations: serviceBlueprint.calculations,
-    parameterSchemas: serviceBlueprint.parameterSchemas,
     layout: serialisableLayout(serviceBlueprint.layout),
     handoffs: serviceBlueprint.handoffs?.length ? serviceBlueprint.handoffs : undefined,
     tags: serviceBlueprint.tags && Object.keys(serviceBlueprint.tags).length > 0 ? serviceBlueprint.tags : undefined,
   };
 }
 
-function serialisableLayout(layout: AuthoredServiceBlueprint['layout']): Record<string, unknown> | undefined {
-  const entries = Object.entries(layout?.nodes ?? {});
+function wholePixels(positions: Record<string, NodePosition> | undefined): Record<string, NodePosition> | undefined {
+  const entries = Object.entries(positions ?? {});
   if (entries.length === 0) {
     return undefined;
   }
-  const nodes: Record<string, { x: number; y: number }> = {};
-  for (const [key, position] of entries) {
-    // Whole pixels only: drag jitter must never produce spurious dirty state.
-    nodes[key] = { x: Math.round(position.x), y: Math.round(position.y) };
-  }
-  return { nodes };
+  // Whole pixels only: drag jitter must never produce spurious dirty state.
+  return Object.fromEntries(entries.map(([key, position]) => [key, { x: Math.round(position.x), y: Math.round(position.y) }]));
+}
+
+function serialisableLayout(layout: ServiceBlueprintLayoutDefinition | undefined): Serialised<ServiceBlueprintLayoutDefinition> | undefined {
+  const nodes = wholePixels(layout?.nodes);
+  const routes = wholePixels(layout?.routes);
+  return nodes || routes ? { nodes, routes } : undefined;
 }
 
 function orderTopLevel(value: Record<string, unknown>): Record<string, unknown> {
@@ -200,7 +202,7 @@ function sortKeys(value: unknown): unknown {
   return value;
 }
 
-export function serializeAuthoredServiceBlueprint(serviceBlueprint: AuthoredServiceBlueprint): string {
+export function serializeAuthoredServiceBlueprint(serviceBlueprint: ServiceBlueprint): string {
   const top = orderTopLevel(serialisableServiceBlueprint(serviceBlueprint));
   const canonical: Record<string, unknown> = {};
   for (const key of Object.keys(top)) {
@@ -221,8 +223,8 @@ export function serializeAuthoredServiceBlueprint(serviceBlueprint: AuthoredServ
 }
 
 export function authoredServiceBlueprintJsonEquals(
-  left: AuthoredServiceBlueprint | null,
-  right: AuthoredServiceBlueprint | null
+  left: ServiceBlueprint | null,
+  right: ServiceBlueprint | null
 ): boolean {
   if (!left && !right) {
     return true;

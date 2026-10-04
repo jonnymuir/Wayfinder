@@ -32,7 +32,7 @@
  */
 
 import { html, nothing, type TemplateResult } from 'lit';
-import type { AuthoredComponent, ComponentDescriptor } from './types.js';
+import type { Component, ComponentDescriptor } from './types.js';
 import {
   blankComponentFor,
   renderComponentPropertyFields,
@@ -53,7 +53,7 @@ export interface ChildEditorContext {
   references: PropertyReferenceContext;
 }
 
-function describeChildLabel(component: AuthoredComponent): string {
+function describeChildLabel(component: Component): string {
   return (component as { label?: string }).label
     ?? (component as { fieldKey?: string }).fieldKey
     ?? (component as { legend?: string | null }).legend
@@ -66,7 +66,7 @@ function describeChildLabel(component: AuthoredComponent): string {
  * containing another fieldset works with no special-casing.
  */
 export function renderComponentNode(
-  component: AuthoredComponent,
+  component: Component,
   path: PropertyPath,
   ctx: ChildEditorContext
 ): TemplateResult {
@@ -93,7 +93,7 @@ export function renderComponentNode(
  * select/radio/checkboxlist).
  */
 function resolveInstanceReferences(
-  component: AuthoredComponent,
+  component: Component,
   references: PropertyReferenceContext
 ): ResolvedPropertyReferences {
   const record = component as unknown as Record<string, unknown>;
@@ -125,7 +125,7 @@ function resolveInstanceReferences(
 }
 
 function renderContainment(
-  component: AuthoredComponent,
+  component: Component,
   descriptor: ComponentDescriptor,
   path: PropertyPath,
   ctx: ChildEditorContext
@@ -139,13 +139,13 @@ function renderContainment(
   const propertyKey = containment.propertyName;
 
   if (containment.kind === 'ChildList') {
-    const children = Array.isArray(record[propertyKey]) ? (record[propertyKey] as AuthoredComponent[]) : [];
+    const children = Array.isArray(record[propertyKey]) ? (record[propertyKey] as Component[]) : [];
     return renderChildList(children, [...path, propertyKey], ctx, containment.propertyName);
   }
 
   if (containment.kind === 'NamedSections') {
     const sections = Array.isArray(record[propertyKey])
-      ? (record[propertyKey] as Array<{ heading?: string; summary?: string | null; children?: AuthoredComponent[] }>)
+      ? (record[propertyKey] as Array<{ heading?: string; summary?: string | null; children?: Component[] }>)
       : [];
     const sectionChildrenKey = containment.sectionChildrenPropertyName ?? 'children';
     const sectionsPath: PropertyPath = [...path, propertyKey];
@@ -192,7 +192,7 @@ function renderContainment(
     const optionsKey = containment.keySourceProperty;
     const options = Array.isArray(record[optionsKey]) ? (record[optionsKey] as string[]) : [];
     const byKey = (record[propertyKey] && typeof record[propertyKey] === 'object')
-      ? (record[propertyKey] as Record<string, AuthoredComponent[]>)
+      ? (record[propertyKey] as Record<string, Component[]>)
       : {};
     const keyedPath: PropertyPath = [...path, propertyKey];
     const containerKey = keyedPath.join('-');
@@ -218,7 +218,7 @@ function renderContainment(
 }
 
 function renderChildList(
-  children: AuthoredComponent[],
+  children: Component[],
   childrenPath: PropertyPath,
   ctx: ChildEditorContext,
   label: string
@@ -302,7 +302,7 @@ function renderChildList(
               return;
             }
 
-            const next = [...children, blankComponentFor(descriptor) as unknown as AuthoredComponent];
+            const next = [...children, blankComponentFor(descriptor) as unknown as Component];
             ctx.onChange(childrenPath, next);
             ctx.onAnnounce(`${descriptor.displayName} added to ${label}.`);
           }}

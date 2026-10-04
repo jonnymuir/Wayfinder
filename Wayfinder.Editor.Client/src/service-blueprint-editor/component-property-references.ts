@@ -5,12 +5,12 @@
  * server data — `ConditionalOn`/`VisibleWhen` are only ever checked against the *current stage's
  * own* submitted field values (Wayfinder/Services/Validation/FieldValueValidator.cs), `DefaultFrom`
  * resolves against ServiceBlueprint.Calculations.Fields (blueprint-wide), and `ChangeStateKey`
- * should be a real stage key — all of it already sits in `AuthoredServiceBlueprint`, which
+ * should be a real stage key — all of it already sits in `ServiceBlueprint`, which
  * wayfinder-step-inspector.ts already holds in full. This module just walks that data into the
  * lists the properties panel offers instead of a blank text box.
  */
 
-import type { AuthoredComponent, AuthoredServiceBlueprint, ComponentDescriptor } from './types.js';
+import type { Component, ServiceBlueprint, ComponentDescriptor } from './types.js';
 
 export interface FieldReference {
   fieldKey: string;
@@ -47,7 +47,7 @@ export interface PropertyReferenceContext {
  * of the stage.
  */
 export function collectStageInputFields(
-  components: AuthoredComponent[] | undefined,
+  components: Component[] | undefined,
   catalog: ComponentDescriptor[]
 ): FieldReference[] {
   const results: FieldReference[] = [];
@@ -56,7 +56,7 @@ export function collectStageInputFields(
 }
 
 function walkComponents(
-  components: AuthoredComponent[] | undefined,
+  components: Component[] | undefined,
   catalog: ComponentDescriptor[],
   results: FieldReference[]
 ): void {
@@ -97,19 +97,19 @@ function walkComponents(
     }
 
     if (containment.kind === 'ChildList') {
-      walkComponents(record[containment.propertyName] as AuthoredComponent[] | undefined, catalog, results);
+      walkComponents(record[containment.propertyName] as Component[] | undefined, catalog, results);
     } else if (containment.kind === 'NamedSections') {
       const sections = record[containment.propertyName];
       const childrenKey = containment.sectionChildrenPropertyName ?? 'children';
       if (Array.isArray(sections)) {
         for (const section of sections as Array<Record<string, unknown>>) {
-          walkComponents(section[childrenKey] as AuthoredComponent[] | undefined, catalog, results);
+          walkComponents(section[childrenKey] as Component[] | undefined, catalog, results);
         }
       }
     } else if (containment.kind === 'KeyedChildren') {
       const byKey = record[containment.propertyName];
       if (byKey && typeof byKey === 'object') {
-        for (const children of Object.values(byKey as Record<string, AuthoredComponent[]>)) {
+        for (const children of Object.values(byKey as Record<string, Component[]>)) {
           walkComponents(children, catalog, results);
         }
       }
@@ -118,8 +118,8 @@ function walkComponents(
 }
 
 export function buildPropertyReferenceContext(
-  serviceBlueprint: AuthoredServiceBlueprint | null | undefined,
-  stageComponents: AuthoredComponent[] | undefined,
+  serviceBlueprint: ServiceBlueprint | null | undefined,
+  stageComponents: Component[] | undefined,
   catalog: ComponentDescriptor[]
 ): PropertyReferenceContext {
   const allComponents = (serviceBlueprint?.stages ?? []).flatMap(stage => stage.components ?? []);
@@ -128,8 +128,8 @@ export function buildPropertyReferenceContext(
     siblingFields: collectStageInputFields(stageComponents, catalog),
     allFields: collectStageInputFields(allComponents, catalog),
     stageOptions: (serviceBlueprint?.stages ?? []).map(stage => ({
-      key: stage.stateKey,
-      label: `${stage.displayName} (${stage.stateKey})`,
+      key: stage.stageKey,
+      label: `${stage.displayName} (${stage.stageKey})`,
     })),
     calculationFieldNames: Object.keys(serviceBlueprint?.calculations?.fields ?? {}),
   };

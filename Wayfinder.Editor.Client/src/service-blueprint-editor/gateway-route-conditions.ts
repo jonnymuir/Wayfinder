@@ -9,7 +9,7 @@
  * evaluated anywhere in the engine, and — because the client serialised it under a "condition"
  * wire key the server model never had a matching property for — didn't even survive a save.
  */
-import type { AuthoredServiceBlueprint } from './types.js';
+import type { ServiceBlueprint } from './types.js';
 
 export const TRANSITION_ACTION_OPTIONS = [
   { value: 'continue', label: 'Continue' },
@@ -26,18 +26,18 @@ export function transitionQuickAction(action?: string): string {
     : 'custom';
 }
 
-export function defaultTransitionTarget(serviceBlueprint: AuthoredServiceBlueprint, sourceStageKey: string): string | null {
-  const currentIndex = serviceBlueprint.stages.findIndex(stage => stage.stateKey === sourceStageKey);
+export function defaultTransitionTarget(serviceBlueprint: ServiceBlueprint, sourceStageKey: string): string | null {
+  const currentIndex = serviceBlueprint.stages.findIndex(stage => stage.stageKey === sourceStageKey);
   if (currentIndex >= 0) {
     const nextStage = serviceBlueprint.stages[currentIndex + 1];
     if (nextStage) {
-      return nextStage.stateKey;
+      return nextStage.stageKey;
     }
   }
 
-  return serviceBlueprint.stages.find(stage => stage.stateKey !== sourceStageKey)?.stateKey ?? null;
+  return serviceBlueprint.stages.find(stage => stage.stageKey !== sourceStageKey)?.stageKey ?? null;
 }
 
-export function defaultTransitionAction(serviceBlueprint: AuthoredServiceBlueprint, targetStageKey: string): string {
+export function defaultTransitionAction(serviceBlueprint: ServiceBlueprint, targetStageKey: string): string {
   return targetStageKey === serviceBlueprint.initialStage ? 'return' : 'continue';
 }
