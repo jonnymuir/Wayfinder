@@ -31,9 +31,38 @@ public static class WorklistExtensions
         return services;
     }
 
-    public static RouteGroupBuilder MapWorklist(this IEndpointRouteBuilder endpoints, string prefix = "/wayfinder/worklist")
+    /// <summary>
+    /// Maps the caseworker worklist: the queue, team tray, pickup/putback, opening and advancing an item,
+    /// and file download. Deny by default: every route requires an authenticated caller, or the policy named
+    /// by <paramref name="authorizationPolicy"/> (e.g. "Caseworker"), unless the host writes
+    /// <c>allowAnonymous: true</c>. Pickup assigns work to a named person, so an anonymous worklist is a
+    /// deliberate exception (say why next to the call). The citizen-facing <c>MapJourney</c> is a different
+    /// surface and is unaffected.
+    /// </summary>
+    public static RouteGroupBuilder MapWorklist(
+        this IEndpointRouteBuilder endpoints,
+        string prefix = "/wayfinder/worklist",
+        string? authorizationPolicy = null,
+        bool allowAnonymous = false)
     {
+        if (allowAnonymous && authorizationPolicy is not null)
+        {
+            throw new ArgumentException("authorizationPolicy and allowAnonymous: true contradict each other.", nameof(authorizationPolicy));
+        }
+
         var group = endpoints.MapGroup(prefix);
+        if (allowAnonymous)
+        {
+            group.AllowAnonymous();
+        }
+        else if (authorizationPolicy is null)
+        {
+            group.RequireAuthorization();
+        }
+        else
+        {
+            group.RequireAuthorization(authorizationPolicy);
+        }
 
         // Filter/sort/search/pagination controls for the worklist (see
         // docs/guides/queue-worklist-filtering.md) — a real <form method="get">, full-page reload.
