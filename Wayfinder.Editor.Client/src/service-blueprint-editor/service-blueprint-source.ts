@@ -66,12 +66,12 @@ function sanitiseServiceBlueprintSaveErrorLine(value: string): string | null {
   }
 
   if (
-    STACK_TRACE_LINE.test(line)
-    || /\.cs:\s*line\s*\d+/i.test(line)
+    STACK_TRACE_LINE.test(line) ||
+    /\.cs:\s*line\s*\d+/i.test(line) ||
     // `(file:line:col)` at end of a JS stack frame. `[^()]+` (not `.+`) so the match is a
     // single linear scan from the last '(' — no polynomial backtracking on pathological
     // input like many unbalanced '(' (js/polynomial-redos).
-    || /\([^()]+:\d+:\d+\)$/.test(line)
+    /\([^()]+:\d+:\d+\)$/.test(line)
   ) {
     return null;
   }
@@ -104,12 +104,9 @@ export function sanitiseServiceBlueprintSaveErrorText(value: string | null | und
 }
 
 function buildServiceBlueprintSaveErrorCopyText(error: ServiceBlueprintSaveError): string {
-  const sections = [
-    error.title,
-    error.summary,
-    ...error.detailLines,
-    error.traceId ? `Reference: ${error.traceId}` : null,
-  ].filter((section): section is string => typeof section === 'string' && section.trim().length > 0);
+  const sections = [error.title, error.summary, ...error.detailLines, error.traceId ? `Reference: ${error.traceId}` : null].filter(
+    (section): section is string => typeof section === 'string' && section.trim().length > 0
+  );
 
   return sections.join('\n');
 }
@@ -131,7 +128,7 @@ export class ServiceBlueprintSaveError extends Error {
     this.title = options.title;
     this.summary = options.summary;
     this.detailLines = options.detailLines ?? [];
-    this.details = options.details ?? this.detailLines.map(message => ({ message }));
+    this.details = options.details ?? this.detailLines.map((message) => ({ message }));
     this.summaryStageKey = options.summaryStageKey;
     this.traceId = options.traceId ?? null;
     this.statusCode = options.statusCode;
@@ -154,16 +151,12 @@ export function normaliseServiceBlueprintSaveError(
 
   const candidate = (typeof error === 'object' && error !== null ? error : {}) as ServiceBlueprintSaveErrorLike;
   const title = sanitiseServiceBlueprintSaveErrorText(candidate.title) ?? 'We couldn’t save this service blueprint';
-  const summary = sanitiseServiceBlueprintSaveErrorText(candidate.summary)
-    ?? sanitiseServiceBlueprintSaveErrorText(candidate.message)
-    ?? fallbackSummary;
+  const summary =
+    sanitiseServiceBlueprintSaveErrorText(candidate.summary) ?? sanitiseServiceBlueprintSaveErrorText(candidate.message) ?? fallbackSummary;
   const traceId = sanitiseServiceBlueprintSaveErrorText(typeof candidate.traceId === 'string' ? candidate.traceId : null);
   const detailLines = sanitiseServiceBlueprintSaveErrorLines(
-    Array.isArray(candidate.detailLines)
-      ? candidate.detailLines.filter((line): line is string => typeof line === 'string')
-      : []
-  )
-    .filter(line => line !== summary);
+    Array.isArray(candidate.detailLines) ? candidate.detailLines.filter((line): line is string => typeof line === 'string') : []
+  ).filter((line) => line !== summary);
 
   return new ServiceBlueprintSaveError({
     title,

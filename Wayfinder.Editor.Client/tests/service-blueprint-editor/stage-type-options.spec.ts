@@ -19,21 +19,19 @@ test.describe('Retired stage types are no longer offered to authors', () => {
     // Switch to list view to expose per-row kind selects.
     await graph.getByRole('button', { name: 'List view' }).click();
 
-    const kindSelectValues = await graph.evaluate(node => {
+    const kindSelectValues = await graph.evaluate((node) => {
       const root = (node as HTMLElement).shadowRoot;
       const selects = Array.from(root?.querySelectorAll<HTMLSelectElement>('select') ?? []);
-      const kindSelect = selects.find(sel => {
-        const optionValues = Array.from(sel.options).map(o => o.value);
+      const kindSelect = selects.find((sel) => {
+        const optionValues = Array.from(sel.options).map((o) => o.value);
         return optionValues.includes('Question') && optionValues.includes('CheckAnswers');
       });
-      return kindSelect ? Array.from(kindSelect.options).map(o => o.value) : null;
+      return kindSelect ? Array.from(kindSelect.options).map((o) => o.value) : null;
     });
 
     expect(kindSelectValues).not.toBeNull();
     expect(kindSelectValues).not.toContain('Waiting');
     expect(kindSelectValues).not.toContain('StatusTimeline');
-    expect(kindSelectValues).toEqual(
-      expect.arrayContaining(['Question', 'CheckAnswers', 'Confirmation', 'TaskList'])
-    );
+    expect(kindSelectValues).toEqual(expect.arrayContaining(['Question', 'CheckAnswers', 'Confirmation', 'TaskList']));
   });
 });

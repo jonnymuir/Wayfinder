@@ -14,25 +14,11 @@ import {
   lineNumbers,
   highlightSpecialChars,
 } from '@codemirror/view';
-import {
-  defaultKeymap,
-  history,
-  historyKeymap,
-  indentWithTab,
-} from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
-import {
-  bracketMatching,
-  defaultHighlightStyle,
-  syntaxHighlighting,
-  indentOnInput,
-} from '@codemirror/language';
+import { bracketMatching, defaultHighlightStyle, syntaxHighlighting, indentOnInput } from '@codemirror/language';
 import { json } from '@codemirror/lang-json';
-import {
-  setDiagnostics,
-  type Diagnostic,
-  lintGutter,
-} from '@codemirror/lint';
+import { setDiagnostics, type Diagnostic, lintGutter } from '@codemirror/lint';
 
 export const setDiagnosticsEffect = StateEffect.define<Diagnostic[]>();
 
@@ -58,13 +44,8 @@ export interface CreateDefinitionViewOptions {
   onChange: (value: string) => void;
 }
 
-export function createDefinitionView({
-  parent,
-  doc,
-  readOnly,
-  onChange,
-}: CreateDefinitionViewOptions): EditorView {
-  const updateListener = EditorView.updateListener.of(update => {
+export function createDefinitionView({ parent, doc, readOnly, onChange }: CreateDefinitionViewOptions): EditorView {
+  const updateListener = EditorView.updateListener.of((update) => {
     if (update.docChanged) {
       onChange(update.state.doc.toString());
     }
@@ -100,7 +81,7 @@ export function createDefinitionView({
       EditorView.contentAttributes.of({
         'aria-label': 'Service blueprint definition JSON editor',
         'data-wayfinder-definition-editor-input': 'true',
-        'spellcheck': 'false',
+        spellcheck: 'false',
       }),
       updateListener,
     ],

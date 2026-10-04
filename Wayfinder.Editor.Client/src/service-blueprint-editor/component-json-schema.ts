@@ -37,8 +37,8 @@ function propertySchema(property: ComponentPropertyDescriptor): JsonSchemaValue 
     case 'Object':
       schema.type = 'object';
       if (property.properties) {
-        schema.properties = Object.fromEntries(property.properties.map(child => [child.key, propertySchema(child)]));
-        const required = property.properties.filter(child => child.required).map(child => child.key);
+        schema.properties = Object.fromEntries(property.properties.map((child) => [child.key, propertySchema(child)]));
+        const required = property.properties.filter((child) => child.required).map((child) => child.key);
         if (required.length > 0) {
           schema.required = required;
         }
@@ -144,7 +144,7 @@ export function generateComponentJsonSchema(catalog: ComponentDescriptor[]): Jso
   }
 
   defs.component = {
-    oneOf: catalog.map(descriptor => ({ $ref: `#/$defs/${descriptor.discriminator}` })),
+    oneOf: catalog.map((descriptor) => ({ $ref: `#/$defs/${descriptor.discriminator}` })),
   };
 
   return {

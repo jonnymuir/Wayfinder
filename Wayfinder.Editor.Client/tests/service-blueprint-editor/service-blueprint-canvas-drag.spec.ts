@@ -29,18 +29,20 @@ async function gotoGraphStory(page: Page, url: string) {
 }
 
 async function recordServiceBlueprintUpdates(page: Page) {
-  await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+  await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
     window.__layoutUpdates = [];
-    graphElement.addEventListener('service-blueprint-updated', event => {
-      const serviceBlueprint = (event as CustomEvent<{ serviceBlueprint: {
-        layout?: { nodes?: Record<string, unknown> };
-        stages: Array<{ stageKey: string; queueKey?: string }>;
-      } }>).detail.serviceBlueprint;
+    graphElement.addEventListener('service-blueprint-updated', (event) => {
+      const serviceBlueprint = (
+        event as CustomEvent<{
+          serviceBlueprint: {
+            layout?: { nodes?: Record<string, unknown> };
+            stages: Array<{ stageKey: string; queueKey?: string }>;
+          };
+        }>
+      ).detail.serviceBlueprint;
       window.__layoutUpdates!.push({
         layoutNodeIds: Object.keys(serviceBlueprint.layout?.nodes ?? {}),
-        queuesByStage: Object.fromEntries(
-          serviceBlueprint.stages.map(stage => [stage.stageKey, stage.queueKey ?? ''])
-        ),
+        queuesByStage: Object.fromEntries(serviceBlueprint.stages.map((stage) => [stage.stageKey, stage.queueKey ?? ''])),
       });
     });
   });
@@ -88,9 +90,9 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
     await gotoGraphStory(page, GRAPH_STORY);
     await recordServiceBlueprintUpdates(page);
 
-    const lanes = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+    const lanes = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
       const root = (graphElement as HTMLElement).shadowRoot!;
-      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-role-queue]')).map(lane => {
+      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-role-queue]')).map((lane) => {
         const rect = lane.getBoundingClientRect();
         return { key: lane.getAttribute('data-wayfinder-role-queue') ?? '', centerX: rect.left + rect.width / 2 };
       });
@@ -113,7 +115,7 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
   test('Tidy layout writes explicit positions for every node in one commit', async ({ page }) => {
     await gotoGraphStory(page, GRAPH_STORY);
 
-    const nodeCount = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+    const nodeCount = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
       const root = (graphElement as HTMLElement).shadowRoot!;
       return root.querySelectorAll('.react-flow__node').length;
     });
@@ -134,7 +136,9 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
     await page.goto(EDITOR_STORY);
     await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
-    const stageKey = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').first()
+    const stageKey = await page
+      .locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]')
+      .first()
       .getAttribute('data-wayfinder-stage');
     const stage = page.locator(`wayfinder-service-blueprint-graph [data-wayfinder-stage="${stageKey}"]`);
 

@@ -3,13 +3,13 @@ import type { Page } from '@playwright/test';
 
 /**
  * Behavioral proof for service blueprint editor overflow and responsive layout contracts.
- * 
+ *
  * This suite proves three critical behavioral contracts:
  * 1. Tall service blueprints (vertical overflow) scroll independently in .graph-canvas
  * 2. Wide lane sets (horizontal overflow) scroll independently in .graph-canvas
  * 3. Shell chrome (outline, inspector, toolbar) stays anchored during canvas scrolling
  * 4. Responsive/narrow layout behavior preserves accessibility and usability
- * 
+ *
  * Isabelle owns the CSS and layout implementation; these tests document the expected behavior.
  */
 
@@ -18,9 +18,13 @@ function storyUrl(storyId: string): string {
 }
 
 async function waitForServiceBlueprintLoad(page: Page, serviceBlueprintKey: string): Promise<void> {
-  await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute('data-wayfinder-service-blueprint-loaded', serviceBlueprintKey, {
-    timeout: 30_000,
-  });
+  await expect(page.locator('wayfinder-service-blueprint-editor')).toHaveAttribute(
+    'data-wayfinder-service-blueprint-loaded',
+    serviceBlueprintKey,
+    {
+      timeout: 30_000,
+    }
+  );
 }
 
 test.describe('ServiceBlueprint editor overflow and responsive behavioral proof', () => {
@@ -35,12 +39,13 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       // The React Flow canvas pans instead of scrolling: tall content proves
       // itself by extending past the canvas bounds at the default zoom.
-      const measurement = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      const measurement = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const shadowRoot = (graphElement as HTMLElement).shadowRoot!;
         const canvas = shadowRoot.querySelector<HTMLElement>('.graph-canvas')!;
         const canvasRect = canvas.getBoundingClientRect();
-        const stageBottoms = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
-          .map(node => node.getBoundingClientRect().bottom);
+        const stageBottoms = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]')).map(
+          (node) => node.getBoundingClientRect().bottom
+        );
         return {
           canvasBottom: canvasRect.bottom,
           maxStageBottom: Math.max(...stageBottoms),
@@ -49,10 +54,9 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       });
 
       expect(measurement.stageCount).toBeGreaterThan(0);
-      expect(
-        measurement.maxStageBottom,
-        'tall service blueprint content must extend beyond the visible canvas',
-      ).toBeGreaterThan(measurement.canvasBottom);
+      expect(measurement.maxStageBottom, 'tall service blueprint content must extend beyond the visible canvas').toBeGreaterThan(
+        measurement.canvasBottom
+      );
     });
 
     test('tall service blueprint panning moves graph content, not window body', async ({ page }) => {
@@ -65,20 +69,21 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       const initialWindowScrollY = await page.evaluate(() => window.scrollY);
       expect(initialWindowScrollY).toBe(0);
 
-      const stageTops = () => page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
-        const shadowRoot = (graphElement as HTMLElement).shadowRoot!;
-        return Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
-          .map(node => node.getBoundingClientRect().top);
-      });
-      const canvasBox = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
-        const rect = (graphElement as HTMLElement).shadowRoot!
-          .querySelector<HTMLElement>('.graph-canvas')!.getBoundingClientRect();
+      const stageTops = () =>
+        page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
+          const shadowRoot = (graphElement as HTMLElement).shadowRoot!;
+          return Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]')).map(
+            (node) => node.getBoundingClientRect().top
+          );
+        });
+      const canvasBox = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
+        const rect = (graphElement as HTMLElement).shadowRoot!.querySelector<HTMLElement>('.graph-canvas')!.getBoundingClientRect();
         return { x: rect.left, y: rect.top, height: rect.height };
       });
 
       const before = await stageTops();
       // Drag from the canvas's left gutter (empty pane, no nodes) to pan up.
-    const viewportHeight = page.viewportSize()!.height;
+      const viewportHeight = page.viewportSize()!.height;
       const startX = canvasBox.x + 24;
       // Drag from the midpoint of the canvas's on-screen band: the editor-host
       // story is taller than the constrained viewport and the HUD can wrap,
@@ -108,19 +113,21 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       // - When tabbing through stages in a tall service blueprint, the focused stage should scroll into view
       // - Focus ring should remain visible and not clipped by .graph-canvas overflow
       // - This may require scrollIntoView() calls when focus changes programmatically
-      
+
       // Verify that lanes are focusable and keyboard navigation works
-      const laneAccessibility = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      const laneAccessibility = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const g = graphElement as HTMLElement;
         const shadowRoot = g.shadowRoot;
         const lanes = Array.from(shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]') ?? []);
-        
+
         return {
           laneCount: lanes.length,
-          allFocusable: lanes.every(lane => (lane as HTMLElement).tabIndex >= 0),
-          canvas: shadowRoot?.querySelector('.graph-canvas') ? {
-            hasOverflow: true,
-          } : null,
+          allFocusable: lanes.every((lane) => (lane as HTMLElement).tabIndex >= 0),
+          canvas: shadowRoot?.querySelector('.graph-canvas')
+            ? {
+                hasOverflow: true,
+              }
+            : null,
         };
       });
 
@@ -143,7 +150,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       // - .graph-canvas should have overflow: auto (both axes scrollable)
       // - With vertical lane layout, horizontal overflow occurs when many lanes exist
       // - Each lane is ~280px wide with gaps, so 4+ lanes exceed most viewports
-      const scrollCapability = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      const scrollCapability = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -162,7 +169,9 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       expect(scrollCapability).not.toBeNull();
       // overflow: auto covers both axes, so either overflow or overflowX should be auto/scroll
-      expect(['auto', 'scroll'].includes(scrollCapability?.overflow ?? '') || ['auto', 'scroll'].includes(scrollCapability?.overflowX ?? '')).toBe(true);
+      expect(
+        ['auto', 'scroll'].includes(scrollCapability?.overflow ?? '') || ['auto', 'scroll'].includes(scrollCapability?.overflowX ?? '')
+      ).toBe(true);
     });
 
     test.fixme('horizontal scrolling with touch/trackpad maintains smooth two-axis panning', async ({ page }) => {
@@ -196,7 +205,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       expect(outlineBefore).not.toBeNull();
 
       // Scroll the graph-canvas vertically
-      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -230,7 +239,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       expect(inspectorBefore).not.toBeNull();
 
       // Scroll the graph-canvas
-      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -259,7 +268,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       expect(toolbarBefore).not.toBeNull();
 
       // Scroll the graph-canvas
-      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -302,7 +311,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       };
 
       // Scroll the graph-canvas significantly
-      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -338,7 +347,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       // Verify drawers are collapsed or stacked appropriately
       const outline = page.locator('[data-wayfinder-service-blueprint-outline]');
       const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
-      
+
       // Both should exist but might be visually hidden or in collapsed state
       await expect(outline).toBeAttached();
       await expect(inspector).toBeAttached();
@@ -373,7 +382,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       // Find drawer toggle buttons
       const outlineToggle = page.locator('[data-wayfinder-panel-toggle="outline"]');
-      const propertiesToggle = page.locator('[data-wayfinder-panel-toggle="properties"]');
+      const _propertiesToggle = page.locator('[data-wayfinder-panel-toggle="properties"]');
 
       // These should exist and be keyboard accessible
       if (await outlineToggle.isVisible()) {
@@ -390,7 +399,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
 
       await waitForServiceBlueprintLoad(page, 'planning');
 
-      const graphCanvas = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      const graphCanvas = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -421,11 +430,11 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await expect(page.locator('wayfinder-service-blueprint-graph[data-wayfinder-graph-ready="true"]')).toBeAttached({ timeout: 15_000 });
 
       // Verify role lanes exist and are focusable
-      const laneStructure = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      const laneStructure = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const lanes = Array.from(shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]') ?? []);
-        
+
         return {
           laneCount: lanes.length,
           lanes: lanes.map((lane, i) => ({
@@ -443,7 +452,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       });
 
       // Scroll and verify lanes are still structured correctly
-      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -452,7 +461,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
         }
       });
 
-      const laneStructureAfterScroll = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      const laneStructureAfterScroll = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const lanes = Array.from(shadowRoot?.querySelectorAll('[data-wayfinder-role-queue]') ?? []);
@@ -470,7 +479,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       await waitForServiceBlueprintLoad(page, 'planning');
 
       // Scroll the canvas
-      await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
@@ -482,16 +491,16 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       // Verify stages are still clickable/interactive
       const stageElement = page.locator('[data-wayfinder-stage="application-form"]');
       await expect(stageElement).toBeVisible();
-      
+
       // Click the stage to select it
       await stageElement.click();
-      
+
       // Stage should emit selection event (verified by inspector panel showing stage details)
       const inspector = page.locator('[data-wayfinder-component="step-inspector"]');
       await expect(inspector).toBeVisible();
-      
+
       // Verify the inspector is showing content (has some heading structure)
-      const hasInspectorContent = await inspector.evaluate(el => {
+      const hasInspectorContent = await inspector.evaluate((el) => {
         return el.textContent && el.textContent.length > 0;
       });
       expect(hasInspectorContent).toBe(true);
@@ -508,7 +517,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       // - Transition paths should render within .graph-canvas's scroll container
       // - When canvas scrolls, transitions should remain visually connected to stages
       // - SVG paths should not clip unexpectedly at canvas boundaries
-      const transitionRendering = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+      const transitionRendering = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
         const graph = graphElement as HTMLElement;
         const shadowRoot = graph.shadowRoot;
         const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');

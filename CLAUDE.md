@@ -76,6 +76,9 @@ the `-live` specs need Aspire and stay local-only). It runs the editor client bu
 the TS conformance scripts → storybook a11y/interaction → editor Playwright. `Wayfinder.ReferenceApp.Tests`
 Playwright specs run via their own configs.
 
+Editor client code is linted and formatted by Biome (`npm run lint` / `npm run format` in `Wayfinder.Editor.Client`); CI
+fails on either. Prettier and ESLint are not used (typescript-eslint does not support TypeScript 7).
+
 The editor's TypeScript model (`Wayfinder.Editor.Client/src/service-blueprint-editor/generated/wayfinder-model.ts`)
 is **generated from the C# model**: change a C# model type, then run
 `dotnet run --project Wayfinder.TypeGen -- write Wayfinder.Editor.Client/src/service-blueprint-editor/generated/wayfinder-model.ts`

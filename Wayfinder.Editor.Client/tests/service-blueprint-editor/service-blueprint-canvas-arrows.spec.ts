@@ -1,10 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  CANONICAL_SCENARIOS,
-  gotoCanonicalScenario,
-  measureGraph,
-  VISUAL_VIEWPORT,
-} from './support/canvas-helpers';
+import { CANONICAL_SCENARIOS, gotoCanonicalScenario, measureGraph, VISUAL_VIEWPORT } from './support/canvas-helpers';
 
 /**
  * Concern 4 from `docs/testing/service-blueprint-editor-visual-tests.md`: every
@@ -48,23 +43,23 @@ test.describe('ServiceBlueprint canvas — arrow endpoints land on nodes', () =>
         // sides dynamically.
         expect(
           route.start.x,
-          `route ${route.key} start.x=${route.start.x} must be within ${fromNode.kind} "${fromNode.key}" horizontal bounds [${fromNode.left}, ${fromNode.right}]`,
+          `route ${route.key} start.x=${route.start.x} must be within ${fromNode.kind} "${fromNode.key}" horizontal bounds [${fromNode.left}, ${fromNode.right}]`
         ).toBeGreaterThanOrEqual(fromNode.left - ENDPOINT_TOLERANCE_PX);
         expect(route.start.x).toBeLessThanOrEqual(fromNode.right + ENDPOINT_TOLERANCE_PX);
         expect(
           route.start.y,
-          `route ${route.key} start.y=${route.start.y} must be within ${fromNode.kind} "${fromNode.key}" vertical bounds [${fromNode.top}, ${fromNode.bottom}]`,
+          `route ${route.key} start.y=${route.start.y} must be within ${fromNode.kind} "${fromNode.key}" vertical bounds [${fromNode.top}, ${fromNode.bottom}]`
         ).toBeGreaterThanOrEqual(fromNode.top - ENDPOINT_TOLERANCE_PX);
         expect(route.start.y).toBeLessThanOrEqual(fromNode.bottom + ENDPOINT_TOLERANCE_PX);
 
         expect(
           route.end.x,
-          `route ${route.key} end.x=${route.end.x} must be within ${toNode.kind} "${toNode.key}" horizontal bounds [${toNode.left}, ${toNode.right}]`,
+          `route ${route.key} end.x=${route.end.x} must be within ${toNode.kind} "${toNode.key}" horizontal bounds [${toNode.left}, ${toNode.right}]`
         ).toBeGreaterThanOrEqual(toNode.left - ENDPOINT_TOLERANCE_PX);
         expect(route.end.x).toBeLessThanOrEqual(toNode.right + ENDPOINT_TOLERANCE_PX);
         expect(
           route.end.y,
-          `route ${route.key} end.y=${route.end.y} must be within ${toNode.kind} "${toNode.key}" vertical bounds [${toNode.top}, ${toNode.bottom}]`,
+          `route ${route.key} end.y=${route.end.y} must be within ${toNode.kind} "${toNode.key}" vertical bounds [${toNode.top}, ${toNode.bottom}]`
         ).toBeGreaterThanOrEqual(toNode.top - ENDPOINT_TOLERANCE_PX);
         expect(route.end.y).toBeLessThanOrEqual(toNode.bottom + ENDPOINT_TOLERANCE_PX);
       }

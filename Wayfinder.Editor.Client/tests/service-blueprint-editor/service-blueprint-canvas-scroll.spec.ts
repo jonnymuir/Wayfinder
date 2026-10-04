@@ -1,10 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  CANONICAL_SCENARIOS,
-  gotoCanonicalScenario,
-  graphLocator,
-  VISUAL_VIEWPORT,
-} from './support/canvas-helpers';
+import { CANONICAL_SCENARIOS, gotoCanonicalScenario, graphLocator, VISUAL_VIEWPORT } from './support/canvas-helpers';
 
 /**
  * Concern 3 from `docs/testing/service-blueprint-editor-visual-tests.md`, restated for
@@ -19,8 +14,7 @@ test.use({ viewport: { ...VISUAL_VIEWPORT } });
 async function nodeScreenTops(page: import('@playwright/test').Page): Promise<number[]> {
   return graphLocator(page).evaluate((el) => {
     const root = (el as HTMLElement).shadowRoot!;
-    return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
-      .map(shell => shell.getBoundingClientRect().top);
+    return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]')).map((shell) => shell.getBoundingClientRect().top);
   });
 }
 
@@ -56,17 +50,15 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     const rect = await canvasRect(page);
     const boxes = await graphLocator(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]'))
-        .map(shell => {
-          const box = shell.getBoundingClientRect();
-          return { top: box.top, bottom: box.bottom, left: box.left, right: box.right };
-        });
+      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card]')).map((shell) => {
+        const box = shell.getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom, left: box.left, right: box.right };
+      });
     });
     expect(boxes.length).toBeGreaterThan(0);
     expect(
-      boxes.some(box => box.bottom > rect.bottom || box.right > rect.right
-        || box.top < rect.top || box.left < rect.left),
-      'a large service blueprint must have stages outside the visible canvas at default zoom',
+      boxes.some((box) => box.bottom > rect.bottom || box.right > rect.right || box.top < rect.top || box.left < rect.left),
+      'a large service blueprint must have stages outside the visible canvas at default zoom'
     ).toBe(true);
   });
 
@@ -79,21 +71,19 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     const after = await nodeScreenTops(page);
 
     const moved = before[0] - after[0];
-    expect(
-      moved,
-      `stages should move up by roughly the pan distance; actual=${moved.toFixed(0)}px`,
-    ).toBeGreaterThan(150);
+    expect(moved, `stages should move up by roughly the pan distance; actual=${moved.toFixed(0)}px`).toBeGreaterThan(150);
   });
 
   test('LARGE_SERVICE_BLUEPRINT: lane header pans with the canvas (not sticky)', async ({ page }) => {
     const scenario = CANONICAL_SCENARIOS.find((s) => s.id === 'LARGE_SERVICE_BLUEPRINT')!;
     await gotoCanonicalScenario(page, scenario);
 
-    const headerTop = () => graphLocator(page).evaluate((el) => {
-      const header = (el as HTMLElement).shadowRoot!.querySelector<HTMLElement>('[data-wayfinder-queue-header]');
-      if (!header) return null;
-      return { top: header.getBoundingClientRect().top, position: getComputedStyle(header).position };
-    });
+    const headerTop = () =>
+      graphLocator(page).evaluate((el) => {
+        const header = (el as HTMLElement).shadowRoot!.querySelector<HTMLElement>('[data-wayfinder-queue-header]');
+        if (!header) return null;
+        return { top: header.getBoundingClientRect().top, position: getComputedStyle(header).position };
+      });
 
     const before = await headerTop();
     expect(before, 'at least one lane header must render').not.toBeNull();
@@ -103,10 +93,7 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
 
     expect(after.position, 'lane-header must not have position:sticky').not.toBe('sticky');
     const moved = before.top - after.top;
-    expect(
-      moved,
-      `Lane header should have panned up by ≥150px after a 250px pane drag; actual=${moved.toFixed(0)}px`,
-    ).toBeGreaterThan(150);
+    expect(moved, `Lane header should have panned up by ≥150px after a 250px pane drag; actual=${moved.toFixed(0)}px`).toBeGreaterThan(150);
   });
 
   test('LARGE_SERVICE_BLUEPRINT: fit-to-screen brings the whole service blueprint into view', async ({ page }) => {
@@ -121,8 +108,8 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     const tops = await nodeScreenTops(page);
     expect(tops.length).toBeGreaterThan(0);
     expect(
-      tops.every(top => top >= rect.top - 1 && top <= rect.bottom + 1),
-      'after fit-to-screen every stage top must be inside the canvas',
+      tops.every((top) => top >= rect.top - 1 && top <= rect.bottom + 1),
+      'after fit-to-screen every stage top must be inside the canvas'
     ).toBe(true);
   });
 
@@ -135,13 +122,14 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     const rect = await canvasRect(page);
     const lanesRight = await graphLocator(page).evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot!;
-      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-queue-container]'))
-        .map(lane => lane.getBoundingClientRect().right);
+      return Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-queue-container]')).map(
+        (lane) => lane.getBoundingClientRect().right
+      );
     });
     expect(lanesRight.length).toBeGreaterThan(0);
     expect(
-      lanesRight.every(right => right <= rect.right + 16),
-      'a fitting service blueprint must not extend horizontally past the canvas',
+      lanesRight.every((right) => right <= rect.right + 16),
+      'a fitting service blueprint must not extend horizontally past the canvas'
     ).toBe(true);
   });
 });

@@ -29,8 +29,7 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
 
     const lanes = graph.locator('[data-wayfinder-role-queue]');
     const laneCount = await lanes.count();
-    expect(laneCount).toBeGreaterThanOrEqual(2,
-      { message: 'A multi-lane service blueprint must show at least two lanes simultaneously' });
+    expect(laneCount).toBeGreaterThanOrEqual(2, { message: 'A multi-lane service blueprint must show at least two lanes simultaneously' });
   });
 
   test('each lane column contains its own stages — no stage appears in two lanes simultaneously', async ({ page }) => {
@@ -63,8 +62,9 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     // No stage key should appear in more than one lane column
     const allKeys = stageKeysPerLane.flat();
     const uniqueKeys = new Set(allKeys);
-    expect(uniqueKeys.size).toBe(allKeys.length,
-      { message: 'Each stage must belong to exactly one lane — no stage key appears in two lane columns' });
+    expect(uniqueKeys.size).toBe(allKeys.length, {
+      message: 'Each stage must belong to exactly one lane — no stage key appears in two lane columns',
+    });
   });
 
   test.fixme('split gateway belongs to one lane and does not span all lanes', async ({ page }) => {
@@ -129,8 +129,7 @@ test.describe('ServiceBlueprint editor parallel lanes', () => {
     // All lane columns must still be present after selection.
     // Gateway nodes carry a data-wayfinder-queue attribute but are rendered as graph siblings —
     // they are not DOM children of the lane column containers.
-    await expect(laneCols).toHaveCount(laneCount,
-      { timeout: 3_000 });
+    await expect(laneCols).toHaveCount(laneCount, { timeout: 3_000 });
   });
 
   // ─── #84: Gateway nodes are distinct from stage nodes in the graph ────────

@@ -56,14 +56,12 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
     selected ? 'selected' : '',
     simulationPath ? 'simulation-path' : '',
     simulationCurrent ? 'simulation-current' : '',
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <div
-      className="stage-node-shell"
-      data-wayfinder-stage-card={stage.stageKey}
-      data-wayfinder-row-rank={String(rowRank)}
-    >
+    <div className="stage-node-shell" data-wayfinder-stage-card={stage.stageKey} data-wayfinder-row-rank={String(rowRank)}>
       <HandleFan handles={targetHandles} type="target" readOnly={readOnly} />
       <button
         type="button"
@@ -80,7 +78,9 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
         onContextMenu={handleContextMenu}
       >
         <span className="node-header">
-          <span className="node-icon-chip"><NodeIcon icon={iconForStage(stage)} /></span>
+          <span className="node-icon-chip">
+            <NodeIcon icon={iconForStage(stage)} />
+          </span>
           <span className="node-meta">{stage.stageType}</span>
         </span>
         <span className="node-label">{stage.displayName}</span>

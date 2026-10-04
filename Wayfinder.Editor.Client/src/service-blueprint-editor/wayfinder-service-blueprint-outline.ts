@@ -61,7 +61,7 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
 
   private _gatewayLabel(gatewayKey: string | undefined | null): string {
     if (!gatewayKey) return '';
-    return serviceBlueprintGateways(this.serviceBlueprint).find(g => g.key === gatewayKey)?.displayName ?? gatewayKey;
+    return serviceBlueprintGateways(this.serviceBlueprint).find((g) => g.key === gatewayKey)?.displayName ?? gatewayKey;
   }
 
   private _stageOutboundTransitions(stageKey: string): { transition: RouteView; index: number }[] {
@@ -69,7 +69,7 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
       return [];
     }
 
-    return (flattenRoutes(this.serviceBlueprint))
+    return flattenRoutes(this.serviceBlueprint)
       .map((transition, index) => ({ transition, index }))
       .filter(({ transition }) => transition.fromStage === stageKey);
   }
@@ -80,8 +80,8 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
     }
 
     return deriveGatewayBindings(this.serviceBlueprint)
-      .filter(binding => binding.gateway.gatewayType === 'Split' && binding.anchorStageKey === stageKey)
-      .map(binding => binding.gateway);
+      .filter((binding) => binding.gateway.gatewayType === 'Split' && binding.anchorStageKey === stageKey)
+      .map((binding) => binding.gateway);
   }
 
   /**
@@ -96,8 +96,8 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
     }
 
     return deriveGatewayBindings(this.serviceBlueprint)
-      .filter(binding => binding.gateway.gatewayType === 'Join' && binding.queueKey === queueKey)
-      .map(binding => binding.gateway);
+      .filter((binding) => binding.gateway.gatewayType === 'Join' && binding.queueKey === queueKey)
+      .map((binding) => binding.gateway);
   }
 
   private _queueGroups() {
@@ -147,8 +147,9 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
 
     return html`
       <nav class="outline-root" aria-label="ServiceBlueprint structure outline">
-        ${this.showHeader
-          ? html`
+        ${
+          this.showHeader
+            ? html`
               <div class="outline-header">
                 <h2 class="outline-title">Outline</h2>
                 <p class="outline-subtitle">
@@ -157,10 +158,12 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                 </p>
               </div>
             `
-          : nothing}
+            : nothing
+        }
 
         <div class="outline-lane-groups">
-          ${laneGroups.map(group => html`
+          ${laneGroups.map(
+            (group) => html`
             <section class="outline-lane-section" data-wayfinder-outline-queue=${group.key}>
               <div class="outline-lane-header">
                 <h3 class="outline-lane-title">${group.label}</h3>
@@ -168,11 +171,11 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
               </div>
               <ol class="outline-stage-list">
                 ${group.stages.map((stage: ServiceBlueprint['stages'][number]) => {
-            const isSelected = this.selectedStageKey === stage.stageKey;
-            const transitions = this._stageOutboundTransitions(stage.stageKey);
-            const splitGateways = this._splitGatewaysForStage(stage.stageKey);
+                  const isSelected = this.selectedStageKey === stage.stageKey;
+                  const transitions = this._stageOutboundTransitions(stage.stageKey);
+                  const splitGateways = this._splitGatewaysForStage(stage.stageKey);
 
-            return html`
+                  return html`
               <li class="outline-stage-item">
                 <button
                   type="button"
@@ -185,10 +188,11 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                   <span class="outline-stage-meta">${stage.actor}</span>
                 </button>
 
-                ${splitGateways.length > 0
-                  ? html`
+                ${
+                  splitGateways.length > 0
+                    ? html`
                       <ul class="outline-gateway-list">
-                        ${splitGateways.map(gateway => {
+                        ${splitGateways.map((gateway) => {
                           const isGatewaySelected = this.selectedGatewayKey === gateway.key;
                           return html`
                             <li class="outline-gateway-item">
@@ -210,10 +214,12 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                         })}
                       </ul>
                     `
-                  : nothing}
+                    : nothing
+                }
 
-                ${transitions.length > 0
-                  ? html`
+                ${
+                  transitions.length > 0
+                    ? html`
                       <ol class="outline-transition-list">
                         ${transitions.map(({ transition, index }) => {
                           const isTransitionSelected = this.selectedTransitionIndex === index;
@@ -221,9 +227,7 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                             <li class="outline-transition-item">
                               <button
                                 type="button"
-                                class="outline-transition-button ${isTransitionSelected
-                                  ? 'outline-transition-button-selected'
-                                  : ''}"
+                                class="outline-transition-button ${isTransitionSelected ? 'outline-transition-button-selected' : ''}"
                                 @click=${() => this._handleTransitionClick(index)}
                                 aria-current=${isTransitionSelected ? 'location' : nothing}
                               >
@@ -239,10 +243,11 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                         })}
                       </ol>
                     `
-                  : nothing}
+                    : nothing
+                }
               </li>
             `;
-               })}
+                })}
              </ol>
              ${(() => {
                const joinGateways = this._joinGatewaysForQueue(group.key);
@@ -253,7 +258,7 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                        <p class="outline-lane-meta">Merges routes from multiple stages</p>
                      </div>
                      <ul class="outline-gateway-list outline-join-list">
-                       ${joinGateways.map(gateway => {
+                       ${joinGateways.map((gateway) => {
                          const isGatewaySelected = this.selectedGatewayKey === gateway.key;
                          return html`
                            <li class="outline-gateway-item">
@@ -278,7 +283,8 @@ export class WayfinderServiceBlueprintOutline extends LitElement {
                  : nothing;
              })()}
             </section>
-          `)}
+          `
+          )}
         </div>
       </nav>
     `;

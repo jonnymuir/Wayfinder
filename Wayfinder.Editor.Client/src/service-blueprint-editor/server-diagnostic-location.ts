@@ -81,9 +81,7 @@ function issueCodeFor(diagnostic: ServiceBlueprintDiagnostic): ServiceBlueprintV
  * non-blocking (they mean "couldn't verify statically", exactly as in the C# validator);
  * everything else blocks Save.
  */
-export function mapServerDiagnosticsToIssues(
-  outcome: ServiceBlueprintValidationOutcome
-): ServiceBlueprintValidationIssue[] {
+export function mapServerDiagnosticsToIssues(outcome: ServiceBlueprintValidationOutcome): ServiceBlueprintValidationIssue[] {
   return (outcome.diagnostics ?? []).map((diagnostic, index) => {
     const severity = normaliseServerSeverity(diagnostic.severity);
     return {

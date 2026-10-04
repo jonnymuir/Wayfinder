@@ -2,14 +2,14 @@
 // MockBusinessApp seed service blueprints (payment-demo.json, money-modeller.json — the two
 // with real Split/Join gateway topology worth checking). Uses Vite in SSR mode so the
 // editor's .js-specifier TS imports resolve without a bundling step.
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { createServer } from 'vite';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const seedDir = join(here, '..', 'src', 'service-blueprint-editor', 'fixtures');
-const seed = name => JSON.parse(readFileSync(join(seedDir, name), 'utf8'));
+const seed = (name) => JSON.parse(readFileSync(join(seedDir, name), 'utf8'));
 
 const server = await createServer({
   configFile: false,

@@ -45,11 +45,7 @@ export type GraphCallbacks = {
   requestDeleteStage(stageKey: string, returnTarget?: HTMLElement): void;
   requestDeleteGateway(gatewayKey: string, returnTarget?: HTMLElement): void;
   requestDeleteTransition(transitionIndex: number): void;
-  openContextMenu(
-    position: { clientX: number; clientY: number },
-    target: GraphContextMenuTarget,
-    returnTarget?: HTMLElement
-  ): void;
+  openContextMenu(position: { clientX: number; clientY: number }, target: GraphContextMenuTarget, returnTarget?: HTMLElement): void;
   paneClicked(): void;
   /** One drag gesture ended — commit all moved nodes as a single undoable update. */
   nodesMoved(moves: GraphNodeMove[]): void;

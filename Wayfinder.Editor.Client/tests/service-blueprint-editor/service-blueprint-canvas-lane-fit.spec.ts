@@ -1,10 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  CANONICAL_SCENARIOS,
-  gotoCanonicalScenario,
-  measureGraph,
-  VISUAL_VIEWPORT,
-} from './support/canvas-helpers';
+import { CANONICAL_SCENARIOS, gotoCanonicalScenario, measureGraph, VISUAL_VIEWPORT } from './support/canvas-helpers';
 
 /**
  * Concern 1 from `docs/testing/service-blueprint-editor-visual-tests.md`:
@@ -40,16 +35,15 @@ test.describe('ServiceBlueprint canvas — lane fit invariant', () => {
 
         expect(
           node.left,
-          `${node.kind} "${node.label || node.key}" left edge (${node.left}) must stay inside lane "${lane.key}" (${lane.left}..${lane.right})`,
+          `${node.kind} "${node.label || node.key}" left edge (${node.left}) must stay inside lane "${lane.key}" (${lane.left}..${lane.right})`
         ).toBeGreaterThanOrEqual(lane.left - LANE_TOLERANCE_PX);
         expect(
           node.right,
-          `${node.kind} "${node.label || node.key}" right edge (${node.right}) must stay inside lane "${lane.key}" (${lane.left}..${lane.right})`,
+          `${node.kind} "${node.label || node.key}" right edge (${node.right}) must stay inside lane "${lane.key}" (${lane.left}..${lane.right})`
         ).toBeLessThanOrEqual(lane.right + LANE_TOLERANCE_PX);
-        expect(
-          node.top,
-          `${node.kind} "${node.label || node.key}" top edge must stay below lane top`,
-        ).toBeGreaterThanOrEqual(lane.top - LANE_TOLERANCE_PX);
+        expect(node.top, `${node.kind} "${node.label || node.key}" top edge must stay below lane top`).toBeGreaterThanOrEqual(
+          lane.top - LANE_TOLERANCE_PX
+        );
       }
     });
   }

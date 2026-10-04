@@ -45,11 +45,11 @@ function useControlledNodes(model: GraphModel) {
   useEffect(() => {
     // Carry the RF-level multi-selection across reseeds so a host re-render
     // doesn't dissolve an in-progress marquee selection.
-    setNodes(current => {
-      const selectedIds = new Set(current.filter(node => node.selected).map(node => node.id));
+    setNodes((current) => {
+      const selectedIds = new Set(current.filter((node) => node.selected).map((node) => node.id));
       return selectedIds.size === 0
         ? model.nodes
-        : model.nodes.map(node => selectedIds.has(node.id) ? { ...node, selected: true } : node);
+        : model.nodes.map((node) => (selectedIds.has(node.id) ? { ...node, selected: true } : node));
     });
   }, [model]);
   const onNodesChange = useCallback((changes: NodeChange<GraphFlowNode>[]) => {
@@ -61,13 +61,11 @@ function useControlledNodes(model: GraphModel) {
     // undefined, silently discarding its handle bounds and breaking
     // connected edges part-way through a drag. Everything else is derived
     // from the document.
-    const localChanges = changes.filter(change =>
-      change.type === 'position' || change.type === 'select' || change.type === 'dimensions'
-    );
+    const localChanges = changes.filter((change) => change.type === 'position' || change.type === 'select' || change.type === 'dimensions');
     if (localChanges.length === 0) {
       return;
     }
-    setNodes(current => applyNodeChanges(localChanges, current) as GraphFlowNode[]);
+    setNodes((current) => applyNodeChanges(localChanges, current) as GraphFlowNode[]);
   }, []);
   return { nodes, onNodesChange };
 }
@@ -89,21 +87,26 @@ function ServiceBlueprintGraphCanvas({ bridge, props }: { bridge: GraphBridge; p
   // React Flow resolves drop targets with document.elementFromPoint, which
   // cannot see into the shadow root — so connection drops are hit-tested
   // against the node rects in flow coordinates instead.
-  const nodeIdAtScreenPoint = useCallback((clientX: number, clientY: number): string | null => {
-    const point = screenToFlowPosition({ x: clientX, y: clientY });
-    const hit = nodes.find(candidate =>
-      point.x >= candidate.position.x
-      && point.x <= candidate.position.x + (candidate.width ?? 0)
-      && point.y >= candidate.position.y
-      && point.y <= candidate.position.y + (candidate.height ?? 0));
-    return hit?.id ?? null;
-  }, [nodes, screenToFlowPosition]);
+  const nodeIdAtScreenPoint = useCallback(
+    (clientX: number, clientY: number): string | null => {
+      const point = screenToFlowPosition({ x: clientX, y: clientY });
+      const hit = nodes.find(
+        (candidate) =>
+          point.x >= candidate.position.x &&
+          point.x <= candidate.position.x + (candidate.width ?? 0) &&
+          point.y >= candidate.position.y &&
+          point.y <= candidate.position.y + (candidate.height ?? 0)
+      );
+      return hit?.id ?? null;
+    },
+    [nodes, screenToFlowPosition]
+  );
 
   const handleNodeDragStop = useCallback(
     (_event: unknown, node: GraphFlowNode, draggedNodes: GraphFlowNode[]) => {
       // React Flow only fills the third argument for selection drags.
       const dragged = draggedNodes.length > 0 ? draggedNodes : [node];
-      const moves: GraphNodeMove[] = dragged.map(dragged => {
+      const moves: GraphNodeMove[] = dragged.map((dragged) => {
         const width = dragged.width ?? 0;
         const currentQueue = dragged.data.node.queueKey;
         const lane = laneForPosition(model.lanes, dragged.position.x + width / 2);
@@ -136,8 +139,8 @@ function ServiceBlueprintGraphCanvas({ bridge, props }: { bridge: GraphBridge; p
       onNodeDragStop={handleNodeDragStop}
       nodesConnectable={!props.readOnly}
       autoPanOnConnect={false}
-      isValidConnection={connection => connection.source !== connection.target}
-      onConnect={connection => {
+      isValidConnection={(connection) => connection.source !== connection.target}
+      onConnect={(connection) => {
         if (connection.source && connection.target) {
           callbacks.connectRequested({ sourceId: connection.source, targetId: connection.target });
         }
@@ -173,42 +176,40 @@ function ServiceBlueprintGraphCanvas({ bridge, props }: { bridge: GraphBridge; p
       zoomOnScroll
       zoomOnPinch
       zoomOnDoubleClick={false}
-      onInit={instance => {
+      onInit={(instance) => {
         bridge.setFlowInstance(instance);
         // Readiness for test probes: nodes/edges are committed to the DOM two
         // frames after the viewport initialises.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (readyFired.current) {
-            return;
-          }
-          readyFired.current = true;
-          // A diagram too big to fit should be visible in full the moment the canvas first
-          // opens, at a small enough zoom to see its whole shape, rather than always starting
-          // at a fixed 100% viewport that may only show a corner of it — but one that already
-          // fits at 100% should stay there, not be zoomed in to fill the fitView padding
-          // target (see GraphBridge.fitViewOnLoad's comment). Its promise is awaited before
-          // firing `ready` since the viewport transform still settles on a later frame even
-          // with no explicit duration — anything that starts interacting (a drag, a
-          // coordinate-based test) the instant `ready` fires otherwise races that settle.
-          void bridge.fitViewOnLoad().then(() => {
-            callbacks.zoomChanged(instance.getZoom());
-            callbacks.ready();
-          });
-        }));
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (readyFired.current) {
+              return;
+            }
+            readyFired.current = true;
+            // A diagram too big to fit should be visible in full the moment the canvas first
+            // opens, at a small enough zoom to see its whole shape, rather than always starting
+            // at a fixed 100% viewport that may only show a corner of it — but one that already
+            // fits at 100% should stay there, not be zoomed in to fill the fitView padding
+            // target (see GraphBridge.fitViewOnLoad's comment). Its promise is awaited before
+            // firing `ready` since the viewport transform still settles on a later frame even
+            // with no explicit duration — anything that starts interacting (a drag, a
+            // coordinate-based test) the instant `ready` fires otherwise races that settle.
+            void bridge.fitViewOnLoad().then(() => {
+              callbacks.zoomChanged(instance.getZoom());
+              callbacks.ready();
+            });
+          })
+        );
       }}
       onMove={(_event, viewport) => callbacks.zoomChanged(viewport.zoom)}
       onPaneClick={() => callbacks.paneClicked()}
-      onSelectionChange={({ nodes: selectedNodes }) =>
-        callbacks.multiSelectionChanged(selectedNodes.map(selected => selected.id))}
-      onPaneContextMenu={event => {
+      onSelectionChange={({ nodes: selectedNodes }) => callbacks.multiSelectionChanged(selectedNodes.map((selected) => selected.id))}
+      onPaneContextMenu={(event) => {
         if (props.readOnly) {
           return;
         }
         event.preventDefault();
-        callbacks.openContextMenu(
-          { clientX: event.clientX, clientY: event.clientY },
-          { kind: 'canvas' }
-        );
+        callbacks.openContextMenu({ clientX: event.clientX, clientY: event.clientY }, { kind: 'canvas' });
       }}
     >
       <Background variant={BackgroundVariant.Dots} gap={20} size={1.4} color="#cbd5e1" />
@@ -218,7 +219,7 @@ function ServiceBlueprintGraphCanvas({ bridge, props }: { bridge: GraphBridge; p
         zoomable
         ariaLabel="ServiceBlueprint overview map"
         className="graph-minimap"
-        nodeColor={node => (node.type === 'gateway' ? '#c4b5fd' : '#93c5fd')}
+        nodeColor={(node) => (node.type === 'gateway' ? '#c4b5fd' : '#93c5fd')}
         nodeStrokeColor="#475569"
       />
     </ReactFlow>

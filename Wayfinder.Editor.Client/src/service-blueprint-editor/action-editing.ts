@@ -36,7 +36,6 @@ export function contextLabel(context: ActionEditorContext): string {
       return 'Stage · On exit';
     case 'transition':
       return 'Transition';
-    case 'stage.onEntry':
     default:
       return 'Stage · On entry';
   }
@@ -48,7 +47,6 @@ export function timingForContext(context: ActionEditorContext): ActionTiming {
       return 'onExit';
     case 'transition':
       return 'onTransition';
-    case 'stage.onEntry':
     default:
       return 'onEnter';
   }
@@ -67,12 +65,13 @@ export function entrySupportsContext(entry: ActionCatalogEntry, context: ActionE
 }
 
 export function availableContexts(entry: ActionCatalogEntry, target: ActionEditorTarget): ActionEditorContext[] {
-  return ACTION_CONTEXTS.filter(context => (target === 'stage' ? context !== 'transition' : context === 'transition'))
-    .filter(context => entrySupportsContext(entry, context));
+  return ACTION_CONTEXTS.filter((context) => (target === 'stage' ? context !== 'transition' : context === 'transition')).filter((context) =>
+    entrySupportsContext(entry, context)
+  );
 }
 
 export function findCatalogEntry(entries: ActionCatalogEntry[], actionType: string): ActionCatalogEntry | null {
-  return entries.find(entry => entry.type === actionType) ?? null;
+  return entries.find((entry) => entry.type === actionType) ?? null;
 }
 
 function propertyDefault(definition: AuthoredParameterDefinition): unknown {
@@ -84,16 +83,14 @@ function propertyDefault(definition: AuthoredParameterDefinition): unknown {
   if (definition.valueKind === 'Integer' || definition.valueKind === 'Number') return '';
   if (definition.valueKind === 'Array') return [];
   if (definition.valueKind === 'Object') {
-    return Object.fromEntries(
-      (definition.properties ?? []).map(property => [property.key, propertyDefault(property)])
-    );
+    return Object.fromEntries((definition.properties ?? []).map((property) => [property.key, propertyDefault(property)]));
   }
   return '';
 }
 
 export function buildActionParams(entry: ActionCatalogEntry): Record<string, unknown> {
   const schemaDefaults = Object.fromEntries(
-    (entry.paramsSchema.properties ?? []).map(property => [property.key, propertyDefault(property)])
+    (entry.paramsSchema.properties ?? []).map((property) => [property.key, propertyDefault(property)])
   );
 
   return {
@@ -103,7 +100,7 @@ export function buildActionParams(entry: ActionCatalogEntry): Record<string, unk
 }
 
 export function isFormsBackedAction(entry: ActionCatalogEntry | null): boolean {
-  const fieldsDefinition = entry?.paramsSchema.properties?.find(property => property.key === 'fields');
+  const fieldsDefinition = entry?.paramsSchema.properties?.find((property) => property.key === 'fields');
   return fieldsDefinition?.valueKind === 'Array' && fieldsDefinition.items?.valueKind === 'Object';
 }
 
@@ -113,26 +110,28 @@ export function normaliseActionFormFields(value: unknown): ActionFormFieldConfig
   }
 
   return value.map((field, index) => {
-    const record = typeof field === 'object' && field !== null ? field as Record<string, unknown> : {};
+    const record = typeof field === 'object' && field !== null ? (field as Record<string, unknown>) : {};
     const type = String(record.type ?? 'text') as ActionFormFieldType;
     return {
       fieldKey: String(record.fieldKey ?? `field-${index + 1}`),
       label: String(record.label ?? ''),
-      type: ACTION_FORM_FIELD_TYPES.some(option => option.value === type) ? type : 'text',
+      type: ACTION_FORM_FIELD_TYPES.some((option) => option.value === type) ? type : 'text',
       required: Boolean(record.required),
       hintText: typeof record.hintText === 'string' ? record.hintText : undefined,
       validationPattern: typeof record.validationPattern === 'string' ? record.validationPattern : undefined,
       defaultValue: typeof record.defaultValue === 'string' ? record.defaultValue : undefined,
-      options: Array.isArray(record.options) ? record.options.map(option => String(option)) : [],
+      options: Array.isArray(record.options) ? record.options.map((option) => String(option)) : [],
     };
   });
 }
 
 function isMissingValue(value: unknown): boolean {
-  return value === undefined
-    || value === null
-    || (typeof value === 'string' && value.trim().length === 0)
-    || (Array.isArray(value) && value.length === 0);
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === 'string' && value.trim().length === 0) ||
+    (Array.isArray(value) && value.length === 0)
+  );
 }
 
 function validateProperty(definition: AuthoredParameterDefinition, value: unknown): string | null {
@@ -181,11 +180,11 @@ function validateFormFields(fields: ActionFormFieldConfig[]): ActionValidationRe
       nextErrors.label = 'Field label is required.';
     }
 
-    if (!ACTION_FORM_FIELD_TYPES.some(option => option.value === field.type)) {
+    if (!ACTION_FORM_FIELD_TYPES.some((option) => option.value === field.type)) {
       nextErrors.type = 'Choose a supported field type.';
     }
 
-    if ((field.type === 'select' || field.type === 'radio') && field.options.filter(option => option.trim()).length === 0) {
+    if ((field.type === 'select' || field.type === 'radio') && field.options.filter((option) => option.trim()).length === 0) {
       nextErrors.options = 'Add at least one option for select or radio fields.';
     }
 
@@ -225,13 +224,13 @@ export function validateAction(entry: ActionCatalogEntry | null, action: ActionD
     }
   }
 
-  const formFieldErrors = isFormsBackedAction(entry)
-    ? validateFormFields(normaliseActionFormFields(params.fields))
-    : {};
+  const formFieldErrors = isFormsBackedAction(entry) ? validateFormFields(normaliseActionFormFields(params.fields)) : {};
 
-  Object.values(propertyErrors).forEach(message => messages.push(message));
-  Object.values(formFieldErrors).forEach(fieldErrors => {
-    Object.values(fieldErrors).forEach(message => {
+  for (const message of Object.values(propertyErrors)) {
+    messages.push(message);
+  }
+  Object.values(formFieldErrors).forEach((fieldErrors) => {
+    Object.values(fieldErrors).forEach((message) => {
       if (message) {
         messages.push(message);
       }
@@ -263,9 +262,7 @@ export function summariseAction(entry: ActionCatalogEntry | null, action: Action
     case 'case.set-status':
       return typeof params.status === 'string' && params.status.trim() ? `Set case status to ${params.status}` : 'Set case status';
     case 'case.add-note':
-      return typeof params.visibility === 'string' && params.visibility.trim()
-        ? `Add ${params.visibility} note`
-        : 'Add case note';
+      return typeof params.visibility === 'string' && params.visibility.trim() ? `Add ${params.visibility} note` : 'Add case note';
     case 'notifications.send-email':
       return typeof params.recipientEmail === 'string' && params.recipientEmail.trim()
         ? `Send email to ${params.recipientEmail}`

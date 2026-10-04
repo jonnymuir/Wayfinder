@@ -12,13 +12,7 @@ export type NodeIconDef = { viewBox: string; paths: string[] };
 export const NODE_ICONS: Record<string, NodeIconDef> = {
   form: {
     viewBox: '0 0 24 24',
-    paths: [
-      'M6 3.5h9l3 3V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z',
-      'M14.5 3.5V7h3.5',
-      'M8 12h8',
-      'M8 15.5h8',
-      'M8 9h4',
-    ],
+    paths: ['M6 3.5h9l3 3V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z', 'M14.5 3.5V7h3.5', 'M8 12h8', 'M8 15.5h8', 'M8 9h4'],
   },
   checklist: {
     viewBox: '0 0 24 24',
@@ -32,53 +26,27 @@ export const NODE_ICONS: Record<string, NodeIconDef> = {
   },
   flagCheck: {
     viewBox: '0 0 24 24',
-    paths: [
-      'M6 3v18',
-      'M6 4h11l-2.5 3.5L17 11H6',
-    ],
+    paths: ['M6 3v18', 'M6 4h11l-2.5 3.5L17 11H6'],
   },
   list: {
     viewBox: '0 0 24 24',
-    paths: [
-      'M8.5 6h10',
-      'M8.5 12h10',
-      'M8.5 18h10',
-      'M5 6h.01',
-      'M5 12h.01',
-      'M5 18h.01',
-    ],
+    paths: ['M8.5 6h10', 'M8.5 12h10', 'M8.5 18h10', 'M5 6h.01', 'M5 12h.01', 'M5 18h.01'],
   },
   split: {
     viewBox: '0 0 24 24',
-    paths: [
-      'M6 4v6',
-      'M6 10c0 3 2 3.5 4.5 3.5H15',
-      'M6 10c0 3-2 3.5-4.5 3.5',
-      'M13.5 11 17 13.5l-3.5 2.5v-5Z',
-    ],
+    paths: ['M6 4v6', 'M6 10c0 3 2 3.5 4.5 3.5H15', 'M6 10c0 3-2 3.5-4.5 3.5', 'M13.5 11 17 13.5l-3.5 2.5v-5Z'],
   },
   join: {
     viewBox: '0 0 24 24',
-    paths: [
-      'M18 4v6',
-      'M18 10c0 3-2 3.5-4.5 3.5H9',
-      'M18 10c0-3 2-3.5 4.5-3.5',
-      'M10.5 11 7 13.5l3.5 2.5v-5Z',
-    ],
+    paths: ['M18 4v6', 'M18 10c0 3-2 3.5-4.5 3.5H9', 'M18 10c0-3 2-3.5 4.5-3.5', 'M10.5 11 7 13.5l3.5 2.5v-5Z'],
   },
   mail: {
     viewBox: '0 0 24 24',
-    paths: [
-      'M4.5 5.5h15a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z',
-      'M4 6.5l8 6.5 8-6.5',
-    ],
+    paths: ['M4.5 5.5h15a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z', 'M4 6.5l8 6.5 8-6.5'],
   },
   flag: {
     viewBox: '0 0 24 24',
-    paths: [
-      'M6 3v18',
-      'M6 4.5h12l-3 4 3 4H6',
-    ],
+    paths: ['M6 3v18', 'M6 4.5h12l-3 4 3 4H6'],
   },
 };
 

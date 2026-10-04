@@ -13,7 +13,11 @@ export class WayfinderInlineHelpElement extends LitElement {
   message = '';
 
   private get _tooltipId() {
-    const token = this.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'help';
+    const token =
+      this.label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'help';
     return `inline-help-${token}`;
   }
 

@@ -45,20 +45,20 @@ test.describe('Outline + gateway-first inspector accessibility', () => {
 
     // The polite live region announced the change (Tangy IMPROVE #4: change to
     // a join gateway on a stage's outgoing route must announce).
-    const announcement = await inspector.evaluate(node => {
+    const announcement = await inspector.evaluate((node) => {
       const announcer = (node as HTMLElement).shadowRoot?.getElementById('inspector-announcer');
       return announcer?.textContent?.trim() ?? '';
     });
     expect(announcement).toBe('Route now arrives directly at the target stage.');
 
     // The service blueprint model lost the join target for that route.
-    const remainingJoinCount = await inspector.evaluate(node => {
+    const remainingJoinCount = await inspector.evaluate((node) => {
       const el = node as unknown as {
         serviceBlueprint: { gateways?: Array<{ routes?: Array<{ target?: string }> }> } | null;
       };
       let count = 0;
-      for (const gw of (el.serviceBlueprint?.gateways ?? [])) {
-        for (const route of (gw.routes ?? [])) {
+      for (const gw of el.serviceBlueprint?.gateways ?? []) {
+        for (const route of gw.routes ?? []) {
           if (route.target === 'decision-join') count++;
         }
       }
@@ -78,11 +78,13 @@ test.describe('Outline + gateway-first inspector accessibility', () => {
 
     // Grab the visible/accessible text rendered for the Draft stage's
     // outgoing transition rows (these were the rows that leaked raw keys).
-    const transitionText = await outline.evaluate(node => {
+    const transitionText = await outline.evaluate((node) => {
       const root = (node as HTMLElement).shadowRoot;
       const stageItem = root?.querySelector('[data-wayfinder-outline-stage="draft"]')?.closest('.outline-stage-item');
       const targets = stageItem?.querySelectorAll('.outline-transition-target') ?? [];
-      return Array.from(targets).map(el => el.textContent?.replace(/\s+/g, ' ').trim() ?? '').join(' | ');
+      return Array.from(targets)
+        .map((el) => el.textContent?.replace(/\s+/g, ' ').trim() ?? '')
+        .join(' | ');
     });
 
     // The Draft stage fans through the "Review split" gateway — display name,

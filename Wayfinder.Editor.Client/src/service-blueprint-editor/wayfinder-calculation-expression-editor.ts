@@ -79,14 +79,12 @@ export class WayfinderCalculationExpressionEditorElement extends LitElement {
         readOnly: this.readOnly,
         ariaLabel: this.ariaLabelText,
         getCompletionItems: () => this.completions,
-        onChange: next => {
+        onChange: (next) => {
           if (this._suppressInputEvent) {
             return;
           }
           this.value = next;
-          this.dispatchEvent(
-            new CustomEvent('expression-input', { detail: { value: next }, bubbles: true, composed: true })
-          );
+          this.dispatchEvent(new CustomEvent('expression-input', { detail: { value: next }, bubbles: true, composed: true }));
         },
       });
     } catch (err) {
@@ -120,11 +118,13 @@ export class WayfinderCalculationExpressionEditorElement extends LitElement {
   render() {
     return html`
       <div class="expression-host" data-wayfinder-calculation-expression-host></div>
-      ${this._loadError
-        ? html`<p class="load-error" role="alert">Couldn't load the expression editor: ${this._loadError}</p>`
-        : !this._ready
-          ? html`<p class="loading" role="status">Loading…</p>`
-          : html`<p class="hint">Start typing, or press Ctrl+Space, for fields, functions, and keywords.</p>`}
+      ${
+        this._loadError
+          ? html`<p class="load-error" role="alert">Couldn't load the expression editor: ${this._loadError}</p>`
+          : !this._ready
+            ? html`<p class="loading" role="status">Loading…</p>`
+            : html`<p class="hint">Start typing, or press Ctrl+Space, for fields, functions, and keywords.</p>`
+      }
     `;
   }
 

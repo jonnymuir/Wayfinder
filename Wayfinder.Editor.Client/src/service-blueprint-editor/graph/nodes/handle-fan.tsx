@@ -19,18 +19,10 @@ function styleForSlot(slot: HandleSlot): CSSProperties {
   return slot.side === 'left' || slot.side === 'right' ? { top: percent } : { left: percent };
 }
 
-export function HandleFan({
-  handles,
-  type,
-  readOnly,
-}: {
-  handles: HandleSlot[];
-  type: 'source' | 'target';
-  readOnly: boolean;
-}) {
+export function HandleFan({ handles, type, readOnly }: { handles: HandleSlot[]; type: 'source' | 'target'; readOnly: boolean }) {
   return (
     <>
-      {handles.map(slot => (
+      {handles.map((slot) => (
         <Handle
           key={slot.id}
           type={type}

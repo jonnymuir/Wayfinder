@@ -132,7 +132,7 @@ export class WayfinderDefinitionEditorElement extends LitElement {
       return;
     }
     const doc = this._view.state.doc;
-    const cmDiagnostics: Diagnostic[] = this.diagnostics.map(diag => {
+    const cmDiagnostics: Diagnostic[] = this.diagnostics.map((diag) => {
       const safeLine = Math.min(Math.max(diag.line, 1), doc.lines);
       const lineInfo = doc.line(safeLine);
       return {
@@ -151,15 +151,17 @@ export class WayfinderDefinitionEditorElement extends LitElement {
         class="editor-host"
         data-wayfinder-definition-editor-host
       ></div>
-      ${this._loadError
-        ? html`<p class="load-error" role="alert" data-wayfinder-definition-load-error>
+      ${
+        this._loadError
+          ? html`<p class="load-error" role="alert" data-wayfinder-definition-load-error>
             Couldn't load the JSON editor: ${this._loadError}
           </p>`
-        : !this._ready
-          ? html`<p class="loading" role="status" data-wayfinder-definition-loading>
+          : !this._ready
+            ? html`<p class="loading" role="status" data-wayfinder-definition-loading>
               Loading the JSON editor…
             </p>`
-          : ''}
+            : ''
+      }
     `;
   }
 

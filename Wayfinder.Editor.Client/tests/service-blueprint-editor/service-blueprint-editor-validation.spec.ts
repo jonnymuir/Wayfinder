@@ -10,15 +10,15 @@ function storyUrl(storyId: string): string {
 type SaveAttempt =
   | { kind: 'success' }
   | {
-    kind: 'error';
-    error: {
-      title: string;
-      summary: string;
-      detailLines: string[];
-      traceId: string;
-      message: string;
+      kind: 'error';
+      error: {
+        title: string;
+        summary: string;
+        detailLines: string[];
+        traceId: string;
+        message: string;
+      };
     };
-  };
 
 const structuredSaveFailure = {
   title: 'We couldn’t save this service blueprint',
@@ -90,7 +90,7 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await page.locator('[data-wayfinder-stage="declaration"]').dblclick();
     const actionInput = page.locator('[data-wayfinder-action-param="0-formDefinitionId"]');
     await expect(actionInput).toHaveValue('planning-declaration');
-    await actionInput.evaluate(element => {
+    await actionInput.evaluate((element) => {
       const input = element as HTMLInputElement;
       input.value = '';
       input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
@@ -105,12 +105,12 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await page.locator('[data-wayfinder-add-stage]').click();
     const createStageDialog = page.locator('[data-wayfinder-create-stage-dialog]');
     await expect(createStageDialog).toBeVisible();
-    await createStageDialog.locator('[data-wayfinder-create-stage-title]').evaluate(element => {
+    await createStageDialog.locator('[data-wayfinder-create-stage-title]').evaluate((element) => {
       const input = element as HTMLInputElement;
       input.value = 'Site visit';
       input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     });
-    await createStageDialog.locator('[data-wayfinder-create-stage-key]').evaluate(element => {
+    await createStageDialog.locator('[data-wayfinder-create-stage-key]').evaluate((element) => {
       const input = element as HTMLInputElement;
       input.value = 'site-visit';
       input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
@@ -124,7 +124,7 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await expect(page.locator('[data-wayfinder-save]')).toBeDisabled();
     await expect(page.locator('[data-wayfinder-canvas-health-hint]')).toContainText('Open Validation');
 
-    const canvasWarnings = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+    const canvasWarnings = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
       const graph = graphElement as HTMLElement;
       const shadowRoot = graph.shadowRoot;
       if (!shadowRoot) {
@@ -133,7 +133,7 @@ test.describe('ServiceBlueprint editor validation rail', () => {
 
       return {
         title: shadowRoot.querySelector('.validation-banner-title')?.textContent?.trim() ?? '',
-        issues: Array.from(shadowRoot.querySelectorAll('.validation-link')).map(issue => issue.textContent?.trim() ?? ''),
+        issues: Array.from(shadowRoot.querySelectorAll('.validation-link')).map((issue) => issue.textContent?.trim() ?? ''),
       };
     });
 
@@ -161,7 +161,7 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await page.locator('[data-wayfinder-stage="declaration"]').dblclick();
     const actionInput = page.locator('[data-wayfinder-action-param="0-formDefinitionId"]');
     await expect(actionInput).toHaveValue('planning-declaration');
-    await actionInput.evaluate(element => {
+    await actionInput.evaluate((element) => {
       const input = element as HTMLInputElement;
       input.value = '';
       input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
@@ -175,12 +175,12 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await page.locator('[data-wayfinder-add-stage]').click();
     const createStageDialog = page.locator('[data-wayfinder-create-stage-dialog]');
     await expect(createStageDialog).toBeVisible();
-    await createStageDialog.locator('[data-wayfinder-create-stage-title]').evaluate(element => {
+    await createStageDialog.locator('[data-wayfinder-create-stage-title]').evaluate((element) => {
       const input = element as HTMLInputElement;
       input.value = 'Site visit';
       input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     });
-    await createStageDialog.locator('[data-wayfinder-create-stage-key]').evaluate(element => {
+    await createStageDialog.locator('[data-wayfinder-create-stage-key]').evaluate((element) => {
       const input = element as HTMLInputElement;
       input.value = 'site-visit';
       input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
@@ -235,9 +235,7 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await expect(saveError).toContainText(`Reference: ${structuredSaveFailure.traceId}`);
     await expect(saveError).not.toContainText('InvalidOperationException');
     await expect(saveError).not.toContainText('SaveServiceBlueprint()');
-    await expect(page.locator('[data-wayfinder-save-status]')).toContainText(
-      structuredSaveFailure.summary
-    );
+    await expect(page.locator('[data-wayfinder-save-status]')).toContainText(structuredSaveFailure.summary);
     await captureDocScreenshot(saveError, `${DOCS_DIR}/save-error-panel.png`);
   });
 
@@ -268,8 +266,8 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await page.locator('[data-wayfinder-copy-save-error]').click();
     await expect(page.locator('[data-wayfinder-save-error-copy-status]')).toContainText('Save error details copied.');
 
-    const copiedError = await page.evaluate(() =>
-      (window as typeof window & { __wayfinderCopiedSaveError: string }).__wayfinderCopiedSaveError
+    const copiedError = await page.evaluate(
+      () => (window as typeof window & { __wayfinderCopiedSaveError: string }).__wayfinderCopiedSaveError
     );
     expect(copiedError).toContain(structuredSaveFailure.title);
     expect(copiedError).toContain('ServiceBlueprint key did not match the route.');
@@ -283,10 +281,7 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
 
     await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
-    await configureSaveAttempts(page, [
-      { kind: 'error', error: structuredSaveFailure },
-      { kind: 'success' },
-    ]);
+    await configureSaveAttempts(page, [{ kind: 'error', error: structuredSaveFailure }, { kind: 'success' }]);
 
     await page.locator('[data-wayfinder-save]').click();
     await expect(page.locator('[data-wayfinder-save-error]')).toBeVisible();
@@ -369,7 +364,12 @@ test.describe('ServiceBlueprint editor validation rail', () => {
         isValid: false,
         diagnostics: [
           { code: 'CALC_FIELD_ERROR', path: 'calculations.fields.total', message: 'SERVER SAYS: total is broken', severity: 'Error' },
-          { code: 'CALC_SERVICE_FIELD_UNVERIFIED', path: 'calculations.fields.member', message: 'SERVER SAYS: member is unverified', severity: 'Warning' },
+          {
+            code: 'CALC_SERVICE_FIELD_UNVERIFIED',
+            path: 'calculations.fields.member',
+            message: 'SERVER SAYS: member is unverified',
+            severity: 'Warning',
+          },
         ],
       };
       editor.serviceBlueprintSource = {
@@ -381,9 +381,9 @@ test.describe('ServiceBlueprint editor validation rail', () => {
       };
     });
 
-    await page.locator('wayfinder-service-blueprint-editor').evaluate((node) =>
-      (node as HTMLElement & { flushValidationPending: () => Promise<void> }).flushValidationPending()
-    );
+    await page
+      .locator('wayfinder-service-blueprint-editor')
+      .evaluate((node) => (node as HTMLElement & { flushValidationPending: () => Promise<void> }).flushValidationPending());
 
     await page.getByRole('tab', { name: 'Validation' }).click();
     const rail = page.locator('[data-wayfinder-validation-rail]');
@@ -398,9 +398,9 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     await page.evaluate(() => {
       (window as unknown as { __wayfinderServerOutcome: unknown }).__wayfinderServerOutcome = { isValid: true, diagnostics: [] };
     });
-    await page.locator('wayfinder-service-blueprint-editor').evaluate((node) =>
-      (node as HTMLElement & { flushValidationPending: () => Promise<void> }).flushValidationPending()
-    );
+    await page
+      .locator('wayfinder-service-blueprint-editor')
+      .evaluate((node) => (node as HTMLElement & { flushValidationPending: () => Promise<void> }).flushValidationPending());
 
     await expect(rail).not.toContainText('SERVER SAYS');
     await expect(page.locator('[data-wayfinder-save]')).toBeEnabled();

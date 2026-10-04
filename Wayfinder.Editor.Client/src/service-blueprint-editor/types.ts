@@ -96,9 +96,7 @@ export function serviceBlueprintGateways(
   return serviceBlueprint?.gateways ?? [];
 }
 
-export function serviceBlueprintQueues(
-  serviceBlueprint: Pick<ServiceBlueprint, 'queues'> | null | undefined
-): QueueDefinition[] {
+export function serviceBlueprintQueues(serviceBlueprint: Pick<ServiceBlueprint, 'queues'> | null | undefined): QueueDefinition[] {
   return serviceBlueprint?.queues ?? [];
 }
 

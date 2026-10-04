@@ -75,8 +75,16 @@ const FUNCTION_COMPLETIONS: Completion[] = [
   snippetCompletion('floor(${x})', { label: 'floor', type: 'function', detail: 'round toward negative infinity' }),
   snippetCompletion('round(${x})', { label: 'round', type: 'function', detail: 'round(x) or round(x, places) — away from zero' }),
   snippetCompletion('pow(${x}, ${y})', { label: 'pow', type: 'function', detail: 'x raised to the power y' }),
-  snippetCompletion('lookup(${tableName}, ${key})', { label: 'lookup', type: 'function', detail: 'table lookup — tableName is a bare name' }),
-  snippetCompletion('matches(${text}, ${pattern})', { label: 'matches', type: 'function', detail: 'regex predicate — true if pattern matches text' }),
+  snippetCompletion('lookup(${tableName}, ${key})', {
+    label: 'lookup',
+    type: 'function',
+    detail: 'table lookup — tableName is a bare name',
+  }),
+  snippetCompletion('matches(${text}, ${pattern})', {
+    label: 'matches',
+    type: 'function',
+    detail: 'regex predicate — true if pattern matches text',
+  }),
 ];
 
 const LANGUAGE_COMPLETIONS: Completion[] = [...KEYWORD_COMPLETIONS, ...FUNCTION_COMPLETIONS];
@@ -129,7 +137,7 @@ const calcStreamParser: StreamParser<CalcTokenizerState> = {
 
 const calcLanguage = StreamLanguage.define(calcStreamParser);
 
-const calcLinter = linter(view => {
+const calcLinter = linter((view) => {
   const text = view.state.doc.toString();
   if (!text.trim()) {
     return [];
@@ -147,9 +155,7 @@ const calcLinter = linter(view => {
 });
 
 /** A single Enter/newline-producing keybinding stripped so the editor stays genuinely single-line. */
-const singleLineFilter = EditorState.transactionFilter.of(tr =>
-  tr.newDoc.lines > 1 ? [] : tr
-);
+const singleLineFilter = EditorState.transactionFilter.of((tr) => (tr.newDoc.lines > 1 ? [] : tr));
 
 /**
  * Reads the live item list via a getter (not a captured array) so completions stay correct as
@@ -175,7 +181,7 @@ function referenceCompletionSource(getItems: () => ExpressionCompletionItem[]) {
       return null;
     }
 
-    const fieldOptions: Completion[] = getItems().map(item => ({
+    const fieldOptions: Completion[] = getItems().map((item) => ({
       label: item.name,
       detail: item.detail,
       type: 'variable',
@@ -183,7 +189,7 @@ function referenceCompletionSource(getItems: () => ExpressionCompletionItem[]) {
 
     const query = word.text.toLowerCase();
     const options = [...fieldOptions, ...LANGUAGE_COMPLETIONS].filter(
-      option => option.label.toLowerCase().includes(query) || (option.detail ?? '').toLowerCase().includes(query)
+      (option) => option.label.toLowerCase().includes(query) || (option.detail ?? '').toLowerCase().includes(query)
     );
     if (options.length === 0) {
       return null;
@@ -211,7 +217,7 @@ export function createExpressionView({
   ariaLabel,
   getCompletionItems,
 }: CreateExpressionViewOptions): EditorView {
-  const updateListener = EditorView.updateListener.of(update => {
+  const updateListener = EditorView.updateListener.of((update) => {
     if (update.docChanged) {
       onChange(update.state.doc.toString());
     }
@@ -231,7 +237,7 @@ export function createExpressionView({
       EditorView.contentAttributes.of({
         'aria-label': ariaLabel,
         'data-wayfinder-calculation-expression-input': 'true',
-        'spellcheck': 'false',
+        spellcheck: 'false',
       }),
       updateListener,
     ],

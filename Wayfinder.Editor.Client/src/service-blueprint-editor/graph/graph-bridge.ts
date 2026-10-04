@@ -13,8 +13,7 @@ const MIN_LEGIBLE_STAGE_SCREEN_WIDTH = 200;
 type FlowInstance = ReactFlowInstance<GraphFlowNode, RouteFlowEdge>;
 
 function snapshotsEqual(left: GraphProps, right: GraphProps): boolean {
-  return (Object.keys(left) as Array<keyof GraphProps>)
-    .every(key => Object.is(left[key], right[key]));
+  return (Object.keys(left) as Array<keyof GraphProps>).every((key) => Object.is(left[key], right[key]));
 }
 
 /**
@@ -52,7 +51,9 @@ export class GraphBridge {
       return;
     }
     this.snapshot = props;
-    this.listeners.forEach(listener => listener());
+    for (const listener of this.listeners) {
+      listener();
+    }
   }
 
   setFlowInstance(flow: FlowInstance) {

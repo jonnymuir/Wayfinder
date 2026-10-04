@@ -1,11 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  CANONICAL_SCENARIOS,
-  gotoCanonicalScenario,
-  measureGraph,
-  rectanglesOverlap,
-  VISUAL_VIEWPORT,
-} from './support/canvas-helpers';
+import { CANONICAL_SCENARIOS, gotoCanonicalScenario, measureGraph, rectanglesOverlap, VISUAL_VIEWPORT } from './support/canvas-helpers';
 
 /**
  * Concern 2 (geometry) from
@@ -42,7 +36,7 @@ test.describe('ServiceBlueprint canvas — no-overlap invariant', () => {
               overlaps,
               `Lane "${lane}": "${a.label || a.key}" (${a.kind}) overlaps "${b.label || b.key}" (${b.kind}). ` +
                 `a=[${a.left.toFixed(0)},${a.top.toFixed(0)},${a.right.toFixed(0)},${a.bottom.toFixed(0)}] ` +
-                `b=[${b.left.toFixed(0)},${b.top.toFixed(0)},${b.right.toFixed(0)},${b.bottom.toFixed(0)}]`,
+                `b=[${b.left.toFixed(0)},${b.top.toFixed(0)},${b.right.toFixed(0)},${b.bottom.toFixed(0)}]`
             ).toBe(false);
           }
         }

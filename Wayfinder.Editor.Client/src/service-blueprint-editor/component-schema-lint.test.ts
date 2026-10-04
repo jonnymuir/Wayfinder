@@ -1,4 +1,10 @@
-import type { ComponentDescriptor, QueueDefinition, ServiceBlueprintGatewayDefinition, ServiceBlueprintRouteDefinition, StageDefinition } from './types.js';
+import type {
+  ComponentDescriptor,
+  QueueDefinition,
+  ServiceBlueprintGatewayDefinition,
+  ServiceBlueprintRouteDefinition,
+  StageDefinition,
+} from './types.js';
 import { generateComponentJsonSchema } from './component-json-schema.js';
 import { coerceParsedAuthoredServiceBlueprint, lintAuthoredServiceBlueprintDocument } from './service-blueprint-lint.js';
 import { EDITOR_TOP_LEVEL_FIELDS, serializeAuthoredServiceBlueprint } from './service-blueprint-canonical-json.js';
@@ -77,9 +83,7 @@ function minimalBlueprint(components: unknown): Record<string, unknown> {
     initialStage: 'only',
     queues: [],
     gateways: [],
-    stages: [
-      { stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components },
-    ],
+    stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components }],
   };
 }
 
@@ -102,7 +106,10 @@ export function run(): number {
     const schema = generateComponentJsonSchema(CATALOG);
     const defs = schema.$defs as Record<string, unknown>;
 
-    check('schema: has a $defs entry per discriminator', CATALOG.every(d => d.discriminator in defs));
+    check(
+      'schema: has a $defs entry per discriminator',
+      CATALOG.every((d) => d.discriminator in defs)
+    );
 
     const textDef = defs.text as Record<string, unknown>;
     const textProperties = textDef.properties as Record<string, unknown>;
@@ -111,13 +118,11 @@ export function run(): number {
 
     const fieldsetDef = defs.fieldset as Record<string, unknown>;
     const fieldsetProperties = fieldsetDef.properties as Record<string, unknown>;
-    check('schema: a ChildList container schema includes its children slot',
-      'children' in fieldsetProperties);
+    check('schema: a ChildList container schema includes its children slot', 'children' in fieldsetProperties);
 
     const componentDef = defs.component as Record<string, unknown>;
     const oneOf = componentDef.oneOf as Array<{ $ref: string }>;
-    check('schema: the polymorphic component def has one oneOf branch per discriminator',
-      oneOf.length === CATALOG.length);
+    check('schema: the polymorphic component def has one oneOf branch per discriminator', oneOf.length === CATALOG.length);
   }
 
   // ── lintAuthoredServiceBlueprintDocument — component checks ──────────────
@@ -130,55 +135,68 @@ export function run(): number {
   {
     const parsed = minimalBlueprint([{ type: 'made-up-type', fieldKey: 'name' }]);
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: an unknown component type is flagged',
-      issues.some(issue => issue.message.includes('Unknown component type')));
+    check(
+      'lint: an unknown component type is flagged',
+      issues.some((issue) => issue.message.includes('Unknown component type'))
+    );
   }
 
   {
     const parsed = minimalBlueprint([{ type: 'text', fieldKey: '', label: '' }]);
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: an empty required property is flagged',
-      issues.filter(issue => issue.message.includes('is required')).length === 2,
-      JSON.stringify(issues));
+    check(
+      'lint: an empty required property is flagged',
+      issues.filter((issue) => issue.message.includes('is required')).length === 2,
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = minimalBlueprint([{ type: 'heading', content: 'Section', level: 9 }]);
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a numeric property above its maximum is flagged',
-      issues.some(issue => issue.message.includes('at most 6')));
+    check(
+      'lint: a numeric property above its maximum is flagged',
+      issues.some((issue) => issue.message.includes('at most 6'))
+    );
   }
 
   {
-    const parsed = minimalBlueprint([{
-      type: 'fieldset',
-      legend: 'Group',
-      children: [{ type: 'text', fieldKey: '', label: 'Name' }],
-    }]);
+    const parsed = minimalBlueprint([
+      {
+        type: 'fieldset',
+        legend: 'Group',
+        children: [{ type: 'text', fieldKey: '', label: 'Name' }],
+      },
+    ]);
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: recurses into a ChildList child and flags its own issue',
-      issues.some(issue => issue.pathHint?.includes('children[0].fieldKey')),
-      JSON.stringify(issues));
+    check(
+      'lint: recurses into a ChildList child and flags its own issue',
+      issues.some((issue) => issue.pathHint?.includes('children[0].fieldKey')),
+      JSON.stringify(issues)
+    );
   }
 
   {
-    const parsed = minimalBlueprint([{
-      type: 'radio',
-      fieldKey: 'choice',
-      label: 'Choice',
-      options: ['Yes', 'No'],
-      conditionalChildren: { Maybe: [{ type: 'text', fieldKey: 'why', label: 'Why?' }] },
-    }]);
+    const parsed = minimalBlueprint([
+      {
+        type: 'radio',
+        fieldKey: 'choice',
+        label: 'Choice',
+        options: ['Yes', 'No'],
+        conditionalChildren: { Maybe: [{ type: 'text', fieldKey: 'why', label: 'Why?' }] },
+      },
+    ]);
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a KeyedChildren key not in Options is flagged',
-      issues.some(issue => issue.message.includes('"Maybe" is a key')));
+    check(
+      'lint: a KeyedChildren key not in Options is flagged',
+      issues.some((issue) => issue.message.includes('"Maybe" is a key'))
+    );
   }
 
   {
     const parsed = minimalBlueprint([{ type: 'made-up-type' }]);
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed));
-    check('lint: component checks are skipped entirely when no catalog is supplied (back-compat default)',
-      issues.length === 0);
+    check('lint: component checks are skipped entirely when no catalog is supplied (back-compat default)', issues.length === 0);
   }
 
   // ── field-ref/calculation-ref/stage-ref dangling-reference checks ────────
@@ -188,9 +206,11 @@ export function run(): number {
       { type: 'text', fieldKey: 'nickname', label: 'Nickname', conditionalOn: 'nam' },
     ]);
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a conditionalOn not matching a sibling fieldKey is flagged',
-      issues.some(issue => issue.pathHint?.includes('[1].conditionalOn') && issue.message.includes('"nam"')),
-      JSON.stringify(issues));
+    check(
+      'lint: a conditionalOn not matching a sibling fieldKey is flagged',
+      issues.some((issue) => issue.pathHint?.includes('[1].conditionalOn') && issue.message.includes('"nam"')),
+      JSON.stringify(issues)
+    );
   }
 
   {
@@ -199,34 +219,51 @@ export function run(): number {
       { type: 'text', fieldKey: 'nickname', label: 'Nickname', conditionalOn: 'name' },
     ]);
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a conditionalOn matching a real sibling fieldKey produces no issue for it',
-      !issues.some(issue => issue.pathHint?.includes('conditionalOn')),
-      JSON.stringify(issues));
+    check(
+      'lint: a conditionalOn matching a real sibling fieldKey produces no issue for it',
+      !issues.some((issue) => issue.pathHint?.includes('conditionalOn')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { suggestedName: { expr: '1' } } },
-      stages: [{
-        stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question',
-        components: [{ type: 'text', fieldKey: 'name', label: 'Name', defaultFrom: 'suggestdName' }],
-      }],
+      stages: [
+        {
+          stageKey: 'only',
+          displayName: 'Only',
+          queueKey: 'citizen',
+          stageType: 'Question',
+          components: [{ type: 'text', fieldKey: 'name', label: 'Name', defaultFrom: 'suggestdName' }],
+        },
+      ],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a defaultFrom not matching a calculations.fields name is flagged',
-      issues.some(issue => issue.pathHint?.includes('defaultFrom') && issue.message.includes('"suggestdName"')),
-      JSON.stringify(issues));
+    check(
+      'lint: a defaultFrom not matching a calculations.fields name is flagged',
+      issues.some((issue) => issue.pathHint?.includes('defaultFrom') && issue.message.includes('"suggestdName"')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const applied = coerceParsedAuthoredServiceBlueprint({ ...minimalBlueprint([]), allowManualRestart: true });
-    check('a Definition-tab edit that sets allowManualRestart true is kept when applied and saved',
+    check(
+      'a Definition-tab edit that sets allowManualRestart true is kept when applied and saved',
       JSON.parse(serializeAuthoredServiceBlueprint(applied)).allowManualRestart === true,
-      serializeAuthoredServiceBlueprint(applied));
+      serializeAuthoredServiceBlueprint(applied)
+    );
     const notOptedIn = coerceParsedAuthoredServiceBlueprint(minimalBlueprint([]));
-    check('a Definition-tab edit that omits allowManualRestart saves without it',
-      !('allowManualRestart' in JSON.parse(serializeAuthoredServiceBlueprint(notOptedIn))));
+    check(
+      'a Definition-tab edit that omits allowManualRestart saves without it',
+      !('allowManualRestart' in JSON.parse(serializeAuthoredServiceBlueprint(notOptedIn)))
+    );
   }
 
   // ── top-level fields: every field the editor owns survives apply+save and is type-checked ──
@@ -255,23 +292,34 @@ export function run(): number {
       if (!sample) continue;
       const withGood = { ...minimalBlueprint([]), [key]: sample.good };
       const applied = JSON.parse(serializeAuthoredServiceBlueprint(coerceParsedAuthoredServiceBlueprint(withGood)));
-      check(`top-level "${key}" survives a Definition-tab apply and save`,
-        key in applied && JSON.stringify(applied[key]) !== undefined, JSON.stringify(applied));
+      check(
+        `top-level "${key}" survives a Definition-tab apply and save`,
+        key in applied && JSON.stringify(applied[key]) !== undefined,
+        JSON.stringify(applied)
+      );
       if (typeof sample.good !== 'object') {
         check(`top-level "${key}" keeps its value through apply and save`, applied[key] === sample.good, JSON.stringify(applied[key]));
       }
       const withBad = { ...minimalBlueprint([]), [key]: sample.bad };
       const issues = lintAuthoredServiceBlueprintDocument(withBad, JSON.stringify(withBad), CATALOG);
-      check(`top-level "${key}" with the wrong type is reported, not silently dropped`,
-        issues.some(issue => issue.pathHint === key), JSON.stringify(issues));
+      check(
+        `top-level "${key}" with the wrong type is reported, not silently dropped`,
+        issues.some((issue) => issue.pathHint === key),
+        JSON.stringify(issues)
+      );
       const withGoodIssues = lintAuthoredServiceBlueprintDocument(withGood, JSON.stringify(withGood), CATALOG);
-      check(`top-level "${key}" with the right type raises no issue about it`,
-        !withGoodIssues.some(issue => issue.pathHint === key), JSON.stringify(withGoodIssues));
+      check(
+        `top-level "${key}" with the right type raises no issue about it`,
+        !withGoodIssues.some((issue) => issue.pathHint === key),
+        JSON.stringify(withGoodIssues)
+      );
     }
 
     const typo = { ...minimalBlueprint([]), allowManualRestat: true };
-    check('an unrecognised top-level property is reported, since saving would discard it',
-      lintAuthoredServiceBlueprintDocument(typo, JSON.stringify(typo), CATALOG).some(issue => issue.pathHint === 'allowManualRestat'));
+    check(
+      'an unrecognised top-level property is reported, since saving would discard it',
+      lintAuthoredServiceBlueprintDocument(typo, JSON.stringify(typo), CATALOG).some((issue) => issue.pathHint === 'allowManualRestat')
+    );
   }
 
   // ── nested types: every property of a queue, stage, gateway or route survives apply + save ──
@@ -280,7 +328,16 @@ export function run(): number {
   // keeps it. A queue's assignmentPolicy/owningTeamId were once silently stripped by every editor
   // save, turning a team-tray queue into an unassigned one.
   {
-    const route: Required<ServiceBlueprintRouteDefinition> = { id: 'r1', target: 'next', trigger: 'go', label: 'L', style: 'primary', requiresRole: 'reviewer', showWhen: 'a == 1', actions: [{ type: 'forms.submit', timing: 'onTransition' }] };
+    const route: Required<ServiceBlueprintRouteDefinition> = {
+      id: 'r1',
+      target: 'next',
+      trigger: 'go',
+      label: 'L',
+      style: 'primary',
+      requiresRole: 'reviewer',
+      showWhen: 'a == 1',
+      actions: [{ type: 'forms.submit', timing: 'onTransition' }],
+    };
     const SAMPLES: {
       QueueDefinition: Required<QueueDefinition>;
       StageDefinition: Required<StageDefinition>;
@@ -288,25 +345,57 @@ export function run(): number {
       ServiceBlueprintRouteDefinition: Required<ServiceBlueprintRouteDefinition>;
     } = {
       QueueDefinition: {
-        key: 'q', displayName: 'Q', description: 'd', actor: 'caseworker', roleGates: ['g'],
-        assignmentPolicy: 'team-tray', owningTeamId: 'team-a', tags: { k: 'v' },
+        key: 'q',
+        displayName: 'Q',
+        description: 'd',
+        actor: 'caseworker',
+        roleGates: ['g'],
+        assignmentPolicy: 'team-tray',
+        owningTeamId: 'team-a',
+        tags: { k: 'v' },
       },
       StageDefinition: {
-        stageKey: 'only', displayName: 'Only', description: 'd', stageType: 'Question', actor: 'a', queueKey: 'q',
-        roleGates: ['g'], actions: [{ type: 'forms.submit', timing: 'onEnter' }], components: [{ type: 'text', fieldKey: 'f', label: 'F', required: false }],
-        routes: [route], validations: [{ code: 'c', rule: 'true', message: 'm' }], icon: 'i',
+        stageKey: 'only',
+        displayName: 'Only',
+        description: 'd',
+        stageType: 'Question',
+        actor: 'a',
+        queueKey: 'q',
+        roleGates: ['g'],
+        actions: [{ type: 'forms.submit', timing: 'onEnter' }],
+        components: [{ type: 'text', fieldKey: 'f', label: 'F', required: false }],
+        routes: [route],
+        validations: [{ code: 'c', rule: 'true', message: 'm' }],
+        icon: 'i',
       },
       ServiceBlueprintGatewayDefinition: {
-        key: 'gw', displayName: 'G', description: 'd', gatewayType: 'Join', queueKey: 'q', actor: 'a', roleGates: ['g'],
-        routes: [route], waitingContent: 'w', waitingExpectedSeconds: 5, waitingPollIntervalMs: 1000, waitingAllowDefer: true,
-        waitingDeferMessage: 'later', requiredIncomingQueues: ['q'], icon: 'i',
+        key: 'gw',
+        displayName: 'G',
+        description: 'd',
+        gatewayType: 'Join',
+        queueKey: 'q',
+        actor: 'a',
+        roleGates: ['g'],
+        routes: [route],
+        waitingContent: 'w',
+        waitingExpectedSeconds: 5,
+        waitingPollIntervalMs: 1000,
+        waitingAllowDefer: true,
+        waitingDeferMessage: 'later',
+        requiredIncomingQueues: ['q'],
+        icon: 'i',
       },
       ServiceBlueprintRouteDefinition: route,
     };
     const sorted = (value: unknown): unknown =>
-      Array.isArray(value) ? value.map(sorted)
+      Array.isArray(value)
+        ? value.map(sorted)
         : value && typeof value === 'object'
-          ? Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted((value as Record<string, unknown>)[key])]))
+          ? Object.fromEntries(
+              Object.keys(value)
+                .sort()
+                .map((key) => [key, sorted((value as Record<string, unknown>)[key])])
+            )
           : value;
     const embed = (record: string, value: Record<string, unknown>): Record<string, unknown> => {
       const blueprint: Record<string, unknown> = { ...minimalBlueprint([]) };
@@ -316,7 +405,12 @@ export function run(): number {
       else (blueprint.stages as Record<string, unknown>[])[0].routes = [value];
       return blueprint;
     };
-    const extract = (record: string, saved: Record<string, any>): Record<string, unknown> => {
+    type SavedBlueprint = {
+      queues: Record<string, unknown>[];
+      stages: Array<Record<string, unknown> & { routes: Record<string, unknown>[] }>;
+      gateways: Record<string, unknown>[];
+    };
+    const extract = (record: string, saved: SavedBlueprint): Record<string, unknown> => {
       if (record === 'QueueDefinition') return saved.queues[0];
       if (record === 'StageDefinition') return saved.stages[0];
       if (record === 'ServiceBlueprintGatewayDefinition') return saved.gateways[0];
@@ -328,118 +422,178 @@ export function run(): number {
       const saved = JSON.parse(serializeAuthoredServiceBlueprint(coerceParsedAuthoredServiceBlueprint(embed(record, sample))));
       const out = extract(record, saved);
       for (const property of Object.keys(sample)) {
-        check(`${record}.${property} survives an editor apply and save`,
+        check(
+          `${record}.${property} survives an editor apply and save`,
           property in out && JSON.stringify(sorted(out[property])) === JSON.stringify(sorted(sample[property])),
-          `${property}: expected ${JSON.stringify(sample[property])}, saved ${JSON.stringify(out[property])}`);
+          `${property}: expected ${JSON.stringify(sample[property])}, saved ${JSON.stringify(out[property])}`
+        );
       }
     }
   }
 
   {
     const userBlueprint = (defaultFrom: string) => ({
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { user: { source: 'service', shape: { name: { valueKind: 'string' } } } } },
-      stages: [{
-        stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question',
-        components: [{ type: 'text', fieldKey: 'name', label: 'Name', defaultFrom }],
-      }],
+      stages: [
+        {
+          stageKey: 'only',
+          displayName: 'Only',
+          queueKey: 'citizen',
+          stageType: 'Question',
+          components: [{ type: 'text', fieldKey: 'name', label: 'Name', defaultFrom }],
+        },
+      ],
     });
     const lint = (defaultFrom: string) => {
       const parsed = userBlueprint(defaultFrom);
       return lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
     };
-    check('lint: a dotted defaultFrom into a declared service-field shape is accepted',
-      !lint('user.name').some(issue => issue.pathHint?.includes('defaultFrom')),
-      JSON.stringify(lint('user.name')));
-    check('lint: a dotted defaultFrom naming a property the shape does not declare is flagged',
-      lint('user.nmae').some(issue => issue.pathHint?.includes('defaultFrom') && issue.message.includes('"nmae"')),
-      JSON.stringify(lint('user.nmae')));
-    check('lint: a dotted defaultFrom on an undeclared root is flagged',
-      lint('person.name').some(issue => issue.pathHint?.includes('defaultFrom')),
-      JSON.stringify(lint('person.name')));
+    check(
+      'lint: a dotted defaultFrom into a declared service-field shape is accepted',
+      !lint('user.name').some((issue) => issue.pathHint?.includes('defaultFrom')),
+      JSON.stringify(lint('user.name'))
+    );
+    check(
+      'lint: a dotted defaultFrom naming a property the shape does not declare is flagged',
+      lint('user.nmae').some((issue) => issue.pathHint?.includes('defaultFrom') && issue.message.includes('"nmae"')),
+      JSON.stringify(lint('user.nmae'))
+    );
+    check(
+      'lint: a dotted defaultFrom on an undeclared root is flagged',
+      lint('person.name').some((issue) => issue.pathHint?.includes('defaultFrom')),
+      JSON.stringify(lint('person.name'))
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'first', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'first',
+      queues: [],
+      gateways: [],
       stages: [
         { stageKey: 'first', displayName: 'First', queueKey: 'citizen', stageType: 'Question', components: [] },
         {
-          stageKey: 'second', displayName: 'Second', queueKey: 'citizen', stageType: 'Question',
+          stageKey: 'second',
+          displayName: 'Second',
+          queueKey: 'citizen',
+          stageType: 'Question',
           components: [{ type: 'text', fieldKey: 'name', label: 'Name', changeStateKey: 'frist' }],
         },
       ],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a changeStateKey not matching a real stage key is flagged',
-      issues.some(issue => issue.pathHint?.includes('changeStateKey') && issue.message.includes('"frist"')),
-      JSON.stringify(issues));
+    check(
+      'lint: a changeStateKey not matching a real stage key is flagged',
+      issues.some((issue) => issue.pathHint?.includes('changeStateKey') && issue.message.includes('"frist"')),
+      JSON.stringify(issues)
+    );
   }
 
   // ── calculations.fields/series checks (mirror the Calculations tab's own live checks) ────
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { a: { expr: '1 +' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: an unparseable calculations.fields expression is flagged',
-      issues.some(issue => issue.pathHint === 'calculations.fields.a'),
-      JSON.stringify(issues));
+    check(
+      'lint: an unparseable calculations.fields expression is flagged',
+      issues.some((issue) => issue.pathHint === 'calculations.fields.a'),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { a: { expr: 'nosuchname + 1' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a calculations.fields expression referencing an unknown name is flagged',
-      issues.some(issue => issue.message.includes('"nosuchname"')),
-      JSON.stringify(issues));
+    check(
+      'lint: a calculations.fields expression referencing an unknown name is flagged',
+      issues.some((issue) => issue.message.includes('"nosuchname"')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
-      calculations: { fields: { a: { expr: "lookup(nosuchtable, 1)" } } },
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
+      calculations: { fields: { a: { expr: 'lookup(nosuchtable, 1)' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a lookup() call against an unknown table is flagged',
-      issues.some(issue => issue.message.includes('unknown table "nosuchtable"')),
-      JSON.stringify(issues));
+    check(
+      'lint: a lookup() call against an unknown table is flagged',
+      issues.some((issue) => issue.message.includes('unknown table "nosuchtable"')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { b: { expr: 'a + 1' }, a: { expr: '1' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: calculations.fields declared out of dependency order is flagged',
-      issues.some(issue => issue.pathHint === 'calculations.fields' && issue.message.includes('out of dependency order')),
-      JSON.stringify(issues));
+    check(
+      'lint: calculations.fields declared out of dependency order is flagged',
+      issues.some((issue) => issue.pathHint === 'calculations.fields' && issue.message.includes('out of dependency order')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { a: { expr: 'b + 1' }, b: { expr: 'a + 1' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a genuine calculations.fields cycle is flagged by name',
-      issues.some(issue => issue.pathHint === 'calculations.fields' && issue.message.includes('circular dependency')),
-      JSON.stringify(issues));
+    check(
+      'lint: a genuine calculations.fields cycle is flagged by name',
+      issues.some((issue) => issue.pathHint === 'calculations.fields' && issue.message.includes('circular dependency')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: {
         fields: { a: { expr: '1' } },
         series: { s: { over: 'i', from: '1', to: '3', values: { x: 'nosuchname2' } } },
@@ -447,25 +601,39 @@ export function run(): number {
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a series value expression referencing an unknown name is flagged',
-      issues.some(issue => issue.pathHint === 'calculations.series.s.values.x' && issue.message.includes('"nosuchname2"')),
-      JSON.stringify(issues));
+    check(
+      'lint: a series value expression referencing an unknown name is flagged',
+      issues.some((issue) => issue.pathHint === 'calculations.series.s.values.x' && issue.message.includes('"nosuchname2"')),
+      JSON.stringify(issues)
+    );
   }
 
   // ── field-name/loop-variable collision (shared with the Calculations tab and the Validation
   // tab via calculation-diagnostics.ts — see PR #40 and the validation-unification follow-up) ──
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { age: { expr: '1' } } },
-      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [
-        { type: 'text', fieldKey: 'age', label: 'Age', default: '30' },
-      ] }],
+      stages: [
+        {
+          stageKey: 'only',
+          displayName: 'Only',
+          queueKey: 'citizen',
+          stageType: 'Question',
+          components: [{ type: 'text', fieldKey: 'age', label: 'Age', default: '30' }],
+        },
+      ],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a calculations.fields name colliding with a WITH-default input fieldKey is flagged',
-      issues.some(issue => issue.pathHint === 'calculations.fields.age' && issue.message.includes('collides with an input')),
-      JSON.stringify(issues));
+    check(
+      'lint: a calculations.fields name colliding with a WITH-default input fieldKey is flagged',
+      issues.some((issue) => issue.pathHint === 'calculations.fields.age' && issue.message.includes('collides with an input')),
+      JSON.stringify(issues)
+    );
   }
 
   {
@@ -475,37 +643,65 @@ export function run(): number {
     // WOULD now be a genuine collision (it always resolves, to "" / false), so this fixture must
     // stay numeric to test what it claims to.
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { totalPremium: { expr: '1' } } },
-      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [
-        { type: 'number', fieldKey: 'totalPremium', label: 'Total premium' },
-      ] }],
+      stages: [
+        {
+          stageKey: 'only',
+          displayName: 'Only',
+          queueKey: 'citizen',
+          stageType: 'Question',
+          components: [{ type: 'number', fieldKey: 'totalPremium', label: 'Total premium' }],
+        },
+      ],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a calculations.fields name matching a NO-default NUMERIC input fieldKey is NOT flagged as a collision',
-      !issues.some(issue => issue.message.includes('collides with an input')),
-      JSON.stringify(issues));
+    check(
+      'lint: a calculations.fields name matching a NO-default NUMERIC input fieldKey is NOT flagged as a collision',
+      !issues.some((issue) => issue.message.includes('collides with an input')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     // A text/boolean field with no declared default now IS a genuine collision — it always
     // resolves in scope (to "" / false), matching CalculationScopeBuilder.Build server-side.
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { totalPremium: { expr: "'1'" } } },
-      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [
-        { type: 'text', fieldKey: 'totalPremium', label: 'Total premium' },
-      ] }],
+      stages: [
+        {
+          stageKey: 'only',
+          displayName: 'Only',
+          queueKey: 'citizen',
+          stageType: 'Question',
+          components: [{ type: 'text', fieldKey: 'totalPremium', label: 'Total premium' }],
+        },
+      ],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a calculations.fields name matching a NO-default TEXT input fieldKey IS flagged as a collision',
-      issues.some(issue => issue.message.includes('collides with an input')),
-      JSON.stringify(issues));
+    check(
+      'lint: a calculations.fields name matching a NO-default TEXT input fieldKey IS flagged as a collision',
+      issues.some((issue) => issue.message.includes('collides with an input')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: {
         fields: { total: { expr: '1' } },
         series: { s: { over: 'total', from: '1', to: '3', values: {} } },
@@ -513,35 +709,49 @@ export function run(): number {
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a series loop variable colliding with an earlier field name is flagged',
-      issues.some(issue => issue.pathHint === 'calculations.series.s.over' && issue.message.includes('collides with an existing')),
-      JSON.stringify(issues));
+    check(
+      'lint: a series loop variable colliding with an earlier field name is flagged',
+      issues.some((issue) => issue.pathHint === 'calculations.series.s.over' && issue.message.includes('collides with an existing')),
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: {
         series: { premiumByFrequency: { over: 'performances', from: '0', to: '50', values: { frequency: 'round(performances * 1.25)' } } },
       },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check("lint: a series' own loop variable is valid inside its values columns (real juggling-insurance-modeller.json shape)",
+    check(
+      "lint: a series' own loop variable is valid inside its values columns (real juggling-insurance-modeller.json shape)",
       issues.length === 0,
-      JSON.stringify(issues));
+      JSON.stringify(issues)
+    );
   }
 
   {
     const parsed = {
-      definitionKey: 'fixture', displayName: 'Fixture', initialStage: 'only', queues: [], gateways: [],
+      definitionKey: 'fixture',
+      displayName: 'Fixture',
+      initialStage: 'only',
+      queues: [],
+      gateways: [],
       calculations: { fields: { a: { expr: '1' }, b: { expr: 'a + 1' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
-    check('lint: a valid, already-correctly-ordered calculations.fields block produces no issues',
-      !issues.some(issue => issue.pathHint?.startsWith('calculations')),
-      JSON.stringify(issues));
+    check(
+      'lint: a valid, already-correctly-ordered calculations.fields block produces no issues',
+      !issues.some((issue) => issue.pathHint?.startsWith('calculations')),
+      JSON.stringify(issues)
+    );
   }
 
   if (failures > 0) {

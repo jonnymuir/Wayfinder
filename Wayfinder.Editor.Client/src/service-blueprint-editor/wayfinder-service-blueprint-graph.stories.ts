@@ -4,7 +4,15 @@ import './wayfinder-service-blueprint-graph.js';
 import type { WayfinderServiceBlueprintGraphElement } from './wayfinder-service-blueprint-graph.js';
 import { STUB_SERVICE_BLUEPRINT } from './fixtures/planning-permission-stub.js';
 import type { ServiceBlueprint } from './types.js';
-import { LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT, PAYMENT_DEMO_SERVICE_BLUEPRINT, COMMUNITY_ENQUIRY_SERVICE_BLUEPRINT, INFORMATION_REQUEST_SERVICE_BLUEPRINT, MONEY_MODELLER_SERVICE_BLUEPRINT, PLANNING_SERVICE_BLUEPRINT_MIGRATED, cloneAuthoredServiceBlueprint } from './fixtures/index.js';
+import {
+  LEAVE_REQUEST_STARTER_SERVICE_BLUEPRINT,
+  PAYMENT_DEMO_SERVICE_BLUEPRINT,
+  COMMUNITY_ENQUIRY_SERVICE_BLUEPRINT,
+  INFORMATION_REQUEST_SERVICE_BLUEPRINT,
+  MONEY_MODELLER_SERVICE_BLUEPRINT,
+  PLANNING_SERVICE_BLUEPRINT_MIGRATED,
+  cloneAuthoredServiceBlueprint,
+} from './fixtures/index.js';
 
 const WORKSPACE_SERVICE_BLUEPRINT: ServiceBlueprint = {
   ...STUB_SERVICE_BLUEPRINT,
@@ -89,9 +97,7 @@ const SAME_LANE_FAN_OUT_SERVICE_BLUEPRINT: ServiceBlueprint = {
       queueKey: 'public',
       actor: 'public',
       roleGates: [],
-      routes: [
-        { id: 'r-decide', target: 'ready-to-decide', trigger: 'continue', actions: [] },
-      ],
+      routes: [{ id: 'r-decide', target: 'ready-to-decide', trigger: 'continue', actions: [] }],
     },
   ],
 };
@@ -115,13 +121,16 @@ function makeElement(args: StoryArgs): WayfinderServiceBlueprintGraphElement {
 async function waitForGraphReady(canvasElement: HTMLElement): Promise<WayfinderServiceBlueprintGraphElement> {
   const el = canvasElement.querySelector('wayfinder-service-blueprint-graph') as WayfinderServiceBlueprintGraphElement;
   await el.updateComplete;
-  await waitFor(() => {
-    const hasStages = (el.serviceBlueprint?.stages?.length ?? 0) > 0;
-    if (!hasStages || el.hasAttribute('data-wayfinder-graph-ready')) {
-      return;
-    }
-    throw new Error('serviceBlueprint graph canvas has not signalled data-wayfinder-graph-ready yet');
-  }, { timeout: 5000 });
+  await waitFor(
+    () => {
+      const hasStages = (el.serviceBlueprint?.stages?.length ?? 0) > 0;
+      if (!hasStages || el.hasAttribute('data-wayfinder-graph-ready')) {
+        return;
+      }
+      throw new Error('serviceBlueprint graph canvas has not signalled data-wayfinder-graph-ready yet');
+    },
+    { timeout: 5000 }
+  );
   return el;
 }
 
@@ -160,7 +169,7 @@ const meta: Meta<StoryArgs> = {
   args: {
     serviceBlueprint: null,
   },
-  render: args => makeElement(args),
+  render: (args) => makeElement(args),
 };
 
 export default meta;
@@ -204,7 +213,7 @@ export const InteractiveWorkspace: Story = {
 
     const declaration = root.querySelector<HTMLElement>('[data-wayfinder-stage="applicant-details"]')!;
     let inspectorOpened = false;
-    el.addEventListener('inspector-requested', event => {
+    el.addEventListener('inspector-requested', (event) => {
       const detail = (event as CustomEvent<{ kind: string; stageKey?: string }>).detail;
       if (detail.kind === 'stage' && detail.stageKey === 'applicant-details') {
         inspectorOpened = true;
@@ -215,12 +224,14 @@ export const InteractiveWorkspace: Story = {
     await el.updateComplete;
     await expect(inspectorOpened).toBe(true);
 
-    declaration.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      composed: true,
-      clientX: 240,
-      clientY: 220,
-    }));
+    declaration.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        composed: true,
+        clientX: 240,
+        clientY: 220,
+      })
+    );
     await el.updateComplete;
     await expect(root.querySelector('[data-wayfinder-context-menu]')).not.toBeNull();
 
@@ -237,12 +248,14 @@ export const DeleteConfirmation: Story = {
 
     const root = el.shadowRoot!;
     const stage = root.querySelector<HTMLElement>('[data-wayfinder-stage="reviewer-assessment"]')!;
-    stage.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true,
-      composed: true,
-      clientX: 240,
-      clientY: 220,
-    }));
+    stage.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        composed: true,
+        clientX: 240,
+        clientY: 220,
+      })
+    );
     await el.updateComplete;
 
     await expect(root.querySelector('[data-wayfinder-context-menu]')).not.toBeNull();
@@ -324,8 +337,7 @@ export const GraphReadOnly: Story = {
     const container = document.createElement('div');
     container.style.cssText = 'display:block;height:560px;';
     const json = JSON.stringify(GATEWAY_SERVICE_BLUEPRINT).replaceAll('"', '&quot;');
-    container.innerHTML =
-      `<wayfinder-service-blueprint-graph read-only service-blueprint-json="${json}" style="display:block;height:100%;"></wayfinder-service-blueprint-graph>`;
+    container.innerHTML = `<wayfinder-service-blueprint-graph read-only service-blueprint-json="${json}" style="display:block;height:100%;"></wayfinder-service-blueprint-graph>`;
     return container;
   },
   play: async ({ canvasElement }) => {
@@ -381,9 +393,10 @@ function buildLargeServiceBlueprint(): ServiceBlueprint {
         actions: [],
         components: [],
         roleGates: [],
-        routes: i < stagesPerLane - 1
-          ? [{ id: `${stageKey}--continue--route-from-${stageKey}`, target: `route-from-${stageKey}`, trigger: 'continue' }]
-          : [],
+        routes:
+          i < stagesPerLane - 1
+            ? [{ id: `${stageKey}--continue--route-from-${stageKey}`, target: `route-from-${stageKey}`, trigger: 'continue' }]
+            : [],
       } as unknown as ServiceBlueprint['stages'][number]);
       if (i > 0) {
         const prev = `${lane}-step-${i}`;
@@ -520,10 +533,12 @@ export const MoneyModeller: Story = {
     // That's a rank-assignment quirk, not a declutter regression — anything
     // beyond this measured ceiling is.
     const MAX_OVERLAP_FRACTION = 0.55;
-    const chipRects = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-transition]'))
-      .map(chip => chip.getBoundingClientRect());
-    const nodeRects = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card], [data-wayfinder-gateway-node]'))
-      .map(node => node.getBoundingClientRect());
+    const chipRects = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-transition]')).map((chip) =>
+      chip.getBoundingClientRect()
+    );
+    const nodeRects = Array.from(root.querySelectorAll<HTMLElement>('[data-wayfinder-stage-card], [data-wayfinder-gateway-node]')).map(
+      (node) => node.getBoundingClientRect()
+    );
     const overlapFraction = (a: DOMRect, b: DOMRect): number => {
       const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);
       const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);

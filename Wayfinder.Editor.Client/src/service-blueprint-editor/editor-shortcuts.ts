@@ -180,18 +180,19 @@ export const SERVICE_BLUEPRINT_SHORTCUT_GROUPS: ServiceBlueprintShortcutGroup[] 
   },
 ];
 
-export const SERVICE_BLUEPRINT_SHORTCUTS = SERVICE_BLUEPRINT_SHORTCUT_GROUPS.flatMap(group => group.shortcuts);
+export const SERVICE_BLUEPRINT_SHORTCUTS = SERVICE_BLUEPRINT_SHORTCUT_GROUPS.flatMap((group) => group.shortcuts);
 
 export function findServiceBlueprintShortcut(id: string): ServiceBlueprintShortcutDefinition | undefined {
-  return SERVICE_BLUEPRINT_SHORTCUTS.find(shortcut => shortcut.id === id);
+  return SERVICE_BLUEPRINT_SHORTCUTS.find((shortcut) => shortcut.id === id);
 }
 
 export function matchesShortcut(event: KeyboardEvent, shortcut: ServiceBlueprintShortcutDefinition): boolean {
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key.toLowerCase();
-  return shortcut.matchers.some(matcher =>
-    key === matcher.key.toLowerCase()
-    && Boolean(matcher.ctrlOrMeta) === Boolean(event.ctrlKey || event.metaKey)
-    && Boolean(matcher.shift) === Boolean(event.shiftKey)
-    && Boolean(matcher.alt) === Boolean(event.altKey)
+  return shortcut.matchers.some(
+    (matcher) =>
+      key === matcher.key.toLowerCase() &&
+      Boolean(matcher.ctrlOrMeta) === Boolean(event.ctrlKey || event.metaKey) &&
+      Boolean(matcher.shift) === Boolean(event.shiftKey) &&
+      Boolean(matcher.alt) === Boolean(event.altKey)
   );
 }

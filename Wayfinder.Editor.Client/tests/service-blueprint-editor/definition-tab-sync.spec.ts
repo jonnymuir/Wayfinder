@@ -16,31 +16,28 @@ async function openDefinitionTab(page: Page): Promise<void> {
   await expect(editor).toBeVisible({ timeout: 10_000 });
   await expect(editor).toHaveAttribute('data-wayfinder-service-blueprint-loaded', /.+/, { timeout: 30_000 });
 
-  const definitionTab = editor
-    .locator('wayfinder-confidence-tabs')
-    .locator('button[data-wayfinder-confidence-tab="definition"]');
+  const definitionTab = editor.locator('wayfinder-confidence-tabs').locator('button[data-wayfinder-confidence-tab="definition"]');
   await definitionTab.click();
   await expect(editor.locator('[data-wayfinder-definition-panel]')).toBeVisible();
-  await page.waitForFunction(() => {
-    const host = document.querySelector('wayfinder-service-blueprint-editor');
-    const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
-    return !!def?.shadowRoot?.querySelector('.cm-content');
-  }, { timeout: 10_000 });
+  await page.waitForFunction(
+    () => {
+      const host = document.querySelector('wayfinder-service-blueprint-editor');
+      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
+      return !!def?.shadowRoot?.querySelector('.cm-content');
+    },
+    { timeout: 10_000 }
+  );
 }
 
 async function clickCanvasTab(page: Page): Promise<void> {
   const editor = page.locator('wayfinder-service-blueprint-editor');
-  await editor
-    .locator('wayfinder-confidence-tabs')
-    .locator('button[data-wayfinder-confidence-tab="canvas"]')
-    .click();
+  await editor.locator('wayfinder-confidence-tabs').locator('button[data-wayfinder-confidence-tab="canvas"]').click();
 }
 
 async function readDefinitionText(page: Page): Promise<string> {
   return await page.evaluate(() => {
     const editorEl = document.querySelector('wayfinder-service-blueprint-editor') as HTMLElement | null;
-    const def = editorEl?.shadowRoot?.querySelector('wayfinder-definition-editor') as
-      (HTMLElement & { value?: string }) | null;
+    const def = editorEl?.shadowRoot?.querySelector('wayfinder-definition-editor') as (HTMLElement & { value?: string }) | null;
     return def?.value ?? '';
   });
 }
@@ -48,10 +45,11 @@ async function readDefinitionText(page: Page): Promise<string> {
 /** Replace the editor doc by dispatching a CodeMirror transaction — the
  * same code path real typing exercises (updateListener → onChange). */
 async function replaceDefinitionViaCm(page: Page, value: string): Promise<void> {
-  await page.evaluate(text => {
+  await page.evaluate((text) => {
     const host = document.querySelector('wayfinder-service-blueprint-editor');
     const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as
-      (HTMLElement & { _view?: { state: { doc: { length: number } }; dispatch: (s: unknown) => void } }) | null;
+      | (HTMLElement & { _view?: { state: { doc: { length: number } }; dispatch: (s: unknown) => void } })
+      | null;
     const view = def?._view;
     if (!view) {
       throw new Error('CodeMirror view not mounted');
@@ -65,7 +63,8 @@ async function replaceDefinitionViaCm(page: Page, value: string): Promise<void> 
 async function readInternalServiceBlueprintDisplayName(page: Page): Promise<string | null> {
   return await page.evaluate(() => {
     const host = document.querySelector('wayfinder-service-blueprint-editor') as
-      (HTMLElement & { _serviceBlueprint?: { displayName?: string } | null }) | null;
+      | (HTMLElement & { _serviceBlueprint?: { displayName?: string } | null })
+      | null;
     return host?._serviceBlueprint?.displayName ?? null;
   });
 }
@@ -85,8 +84,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await clickCanvasTab(page);
 
     const editor = page.locator('wayfinder-service-blueprint-editor');
-    await expect(editor.locator('[data-wayfinder-stage="application-form"]'))
-      .toContainText('Real-Typed Form', { timeout: 2_000 });
+    await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toContainText('Real-Typed Form', { timeout: 2_000 });
   });
 
   test('b) Add a route in JSON → switch to Canvas → canvas shows the new route', async ({ page }) => {
@@ -97,10 +95,9 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     expect(original).toContain('"gateways"');
 
     // Add a new gateway-owned route to an existing split gateway.
-    const updated = await page.evaluate(text => {
+    const updated = await page.evaluate((text) => {
       const doc = JSON.parse(text);
-      const gateway = (doc.gateways as Array<Record<string, unknown>>)
-        .find(candidate => candidate.key === 'route-check-answers');
+      const gateway = (doc.gateways as Array<Record<string, unknown>>).find((candidate) => candidate.key === 'route-check-answers');
       if (!gateway) {
         throw new Error('route-check-answers gateway missing');
       }
@@ -118,10 +115,13 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     // Internal model should now have the extra route.
     const actionsAfter = await page.evaluate(() => {
       const host = document.querySelector('wayfinder-service-blueprint-editor') as
-        (HTMLElement & { _serviceBlueprint?: { gateways?: Array<{ key?: string; routes?: Array<{ trigger?: string }> }> } | null }) | null;
-      return host?._serviceBlueprint?.gateways
-        ?.find(gateway => gateway.key === 'route-check-answers')
-        ?.routes?.map(route => route.trigger) ?? [];
+        | (HTMLElement & { _serviceBlueprint?: { gateways?: Array<{ key?: string; routes?: Array<{ trigger?: string }> }> } | null })
+        | null;
+      return (
+        host?._serviceBlueprint?.gateways
+          ?.find((gateway) => gateway.key === 'route-check-answers')
+          ?.routes?.map((route) => route.trigger) ?? []
+      );
     });
     expect(actionsAfter).toContain('fast-track');
 
@@ -130,7 +130,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     const editor = page.locator('wayfinder-service-blueprint-editor');
     const graph = editor.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible();
-    const hasRoute = await graph.evaluate(el => {
+    const hasRoute = await graph.evaluate((el) => {
       const root = (el as HTMLElement).shadowRoot;
       if (!root) return false;
       return root?.textContent?.includes('fast-track') ?? false;
@@ -160,8 +160,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
 
     // Canvas should still show the last good state (renamed).
     await clickCanvasTab(page);
-    await expect(editor.locator('[data-wayfinder-stage="application-form"]'))
-      .toContainText('Pre-Invalid Form', { timeout: 2_000 });
+    await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toContainText('Pre-Invalid Form', { timeout: 2_000 });
   });
 
   test('d) Round-trip: canvas change shows in JSON, JSON edit on top shows on canvas', async ({ page }) => {
@@ -171,24 +170,24 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
 
     // Canvas-side: change displayName via the standard service-blueprint-updated event.
     await page.evaluate(() => {
-      const host = document.querySelector('wayfinder-service-blueprint-editor') as
-        (HTMLElement & { _serviceBlueprint?: unknown }) | null;
+      const host = document.querySelector('wayfinder-service-blueprint-editor') as (HTMLElement & { _serviceBlueprint?: unknown }) | null;
       if (!host) throw new Error('editor not mounted');
       const graph = host.shadowRoot?.querySelector('wayfinder-service-blueprint-graph') as HTMLElement | null;
       if (!graph) throw new Error('graph not mounted');
       const next = JSON.parse(JSON.stringify((host as { _serviceBlueprint: unknown })._serviceBlueprint));
       next.displayName = 'Canvas-Edited Display';
-      graph.dispatchEvent(new CustomEvent('service-blueprint-updated', {
-        detail: { serviceBlueprint: next, selection: null },
-        bubbles: true,
-        composed: true,
-      }));
+      graph.dispatchEvent(
+        new CustomEvent('service-blueprint-updated', {
+          detail: { serviceBlueprint: next, selection: null },
+          bubbles: true,
+          composed: true,
+        })
+      );
     });
 
     // Open Definition tab, confirm canvas edit shows.
     await openDefinitionTab(page);
-    await expect.poll(async () => readDefinitionText(page), { timeout: 5_000 })
-      .toContain('Canvas-Edited Display');
+    await expect.poll(async () => readDefinitionText(page), { timeout: 5_000 }).toContain('Canvas-Edited Display');
 
     // JSON-side edit on top: change displayName again.
     const current = await readDefinitionText(page);
@@ -197,8 +196,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await page.waitForTimeout(350);
 
     // Confirm internal service blueprint updated and canvas reflects it.
-    await expect.poll(() => readInternalServiceBlueprintDisplayName(page), { timeout: 2_000 })
-      .toBe('JSON-Then-Canvas');
+    await expect.poll(() => readInternalServiceBlueprintDisplayName(page), { timeout: 2_000 }).toBe('JSON-Then-Canvas');
   });
 
   test('e) Switching back to Canvas before debounce flushes still propagates the edit', async ({ page }) => {
@@ -213,7 +211,6 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await clickCanvasTab(page);
 
     const editor = page.locator('wayfinder-service-blueprint-editor');
-    await expect(editor.locator('[data-wayfinder-stage="application-form"]'))
-      .toContainText('Flushed-On-Switch', { timeout: 2_000 });
+    await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toContainText('Flushed-On-Switch', { timeout: 2_000 });
   });
 });

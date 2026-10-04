@@ -21,7 +21,7 @@ export function LaneLayer({ lanes, height }: { lanes: LaneGeometry[]; height: nu
     <>
       <ViewportPortal>
         <div className="graph-lane-backdrop" style={{ position: 'absolute', top: 0, left: 0, zIndex: -1 }} aria-hidden="true">
-          {lanes.map(lane => (
+          {lanes.map((lane) => (
             <div
               key={lane.key}
               className={`lane-band ${lane.surface === 'back-stage' ? 'lane-supporting' : 'lane-primary'}`}
@@ -38,7 +38,7 @@ export function LaneLayer({ lanes, height }: { lanes: LaneGeometry[]; height: nu
       </ViewportPortal>
       <ViewportPortal>
         <div className="graph-lane-layer" style={{ position: 'absolute', top: 0, left: 0, zIndex: 10 }}>
-          {lanes.map(lane => {
+          {lanes.map((lane) => {
             const headingId = `queue-heading-${lane.key}`;
             return (
               <section
@@ -52,6 +52,7 @@ export function LaneLayer({ lanes, height }: { lanes: LaneGeometry[]; height: nu
                   height: Math.max(0, height - TOP_PADDING * 2),
                   pointerEvents: 'none',
                 }}
+                // biome-ignore lint/a11y/noNoninteractiveTabindex: a lane is a keyboard stop so arrow-key navigation can enter it
                 tabIndex={0}
                 aria-labelledby={headingId}
                 data-wayfinder-role-queue={lane.key}
@@ -59,8 +60,12 @@ export function LaneLayer({ lanes, height }: { lanes: LaneGeometry[]; height: nu
                 onFocus={() => callbacks.laneFocused(lane)}
               >
                 <div className="lane-header" data-wayfinder-queue-header={lane.key}>
-                  <div id={headingId} className="lane-heading">{lane.label}</div>
-                  <div className="lane-meta">{lane.stageCount} stage{lane.stageCount === 1 ? '' : 's'}</div>
+                  <div id={headingId} className="lane-heading">
+                    {lane.label}
+                  </div>
+                  <div className="lane-meta">
+                    {lane.stageCount} stage{lane.stageCount === 1 ? '' : 's'}
+                  </div>
                 </div>
               </section>
             );

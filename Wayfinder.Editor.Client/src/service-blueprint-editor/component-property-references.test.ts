@@ -71,7 +71,7 @@ export function run(): number {
     ] as unknown as Component[];
     const fields = collectStageInputFields(components, CATALOG);
     check('top-level input fields are collected', fields.length === 1 && fields[0].fieldKey === 'name');
-    check('content-only components are excluded', !fields.some(f => f.fieldKey === undefined));
+    check('content-only components are excluded', !fields.some((f) => f.fieldKey === undefined));
   }
 
   {
@@ -83,20 +83,24 @@ export function run(): number {
       },
     ] as unknown as Component[];
     const fields = collectStageInputFields(components, CATALOG);
-    check('fields nested inside a ChildList container are found', fields.some(f => f.fieldKey === 'nested'));
+    check(
+      'fields nested inside a ChildList container are found',
+      fields.some((f) => f.fieldKey === 'nested')
+    );
   }
 
   {
     const components = [
       {
         type: 'accordion',
-        sections: [
-          { heading: 'One', children: [{ type: 'text', fieldKey: 'inSection', label: 'In section' }] },
-        ],
+        sections: [{ heading: 'One', children: [{ type: 'text', fieldKey: 'inSection', label: 'In section' }] }],
       },
     ] as unknown as Component[];
     const fields = collectStageInputFields(components, CATALOG);
-    check('fields nested inside a NamedSections container are found', fields.some(f => f.fieldKey === 'inSection'));
+    check(
+      'fields nested inside a NamedSections container are found',
+      fields.some((f) => f.fieldKey === 'inSection')
+    );
   }
 
   {
@@ -112,9 +116,14 @@ export function run(): number {
       },
     ] as unknown as Component[];
     const fields = collectStageInputFields(components, CATALOG);
-    check('the radio itself is collected with its options',
-      fields.some(f => f.fieldKey === 'choice' && JSON.stringify(f.options) === JSON.stringify(['yes', 'no'])));
-    check('fields nested inside KeyedChildren are found', fields.some(f => f.fieldKey === 'why'));
+    check(
+      'the radio itself is collected with its options',
+      fields.some((f) => f.fieldKey === 'choice' && JSON.stringify(f.options) === JSON.stringify(['yes', 'no']))
+    );
+    check(
+      'fields nested inside KeyedChildren are found',
+      fields.some((f) => f.fieldKey === 'why')
+    );
   }
 
   {
@@ -132,22 +141,36 @@ export function run(): number {
       calculations: { fields: { premium: { expr: '1' }, excess: { expr: '2' } } },
     } as unknown as ServiceBlueprint;
 
-    const context = buildPropertyReferenceContext(blueprint, [{ type: 'text', fieldKey: 'a', label: 'A' }] as unknown as Component[], CATALOG);
+    const context = buildPropertyReferenceContext(
+      blueprint,
+      [{ type: 'text', fieldKey: 'a', label: 'A' }] as unknown as Component[],
+      CATALOG
+    );
 
     check('stageOptions lists every stage', context.stageOptions.length === 2);
-    check('stageOptions labels combine displayName and key',
-      context.stageOptions[0].label === 'First stage (first)', context.stageOptions[0].label);
-    check('calculationFieldNames lists every calculation field name',
-      JSON.stringify(context.calculationFieldNames.sort()) === JSON.stringify(['excess', 'premium']));
+    check(
+      'stageOptions labels combine displayName and key',
+      context.stageOptions[0].label === 'First stage (first)',
+      context.stageOptions[0].label
+    );
+    check(
+      'calculationFieldNames lists every calculation field name',
+      JSON.stringify(context.calculationFieldNames.sort()) === JSON.stringify(['excess', 'premium'])
+    );
     check('siblingFields reflects the passed-in stage components only', context.siblingFields.length === 1);
-    check('allFields spans every stage in the blueprint, not just the passed-in one',
-      context.allFields.length === 2, JSON.stringify(context.allFields));
+    check(
+      'allFields spans every stage in the blueprint, not just the passed-in one',
+      context.allFields.length === 2,
+      JSON.stringify(context.allFields)
+    );
   }
 
   {
     const context = buildPropertyReferenceContext(null, undefined, CATALOG);
-    check('a null blueprint yields empty stage/calculation/field lists',
-      context.stageOptions.length === 0 && context.calculationFieldNames.length === 0 && context.allFields.length === 0);
+    check(
+      'a null blueprint yields empty stage/calculation/field lists',
+      context.stageOptions.length === 0 && context.calculationFieldNames.length === 0 && context.allFields.length === 0
+    );
   }
 
   return failures;

@@ -71,7 +71,7 @@ function lintComponentTree(
     const component = rawComponent as Record<string, unknown>;
     const componentPath = `${pathPrefix}[${index}]`;
     const discriminator = typeof component.type === 'string' ? component.type : '';
-    const descriptor = catalog.find(candidate => candidate.discriminator === discriminator);
+    const descriptor = catalog.find((candidate) => candidate.discriminator === discriminator);
 
     if (!discriminator) {
       issues.push({ message: `Component at "${componentPath}" is missing "type".`, pathHint: componentPath });
@@ -101,7 +101,14 @@ function lintComponentTree(
         sections.forEach((rawSection, sectionIndex) => {
           if (rawSection && typeof rawSection === 'object' && !Array.isArray(rawSection)) {
             const section = rawSection as Record<string, unknown>;
-            lintComponentTree(section[childrenKey], catalog, source, `${componentPath}.${key}[${sectionIndex}].${childrenKey}`, issues, refs);
+            lintComponentTree(
+              section[childrenKey],
+              catalog,
+              source,
+              `${componentPath}.${key}[${sectionIndex}].${childrenKey}`,
+              issues,
+              refs
+            );
           }
         });
       }
@@ -137,9 +144,11 @@ function lintComponentProperties(
   for (const property of properties) {
     const value = component[property.key];
     const propertyPath = `${path}.${property.key}`;
-    const isMissing = value === undefined || value === null
-      || (typeof value === 'string' && value.trim() === '')
-      || (Array.isArray(value) && value.length === 0);
+    const isMissing =
+      value === undefined ||
+      value === null ||
+      (typeof value === 'string' && value.trim() === '') ||
+      (Array.isArray(value) && value.length === 0);
 
     if (isMissing) {
       if (property.required) {
@@ -196,17 +205,26 @@ function lintComponentProperties(
       if (property.pattern) {
         try {
           if (!new RegExp(property.pattern).test(value)) {
-            issues.push({ message: `"${property.title}" at "${propertyPath}" does not match the required pattern.`, pathHint: propertyPath });
+            issues.push({
+              message: `"${property.title}" at "${propertyPath}" does not match the required pattern.`,
+              pathHint: propertyPath,
+            });
           }
         } catch {
           // An invalid regex is a descriptor-authoring bug, not something this document can fix.
         }
       }
       if (property.minLength != null && value.length < property.minLength) {
-        issues.push({ message: `"${property.title}" at "${propertyPath}" must be at least ${property.minLength} character(s) long.`, pathHint: propertyPath });
+        issues.push({
+          message: `"${property.title}" at "${propertyPath}" must be at least ${property.minLength} character(s) long.`,
+          pathHint: propertyPath,
+        });
       }
       if (property.maxLength != null && value.length > property.maxLength) {
-        issues.push({ message: `"${property.title}" at "${propertyPath}" must be at most ${property.maxLength} character(s) long.`, pathHint: propertyPath });
+        issues.push({
+          message: `"${property.title}" at "${propertyPath}" must be at most ${property.maxLength} character(s) long.`,
+          pathHint: propertyPath,
+        });
       }
     } else if (typeof value === 'number') {
       if (property.minimum != null && value < property.minimum) {
@@ -220,7 +238,14 @@ function lintComponentProperties(
     if (property.valueKind === 'Array' && Array.isArray(value) && property.items?.properties) {
       value.forEach((item, itemIndex) => {
         if (item && typeof item === 'object' && !Array.isArray(item)) {
-          lintComponentProperties(item as Record<string, unknown>, property.items!.properties!, source, `${propertyPath}[${itemIndex}]`, issues, refs);
+          lintComponentProperties(
+            item as Record<string, unknown>,
+            property.items!.properties!,
+            source,
+            `${propertyPath}[${itemIndex}]`,
+            issues,
+            refs
+          );
         }
       });
     } else if (property.valueKind === 'Object' && value && typeof value === 'object' && !Array.isArray(value) && property.properties) {
@@ -260,7 +285,7 @@ function lintCalculations(
   );
 
   const allInputFields = Array.isArray(root.stages)
-    ? root.stages.flatMap(rawState => {
+    ? root.stages.flatMap((rawState) => {
         if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
           return [];
         }
@@ -481,7 +506,7 @@ export function lintAuthoredServiceBlueprintDocument(
     if (value === undefined || value === null || matchesTopLevelFieldKind(value, kind)) {
       continue;
     }
-    if (issues.some(issue => issue.pathHint === key)) {
+    if (issues.some((issue) => issue.pathHint === key)) {
       continue;
     }
     const expected = kind === 'boolean' ? 'true or false' : kind === 'array' ? 'an array' : kind === 'object' ? 'an object' : `a ${kind}`;
@@ -513,7 +538,7 @@ export function lintAuthoredServiceBlueprintDocument(
 
   const calculationFields: Record<string, unknown> =
     root.calculations && typeof root.calculations === 'object'
-      ? ((root.calculations as Record<string, unknown>).fields as Record<string, unknown> | undefined) ?? {}
+      ? (((root.calculations as Record<string, unknown>).fields as Record<string, unknown> | undefined) ?? {})
       : {};
   const calculationFieldNames = new Set(Object.keys(calculationFields));
   const calculationShapes = new Map<string, Set<string>>();
@@ -526,7 +551,7 @@ export function lintAuthoredServiceBlueprintDocument(
   const stageKeys = new Set(
     Array.isArray(root.stages)
       ? root.stages
-          .map(rawState => {
+          .map((rawState) => {
             if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
               return undefined;
             }
@@ -548,11 +573,7 @@ export function lintAuthoredServiceBlueprintDocument(
       }
 
       const state = rawState as Record<string, unknown>;
-      const stageKey = typeof state.stageKey === 'string'
-        ? state.stageKey
-        : typeof state.stageKey === 'string'
-          ? state.stageKey
-          : '';
+      const stageKey = typeof state.stageKey === 'string' ? state.stageKey : typeof state.stageKey === 'string' ? state.stageKey : '';
       if (!stageKey.trim()) {
         issues.push({ message: `State at index ${index} is missing "stageKey".` });
       } else if (seenStageKeys.has(stageKey)) {
@@ -582,7 +603,7 @@ export function lintAuthoredServiceBlueprintDocument(
 
       if (componentCatalog.length > 0 && state.components !== undefined) {
         const siblingFieldKeys = new Set(
-          collectStageInputFields(state.components as Component[], componentCatalog).map(field => field.fieldKey)
+          collectStageInputFields(state.components as Component[], componentCatalog).map((field) => field.fieldKey)
         );
         lintComponentTree(state.components, componentCatalog, source, `stages[${index}].components`, issues, {
           siblingFieldKeys,
@@ -643,7 +664,9 @@ export function coerceParsedAuthoredServiceBlueprint(parsed: unknown): ServiceBl
   // Copied from the field table, not field by field, so a newly declared top-level property cannot
   // be forgotten here (allowManualRestart was, and was dropped on every Definition-tab apply).
   const owned = Object.fromEntries(
-    Object.entries(EDITOR_TOP_LEVEL_FIELDS).filter(([key, kind]) => matchesTopLevelFieldKind(root[key], kind)).map(([key]) => [key, root[key]])
+    Object.entries(EDITOR_TOP_LEVEL_FIELDS)
+      .filter(([key, kind]) => matchesTopLevelFieldKind(root[key], kind))
+      .map(([key]) => [key, root[key]])
   );
   return hydrateServiceBlueprintDefinition({
     definitionKey: '',

@@ -37,17 +37,17 @@ test.describe('ServiceBlueprint canvas — drag-to-connect', () => {
     // Chips are per authored route; route paths are per node pair (and this
     // connection reuses an existing pair), so assert on chips.
     const chipsBefore = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-transition]').count();
-    await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+    await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
       (window as unknown as { __inspector: unknown[] }).__inspector = [];
-      graphElement.addEventListener('inspector-requested', event => {
-        (window as unknown as { __inspector: unknown[] }).__inspector.push(
-          (event as CustomEvent).detail
-        );
+      graphElement.addEventListener('inspector-requested', (event) => {
+        (window as unknown as { __inspector: unknown[] }).__inspector.push((event as CustomEvent).detail);
       });
     });
 
     const handle = await sourceHandleCentre(page, 'confirm-payment-received');
-    const target = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-gateway-node="await-payment-confirmation"]').boundingBox();
+    const target = await page
+      .locator('wayfinder-service-blueprint-graph [data-wayfinder-gateway-node="await-payment-confirmation"]')
+      .boundingBox();
     await page.mouse.move(handle.x, handle.y);
     await page.mouse.down();
     await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, { steps: 10 });
@@ -56,10 +56,11 @@ test.describe('ServiceBlueprint canvas — drag-to-connect', () => {
     await expect
       .poll(() => page.locator('wayfinder-service-blueprint-graph [data-wayfinder-transition]').count())
       .toBeGreaterThan(chipsBefore);
-    const inspectorEvents = await page.evaluate(() =>
-      (window as unknown as { __inspector: Array<{ kind: string }> }).__inspector);
-    expect(inspectorEvents.some(detail => detail.kind === 'transition'),
-      'the inspector must open on the newly created route').toBe(true);
+    const inspectorEvents = await page.evaluate(() => (window as unknown as { __inspector: Array<{ kind: string }> }).__inspector);
+    expect(
+      inspectorEvents.some((detail) => detail.kind === 'transition'),
+      'the inspector must open on the newly created route'
+    ).toBe(true);
   });
 
   test('connecting stage to stage routes through an auto-created Split gateway', async ({ page }) => {
@@ -91,7 +92,7 @@ test.describe('ServiceBlueprint canvas — drag-to-connect', () => {
   test('read-only canvases expose no connectable handles', async ({ page }) => {
     await gotoStory(page, '/iframe.html?id=service-blueprint-editor-service-blueprint-graph--graph-read-only&viewMode=story');
 
-    const connectable = await page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement => {
+    const connectable = await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
       const root = (graphElement as HTMLElement).shadowRoot!;
       return root.querySelectorAll('.react-flow__handle.connectable').length;
     });
@@ -121,23 +122,25 @@ test.describe('ServiceBlueprint canvas — marquee subgraph copy/paste', () => {
     await page.keyboard.up('Shift');
 
     await expect
-      .poll(() => page.locator('wayfinder-service-blueprint-graph').evaluate(graphElement =>
-        (graphElement as HTMLElement).shadowRoot!.querySelectorAll('.react-flow__node.selected').length))
+      .poll(() =>
+        page
+          .locator('wayfinder-service-blueprint-graph')
+          .evaluate((graphElement) => (graphElement as HTMLElement).shadowRoot!.querySelectorAll('.react-flow__node.selected').length)
+      )
       .toBeGreaterThanOrEqual(2);
 
     await page.keyboard.press('ControlOrMeta+c');
     await page.keyboard.press('ControlOrMeta+v');
 
-    await expect
-      .poll(() => page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').count())
-      .toBeGreaterThan(stagesBefore);
+    await expect.poll(() => page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').count()).toBeGreaterThan(stagesBefore);
     const copies = page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage*="-copy"]');
     await expect(copies.first()).toBeAttached();
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect
-      .poll(() => page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').count(),
-        { message: 'one undo must remove the whole pasted subgraph' })
+      .poll(() => page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage]').count(), {
+        message: 'one undo must remove the whole pasted subgraph',
+      })
       .toBe(stagesBefore);
   });
 });

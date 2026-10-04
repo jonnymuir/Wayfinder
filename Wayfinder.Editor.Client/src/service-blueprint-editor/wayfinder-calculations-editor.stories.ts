@@ -28,9 +28,7 @@ function fixtureBlueprint(): ServiceBlueprint {
         stageKey: 'only',
         displayName: 'Only',
         queueKey: 'citizen',
-        components: [
-          { type: 'number', fieldKey: 'age', label: 'Age', required: true, default: '30' } as never,
-        ],
+        components: [{ type: 'number', fieldKey: 'age', label: 'Age', required: true, default: '30' } as never],
       },
     ],
     calculations: {
@@ -57,7 +55,7 @@ function makeElement(): WayfinderCalculationsEditorElement {
   const el = document.createElement('wayfinder-calculations-editor') as WayfinderCalculationsEditorElement;
   el.serviceBlueprint = fixtureBlueprint();
   el.componentCatalog = CATALOG;
-  el.addEventListener('service-blueprint-updated', event => {
+  el.addEventListener('service-blueprint-updated', (event) => {
     const detail = (event as CustomEvent<{ serviceBlueprint: ServiceBlueprint }>).detail;
     el.serviceBlueprint = detail.serviceBlueprint;
   });
@@ -80,7 +78,7 @@ type Story = StoryObj;
  */
 export const Default: Story = {
   play: async ({ canvasElement }) => {
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await new Promise((resolve) => setTimeout(resolve, 150));
     const el = canvasElement.querySelector('wayfinder-calculations-editor') as WayfinderCalculationsEditorElement;
     await el.updateComplete;
     const root = el.shadowRoot!;
@@ -88,9 +86,9 @@ export const Default: Story = {
     const fieldRows = root.querySelectorAll('[data-wayfinder-calc-field]');
     await expect(fieldRows.length).toBe(2);
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     const previews = root.querySelectorAll('[data-wayfinder-calc-field-preview]');
-    const previewTexts = Array.from(previews).map(node => node.textContent?.trim());
+    const previewTexts = Array.from(previews).map((node) => node.textContent?.trim());
     await expect(previewTexts).toContain('= 60');
     await expect(previewTexts).toContain('= 90');
 
@@ -115,12 +113,12 @@ export const Default: Story = {
  */
 export const AddFieldAndInsertReference: Story = {
   play: async ({ canvasElement }) => {
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await new Promise((resolve) => setTimeout(resolve, 150));
     const el = canvasElement.querySelector('wayfinder-calculations-editor') as WayfinderCalculationsEditorElement;
     await el.updateComplete;
     const root = el.shadowRoot!;
 
-    const addFieldButton = Array.from(root.querySelectorAll('button')).find(button => button.textContent?.includes('+ Add field'));
+    const addFieldButton = Array.from(root.querySelectorAll('button')).find((button) => button.textContent?.includes('+ Add field'));
     await expect(addFieldButton).not.toBeUndefined();
     addFieldButton!.click();
     await el.updateComplete;
@@ -135,6 +133,6 @@ export const AddFieldAndInsertReference: Story = {
       completions: Array<{ name: string; detail: string }>;
     };
     await expect(exprEditor).not.toBeNull();
-    await expect(exprEditor.completions.some(item => item.name === 'age')).toBe(true);
+    await expect(exprEditor.completions.some((item) => item.name === 'age')).toBe(true);
   },
 };

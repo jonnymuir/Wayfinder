@@ -115,11 +115,9 @@ export function computeCalculationDiagnostics(input: CalculationDiagnosticsInput
       }
       if (hasDefault && !hasValueKind) {
         diagnostics.push({ kind: 'field-default-without-value-kind', field: name });
-      } else if (hasDefault && normalisedKind === 'number'
-        && !Number.isFinite(Number(field.default!.replace(/[£,]/g, '').trim()))) {
+      } else if (hasDefault && normalisedKind === 'number' && !Number.isFinite(Number(field.default!.replace(/[£,]/g, '').trim()))) {
         diagnostics.push({ kind: 'field-default-unparseable', field: name, valueKind: 'number' });
-      } else if (hasDefault && normalisedKind === 'boolean'
-        && !['true', 'false'].includes(field.default!.trim().toLowerCase())) {
+      } else if (hasDefault && normalisedKind === 'boolean' && !['true', 'false'].includes(field.default!.trim().toLowerCase())) {
         diagnostics.push({ kind: 'field-default-unparseable', field: name, valueKind: 'boolean' });
       }
     }
@@ -127,9 +125,9 @@ export function computeCalculationDiagnostics(input: CalculationDiagnosticsInput
     if (!isService && expr.trim()) {
       checkExpression(
         expr,
-        message => diagnostics.push({ kind: 'field-parse-error', field: name, message }),
-        refName => diagnostics.push({ kind: 'field-unknown-reference', field: name, name: refName }),
-        table => diagnostics.push({ kind: 'field-unknown-table', field: name, table })
+        (message) => diagnostics.push({ kind: 'field-parse-error', field: name, message }),
+        (refName) => diagnostics.push({ kind: 'field-unknown-reference', field: name, name: refName }),
+        (table) => diagnostics.push({ kind: 'field-unknown-table', field: name, table })
       );
     }
   }
@@ -155,9 +153,9 @@ export function computeCalculationDiagnostics(input: CalculationDiagnosticsInput
     if (from.trim()) {
       checkExpression(
         from,
-        message => diagnostics.push({ kind: 'series-parse-error', series: name, part: 'from', message }),
-        refName => diagnostics.push({ kind: 'series-unknown-reference', series: name, part: 'from', name: refName }),
-        table => diagnostics.push({ kind: 'series-unknown-table', series: name, part: 'from', table })
+        (message) => diagnostics.push({ kind: 'series-parse-error', series: name, part: 'from', message }),
+        (refName) => diagnostics.push({ kind: 'series-unknown-reference', series: name, part: 'from', name: refName }),
+        (table) => diagnostics.push({ kind: 'series-unknown-table', series: name, part: 'from', table })
       );
     }
 
@@ -165,9 +163,9 @@ export function computeCalculationDiagnostics(input: CalculationDiagnosticsInput
     if (to.trim()) {
       checkExpression(
         to,
-        message => diagnostics.push({ kind: 'series-parse-error', series: name, part: 'to', message }),
-        refName => diagnostics.push({ kind: 'series-unknown-reference', series: name, part: 'to', name: refName }),
-        table => diagnostics.push({ kind: 'series-unknown-table', series: name, part: 'to', table })
+        (message) => diagnostics.push({ kind: 'series-parse-error', series: name, part: 'to', message }),
+        (refName) => diagnostics.push({ kind: 'series-unknown-reference', series: name, part: 'to', name: refName }),
+        (table) => diagnostics.push({ kind: 'series-unknown-table', series: name, part: 'to', table })
       );
     }
 
@@ -175,9 +173,9 @@ export function computeCalculationDiagnostics(input: CalculationDiagnosticsInput
       if (typeof expr === 'string' && expr.trim()) {
         checkExpression(
           expr,
-          message => diagnostics.push({ kind: 'series-parse-error', series: name, part: 'values', column, message }),
-          refName => diagnostics.push({ kind: 'series-unknown-reference', series: name, part: 'values', column, name: refName }),
-          table => diagnostics.push({ kind: 'series-unknown-table', series: name, part: 'values', column, table }),
+          (message) => diagnostics.push({ kind: 'series-parse-error', series: name, part: 'values', column, message }),
+          (refName) => diagnostics.push({ kind: 'series-unknown-reference', series: name, part: 'values', column, name: refName }),
+          (table) => diagnostics.push({ kind: 'series-unknown-table', series: name, part: 'values', column, table }),
           over
         );
       }

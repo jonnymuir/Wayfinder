@@ -1,6 +1,17 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import { type ActionCatalogEntry, type ActionDefinition, type ServiceBlueprintGatewayDefinition, type ServiceBlueprintRouteDefinition, type StageDefinition, type ServiceBlueprint, type ComponentDescriptor, type NodePosition, type SupportSystemDescriptor, serviceBlueprintGateways } from './types.js';
+import {
+  type ActionCatalogEntry,
+  type ActionDefinition,
+  type ServiceBlueprintGatewayDefinition,
+  type ServiceBlueprintRouteDefinition,
+  type StageDefinition,
+  type ServiceBlueprint,
+  type ComponentDescriptor,
+  type NodePosition,
+  type SupportSystemDescriptor,
+  serviceBlueprintGateways,
+} from './types.js';
 import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
 import { computeServiceBlueprintGraphLayout, parseGraphNodeId } from './graph/service-blueprint-graph-layout.js';
 import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
@@ -31,10 +42,7 @@ import {
 import type { ConfidenceTab } from './wayfinder-confidence-tabs.js';
 import { renderToolbarIcon } from './graph/toolbar-icons.js';
 
-type ServiceBlueprintSelection =
-  | { kind: 'stage'; stageKey: string }
-  | { kind: 'gateway'; gatewayKey: string }
-  | null;
+type ServiceBlueprintSelection = { kind: 'stage'; stageKey: string } | { kind: 'gateway'; gatewayKey: string } | null;
 
 type ServiceBlueprintHistoryEntry = {
   serviceBlueprint: ServiceBlueprint;
@@ -98,7 +106,7 @@ function selectionsEqual(left: ServiceBlueprintSelection, right: ServiceBlueprin
 }
 
 function makeCopiedStageKey(baseStageKey: string, serviceBlueprint: ServiceBlueprint): string {
-  const usedKeys = new Set(serviceBlueprint.stages.map(stage => stage.stageKey));
+  const usedKeys = new Set(serviceBlueprint.stages.map((stage) => stage.stageKey));
   let candidate = `${baseStageKey}-copy`;
   let suffix = 2;
   while (usedKeys.has(candidate)) {
@@ -288,11 +296,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   willUpdate(changedProperties: Map<string, unknown>) {
     // Watch for serviceBlueprint key changes and reload
-    if (
-      changedProperties.has('blueprintKey') &&
-      this.blueprintKey !== this._lastLoadedBlueprintKey &&
-      !this.initialServiceBlueprint
-    ) {
+    if (changedProperties.has('blueprintKey') && this.blueprintKey !== this._lastLoadedBlueprintKey && !this.initialServiceBlueprint) {
       void this._loadServiceBlueprint();
     }
   }
@@ -319,11 +323,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     // the two paths behaving identically. The first load (null → a blueprint) validates
     // immediately so the rail isn't blank for the debounce interval right after opening.
     if (
-      _changedProperties.has('_serviceBlueprint')
-      || _changedProperties.has('_componentCatalog')
-      || _changedProperties.has('_actionCatalog')
-      || _changedProperties.has('_supportSystemCatalog')
-      || _changedProperties.has('serviceBlueprintSource')
+      _changedProperties.has('_serviceBlueprint') ||
+      _changedProperties.has('_componentCatalog') ||
+      _changedProperties.has('_actionCatalog') ||
+      _changedProperties.has('_supportSystemCatalog') ||
+      _changedProperties.has('serviceBlueprintSource')
     ) {
       if (_changedProperties.has('_serviceBlueprint') && !_changedProperties.get('_serviceBlueprint') && this._serviceBlueprint) {
         void this._revalidate();
@@ -472,7 +476,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     if (selection?.kind === 'stage') {
-      const exists = serviceBlueprint.stages.some(stage => stage.stageKey === selection.stageKey);
+      const exists = serviceBlueprint.stages.some((stage) => stage.stageKey === selection.stageKey);
       this._selection = exists ? { kind: 'stage', stageKey: selection.stageKey } : null;
       this._selectedTransitionIndex = null;
       this._expandInspectorForSelection();
@@ -480,7 +484,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     if (selection?.kind === 'gateway') {
-      const exists = serviceBlueprint.gateways?.some(gateway => gateway.key === selection.gatewayKey) ?? false;
+      const exists = serviceBlueprint.gateways?.some((gateway) => gateway.key === selection.gatewayKey) ?? false;
       this._selection = exists ? { kind: 'gateway', gatewayKey: selection.gatewayKey } : null;
       this._selectedTransitionIndex = null;
       this._expandInspectorForSelection();
@@ -517,9 +521,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     // empty state and a newly-connected or outline-clicked route never
     // becomes editable.
     const route = transitions[transitionIndex];
-    this._selection = route.fromGateway
-      ? { kind: 'gateway', gatewayKey: route.fromGateway }
-      : { kind: 'stage', stageKey: route.fromStage };
+    this._selection = route.fromGateway ? { kind: 'gateway', gatewayKey: route.fromGateway } : { kind: 'stage', stageKey: route.fromStage };
     this._selectedTransitionIndex = transitionIndex;
     this._expandInspectorForSelection();
   }
@@ -545,7 +547,12 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._clearVersionPollTimer();
 
     // No point polling once we already know it's stale — nothing more to learn until reload.
-    if (typeof window === 'undefined' || !this.serviceBlueprintSource?.checkVersion || !this._serviceBlueprint || this._serviceBlueprintStale) {
+    if (
+      typeof window === 'undefined' ||
+      !this.serviceBlueprintSource?.checkVersion ||
+      !this._serviceBlueprint ||
+      this._serviceBlueprintStale
+    ) {
       return;
     }
 
@@ -595,7 +602,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-
   private _snapshotCurrentState(): ServiceBlueprintHistoryEntry | null {
     if (!this._serviceBlueprint) {
       return null;
@@ -638,9 +644,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     const undoLabel = `${this._undoHistory.length} change${this._undoHistory.length === 1 ? '' : 's'} available to undo`;
-    const redoLabel = this._redoHistory.length > 0
-      ? `${this._redoHistory.length} change${this._redoHistory.length === 1 ? '' : 's'} available to redo`
-      : 'Redo disabled — you are at the latest change';
+    const redoLabel =
+      this._redoHistory.length > 0
+        ? `${this._redoHistory.length} change${this._redoHistory.length === 1 ? '' : 's'} available to redo`
+        : 'Redo disabled — you are at the latest change';
 
     return `${undoLabel}. ${redoLabel}.`;
   }
@@ -651,9 +658,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return null;
     }
 
-    return currentSelection.kind === 'stage' && this._actionSelection.target === 'stage'
-      ? this._actionSelection.index
-      : null;
+    return currentSelection.kind === 'stage' && this._actionSelection.target === 'stage' ? this._actionSelection.index : null;
   }
 
   private get _clipboardSummary() {
@@ -742,11 +747,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   private get _blockingValidationIssues() {
-    return this._validationIssues.filter(issue => issue.blocking);
+    return this._validationIssues.filter((issue) => issue.blocking);
   }
 
   private get _warningValidationIssues() {
-    return this._validationIssues.filter(issue => !issue.blocking);
+    return this._validationIssues.filter((issue) => !issue.blocking);
   }
 
   private get _hasBlockingValidationIssues() {
@@ -758,10 +763,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   private get _canSave() {
-    return Boolean(this._serviceBlueprint)
-      && !this._hasBlockingValidationIssues
-      && this._saveState !== 'saving'
-      && this._canSaveByContext;
+    return Boolean(this._serviceBlueprint) && !this._hasBlockingValidationIssues && this._saveState !== 'saving' && this._canSaveByContext;
   }
 
   private get _dirtyStateSummary() {
@@ -849,13 +851,13 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     if (this._actionSelection.target === 'stage' && this._selectedStageKey) {
-      const stage = this._serviceBlueprint.stages.find(candidate => candidate.stageKey === this._selectedStageKey);
+      const stage = this._serviceBlueprint.stages.find((candidate) => candidate.stageKey === this._selectedStageKey);
       const action = stage?.actions?.[this._actionSelection.index];
       return action ? { action, target: 'stage' } : null;
     }
 
     if (this._actionSelection.target === 'transition' && this._selectedTransitionIndex !== null) {
-      const transition = (flattenRoutes(this._serviceBlueprint))[this._selectedTransitionIndex];
+      const transition = flattenRoutes(this._serviceBlueprint)[this._selectedTransitionIndex];
       const action = transition?.actions?.[this._actionSelection.index];
       return action ? { action, target: 'transition' } : null;
     }
@@ -870,14 +872,12 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     const target = currentSelection.kind === 'stage' ? 'stage' : 'transition';
-    const entry = this._actionCatalog.find(candidate => candidate.type === action.type) ?? null;
+    const entry = this._actionCatalog.find((candidate) => candidate.type === action.type) ?? null;
     return entry ? availableContexts(entry, target).length > 0 : true;
   }
 
   private get _canCopy() {
-    return this._currentAction() !== null
-      || this._currentSelection()?.kind === 'stage'
-      || this._graphMultiSelection.length >= 2;
+    return this._currentAction() !== null || this._currentSelection()?.kind === 'stage' || this._graphMultiSelection.length >= 2;
   }
 
   private get _canPaste() {
@@ -893,16 +893,12 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   private _normalisePastedAction(action: ActionDefinition, target: 'stage' | 'transition'): ActionDefinition | null {
     const nextAction = cloneAction(action);
-    const entry = this._actionCatalog.find(candidate => candidate.type === nextAction.type) ?? null;
+    const entry = this._actionCatalog.find((candidate) => candidate.type === nextAction.type) ?? null;
 
     if (!entry) {
       return {
         ...nextAction,
-        timing: target === 'transition'
-          ? 'onTransition'
-          : nextAction.timing === 'onExit'
-            ? 'onExit'
-            : 'onEnter',
+        timing: target === 'transition' ? 'onTransition' : nextAction.timing === 'onExit' ? 'onExit' : 'onEnter',
       };
     }
 
@@ -911,11 +907,12 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return null;
     }
 
-    const preferredContext = target === 'transition'
-      ? 'transition'
-      : contexts.includes(contextForTiming(nextAction.timing, 'stage'))
-        ? contextForTiming(nextAction.timing, 'stage')
-        : contexts[0];
+    const preferredContext =
+      target === 'transition'
+        ? 'transition'
+        : contexts.includes(contextForTiming(nextAction.timing, 'stage'))
+          ? contextForTiming(nextAction.timing, 'stage')
+          : contexts[0];
 
     return updateActionSummary(entry, {
       ...nextAction,
@@ -958,15 +955,16 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   };
 
   private _isEditableTarget(event: KeyboardEvent) {
-    return event.composedPath().some(target =>
-      target instanceof HTMLElement
-      && (
-        target instanceof HTMLInputElement
-        || target instanceof HTMLTextAreaElement
-        || target instanceof HTMLSelectElement
-        || target.isContentEditable
-      )
-    );
+    return event
+      .composedPath()
+      .some(
+        (target) =>
+          target instanceof HTMLElement &&
+          (target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement ||
+            target instanceof HTMLSelectElement ||
+            target.isContentEditable)
+      );
   }
 
   private _handleEditorKeydown = (event: KeyboardEvent) => {
@@ -987,9 +985,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     if (
-      ((COPY_SHORTCUT && matchesShortcut(event, COPY_SHORTCUT))
-        || (PASTE_SHORTCUT && matchesShortcut(event, PASTE_SHORTCUT)))
-      && this._isEditableTarget(event)
+      ((COPY_SHORTCUT && matchesShortcut(event, COPY_SHORTCUT)) || (PASTE_SHORTCUT && matchesShortcut(event, PASTE_SHORTCUT))) &&
+      this._isEditableTarget(event)
     ) {
       return;
     }
@@ -1054,7 +1051,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     const root = event.currentTarget as HTMLElement;
     const focusable = Array.from(
       root.querySelectorAll<HTMLElement>('button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])')
-    ).filter(element => !element.hasAttribute('disabled') && element.tabIndex >= 0);
+    ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex >= 0);
     if (focusable.length === 0) {
       return;
     }
@@ -1091,9 +1088,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   private _handleActionSelected(e: CustomEvent<{ index: number | null; target: 'stage' | 'transition' }>) {
-    this._actionSelection = e.detail.index === null
-      ? null
-      : { target: e.detail.target, index: e.detail.index };
+    this._actionSelection = e.detail.index === null ? null : { target: e.detail.target, index: e.detail.index };
   }
 
   private _handleServiceBlueprintUpdated(
@@ -1133,7 +1128,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _handleOutlineGatewaySelected = (e: CustomEvent<{ gatewayKey: string }>) => {
     this._applySelection({ kind: 'gateway', gatewayKey: e.detail.gatewayKey }, this._serviceBlueprint);
     this._actionSelection = null;
-    const gateway = this._serviceBlueprint?.gateways?.find(g => g.key === e.detail.gatewayKey);
+    const gateway = this._serviceBlueprint?.gateways?.find((g) => g.key === e.detail.gatewayKey);
     if (gateway) {
       this._announceHistory(`Selected gateway ${gateway.displayName}`);
     }
@@ -1272,7 +1267,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._tryApplyDefinitionText();
   }
   // Public hook for tests/host: flush debounce and apply if valid.
-  applyDefinitionPending() { this._applyDefinitionTextImmediately(); }
+  applyDefinitionPending() {
+    this._applyDefinitionTextImmediately();
+  }
 
   private get _definitionHasIssues() {
     return this._definitionParseError !== null || this._definitionSchemaIssues.length > 0;
@@ -1297,13 +1294,13 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return out;
   }
 
-
   private _copySelection() {
     const selectedAction = this._currentAction();
     if (selectedAction) {
-      const label = selectedAction.action.summary?.trim()
-        || this._actionCatalog.find(entry => entry.type === selectedAction.action.type)?.label
-        || selectedAction.action.type;
+      const label =
+        selectedAction.action.summary?.trim() ||
+        this._actionCatalog.find((entry) => entry.type === selectedAction.action.type)?.label ||
+        selectedAction.action.type;
       this._clipboard = {
         kind: 'action',
         action: cloneAction(selectedAction.action),
@@ -1320,19 +1317,23 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     if (this._graphMultiSelection.length >= 2) {
       const selectedKeys = this._graphMultiSelection.map(parseGraphNodeId);
-      const stages = this._serviceBlueprint.stages.filter(stage =>
-        selectedKeys.some(parsed => parsed.kind === 'stage' && parsed.key === stage.stageKey));
-      const gateways = serviceBlueprintGateways(this._serviceBlueprint).filter(gateway =>
-        selectedKeys.some(parsed => parsed.kind === 'gateway' && parsed.key === gateway.key));
+      const stages = this._serviceBlueprint.stages.filter((stage) =>
+        selectedKeys.some((parsed) => parsed.kind === 'stage' && parsed.key === stage.stageKey)
+      );
+      const gateways = serviceBlueprintGateways(this._serviceBlueprint).filter((gateway) =>
+        selectedKeys.some((parsed) => parsed.kind === 'gateway' && parsed.key === gateway.key)
+      );
       if (stages.length + gateways.length >= 2) {
         const label = [
           stages.length > 0 ? `${stages.length} stage${stages.length === 1 ? '' : 's'}` : null,
           gateways.length > 0 ? `${gateways.length} gateway${gateways.length === 1 ? '' : 's'}` : null,
-        ].filter(Boolean).join(' and ');
+        ]
+          .filter(Boolean)
+          .join(' and ');
         this._clipboard = {
           kind: 'subgraph',
           stages: stages.map(cloneStage),
-          gateways: gateways.map(gateway => JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition),
+          gateways: gateways.map((gateway) => JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition),
           label,
         };
         this._showToast(`Copied ${label}.`);
@@ -1344,7 +1345,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return false;
     }
 
-    const stage = this._serviceBlueprint.stages.find(candidate => candidate.stageKey === this._selectedStageKey);
+    const stage = this._serviceBlueprint.stages.find((candidate) => candidate.stageKey === this._selectedStageKey);
     if (!stage) {
       return false;
     }
@@ -1371,8 +1372,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     const serviceBlueprint = this._serviceBlueprint;
 
     const usedKeys = new Set<string>([
-      ...serviceBlueprint.stages.map(stage => stage.stageKey),
-      ...serviceBlueprintGateways(serviceBlueprint).map(gateway => gateway.key),
+      ...serviceBlueprint.stages.map((stage) => stage.stageKey),
+      ...serviceBlueprintGateways(serviceBlueprint).map((gateway) => gateway.key),
     ]);
     const uniqueKey = (base: string) => {
       let candidate = `${base}-copy`;
@@ -1386,20 +1387,24 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     };
 
     const keyMap = new Map<string, string>();
-    entry.stages.forEach(stage => keyMap.set(stage.stageKey, uniqueKey(stage.stageKey)));
-    entry.gateways.forEach(gateway => keyMap.set(gateway.key, uniqueKey(gateway.key)));
+    for (const stage of entry.stages) {
+      keyMap.set(stage.stageKey, uniqueKey(stage.stageKey));
+    }
+    for (const gateway of entry.gateways) {
+      keyMap.set(gateway.key, uniqueKey(gateway.key));
+    }
 
     const remapRoutes = (ownerNewKey: string, routes: ServiceBlueprintRouteDefinition[] | undefined): ServiceBlueprintRouteDefinition[] =>
-      (routes ?? []).map(route => {
+      (routes ?? []).map((route) => {
         const target = keyMap.get(route.target) ?? route.target;
         return { ...route, target, id: newRouteId(ownerNewKey, route.trigger, target) };
       });
 
-    const pastedStages: StageDefinition[] = entry.stages.map(stage => {
+    const pastedStages: StageDefinition[] = entry.stages.map((stage) => {
       const stageKey = keyMap.get(stage.stageKey)!;
       return { ...cloneStage(stage), stageKey, routes: remapRoutes(stageKey, stage.routes) };
     });
-    const pastedGateways: ServiceBlueprintGatewayDefinition[] = entry.gateways.map(gateway => {
+    const pastedGateways: ServiceBlueprintGatewayDefinition[] = entry.gateways.map((gateway) => {
       const key = keyMap.get(gateway.key)!;
       const clone = JSON.parse(JSON.stringify(gateway)) as ServiceBlueprintGatewayDefinition;
       return { ...clone, key, routes: remapRoutes(key, gateway.routes) };
@@ -1409,7 +1414,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     const { layout } = computeServiceBlueprintGraphLayout(serviceBlueprint, this.availableQueues);
     const layoutNodes: Record<string, NodePosition> = { ...(serviceBlueprint.layout?.nodes ?? {}) };
     keyMap.forEach((newKey, oldKey) => {
-      const isStage = entry.stages.some(stage => stage.stageKey === oldKey);
+      const isStage = entry.stages.some((stage) => stage.stageKey === oldKey);
       const placement = layout.placements.get(`${isStage ? 'stage' : 'gateway'}:${oldKey}`);
       if (placement) {
         layoutNodes[`${isStage ? 'stage' : 'gateway'}:${newKey}`] = {
@@ -1427,10 +1432,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     };
 
     const firstStageKey = pastedStages[0]?.stageKey ?? null;
-    this._commitServiceBlueprintUpdate(
-      next,
-      firstStageKey ? { kind: 'stage', stageKey: firstStageKey } : this._currentSelection()
-    );
+    this._commitServiceBlueprintUpdate(next, firstStageKey ? { kind: 'stage', stageKey: firstStageKey } : this._currentSelection());
     this._showToast(`Pasted ${entry.label}.`);
     return true;
   }
@@ -1453,9 +1455,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       };
 
       const stages = [...this._serviceBlueprint.stages];
-      const selectedStageIndex = this._selectedStageKey
-        ? stages.findIndex(stage => stage.stageKey === this._selectedStageKey)
-        : -1;
+      const selectedStageIndex = this._selectedStageKey ? stages.findIndex((stage) => stage.stageKey === this._selectedStageKey) : -1;
       const insertIndex = selectedStageIndex >= 0 ? selectedStageIndex + 1 : stages.length;
       stages.splice(insertIndex, 0, pastedStage);
 
@@ -1466,7 +1466,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     const currentSelection = this._currentSelection();
-    if (!currentSelection || currentSelection.kind !== 'stage') {
+    if (currentSelection?.kind !== 'stage') {
       return false;
     }
 
@@ -1476,7 +1476,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return false;
     }
 
-    const stageIndex = this._serviceBlueprint.stages.findIndex(stage => stage.stageKey === currentSelection.stageKey);
+    const stageIndex = this._serviceBlueprint.stages.findIndex((stage) => stage.stageKey === currentSelection.stageKey);
     if (stageIndex < 0) {
       return false;
     }
@@ -1502,9 +1502,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       this._toastDismissTimer = null;
     };
 
-    this._toastDismissTimer = typeof window !== 'undefined'
-      ? window.setTimeout(dismiss, 5000)
-      : (setTimeout(dismiss, 5000) as unknown as number);
+    this._toastDismissTimer =
+      typeof window !== 'undefined' ? window.setTimeout(dismiss, 5000) : (setTimeout(dismiss, 5000) as unknown as number);
   }
 
   private _focusInspectorForValidationIssue(issue: ServiceBlueprintValidationIssue) {
@@ -1520,11 +1519,12 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
       requestAnimationFrame(() => {
         const actionEditor = inspector?.shadowRoot?.querySelector<HTMLElement>('wayfinder-stage-action-editor');
-        const selector = actionLocation.fieldKey && actionLocation.fieldKey !== 'fields'
-          ? `[data-wayfinder-action-param="${actionLocation.actionIndex}-${actionLocation.fieldKey}"]`
-          : typeof actionLocation.formFieldIndex === 'number'
-            ? `[data-wayfinder-form-field-key="${actionLocation.actionIndex}-${actionLocation.formFieldIndex}"]`
-            : `[data-wayfinder-stage-action="${actionLocation.actionIndex}"]`;
+        const selector =
+          actionLocation.fieldKey && actionLocation.fieldKey !== 'fields'
+            ? `[data-wayfinder-action-param="${actionLocation.actionIndex}-${actionLocation.fieldKey}"]`
+            : typeof actionLocation.formFieldIndex === 'number'
+              ? `[data-wayfinder-form-field-key="${actionLocation.actionIndex}-${actionLocation.formFieldIndex}"]`
+              : `[data-wayfinder-stage-action="${actionLocation.actionIndex}"]`;
         actionEditor?.shadowRoot?.querySelector<HTMLElement>(selector)?.focus();
       });
     });
@@ -1577,9 +1577,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       const gatewayKey = issue.location.routeId;
       const routeId = issue.location.routeId;
       const transitions = flattenRoutes(this._serviceBlueprint);
-      const targetIndex = transitions.findIndex(view =>
-        view.key === gatewayKey && view.routeId === routeId
-      );
+      const targetIndex = transitions.findIndex((view) => view.key === gatewayKey && view.routeId === routeId);
       if (targetIndex >= 0) {
         this._applyTransitionHighlight(targetIndex, this._serviceBlueprint);
       }
@@ -1592,9 +1590,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       const gatewayKey = issue.location.routeId;
       const routeId = issue.location.routeId;
       const transitions = flattenRoutes(this._serviceBlueprint);
-      const targetIndex = transitions.findIndex(view =>
-        view.key === gatewayKey && view.routeId === routeId
-      );
+      const targetIndex = transitions.findIndex((view) => view.key === gatewayKey && view.routeId === routeId);
       this._applyTransitionHighlight(targetIndex >= 0 ? targetIndex : 0, this._serviceBlueprint);
       this._actionSelection = { target: 'transition', index: issue.location.actionIndex };
       this._focusInspectorForValidationIssue(issue);
@@ -1744,9 +1740,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             <p class="validation-panel-summary">${this._validationStatusSummary}</p>
           </div>
           <div class="validation-panel-meta">
-            ${this._validationPending
-              ? html`<span class="validation-count" data-wayfinder-validation-pending>checking…</span>`
-              : nothing}
+            ${this._validationPending ? html`<span class="validation-count" data-wayfinder-validation-pending>checking…</span>` : nothing}
             <span class="validation-count validation-count-error" data-wayfinder-validation-errors>${errorCount} errors</span>
             <span class="validation-count validation-count-warning" data-wayfinder-validation-warnings>${warningCount} warnings</span>
           </div>
@@ -1757,11 +1751,13 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           <span>${this._saveStatusSummary}</span>
         </div>
 
-        ${issues.length === 0
-          ? html`<p class="validation-empty">No validation issues. You can save whenever you are ready.</p>`
-          : html`
+        ${
+          issues.length === 0
+            ? html`<p class="validation-empty">No validation issues. You can save whenever you are ready.</p>`
+            : html`
               <ol class="validation-issue-list">
-                ${issues.map(issue => html`
+                ${issues.map(
+                  (issue) => html`
                   <li>
                     <button
                       type="button"
@@ -1775,9 +1771,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                       <span>${issue.message}</span>
                     </button>
                   </li>
-                `)}
+                `
+                )}
               </ol>
-            `}
+            `
+        }
       </section>
     `;
   }
@@ -1795,8 +1793,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       <div class="definition-panel" data-wayfinder-definition-panel>
         ${banner}
         <div class="definition-editor-frame">
-          ${this._definitionEditorLoaded
-            ? html`
+          ${
+            this._definitionEditorLoaded
+              ? html`
                 <wayfinder-definition-editor
                   data-wayfinder-definition-editor
                   .value=${this._definitionText}
@@ -1804,9 +1803,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                   @definition-input=${this._handleDefinitionInput}
                 ></wayfinder-definition-editor>
               `
-            : html`<p class="definition-loading" role="status" data-wayfinder-definition-tab-loading>
+              : html`<p class="definition-loading" role="status" data-wayfinder-definition-tab-loading>
                 Preparing the JSON editor…
-              </p>`}
+              </p>`
+          }
         </div>
         <div class="sr-only" role="status" aria-live="polite" data-wayfinder-definition-announcement>
           ${this._definitionAnnouncement}
@@ -1821,12 +1821,13 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
     const summary = this._definitionParseError
       ? `JSON is not valid: ${this._definitionParseError}`
-      : this._definitionSchemaIssues[0]?.message ?? 'Definition does not match the service blueprint schema.';
-    const additional = !this._definitionParseError && this._definitionSchemaIssues.length > 1
-      ? html`<ul class="definition-banner-list">
-          ${this._definitionSchemaIssues.slice(1, 5).map(issue => html`<li>${issue.message}</li>`)}
+      : (this._definitionSchemaIssues[0]?.message ?? 'Definition does not match the service blueprint schema.');
+    const additional =
+      !this._definitionParseError && this._definitionSchemaIssues.length > 1
+        ? html`<ul class="definition-banner-list">
+          ${this._definitionSchemaIssues.slice(1, 5).map((issue) => html`<li>${issue.message}</li>`)}
         </ul>`
-      : nothing;
+        : nothing;
 
     return html`
       <div
@@ -1904,25 +1905,29 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           </div>
 
           <div class="shortcut-groups">
-            ${SERVICE_BLUEPRINT_SHORTCUT_GROUPS.map(group => html`
+            ${SERVICE_BLUEPRINT_SHORTCUT_GROUPS.map(
+              (group) => html`
               <section class="shortcut-group" data-wayfinder-shortcut-group=${group.id}>
                 <h3 class="shortcut-group-title">${group.title}</h3>
                 <ol class="shortcut-list">
-                  ${group.shortcuts.map(shortcut => html`
+                  ${group.shortcuts.map(
+                    (shortcut) => html`
                     <li class="shortcut-item" data-wayfinder-shortcut=${shortcut.id}>
                       <div class="shortcut-copy">
                         <p class="shortcut-command">${shortcut.command}</p>
                         <p class="shortcut-description">${shortcut.description}</p>
                       </div>
                       <div class="shortcut-keys" aria-label=${`${shortcut.command} shortcuts`}>
-                        ${shortcut.labels.map(label => html`<kbd>${label}</kbd>`)}
+                        ${shortcut.labels.map((label) => html`<kbd>${label}</kbd>`)}
                       </div>
                       <p class="shortcut-context">${shortcut.context}</p>
                     </li>
-                  `)}
+                  `
+                  )}
                 </ol>
               </section>
-            `)}
+            `
+            )}
           </div>
 
           <section class="shortcut-group" data-wayfinder-shortcut-group="quick-tips">
@@ -2036,9 +2041,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               data-wayfinder-save
               ?disabled=${!this._canSave}
               aria-label=${this._saveState === 'saving' ? 'Saving' : 'Save'}
-              title=${!this._canSaveByContext
-                ? 'Saving is disabled for the current author.'
-                : `${this._dirtyStateSummary} — ${this._saveState === 'saving' ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`}
+              title=${
+                !this._canSaveByContext
+                  ? 'Saving is disabled for the current author.'
+                  : `${this._dirtyStateSummary} — ${this._saveState === 'saving' ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`
+              }
               aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
               @click=${this._handleSave}
             >
@@ -2067,8 +2074,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               ${renderToolbarIcon('redo')}
             </button>
 
-            ${this._activeConfidenceTab === 'canvas'
-              ? html`
+            ${
+              this._activeConfidenceTab === 'canvas'
+                ? html`
                   <span class="toolbar-divider" role="separator" aria-orientation="vertical"></span>
                   <div class="editor-toolbar">
                     <button
@@ -2173,7 +2181,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     </button>
                   </div>
                 `
-              : nothing}
+                : nothing
+            }
           </div>
         </div>
 
@@ -2198,14 +2207,16 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                 <div class="panel-header">
                   <div class="panel-header-copy">
                     <h2 class="panel-title">Outline</h2>
-                    ${this._outlineCollapsed
-                      ? nothing
-                      : html`
+                    ${
+                      this._outlineCollapsed
+                        ? nothing
+                        : html`
                           <p class="panel-subtitle">
-                            ${(this._serviceBlueprint?.stages.length ?? 0)} ${(this._serviceBlueprint?.stages.length ?? 0) === 1 ? 'stage' : 'stages'}
+                            ${this._serviceBlueprint?.stages.length ?? 0} ${(this._serviceBlueprint?.stages.length ?? 0) === 1 ? 'stage' : 'stages'}
                             ${this._serviceBlueprint?.gateways?.length ? ` · ${this._serviceBlueprint.gateways.length} gateways` : ''}
                           </p>
-                        `}
+                        `
+                    }
                   </div>
                   <button
                     type="button"
@@ -2248,11 +2259,12 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                   const warningCount = this._warningValidationIssues.length;
                   const total = errorCount + warningCount;
                   if (total === 0) return nothing;
-                  const summary = errorCount > 0 && warningCount > 0
-                    ? `${errorCount} error${errorCount === 1 ? '' : 's'} and ${warningCount} warning${warningCount === 1 ? '' : 's'} need attention.`
-                    : errorCount > 0
-                      ? `${errorCount} validation error${errorCount === 1 ? '' : 's'} need attention.`
-                      : `${warningCount} validation warning${warningCount === 1 ? '' : 's'} need attention.`;
+                  const summary =
+                    errorCount > 0 && warningCount > 0
+                      ? `${errorCount} error${errorCount === 1 ? '' : 's'} and ${warningCount} warning${warningCount === 1 ? '' : 's'} need attention.`
+                      : errorCount > 0
+                        ? `${errorCount} validation error${errorCount === 1 ? '' : 's'} need attention.`
+                        : `${warningCount} validation warning${warningCount === 1 ? '' : 's'} need attention.`;
                   return html`
                     <div
                       class=${`canvas-health-hint ${errorCount > 0 ? 'is-error' : 'is-warning'}`}
@@ -2264,7 +2276,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                         type="button"
                         class="canvas-health-action"
                         data-wayfinder-open-validation
-                        @click=${() => { this._activeConfidenceTab = 'validation'; }}
+                        @click=${() => {
+                          this._activeConfidenceTab = 'validation';
+                        }}
                       >Open Validation</button>
                     </div>
                   `;
@@ -2295,9 +2309,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
               <!-- Right: inspector -->
               <section class=${`editor-right ${this._inspectorCollapsed ? 'panel-collapsed' : ''}`}>
-                ${this._inspectorCollapsed
-                  ? nothing
-                  : html`
+                ${
+                  this._inspectorCollapsed
+                    ? nothing
+                    : html`
                       <div
                         class="panel-resize-handle"
                         role="separator"
@@ -2310,13 +2325,12 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                         @pointerdown=${this._handleInspectorResizeStart}
                         @keydown=${this._handleInspectorResizeKeydown}
                       ></div>
-                    `}
+                    `
+                }
                 <div class="panel-header">
                   <div class="panel-header-copy">
                     <h2 class="panel-title">Properties</h2>
-                    ${this._inspectorCollapsed
-                      ? nothing
-                      : html`<p class="panel-subtitle">Selected stage, gateway, or route details</p>`}
+                    ${this._inspectorCollapsed ? nothing : html`<p class="panel-subtitle">Selected stage, gateway, or route details</p>`}
                   </div>
                   <button
                     type="button"
@@ -2426,7 +2440,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             class="toolbar-btn govuk-button govuk-button--secondary"
             aria-label="Dismiss — I just want to look at my changes first"
             data-wayfinder-dismiss-stale-banner
-            @click=${() => { this._staleBannerDismissed = true; }}
+            @click=${() => {
+              this._staleBannerDismissed = true;
+            }}
           >
             Dismiss
           </button>
@@ -2479,8 +2495,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         <div class="save-error-header">
           <p class="save-error-eyebrow">Save problem</p>
           <h2 id="service-blueprint-save-error-title" class="save-error-title">${this._saveError.title}</h2>
-          ${this._saveError.summaryStageKey
-            ? html`
+          ${
+            this._saveError.summaryStageKey
+              ? html`
                 <p class="save-error-summary" role="alert">
                   <button
                     type="button"
@@ -2493,16 +2510,20 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                   </button>
                 </p>
               `
-            : html`<p class="save-error-summary" role="alert">${this._saveError.summary}</p>`}
+              : html`<p class="save-error-summary" role="alert">${this._saveError.summary}</p>`
+          }
         </div>
 
-        ${this._saveError.details.length > 0
-          ? html`
+        ${
+          this._saveError.details.length > 0
+            ? html`
               <ul class="save-error-list">
-                ${this._saveError.details.map(detail => html`
+                ${this._saveError.details.map(
+                  (detail) => html`
                   <li>
-                    ${detail.stageKey
-                      ? html`
+                    ${
+                      detail.stageKey
+                        ? html`
                           <button
                             type="button"
                             class="save-error-detail-link"
@@ -2513,16 +2534,17 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                             <span class="save-error-detail-link-hint">Go to stage</span>
                           </button>
                         `
-                      : detail.message}
+                        : detail.message
+                    }
                   </li>
-                `)}
+                `
+                )}
               </ul>
             `
-          : nothing}
+            : nothing
+        }
 
-        ${this._saveError.traceId
-          ? html`<p class="save-error-trace"><strong>Reference:</strong> ${this._saveError.traceId}</p>`
-          : nothing}
+        ${this._saveError.traceId ? html`<p class="save-error-trace"><strong>Reference:</strong> ${this._saveError.traceId}</p>` : nothing}
 
         <label class="save-error-copy-label" for="service-blueprint-save-error-details">Copyable save error details</label>
         <textarea
@@ -2548,7 +2570,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             class="toolbar-btn govuk-button govuk-button--secondary"
             aria-label="Dismiss save error"
             data-wayfinder-dismiss-save-error
-            @click=${() => { this._saveError = null; this._saveErrorCopyStatus = null; }}
+            @click=${() => {
+              this._saveError = null;
+              this._saveErrorCopyStatus = null;
+            }}
           >
             Dismiss
           </button>

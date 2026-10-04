@@ -26,9 +26,7 @@ export interface FieldMove {
   movedAfter: string;
 }
 
-export type FieldOrderResult =
-  | { ok: true; order: string[]; moved: FieldMove[] }
-  | { ok: false; cycle: string[] };
+export type FieldOrderResult = { ok: true; order: string[]; moved: FieldMove[] } | { ok: false; cycle: string[] };
 
 /**
  * `currentOrder` is the field order before this change (e.g. the persisted declaration order,
@@ -37,7 +35,7 @@ export type FieldOrderResult =
  * is simply appended, in `fields`' own order, after every already-known field.
  */
 export function computeStableFieldOrder(fields: FieldInput[], currentOrder: string[]): FieldOrderResult {
-  const fieldNames = new Set(fields.map(f => f.name));
+  const fieldNames = new Set(fields.map((f) => f.name));
 
   const dependencies = new Map<string, Set<string>>();
   for (const field of fields) {
@@ -54,8 +52,8 @@ export function computeStableFieldOrder(fields: FieldInput[], currentOrder: stri
   }
 
   const priority = [
-    ...currentOrder.filter(name => fieldNames.has(name)),
-    ...fields.map(f => f.name).filter(name => !currentOrder.includes(name)),
+    ...currentOrder.filter((name) => fieldNames.has(name)),
+    ...fields.map((f) => f.name).filter((name) => !currentOrder.includes(name)),
   ];
 
   const placed = new Set<string>();
@@ -69,7 +67,7 @@ export function computeStableFieldOrder(fields: FieldInput[], currentOrder: stri
         continue;
       }
       const fieldDeps = dependencies.get(name) ?? new Set();
-      if ([...fieldDeps].every(dep => placed.has(dep))) {
+      if ([...fieldDeps].every((dep) => placed.has(dep))) {
         picked = name;
         break;
       }

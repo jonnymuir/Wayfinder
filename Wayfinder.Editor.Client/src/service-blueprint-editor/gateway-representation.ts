@@ -10,10 +10,7 @@ export interface GatewayBinding {
   relatedTransitionIndices: number[];
 }
 
-function shiftCandidate(
-  candidatesByQueue: Map<string, string[]>,
-  queueKey: string
-): string | null {
+function shiftCandidate(candidatesByQueue: Map<string, string[]>, queueKey: string): string | null {
   const direct = candidatesByQueue.get(queueKey);
   if (direct && direct.length > 0) {
     return direct.shift() ?? null;
@@ -46,7 +43,10 @@ export function deriveGatewayBindings(serviceBlueprint: Pick<ServiceBlueprint, '
     if (transition.fromGateway) {
       const existing = explicitSplitBindings.get(transition.fromGateway);
       explicitSplitBindings.set(transition.fromGateway, {
-        anchorStageKey: existing?.anchorStageKey ?? routes.find(route => route.toStage === transition.fromGateway && !route.fromGateway)?.fromStage ?? null,
+        anchorStageKey:
+          existing?.anchorStageKey ??
+          routes.find((route) => route.toStage === transition.fromGateway && !route.fromGateway)?.fromStage ??
+          null,
         relatedTransitionIndices: [...(existing?.relatedTransitionIndices ?? []), index],
       });
     }
@@ -54,7 +54,10 @@ export function deriveGatewayBindings(serviceBlueprint: Pick<ServiceBlueprint, '
     if (transition.toGateway) {
       const existing = explicitJoinBindings.get(transition.toGateway);
       explicitJoinBindings.set(transition.toGateway, {
-        anchorStageKey: existing?.anchorStageKey ?? routes.find(route => route.toStage === transition.toGateway && !route.fromGateway)?.fromStage ?? null,
+        anchorStageKey:
+          existing?.anchorStageKey ??
+          routes.find((route) => route.toStage === transition.toGateway && !route.fromGateway)?.fromStage ??
+          null,
         relatedTransitionIndices: [...(existing?.relatedTransitionIndices ?? []), index],
       });
     }
@@ -63,7 +66,7 @@ export function deriveGatewayBindings(serviceBlueprint: Pick<ServiceBlueprint, '
   const splitCandidatesByQueue = new Map<string, string[]>();
   const joinCandidatesByQueue = new Map<string, string[]>();
 
-  serviceBlueprint.stages.forEach(stage => {
+  serviceBlueprint.stages.forEach((stage) => {
     const stageKey = stage.stageKey;
     const queueKey = stageQueueKey(stage);
     const outgoing = outgoingByStage.get(stageKey) ?? [];
@@ -78,24 +81,23 @@ export function deriveGatewayBindings(serviceBlueprint: Pick<ServiceBlueprint, '
     }
   });
 
-  return serviceBlueprintGateways(serviceBlueprint).map(gateway => {
+  return serviceBlueprintGateways(serviceBlueprint).map((gateway) => {
     const queueKey = gatewayQueueKey(gateway);
-    const explicitBinding = gateway.gatewayType === 'Split'
-      ? explicitSplitBindings.get(gateway.key)
-      : explicitJoinBindings.get(gateway.key);
-    const anchorStageKey = explicitBinding?.anchorStageKey ?? (
-      gateway.gatewayType === 'Split'
+    const explicitBinding =
+      gateway.gatewayType === 'Split' ? explicitSplitBindings.get(gateway.key) : explicitJoinBindings.get(gateway.key);
+    const anchorStageKey =
+      explicitBinding?.anchorStageKey ??
+      (gateway.gatewayType === 'Split'
         ? shiftCandidate(splitCandidatesByQueue, queueKey)
-        : shiftCandidate(joinCandidatesByQueue, queueKey)
-    );
+        : shiftCandidate(joinCandidatesByQueue, queueKey));
 
     return {
       gateway,
       queueKey,
       anchorStageKey,
       relatedTransitionIndices:
-        explicitBinding?.relatedTransitionIndices
-        ?? (anchorStageKey === null
+        explicitBinding?.relatedTransitionIndices ??
+        (anchorStageKey === null
           ? []
           : gateway.gatewayType === 'Split'
             ? (outgoingByStage.get(anchorStageKey) ?? [])

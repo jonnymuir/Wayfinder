@@ -77,9 +77,7 @@
       "stageType": "Question",
       "actor": "reviewer",
       "queueKey": "business-user",
-      "roleGates": [
-        "reviewer"
-      ],
+      "roleGates": ["reviewer"],
       "components": [
         {
           "type": "body",
@@ -197,10 +195,7 @@
       "waitingPollIntervalMs": 5000,
       "waitingAllowDefer": true,
       "waitingDeferMessage": "You can leave this page and return later. We\u0027ll update this payment as soon as the confirmation arrives.",
-      "requiredIncomingQueues": [
-        "web-user",
-        "business-user"
-      ]
+      "requiredIncomingQueues": ["web-user", "business-user"]
     }
   ]
 }

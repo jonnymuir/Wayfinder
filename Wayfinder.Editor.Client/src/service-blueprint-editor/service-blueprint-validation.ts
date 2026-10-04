@@ -83,15 +83,13 @@ export function serviceBlueprintInboundRoutes(serviceBlueprint: ServiceBlueprint
 }
 
 export function serviceBlueprintReachableStageKeys(serviceBlueprint: ServiceBlueprint): Set<string> {
-  const stageKeys = new Set(serviceBlueprintStages(serviceBlueprint).map(stage => stage.stageKey));
-  const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map(gateway => gateway.key));
+  const stageKeys = new Set(serviceBlueprintStages(serviceBlueprint).map((stage) => stage.stageKey));
+  const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map((gateway) => gateway.key));
   if (stageKeys.size === 0) {
     return new Set<string>();
   }
 
-  const startStageKey = stageKeys.has(serviceBlueprint.initialStage)
-    ? serviceBlueprint.initialStage
-    : serviceBlueprint.stages[0]?.stageKey;
+  const startStageKey = stageKeys.has(serviceBlueprint.initialStage) ? serviceBlueprint.initialStage : serviceBlueprint.stages[0]?.stageKey;
 
   if (!startStageKey) {
     return new Set<string>();
@@ -114,7 +112,7 @@ export function serviceBlueprintReachableStageKeys(serviceBlueprint: ServiceBlue
       reachable.add(current);
     }
 
-    routes.forEach(route => {
+    routes.forEach((route) => {
       if (route.fromStage !== current) {
         return;
       }
@@ -129,41 +127,46 @@ export function serviceBlueprintReachableStageKeys(serviceBlueprint: ServiceBlue
 }
 
 export function serviceBlueprintOrphanedStages(serviceBlueprint: ServiceBlueprint): StageDefinition[] {
-  return serviceBlueprint.stages.filter(stage =>
-    stage.stageKey !== serviceBlueprint.initialStage
-    && serviceBlueprintInboundRoutes(serviceBlueprint, stage.stageKey).length === 0
-    && serviceBlueprintOutgoingRoutes(serviceBlueprint, stage.stageKey).length === 0
+  return serviceBlueprint.stages.filter(
+    (stage) =>
+      stage.stageKey !== serviceBlueprint.initialStage &&
+      serviceBlueprintInboundRoutes(serviceBlueprint, stage.stageKey).length === 0 &&
+      serviceBlueprintOutgoingRoutes(serviceBlueprint, stage.stageKey).length === 0
   );
 }
 
 export function serviceBlueprintUnreachableStages(serviceBlueprint: ServiceBlueprint): StageDefinition[] {
   const reachable = serviceBlueprintReachableStageKeys(serviceBlueprint);
-  const orphanedKeys = new Set(serviceBlueprintOrphanedStages(serviceBlueprint).map(stage => stage.stageKey));
-  return serviceBlueprint.stages.filter(stage => !reachable.has(stage.stageKey) && !orphanedKeys.has(stage.stageKey));
+  const orphanedKeys = new Set(serviceBlueprintOrphanedStages(serviceBlueprint).map((stage) => stage.stageKey));
+  return serviceBlueprint.stages.filter((stage) => !reachable.has(stage.stageKey) && !orphanedKeys.has(stage.stageKey));
 }
 
 export function serviceBlueprintDeadEndStages(serviceBlueprint: ServiceBlueprint): StageDefinition[] {
-  const orphanedKeys = new Set(serviceBlueprintOrphanedStages(serviceBlueprint).map(stage => stage.stageKey));
-  return serviceBlueprint.stages.filter(stage =>
-    !orphanedKeys.has(stage.stageKey)
-    && !isTerminalStage(stage)
-    && serviceBlueprintOutgoingRoutes(serviceBlueprint, stage.stageKey).length === 0
+  const orphanedKeys = new Set(serviceBlueprintOrphanedStages(serviceBlueprint).map((stage) => stage.stageKey));
+  return serviceBlueprint.stages.filter(
+    (stage) =>
+      !orphanedKeys.has(stage.stageKey) &&
+      !isTerminalStage(stage) &&
+      serviceBlueprintOutgoingRoutes(serviceBlueprint, stage.stageKey).length === 0
   );
 }
 
 export function serviceBlueprintRoutesWithMissingStages(serviceBlueprint: ServiceBlueprint): RouteView[] {
-  const stageKeys = new Set(serviceBlueprint.stages.map(stage => stage.stageKey));
-  const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map(gateway => gateway.key));
-  return flattenRoutes(serviceBlueprint).filter(route =>
-    (!stageKeys.has(route.fromStage) && !gatewayKeys.has(route.fromStage))
-    || (!stageKeys.has(route.toStage) && !gatewayKeys.has(route.toStage))
+  const stageKeys = new Set(serviceBlueprint.stages.map((stage) => stage.stageKey));
+  const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map((gateway) => gateway.key));
+  return flattenRoutes(serviceBlueprint).filter(
+    (route) =>
+      (!stageKeys.has(route.fromStage) && !gatewayKeys.has(route.fromStage)) ||
+      (!stageKeys.has(route.toStage) && !gatewayKeys.has(route.toStage))
   );
 }
 
 function stageLabel(serviceBlueprint: ServiceBlueprint, stageKey: string) {
-  return serviceBlueprint.stages.find(stage => stage.stageKey === stageKey)?.displayName
-    ?? serviceBlueprintGateways(serviceBlueprint).find(gateway => gateway.key === stageKey)?.displayName
-    ?? stageKey;
+  return (
+    serviceBlueprint.stages.find((stage) => stage.stageKey === stageKey)?.displayName ??
+    serviceBlueprintGateways(serviceBlueprint).find((gateway) => gateway.key === stageKey)?.displayName ??
+    stageKey
+  );
 }
 
 function actionLabel(entry: ActionCatalogEntry | null, action: ActionDefinition) {
@@ -188,11 +191,12 @@ function actionValidationIssues(
   const entry = findCatalogEntry(actionCatalog, action.type);
   const validation = validateAction(entry, action);
   const baseLabel = actionLabel(entry, action);
-  const parentLabel = location.target === 'stage'
-    ? stageLabel(serviceBlueprint, location.stageKey ?? '')
-    : routeView
-      ? routeLabel(serviceBlueprint, routeView)
-      : location.routeId ?? '';
+  const parentLabel =
+    location.target === 'stage'
+      ? stageLabel(serviceBlueprint, location.stageKey ?? '')
+      : routeView
+        ? routeLabel(serviceBlueprint, routeView)
+        : (location.routeId ?? '');
 
   const propertyIssues = Object.entries(validation.propertyErrors).map(([fieldKey, message]) => ({
     id: `${location.target}-${location.stageKey ?? location.routeId}-action-${location.actionIndex}-${fieldKey}`,
@@ -200,9 +204,10 @@ function actionValidationIssues(
     severity: 'warning' as const,
     blocking: false,
     location: { ...location, fieldKey },
-    message: location.target === 'stage'
-      ? `Stage “${parentLabel}” has an action that needs attention: “${baseLabel}” — ${normaliseValidationMessage(message)}`
-      : `Route “${parentLabel}” has an action that needs attention: “${baseLabel}” — ${normaliseValidationMessage(message)}`,
+    message:
+      location.target === 'stage'
+        ? `Stage “${parentLabel}” has an action that needs attention: “${baseLabel}” — ${normaliseValidationMessage(message)}`
+        : `Route “${parentLabel}” has an action that needs attention: “${baseLabel}” — ${normaliseValidationMessage(message)}`,
   }));
 
   const formFieldIssues = Object.entries(validation.formFieldErrors).flatMap(([fieldIndex, fieldErrors]) =>
@@ -211,20 +216,23 @@ function actionValidationIssues(
         return [];
       }
 
-      return [{
-        id: `${location.target}-${location.stageKey ?? location.routeId}-action-${location.actionIndex}-form-${fieldIndex}-${fieldKey}`,
-        code: 'action-configuration' as const,
-        severity: 'warning' as const,
-        blocking: false,
-        location: {
-          ...location,
-          fieldKey: 'fields',
-          formFieldIndex: Number(fieldIndex),
+      return [
+        {
+          id: `${location.target}-${location.stageKey ?? location.routeId}-action-${location.actionIndex}-form-${fieldIndex}-${fieldKey}`,
+          code: 'action-configuration' as const,
+          severity: 'warning' as const,
+          blocking: false,
+          location: {
+            ...location,
+            fieldKey: 'fields',
+            formFieldIndex: Number(fieldIndex),
+          },
+          message:
+            location.target === 'stage'
+              ? `Stage “${parentLabel}” has a form action that needs attention: “${baseLabel}” — ${normaliseValidationMessage(message)}`
+              : `Route “${parentLabel}” has a form action that needs attention: “${baseLabel}” — ${normaliseValidationMessage(message)}`,
         },
-        message: location.target === 'stage'
-          ? `Stage “${parentLabel}” has a form action that needs attention: “${baseLabel}” — ${normaliseValidationMessage(message)}`
-          : `Route “${parentLabel}” has a form action that needs attention: “${baseLabel}” — ${normaliseValidationMessage(message)}`,
-      }];
+      ];
     })
   );
 
@@ -263,23 +271,28 @@ function supportSystemActionValidationIssues(
     return [issue('missing-keys', 'a support-system-call action must set both a support system and a capability.')];
   }
 
-  const supportSystem = supportSystemCatalog.find(candidate => candidate.key === params.supportSystemKey);
+  const supportSystem = supportSystemCatalog.find((candidate) => candidate.key === params.supportSystemKey);
   if (!supportSystem) {
     return [issue('unknown-support-system', `“${params.supportSystemKey}” is not a registered support system.`)];
   }
 
-  const capability = supportSystem.capabilities.find(candidate => candidate.key === params.capabilityKey);
+  const capability = supportSystem.capabilities.find((candidate) => candidate.key === params.capabilityKey);
   if (!capability) {
     return [issue('unknown-capability', `“${params.capabilityKey}” is not a capability of “${supportSystem.displayName}”.`)];
   }
 
   const issues: ServiceBlueprintValidationIssue[] = [];
   const mappedInputKeys = new Set(Object.keys(params.inputs ?? {}));
-  const declaredInputKeys = new Set(capability.inputs.map(input => input.key));
+  const declaredInputKeys = new Set(capability.inputs.map((input) => input.key));
 
   for (const input of capability.inputs) {
     if (input.required && !mappedInputKeys.has(input.key)) {
-      issues.push(issue(`missing-input-${input.key}`, `capability “${capability.displayName}” requires “${input.title || input.key}”, which this action doesn't bind to a field.`));
+      issues.push(
+        issue(
+          `missing-input-${input.key}`,
+          `capability “${capability.displayName}” requires “${input.title || input.key}”, which this action doesn't bind to a field.`
+        )
+      );
     }
   }
 
@@ -290,17 +303,24 @@ function supportSystemActionValidationIssues(
     }
 
     if (!fieldKey || !blueprintFieldKeys.has(fieldKey)) {
-      issues.push(issue(`input-unknown-field-${mappedKey}`, `input “${mappedKey}” is bound to field “${fieldKey || ''}”, which is not a captured input field anywhere in this blueprint.`));
+      issues.push(
+        issue(
+          `input-unknown-field-${mappedKey}`,
+          `input “${mappedKey}” is bound to field “${fieldKey || ''}”, which is not a captured input field anywhere in this blueprint.`
+        )
+      );
     }
   }
 
-  const declaredOutcomeKeys = new Set(capability.outcomes.map(outcome => outcome.key));
+  const declaredOutcomeKeys = new Set(capability.outcomes.map((outcome) => outcome.key));
   for (const route of stage.routes ?? []) {
     if (route.trigger && !declaredOutcomeKeys.has(route.trigger)) {
-      issues.push(issue(
-        `route-trigger-${route.trigger}`,
-        `route trigger “${route.trigger}” is not one of capability “${capability.displayName}”'s declared outcomes (${[...declaredOutcomeKeys].join(', ') || 'none'}) — it can never fire.`
-      ));
+      issues.push(
+        issue(
+          `route-trigger-${route.trigger}`,
+          `route trigger “${route.trigger}” is not one of capability “${capability.displayName}”'s declared outcomes (${[...declaredOutcomeKeys].join(', ') || 'none'}) — it can never fire.`
+        )
+      );
     }
   }
 
@@ -324,25 +344,20 @@ function bulkDatasetActionValidationIssues(
 ): ServiceBlueprintValidationIssue[] {
   const knownFieldKeys = new Set(blueprintFieldKeys);
   for (const stage of serviceBlueprintStages(serviceBlueprint)) {
-    for (const action of (stage.actions ?? [])) {
+    for (const action of stage.actions ?? []) {
       if (action.type !== 'support-system-call') {
         continue;
       }
       const params = (action.params ?? {}) as SupportSystemCallActionParams;
-      const supportSystem = supportSystemCatalog.find(candidate => candidate.key === params.supportSystemKey);
-      const capability = supportSystem?.capabilities.find(candidate => candidate.key === params.capabilityKey);
+      const supportSystem = supportSystemCatalog.find((candidate) => candidate.key === params.supportSystemKey);
+      const capability = supportSystem?.capabilities.find((candidate) => candidate.key === params.capabilityKey);
       for (const output of capability?.outputs ?? []) {
         knownFieldKeys.add(output.key);
       }
     }
   }
 
-  const issue = (
-    stage: StageDefinition,
-    actionIndex: number,
-    suffix: string,
-    message: string
-  ): ServiceBlueprintValidationIssue => ({
+  const issue = (stage: StageDefinition, actionIndex: number, suffix: string, message: string): ServiceBlueprintValidationIssue => ({
     id: `stage-${stage.stageKey}-action-${actionIndex}-${suffix}`,
     code: 'action-bulk-dataset' as const,
     severity: 'error' as const,
@@ -362,7 +377,9 @@ function bulkDatasetActionValidationIssues(
         return;
       }
 
-      const params = action.params as { sourceFileField?: string; datasetIdField?: string; columns?: Array<Record<string, unknown>> } | undefined;
+      const params = action.params as
+        | { sourceFileField?: string; datasetIdField?: string; columns?: Array<Record<string, unknown>> }
+        | undefined;
       if (!params?.datasetIdField) {
         issues.push(issue(stage, actionIndex, 'missing-dataset-id-field', 'a bulk-dataset-ingest action must set datasetIdField.'));
         return;
@@ -373,16 +390,25 @@ function bulkDatasetActionValidationIssues(
       if (!params.sourceFileField) {
         issues.push(issue(stage, actionIndex, 'missing-source-field', 'a bulk-dataset-ingest action must set sourceFileField.'));
       } else if (!knownFieldKeys.has(params.sourceFileField)) {
-        issues.push(issue(stage, actionIndex, 'invalid-source-field', `sourceFileField “${params.sourceFileField}” is neither a captured input field nor a support system capability's declared output anywhere in this blueprint.`));
+        issues.push(
+          issue(
+            stage,
+            actionIndex,
+            'invalid-source-field',
+            `sourceFileField “${params.sourceFileField}” is neither a captured input field nor a support system capability's declared output anywhere in this blueprint.`
+          )
+        );
       }
 
       const columns = Array.isArray(params.columns) ? params.columns : [];
       if (columns.length === 0) {
         issues.push(issue(stage, actionIndex, 'missing-columns', 'a bulk-dataset-ingest action must declare at least one column.'));
       } else {
-        const rowKeyCount = columns.filter(column => column.role === BULK_DATASET_COLUMN_ROLE_ROW_KEY).length;
+        const rowKeyCount = columns.filter((column) => column.role === BULK_DATASET_COLUMN_ROLE_ROW_KEY).length;
         if (rowKeyCount === 0) {
-          issues.push(issue(stage, actionIndex, 'missing-row-key', 'exactly one column must declare role RowKey — none of this action’s columns do.'));
+          issues.push(
+            issue(stage, actionIndex, 'missing-row-key', 'exactly one column must declare role RowKey — none of this action’s columns do.')
+          );
         } else if (rowKeyCount > 1) {
           issues.push(issue(stage, actionIndex, 'duplicate-row-key', `${rowKeyCount} columns declare role RowKey — exactly one must.`));
         }
@@ -401,7 +427,14 @@ function bulkDatasetActionValidationIssues(
       if (!params?.datasetIdField) {
         issues.push(issue(stage, actionIndex, 'missing-dataset-id-field', 'a bulk-dataset-materialize action must set datasetIdField.'));
       } else if (!ingestDatasetIdFields.has(params.datasetIdField)) {
-        issues.push(issue(stage, actionIndex, 'unknown-dataset', `datasetIdField “${params.datasetIdField}” doesn't match any bulk-dataset-ingest action's own datasetIdField in this blueprint — there's no dataset for this action to materialize.`));
+        issues.push(
+          issue(
+            stage,
+            actionIndex,
+            'unknown-dataset',
+            `datasetIdField “${params.datasetIdField}” doesn't match any bulk-dataset-ingest action's own datasetIdField in this blueprint — there's no dataset for this action to materialize.`
+          )
+        );
       }
 
       if (!params?.targetFileField) {
@@ -431,7 +464,7 @@ function calculationValidationIssues(
     return [];
   }
 
-  const allComponents = serviceBlueprint.stages.flatMap(stage => stage.components ?? []);
+  const allComponents = serviceBlueprint.stages.flatMap((stage) => stage.components ?? []);
   const allInputFields = collectStageInputFields(allComponents, componentCatalog);
   const scopedInputFieldKeys = inScopeInputFieldKeys(allInputFields);
 
@@ -573,7 +606,7 @@ function calculationDiagnosticToIssue(diagnostic: CalculationDiagnostic, index: 
  * warns but never blocks Save.
  */
 function stageValidationRuleIssues(serviceBlueprint: ServiceBlueprint): ServiceBlueprintValidationIssue[] {
-  return serviceBlueprint.stages.flatMap(stage =>
+  return serviceBlueprint.stages.flatMap((stage) =>
     (stage.validations ?? []).flatMap((validation, index) => {
       const fields: Array<{ key: 'when' | 'rule'; expression: string | undefined }> = [
         { key: 'when', expression: validation.when },
@@ -590,14 +623,16 @@ function stageValidationRuleIssues(serviceBlueprint: ServiceBlueprint): ServiceB
           return [];
         }
 
-        return [{
-          id: `stage-validation-parse-error-${stage.stageKey}-${index}-${key}`,
-          code: 'stage-validation-parse-error' as const,
-          severity: 'error' as const,
-          blocking: true,
-          location: { kind: 'stage', stageKey: stage.stageKey } as const,
-          message: `Stage “${stage.displayName}” validation rule “${validation.code}” has an invalid ${key} expression: ${result.message}`,
-        }];
+        return [
+          {
+            id: `stage-validation-parse-error-${stage.stageKey}-${index}-${key}`,
+            code: 'stage-validation-parse-error' as const,
+            severity: 'error' as const,
+            blocking: true,
+            location: { kind: 'stage', stageKey: stage.stageKey } as const,
+            message: `Stage “${stage.displayName}” validation rule “${validation.code}” has an invalid ${key} expression: ${result.message}`,
+          },
+        ];
       });
     })
   );
@@ -619,21 +654,24 @@ export function validateServiceBlueprint(
   componentCatalog: ComponentDescriptor[] = [],
   supportSystemCatalog: SupportSystemDescriptor[] = []
 ): ServiceBlueprintValidationIssue[] {
-  const initialStageExists = serviceBlueprint.stages.some(stage => stage.stageKey === serviceBlueprint.initialStage);
-  const initialStageIssues = initialStageExists || serviceBlueprint.stages.length === 0
-    ? []
-    : [{
-        id: 'initial-stage-missing',
-        code: 'initial-stage-missing' as const,
-        severity: 'error' as const,
-        blocking: true,
-        location: { kind: 'stage', stageKey: serviceBlueprint.initialStage || serviceBlueprint.stages[0]?.stageKey || '' } as const,
-        message: serviceBlueprint.initialStage
-          ? `The service blueprint start stage “${serviceBlueprint.initialStage}” is missing. Pick an existing initial stage before you save or simulate this service blueprint.`
-          : 'The service blueprint does not have an initial stage yet. Pick one before you save or simulate this service blueprint.',
-      }];
+  const initialStageExists = serviceBlueprint.stages.some((stage) => stage.stageKey === serviceBlueprint.initialStage);
+  const initialStageIssues =
+    initialStageExists || serviceBlueprint.stages.length === 0
+      ? []
+      : [
+          {
+            id: 'initial-stage-missing',
+            code: 'initial-stage-missing' as const,
+            severity: 'error' as const,
+            blocking: true,
+            location: { kind: 'stage', stageKey: serviceBlueprint.initialStage || serviceBlueprint.stages[0]?.stageKey || '' } as const,
+            message: serviceBlueprint.initialStage
+              ? `The service blueprint start stage “${serviceBlueprint.initialStage}” is missing. Pick an existing initial stage before you save or simulate this service blueprint.`
+              : 'The service blueprint does not have an initial stage yet. Pick one before you save or simulate this service blueprint.',
+          },
+        ];
 
-  const orphanedIssues = serviceBlueprintOrphanedStages(serviceBlueprint).map(stage => ({
+  const orphanedIssues = serviceBlueprintOrphanedStages(serviceBlueprint).map((stage) => ({
     id: `stage-orphaned-${stage.stageKey}`,
     code: 'stage-orphaned' as const,
     severity: 'error' as const,
@@ -642,7 +680,7 @@ export function validateServiceBlueprint(
     message: `Stage “${stage.displayName}” is orphaned. Connect it through a gateway so authors can reach it.`,
   }));
 
-  const unreachableIssues = serviceBlueprintUnreachableStages(serviceBlueprint).map(stage => ({
+  const unreachableIssues = serviceBlueprintUnreachableStages(serviceBlueprint).map((stage) => ({
     id: `stage-unreachable-${stage.stageKey}`,
     code: 'stage-unreachable' as const,
     severity: 'error' as const,
@@ -651,7 +689,7 @@ export function validateServiceBlueprint(
     message: `Stage “${stage.displayName}” is unreachable from the service blueprint start. Add or retarget a route through a gateway so authors can get there.`,
   }));
 
-  const deadEndIssues = serviceBlueprintDeadEndStages(serviceBlueprint).map(stage => ({
+  const deadEndIssues = serviceBlueprintDeadEndStages(serviceBlueprint).map((stage) => ({
     id: `stage-dead-end-${stage.stageKey}`,
     code: 'stage-dead-end' as const,
     severity: 'warning' as const,
@@ -661,26 +699,28 @@ export function validateServiceBlueprint(
   }));
 
   const duplicateRouteKeys = new Set<string>();
-  const duplicateRouteIssues = flattenRoutes(serviceBlueprint).flatMap(view => {
+  const duplicateRouteIssues = flattenRoutes(serviceBlueprint).flatMap((view) => {
     const key = `${view.fromStage}::${view.action}::${view.toStage}`;
     if (duplicateRouteKeys.has(key)) {
-      return [{
-        id: `route-duplicate-${view.routeId}`,
-        code: 'route-duplicate' as const,
-        severity: 'error' as const,
-        blocking: true,
-        location: { kind: 'route', routeId: view.routeId } as const,
-        message: `Route “${view.action}” from “${stageLabel(serviceBlueprint, view.fromStage)}” to “${stageLabel(serviceBlueprint, view.toStage)}” is duplicated. Keep each route unique in the flat contract.`,
-      }];
+      return [
+        {
+          id: `route-duplicate-${view.routeId}`,
+          code: 'route-duplicate' as const,
+          severity: 'error' as const,
+          blocking: true,
+          location: { kind: 'route', routeId: view.routeId } as const,
+          message: `Route “${view.action}” from “${stageLabel(serviceBlueprint, view.fromStage)}” to “${stageLabel(serviceBlueprint, view.toStage)}” is duplicated. Keep each route unique in the flat contract.`,
+        },
+      ];
     }
 
     duplicateRouteKeys.add(key);
     return [];
   });
 
-  const missingStageRouteIssues = serviceBlueprintRoutesWithMissingStages(serviceBlueprint).map(view => {
-    const stageKeys = new Set(serviceBlueprint.stages.map(stage => stage.stageKey));
-    const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map(gateway => gateway.key));
+  const missingStageRouteIssues = serviceBlueprintRoutesWithMissingStages(serviceBlueprint).map((view) => {
+    const stageKeys = new Set(serviceBlueprint.stages.map((stage) => stage.stageKey));
+    const gatewayKeys = new Set(serviceBlueprintGateways(serviceBlueprint).map((gateway) => gateway.key));
     const missingSource = !stageKeys.has(view.fromStage) && !gatewayKeys.has(view.fromStage);
     const missingTarget = !stageKeys.has(view.toStage) && !gatewayKeys.has(view.toStage);
     const missingLabel = missingTarget ? view.toStage : view.fromStage;
@@ -692,13 +732,14 @@ export function validateServiceBlueprint(
       severity: 'error' as const,
       blocking: true,
       location: { kind: 'route', routeId: view.routeId } as const,
-      message: missingSource && missingTarget
-        ? `Route “${view.action}” is disconnected because both ends are missing. Reconnect it to existing stages before you save or simulate this service blueprint.`
-        : `Route “${view.action}” points to a missing ${direction} step “${missingLabel}”. Reconnect it to an existing stage or gateway before you save or simulate this service blueprint.`,
+      message:
+        missingSource && missingTarget
+          ? `Route “${view.action}” is disconnected because both ends are missing. Reconnect it to existing stages before you save or simulate this service blueprint.`
+          : `Route “${view.action}” points to a missing ${direction} step “${missingLabel}”. Reconnect it to an existing stage or gateway before you save or simulate this service blueprint.`,
     };
   });
 
-  const stageActionIssues = serviceBlueprint.stages.flatMap(stage =>
+  const stageActionIssues = serviceBlueprint.stages.flatMap((stage) =>
     (stage.actions ?? []).flatMap((action, actionIndex) =>
       actionValidationIssues(serviceBlueprint, actionCatalog, action, {
         kind: 'action',
@@ -709,14 +750,20 @@ export function validateServiceBlueprint(
     )
   );
 
-  const routeActionIssues = flattenRoutes(serviceBlueprint).flatMap(view =>
+  const routeActionIssues = flattenRoutes(serviceBlueprint).flatMap((view) =>
     (view.actions ?? []).flatMap((action, actionIndex) =>
-      actionValidationIssues(serviceBlueprint, actionCatalog, action, {
-        kind: 'action',
-        target: 'route',
-        routeId: view.routeId,
-        actionIndex,
-      }, view)
+      actionValidationIssues(
+        serviceBlueprint,
+        actionCatalog,
+        action,
+        {
+          kind: 'action',
+          target: 'route',
+          routeId: view.routeId,
+          actionIndex,
+        },
+        view
+      )
     )
   );
 
@@ -724,11 +771,13 @@ export function validateServiceBlueprint(
   // scope (not stage-scoped — a capability input is typically bound to a field captured on an
   // earlier stage than the one carrying the action).
   const blueprintFieldKeys = new Set(
-    collectStageInputFields(serviceBlueprint.stages.flatMap(stage => stage.components ?? []), componentCatalog)
-      .map(field => field.fieldKey)
+    collectStageInputFields(
+      serviceBlueprint.stages.flatMap((stage) => stage.components ?? []),
+      componentCatalog
+    ).map((field) => field.fieldKey)
   );
 
-  const supportSystemActionIssues = serviceBlueprint.stages.flatMap(stage =>
+  const supportSystemActionIssues = serviceBlueprint.stages.flatMap((stage) =>
     (stage.actions ?? []).flatMap((action, actionIndex) =>
       action.type === 'support-system-call'
         ? supportSystemActionValidationIssues(supportSystemCatalog, blueprintFieldKeys, action, stage, actionIndex)
