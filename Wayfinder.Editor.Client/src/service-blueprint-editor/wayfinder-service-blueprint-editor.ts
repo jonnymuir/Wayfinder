@@ -3,11 +3,13 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import type { ActionCatalogEntry, ActionDefinition, ServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
 import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
 import { DefinitionController } from './definition-controller.js';
+import { cloneServiceBlueprint, serviceBlueprintsEqual } from './blueprint-snapshot.js';
 import { EditHistory } from './edit-history.js';
+import { SaveController } from './save-controller.js';
+import { ToastController } from './toast-controller.js';
 import { StalenessController } from './staleness-controller.js';
 import { ValidationController } from './validation-controller.js';
-import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
-import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
+import { type ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import { BuiltInServiceBlueprintActionCatalog } from './action-catalog.js';
 import type { ServiceBlueprintComponentCatalog } from './component-catalog.js';
@@ -40,8 +42,6 @@ type ActionSelection = {
   index: number;
 } | null;
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-
 const SAVE_SHORTCUT = findServiceBlueprintShortcut('save');
 const UNDO_SHORTCUT = findServiceBlueprintShortcut('undo');
 const REDO_SHORTCUT = findServiceBlueprintShortcut('redo');
@@ -49,16 +49,8 @@ const COPY_SHORTCUT = findServiceBlueprintShortcut('copy');
 const PASTE_SHORTCUT = findServiceBlueprintShortcut('paste');
 const HELP_SHORTCUT = findServiceBlueprintShortcut('help');
 
-function cloneServiceBlueprint(serviceBlueprint: ServiceBlueprint): ServiceBlueprint {
-  return hydrateServiceBlueprintDefinition(JSON.parse(JSON.stringify(serviceBlueprint)) as ServiceBlueprint);
-}
-
 function cloneSelection(selection: ServiceBlueprintSelection): ServiceBlueprintSelection {
   return selection ? { ...selection } : null;
-}
-
-function serviceBlueprintsEqual(left: ServiceBlueprint | null, right: ServiceBlueprint | null): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function selectionsEqual(left: ServiceBlueprintSelection, right: ServiceBlueprintSelection): boolean {
@@ -154,8 +146,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @state() private _serviceBlueprint: ServiceBlueprint | null = null;
   @state() private _selection: ServiceBlueprintSelection = null;
   @state() private _selectedTransitionIndex: number | null = null;
-  @state() private _toastMessage: string | null = null;
-  private _toastDismissTimer: number | null = null;
+  private readonly _toast = new ToastController(this);
   private readonly _staleness = new StalenessController(this, {
     source: () => this.serviceBlueprintSource,
     blueprintKey: () => this.blueprintKey,
@@ -174,10 +165,19 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   /** Prefixed node ids from the canvas's shift-marquee multi-selection. */
   @state() private _graphMultiSelection: string[] = [];
-  @state() private _saveState: SaveState = 'idle';
-  @state() private _saveMessage: string | null = null;
-  @state() private _saveError: ServiceBlueprintSaveError | null = null;
-  @state() private _saveErrorCopyStatus: string | null = null;
+  private readonly _save = new SaveController(this, {
+    blueprint: () => this._serviceBlueprint,
+    blueprintKey: () => this.blueprintKey,
+    source: () => this.serviceBlueprintSource,
+    hasBlockingIssues: () => this._validation.hasBlocking,
+    allowedByContext: () => this._canSaveByContext,
+    adopt: (saved) => {
+      this._serviceBlueprint = saved;
+    },
+    conflict: (version) => this._staleness.markStale(version),
+    toast: (message) => this._toast.show(message),
+    jumpToStage: (stageKey) => this._jumpToStage(stageKey),
+  });
   @state() private _helpOpen = false;
   @state() private _activeConfidenceTab: ConfidenceTab = 'canvas';
   // Both start collapsed — the canvas is the primary surface, and either panel is one click
@@ -201,7 +201,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     apply: (next) => this._commitServiceBlueprintUpdate(next, this._currentSelection()),
   });
 
-  private _savedServiceBlueprintSnapshot: ServiceBlueprint | null = null;
   private _helpReturnTarget: HTMLElement | null = null;
   private _lastLoadedBlueprintKey: string | null = null;
   private _serviceBlueprintLoadRequestId = 0;
@@ -258,11 +257,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   updated(_changedProperties: Map<string, unknown>) {
     this._definition.syncFromBlueprint();
-    if (_changedProperties.has('_saveError') && this._saveError) {
-      this.updateComplete.then(() => {
-        this.shadowRoot?.querySelector<HTMLElement>('[data-wayfinder-save-error]')?.focus();
-      });
-    }
     // The component catalog fetch (component-catalog.ts) resolves asynchronously, independent
     // of the Definition tab's own debounced re-lint (which only re-runs on text edits) — a user
     // who opens the Definition tab before it resolves would otherwise see component-schema
@@ -294,9 +288,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   disconnectedCallback() {
     this.removeEventListener('keydown', this._handleEditorKeydown, true);
-    if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._toastDismissTimer);
-    }
     window.removeEventListener('pointermove', this._handleInspectorResizeMove);
     window.removeEventListener('pointerup', this._handleInspectorResizeEnd);
     super.disconnectedCallback();
@@ -371,13 +362,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _initialiseEditorState(serviceBlueprint: ServiceBlueprint) {
     this._serviceBlueprint = cloneServiceBlueprint(serviceBlueprint);
     this._reflectServiceBlueprintLoadedState();
-    this._savedServiceBlueprintSnapshot = cloneServiceBlueprint(this._serviceBlueprint);
     this._history.clear();
     this._actionSelection = null;
-    this._saveState = 'idle';
-    this._saveMessage = null;
-    this._saveError = null;
-    this._saveErrorCopyStatus = null;
+    this._save.loaded(this._serviceBlueprint);
     this._definition.reset();
     this._applySelection(null, this._serviceBlueprint);
     this._announceHistory('Service blueprint loaded. Undo history is ready for your next edit.');
@@ -513,42 +500,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     await this.updateComplete;
   }
 
-  private get _isDirty() {
-    return !serviceBlueprintsEqual(this._serviceBlueprint, this._savedServiceBlueprintSnapshot);
-  }
-
-  private get _canSave() {
-    return Boolean(this._serviceBlueprint) && !this._validation.hasBlocking && this._saveState !== 'saving' && this._canSaveByContext;
-  }
-
-  private get _dirtyStateSummary() {
-    if (!this._serviceBlueprint) {
-      return 'Service blueprint not loaded yet.';
-    }
-
-    return this._isDirty ? 'Unsaved changes' : 'All changes saved';
-  }
-
-  private get _saveStatusSummary() {
-    if (this._saveState === 'saving') {
-      return 'Saving serviceBlueprint changes…';
-    }
-
-    if (this._saveState === 'saved') {
-      return this._saveMessage ?? 'Service blueprint changes saved.';
-    }
-
-    if (this._saveState === 'error') {
-      return this._saveMessage ?? 'Save failed.';
-    }
-
-    if (this._validation.hasBlocking) {
-      return 'Save is blocked until the blocking validation errors are fixed.';
-    }
-
-    return this._saveMessage ?? 'Save is ready.';
-  }
-
   private _commitServiceBlueprintUpdate(nextServiceBlueprint: ServiceBlueprint, nextSelection: ServiceBlueprintSelection) {
     const previousSelection = this._currentSelection();
 
@@ -570,8 +521,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     this._serviceBlueprint = nextServiceBlueprint;
-    this._saveState = 'idle';
-    this._saveMessage = null;
+    this._save.edited();
     this._applySelection(nextSelection, nextServiceBlueprint);
     this._announceHistory(`Change recorded. ${this._historyStatusSummary}`);
   }
@@ -644,7 +594,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
     if (SAVE_SHORTCUT && matchesShortcut(event, SAVE_SHORTCUT)) {
       event.preventDefault();
-      void this._handleSave();
+      void this._save.save();
       return;
     }
 
@@ -847,7 +797,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     if (!message) {
       return false;
     }
-    this._showToast(message);
+    this._toast.show(message);
     this.requestUpdate();
     return true;
   }
@@ -856,7 +806,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     const outcome = this._clipboard.paste(this._clipboardContext);
     if (!outcome.ok) {
       if (outcome.message) {
-        this._showToast(outcome.message);
+        this._toast.show(outcome.message);
       }
       return false;
     }
@@ -866,27 +816,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     if (outcome.selectActionIndex !== undefined) {
       this._actionSelection = { target: 'stage', index: outcome.selectActionIndex };
     }
-    this._showToast(outcome.message);
+    this._toast.show(outcome.message);
     if (outcome.revealInspector) {
       this._handleInspectorRequested();
     }
     return true;
-  }
-
-  private _showToast(message: string) {
-    if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._toastDismissTimer);
-    }
-
-    this._toastMessage = message;
-
-    const dismiss = () => {
-      this._toastMessage = null;
-      this._toastDismissTimer = null;
-    };
-
-    this._toastDismissTimer =
-      typeof window !== 'undefined' ? window.setTimeout(dismiss, 5000) : (setTimeout(dismiss, 5000) as unknown as number);
   }
 
   private _focusInspectorForValidationIssue(issue: ServiceBlueprintValidationIssue) {
@@ -987,113 +921,16 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  private async _handleSave() {
-    if (!this._serviceBlueprint) {
-      return;
-    }
-
-    if (this._validation.hasBlocking) {
-      this._saveState = 'error';
-      this._saveError = new ServiceBlueprintSaveError({
-        title: 'Can’t save this service blueprint yet',
-        summary: 'Fix the blocking validation errors first.',
-        detailLines: ['Open Validation to review each blocking error before trying again.'],
-      });
-      this._saveMessage = this._saveError.summary;
-      this._saveErrorCopyStatus = null;
-      return;
-    }
-
-    this._saveState = 'saving';
-    this._saveMessage = null;
-    this._saveErrorCopyStatus = null;
-
-    if (!this.serviceBlueprintSource) {
-      this._saveState = 'error';
-      this._saveError = new ServiceBlueprintSaveError({
-        title: 'Save unavailable',
-        summary: 'No service blueprint source is wired to the editor.',
-        detailLines: ['Connect a service blueprint source before trying to save.'],
-      });
-      this._saveMessage = this._saveError.summary;
-      this._saveErrorCopyStatus = null;
-      return;
-    }
-
-    try {
-      await this.serviceBlueprintSource.save(this.blueprintKey, this._serviceBlueprint);
-      // A successful save (no conflict thrown) means expectedVersion — this._serviceBlueprint.version at
-      // the time of the call — matched what the store had, and every IServiceBlueprintSourceStore
-      // increments by exactly 1 on that path. serviceBlueprintSource.save() returns void, not the new
-      // version, so bump it locally rather than leaving _serviceBlueprint.version stale: left unbumped,
-      // the next _pollServiceBlueprintVersion (15s later) compares that stale local version against the
-      // real server version and false-positives "someone else changed this" against the editor's
-      // own save.
-      this._serviceBlueprint = cloneServiceBlueprint({ ...this._serviceBlueprint, version: this._serviceBlueprint.version + 1 });
-      this._savedServiceBlueprintSnapshot = cloneServiceBlueprint(this._serviceBlueprint);
-      this._saveState = 'saved';
-      this._saveMessage = 'Service blueprint saved.';
-      this._saveError = null;
-      this._saveErrorCopyStatus = null;
-      this._showToast(this._saveMessage);
-    } catch (error) {
-      const normalised = normaliseServiceBlueprintSaveError(
-        error,
-        'The editor couldn’t save your changes. Review the details below and try again.'
-      );
-
-      if (normalised.isConflict) {
-        // Same treatment as a proactively-detected staleness — one consistent path (read-only
-        // overlay + banner) regardless of whether we found out via polling or via this failed save.
-        this._saveState = 'idle';
-        this._saveMessage = null;
-        this._saveError = null;
-        this._saveErrorCopyStatus = null;
-        this._staleness.markStale(normalised.currentVersion);
-        return;
-      }
-
-      this._saveState = 'error';
-      this._saveError = normalised;
-      this._saveMessage = this._saveError.summary;
-      this._saveErrorCopyStatus = null;
-    }
-  }
-
   private async _handleReloadAfterConflict() {
-    this._saveState = 'idle';
-    this._saveMessage = null;
-    this._saveError = null;
-    this._saveErrorCopyStatus = null;
+    this._save.clearOutcome();
     // Deliberately NOT clearing _serviceBlueprintStale here — that must stay true (read-only
     // overlay up, banner's Reload button available) until _loadServiceBlueprint actually succeeds.
     // _initialiseEditorState clears it on success. If the reload itself fails, we're
     // correctly still stale/read-only rather than briefly unlocked with old content.
     await this._loadServiceBlueprint();
     if (!this._staleness.stale) {
-      this._showToast('Reloaded the latest version.');
+      this._toast.show('Reloaded the latest version.');
     }
-  }
-
-  private async _copySaveErrorDetails() {
-    if (!this._saveError) {
-      return;
-    }
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(this._saveError.copyText);
-        this._saveErrorCopyStatus = 'Save error details copied.';
-        return;
-      }
-    } catch {
-      // Fall through to manual copy support below.
-    }
-
-    const copyField = this.shadowRoot?.querySelector<HTMLTextAreaElement>('[data-wayfinder-save-error-details]');
-    copyField?.focus();
-    copyField?.select();
-    this._saveErrorCopyStatus = 'Clipboard access is unavailable. Select and copy the details manually.';
   }
 
   private _renderCalculationsPanel() {
@@ -1131,7 +968,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
         <div class="validation-panel-save-status" data-wayfinder-save-status>
           <span class="validation-save-label">Save status</span>
-          <span>${this._saveStatusSummary}</span>
+          <span>${this._save.statusSummary}</span>
         </div>
 
         ${
@@ -1321,10 +1158,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         data-wayfinder-service-blueprint-loaded="${this.blueprintKey || this._serviceBlueprint?.definitionKey || ''}"
         class="editor-root"
       >
-        ${this._renderToast()}
+        ${this._toast.render()}
         ${this._loading ? html`<div class="loading-banner" role="status">Loading serviceBlueprint…</div>` : nothing}
         ${this._error ? html`<div class="error-banner" role="alert">${this._error}</div>` : nothing}
-        ${this._renderSaveErrorSurface()}
+        ${this._save.renderError()}
         ${this._staleness.renderBanner()}
 
         <!-- Toolbar header: sits above the whole tabbed area (not slotted into any one tab), so
@@ -1338,19 +1175,19 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           </h1>
           <div class="toolbar-actions" role="toolbar" aria-label="ServiceBlueprint editor tools">
             <button
-              class="toolbar-btn toolbar-btn--icon govuk-button${this._saveState === 'saving' ? ' toolbar-btn--spinning' : ''}"
+              class="toolbar-btn toolbar-btn--icon govuk-button${this._save.isSaving ? ' toolbar-btn--spinning' : ''}"
               data-wayfinder-save
-              ?disabled=${!this._canSave}
-              aria-label=${this._saveState === 'saving' ? 'Saving' : 'Save'}
+              ?disabled=${!this._save.canSave}
+              aria-label=${this._save.isSaving ? 'Saving' : 'Save'}
               title=${
                 !this._canSaveByContext
                   ? 'Saving is disabled for the current author.'
-                  : `${this._dirtyStateSummary} — ${this._saveState === 'saving' ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`
+                  : `${this._save.dirtySummary} — ${this._save.isSaving ? 'Saving…' : 'Save'}${SAVE_SHORTCUT ? ` (${SAVE_SHORTCUT.labels[0]})` : ''}`
               }
               aria-keyshortcuts=${SAVE_SHORTCUT?.ariaKeys ?? nothing}
-              @click=${this._handleSave}
+              @click=${() => void this._save.save()}
             >
-              ${this._saveState === 'saving' ? renderToolbarIcon('saving') : renderToolbarIcon('save')}
+              ${this._save.isSaving ? renderToolbarIcon('saving') : renderToolbarIcon('save')}
             </button>
             <button
               class="toolbar-btn toolbar-btn--icon govuk-button govuk-button--secondary"
@@ -1680,125 +1517,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
         ${this._renderShortcutGuide()}
       </div>
-    `;
-  }
-
-  private _renderToast() {
-    if (!this._toastMessage) return nothing;
-    return html`
-      <div
-        class="toast-banner"
-        role="status"
-        aria-live="assertive"
-        data-wayfinder-toast
-      >
-        ${this._toastMessage}
-      </div>
-    `;
-  }
-
-  private _renderSaveErrorSurface() {
-    if (!this._saveError) {
-      return nothing;
-    }
-
-    return html`
-      <section
-        class="save-error-surface"
-        aria-labelledby="service-blueprint-save-error-title"
-        tabindex="-1"
-        data-wayfinder-save-error
-      >
-        <div class="save-error-header">
-          <p class="save-error-eyebrow">Save problem</p>
-          <h2 id="service-blueprint-save-error-title" class="save-error-title">${this._saveError.title}</h2>
-          ${
-            this._saveError.summaryStageKey
-              ? html`
-                <p class="save-error-summary" role="alert">
-                  <button
-                    type="button"
-                    class="save-error-detail-link"
-                    data-wayfinder-save-error-jump
-                    @click=${() => this._jumpToStage(this._saveError!.summaryStageKey!)}
-                  >
-                    ${this._saveError.summary}
-                    <span class="save-error-detail-link-hint">Go to stage</span>
-                  </button>
-                </p>
-              `
-              : html`<p class="save-error-summary" role="alert">${this._saveError.summary}</p>`
-          }
-        </div>
-
-        ${
-          this._saveError.details.length > 0
-            ? html`
-              <ul class="save-error-list">
-                ${this._saveError.details.map(
-                  (detail) => html`
-                  <li>
-                    ${
-                      detail.stageKey
-                        ? html`
-                          <button
-                            type="button"
-                            class="save-error-detail-link"
-                            data-wayfinder-save-error-jump
-                            @click=${() => this._jumpToStage(detail.stageKey!)}
-                          >
-                            ${detail.message}
-                            <span class="save-error-detail-link-hint">Go to stage</span>
-                          </button>
-                        `
-                        : detail.message
-                    }
-                  </li>
-                `
-                )}
-              </ul>
-            `
-            : nothing
-        }
-
-        ${this._saveError.traceId ? html`<p class="save-error-trace"><strong>Reference:</strong> ${this._saveError.traceId}</p>` : nothing}
-
-        <label class="save-error-copy-label" for="service-blueprint-save-error-details">Copyable save error details</label>
-        <textarea
-          id="service-blueprint-save-error-details"
-          class="save-error-copy-field"
-          readonly
-          rows="6"
-          .value=${this._saveError.copyText}
-          data-wayfinder-save-error-details
-        ></textarea>
-
-        <div class="save-error-actions">
-          <button
-            type="button"
-            class="toolbar-btn govuk-button govuk-button--secondary save-error-copy-button"
-            data-wayfinder-copy-save-error
-            @click=${this._copySaveErrorDetails}
-          >
-            Copy details
-          </button>
-          <button
-            type="button"
-            class="toolbar-btn govuk-button govuk-button--secondary"
-            aria-label="Dismiss save error"
-            data-wayfinder-dismiss-save-error
-            @click=${() => {
-              this._saveError = null;
-              this._saveErrorCopyStatus = null;
-            }}
-          >
-            Dismiss
-          </button>
-          <p class="save-error-copy-status" role="status" aria-live="polite" data-wayfinder-save-error-copy-status>
-            ${this._saveErrorCopyStatus ?? ''}
-          </p>
-        </div>
-      </section>
     `;
   }
 
