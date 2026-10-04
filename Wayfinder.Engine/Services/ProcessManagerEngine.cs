@@ -31,6 +31,7 @@ public class ProcessManagerEngine : IProcessManager
     private readonly WorkItemFinder _workItems;
     private readonly StageRenderer _renderer;
     private readonly BulkDatasetActions _bulkDatasets;
+    private readonly SupportSystemActions _supportSystems;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly Dictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
@@ -65,6 +66,7 @@ public class ProcessManagerEngine : IProcessManager
         _workItems = new WorkItemFinder(_calculations);
         _renderer = new StageRenderer(sanitizer, _calculations, logger);
         _bulkDatasets = new BulkDatasetActions(bulkDatasetStore, logger);
+        _supportSystems = new SupportSystemActions(_supportSystemClients, logger);
     }
 
     protected ILogger Logger { get; }
@@ -556,7 +558,7 @@ public class ProcessManagerEngine : IProcessManager
             var mergedMultiFieldValues = Merge(instance.FieldValues, fieldValues);
             var movedCursor = updatedCursors.FirstOrDefault(c => c.CursorId == sourceCursor?.CursorId);
             var newInvocations = movedCursor is not null
-                ? ExecuteOnEnterSupportSystemActions(instanceId, definition, mergedMultiFieldValues, movedCursor)
+                ? _supportSystems.ExecuteOnEnterSupportSystemActions(instanceId, definition, mergedMultiFieldValues, movedCursor)
                 : [];
             var updatedMulti = instance with
             {
@@ -1917,7 +1919,7 @@ public class ProcessManagerEngine : IProcessManager
                 mergedFieldValues = Merge(mergedFieldValues, bulkDatasetUpdates);
             }
 
-            newInvocations.AddRange(ExecuteOnEnterSupportSystemActions(instance.InstanceId, definition, mergedFieldValues, cursor));
+            newInvocations.AddRange(_supportSystems.ExecuteOnEnterSupportSystemActions(instance.InstanceId, definition, mergedFieldValues, cursor));
         }
 
         foreach (var joinGroup in newCursors
@@ -2073,119 +2075,6 @@ public class ProcessManagerEngine : IProcessManager
 
         return TryReleaseJoinIfReady(arrivedInstance, definition, joinGateway, accessProfile, userId)
                ?? Envelopes.JoinWaiting(arrivedInstance, definition, joinGateway);
-    }
-
-    /// <summary>
-    /// Runs every <c>onEnter</c> <c>support-system-call</c> action declared on the stage a cursor
-    /// just landed on, recording a <see cref="SupportSystemInvocation"/> for each successful
-    /// start. Only wired into the multi-cursor paths (a support-system call only makes sense
-    /// against a genuinely separate automation-queue cursor, per docs/guides/support-systems.md)
-    /// — a single-queue blueprint has no automation actor for such an action to belong to, so
-    /// this deliberately isn't called from the single-cursor "regular stage transition" path.
-    /// </summary>
-    private List<SupportSystemInvocation> ExecuteOnEnterSupportSystemActions(
-        string instanceId,
-        ServiceBlueprint definition,
-        IReadOnlyDictionary<string, object?> fieldValues,
-        RequestCursor cursor)
-    {
-        var stage = definition.Stages.FirstOrDefault(s => s.StageKey == cursor.CurrentNodeKey);
-        if (stage?.Actions is not { Count: > 0 } actions)
-        {
-            return [];
-        }
-
-        var invocations = new List<SupportSystemInvocation>();
-        foreach (var action in actions)
-        {
-            if (action.Timing != ActionTiming.OnEnter
-                || !string.Equals(action.Type, SupportSystemActionTypes.SupportSystemCall, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (TryExecuteSupportSystemCall(instanceId, fieldValues, cursor, action) is { } invocation)
-            {
-                invocations.Add(invocation);
-            }
-        }
-
-        return invocations;
-    }
-
-    private SupportSystemInvocation? TryExecuteSupportSystemCall(
-        string instanceId,
-        IReadOnlyDictionary<string, object?> fieldValues,
-        RequestCursor cursor,
-        ActionDefinition action)
-    {
-        var supportSystemKey = action.Parameters["supportSystemKey"]?.GetValue<string>();
-        var capabilityKey = action.Parameters["capabilityKey"]?.GetValue<string>();
-        if (string.IsNullOrWhiteSpace(supportSystemKey) || string.IsNullOrWhiteSpace(capabilityKey))
-        {
-            Logger.LogWarning(
-                "support-system-call action on stage '{Stage}' is missing supportSystemKey/capabilityKey; skipped.",
-                cursor.CurrentNodeKey);
-            return null;
-        }
-
-        var capability = SupportSystemRegistry.FindCapability(supportSystemKey, capabilityKey);
-        if (capability is null)
-        {
-            Logger.LogWarning(
-                "support-system-call action on stage '{Stage}' references unregistered support system " +
-                "'{System}'/capability '{Capability}'; skipped.",
-                cursor.CurrentNodeKey, supportSystemKey, capabilityKey);
-            return null;
-        }
-
-        if (!_supportSystemClients.TryGetValue(supportSystemKey, out var client))
-        {
-            Logger.LogWarning(
-                "No ISupportSystemClient registered for support system '{System}'; skipped.", supportSystemKey);
-            return null;
-        }
-
-        var inputFieldRefs = action.Parameters["inputs"]?.AsObject();
-        var inputs = new Dictionary<string, SupportSystemInputValue>(StringComparer.Ordinal);
-        foreach (var input in capability.Inputs)
-        {
-            var fieldKey = inputFieldRefs?[input.Key]?.GetValue<string>();
-            var raw = fieldKey is not null ? fieldValues.GetValueOrDefault(fieldKey) : null;
-            inputs[input.Key] = SupportSystemInputValue.Resolve(raw);
-        }
-
-        var invocationId = Guid.NewGuid().ToString("N");
-        var context = new SupportSystemInvocationContext
-        {
-            InstanceId = instanceId,
-            InvocationId = invocationId,
-            WebhookExpected = capability.SupportedCompletionModes.Contains(SupportSystemCompletionMode.Webhook)
-        };
-
-        SupportSystemInvocationReceipt receipt;
-        try
-        {
-            receipt = client.InvokeAsync(capabilityKey, inputs, context).GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(
-                ex,
-                "Support system '{System}' capability '{Capability}' invocation failed for cursor '{Cursor}'.",
-                supportSystemKey, capabilityKey, cursor.CursorId);
-            return null;
-        }
-
-        return new SupportSystemInvocation
-        {
-            InvocationId = invocationId,
-            SupportSystemKey = supportSystemKey,
-            CapabilityKey = capabilityKey,
-            CursorId = cursor.CursorId,
-            StageKey = cursor.CurrentNodeKey,
-            Receipt = receipt
-        };
     }
 
     /// <summary>
