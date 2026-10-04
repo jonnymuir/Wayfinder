@@ -22,7 +22,7 @@ namespace Wayfinder.Engine.Services;
 /// <summary>
 /// Generic in-memory runtime engine that executes Wayfinder service blueprints.
 /// </summary>
-public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
+public class ProcessManagerEngine : IProcessManager
 {
     private readonly IServiceContentSanitizer _sanitizer;
     private readonly BlueprintRegistry _registry;
@@ -30,6 +30,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
     private readonly StageCalculations _calculations;
     private readonly WorkItemFinder _workItems;
     private readonly StageRenderer _renderer;
+    private readonly EnvelopeBuilder _envelopes;
     private readonly BulkDatasetActions _bulkDatasets;
     private readonly SupportSystemActions _supportSystems;
     private readonly InstanceAdmin _admin;
@@ -70,12 +71,15 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
         _calculations = new StageCalculations(logger, _instances, ResolveServiceInputs);
         _workItems = new WorkItemFinder(_calculations);
         _renderer = new StageRenderer(sanitizer, _calculations, logger);
+        _outcomes = new SupportSystemOutcomes(_instances, _supportSystemClients, this, logger);
+        _envelopes = new EnvelopeBuilder(
+            _instances, _workItems, _calculations, _renderer, BuildRenderData,
+            _outcomes.TryPollResolveSupportSystemInvocations);
         _bulkDatasets = new BulkDatasetActions(bulkDatasetStore, logger);
         _supportSystems = new SupportSystemActions(_supportSystemClients, logger);
         _admin = new InstanceAdmin(_instances, _registry, logger);
-        _allocation = new WorkAllocation(_instances, _registry, _workItems, this);
-        _gateways = new GatewayAdvancer(_instances, _bulkDatasets, _supportSystems, this, logger);
-        _outcomes = new SupportSystemOutcomes(_instances, _supportSystemClients, this, logger);
+        _allocation = new WorkAllocation(_instances, _registry, _workItems, _envelopes);
+        _gateways = new GatewayAdvancer(_instances, _bulkDatasets, _supportSystems, _envelopes, logger);
         _queues = new WorkQueues(_instances, _registry, _workItems, _outcomes.TryPollResolveSupportSystemInvocations);
     }
 
@@ -124,7 +128,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
             }
 
             Logger.LogInformation("Resuming specific instance {Id}", instanceId);
-            return BuildEnvelope(specificInstance, definition, accessProfile, userId);
+            return _envelopes.BuildEnvelope(specificInstance, definition, accessProfile, userId);
         }
 
         var existingInstance = FindLatestInstance(tenantId, userId, blueprintKey, accessProfile);
@@ -151,7 +155,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
             if (existingInstance is not null)
             {
                 Logger.LogInformation("Resuming existing instance {Id} (action=resume)", existingInstance.InstanceId);
-                return BuildEnvelope(existingInstance, definition, accessProfile, userId);
+                return _envelopes.BuildEnvelope(existingInstance, definition, accessProfile, userId);
             }
 
             return CreateAndRegisterNewInstance(
@@ -184,7 +188,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
             switch (decision.Outcome)
             {
                 case RequestConcurrencyOutcome.ReuseExisting:
-                    return BuildEnvelope(
+                    return _envelopes.BuildEnvelope(
                         decision.ExistingInstance ?? throw new InvalidOperationException(
                             $"{customPolicy.GetType().Name} returned ReuseExisting with no ExistingInstance."),
                         definition, accessProfile, userId);
@@ -280,7 +284,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
         // silently-reset blank form). ServiceRequestPageController's PRG redirect after a POST
         // relies on this same fallthrough to show the confirmation page for the visit that just
         // submitted it.
-        return BuildEnvelope(existingInstance, definition, accessProfile, userId);
+        return _envelopes.BuildEnvelope(existingInstance, definition, accessProfile, userId);
     }
 
     /// <summary>
@@ -445,7 +449,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
                 "Change-link: jumped instance {Id} to stage '{State}'",
                 instanceId,
                 targetStageKey);
-            return BuildEnvelope(savedJumped, definition, accessProfile, userId);
+            return _envelopes.BuildEnvelope(savedJumped, definition, accessProfile, userId);
         }
 
         var visibleWorkItem = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId)
@@ -516,7 +520,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
                 // unmodified instance would blank every field on this stage back to whatever was
                 // there before the user started typing — not just the one that failed validation.
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
-                return BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = problems };
+                return _envelopes.BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = problems };
             }
 
             // Declarative cross-field business rules (StageDefinition.Validations) — the
@@ -528,7 +532,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
             if (stageValidationProblems.Count > 0)
             {
                 var previewInstance = instance with { FieldValues = Merge(instance.FieldValues, fieldValues) };
-                return BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = stageValidationProblems };
+                return _envelopes.BuildEnvelope(previewInstance, definition, accessProfile, userId) with { Problems = stageValidationProblems };
             }
         }
 
@@ -593,7 +597,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
             Logger.LogInformation(
                 "Multi-cursor advance instance {Id}: cursor {CursorId} → {To}",
                 instanceId, sourceCursor?.CursorId ?? "(none)", transition.ToState);
-            return BuildEnvelope(savedMulti, definition, accessProfile, userId);
+            return _envelopes.BuildEnvelope(savedMulti, definition, accessProfile, userId);
         }
 
         var updated = instance with
@@ -621,7 +625,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
             visibleWorkItem.StageKey,
             transition.ToState);
 
-        return BuildEnvelope(savedUpdated, definition, accessProfile, userId);
+        return _envelopes.BuildEnvelope(savedUpdated, definition, accessProfile, userId);
     }
 
     /// <inheritdoc cref="IProcessManager.TryGetAccessibleInstance"/>
@@ -702,7 +706,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
             var savedSync = _instances.TrySaveIfVersionMatches(updatedInstance, userId, instance.StateVersion, auditEvent: null);
             if (savedSync is not null)
             {
-                return BuildEnvelope(savedSync, definition, accessProfile, userId);
+                return _envelopes.BuildEnvelope(savedSync, definition, accessProfile, userId);
             }
         }
 
@@ -884,108 +888,6 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
     public CalculationResult? GetLastCalculationResult(string instanceId) =>
         _instances.TryGet(instanceId, out var instance) ? instance.LastCalculationResult : null;
 
-    ServiceRequestResponseEnvelope IEnvelopeSource.BuildEnvelope(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        ActorProfile accessProfile,
-        string userId) => BuildEnvelope(instance, definition, accessProfile, userId);
-
-    protected ServiceRequestResponseEnvelope BuildEnvelope(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        ActorProfile accessProfile,
-        string userId)
-    {
-        if (instance.IsAborted)
-        {
-            return Envelopes.Aborted(instance);
-        }
-
-        var workItems = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId);
-        var visibleItem = workItems is [var firstItem, ..] ? firstItem : null;
-
-        if (visibleItem is null)
-        {
-            return Envelopes.Error(
-                "Access denied to the current queue.",
-                "ACCESS_DENIED");
-        }
-
-        if (visibleItem.IsJoinGateway)
-        {
-            var joinGateway = FindGateway(definition, visibleItem.StageKey);
-            if (joinGateway is not null)
-            {
-                // A join gateway is exactly where a caseworker's own cursor sits waiting on an
-                // automation-queue cursor that's itself waiting on a support-system call — the
-                // same "waiting behind the line of visibility" screen citizen/caseworker joins
-                // already use. Before rendering that wait screen again, give any still-pending
-                // support-system invocation blocking THIS gateway a chance to resolve via poll —
-                // the generic, always-on counterpart to the webhook receiver resolving one
-                // asynchronously. If anything resolved, its own Advance() call already saved
-                // fresh state (and possibly released the join outright); re-derive the response
-                // from that fresh state rather than the now-stale `instance` this method started
-                // with.
-                if (_outcomes.TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
-                    && _instances.TryGet(instance.InstanceId, out var refreshed))
-                {
-                    return BuildEnvelope(refreshed, definition, accessProfile, userId);
-                }
-
-                return Envelopes.JoinWaiting(instance, definition, joinGateway);
-            }
-        }
-
-        var stage = definition.Stages.FirstOrDefault(s => s.StageKey == visibleItem.StageKey);
-        if (stage == null)
-        {
-            return Envelopes.Error(
-                $"State '{visibleItem.StageKey}' not found in definition '{definition.DefinitionKey}'.",
-                "STATE_NOT_FOUND");
-        }
-
-        var renderData = BuildRenderData(instance, definition, stage);
-        var calc = _calculations.EvaluateDefinitionCalculations(instance, definition, stage);
-        if (calc is not null)
-        {
-            renderData ??= new JsonObject();
-            renderData["live"] = StageCalculations.BuildLiveModel(definition, calc);
-        }
-
-        var components = _renderer.BuildComponents(stage.Components, instance.FieldValues, calc);
-        var effectiveStepType = stage.Components.InferStepType();
-        var waitingComponent = stage.Components.OfType<WaitingComponent>().FirstOrDefault();
-
-        var render = new StepContent
-        {
-            StepType = effectiveStepType,
-            StateDisplayName = stage.DisplayName,
-            Components = components,
-            AvailableActions = visibleItem.AvailableActions.ToArray(),
-            Data = renderData
-        };
-
-        var responseState = effectiveStepType switch
-        {
-            "status-timeline" => "defer",
-            "confirmation" => "complete",
-            _ => "render"
-        };
-
-        return new ServiceRequestResponseEnvelope
-        {
-            InstanceId = instance.InstanceId,
-            ResponseState = responseState,
-            StateVersion = instance.StateVersion,
-            CorrelationId = instance.InstanceId,
-            ServerTimeUtc = DateTimeOffset.UtcNow,
-            PollAfterMs = waitingComponent?.PollIntervalMs,
-            Render = render,
-            RequestPolicy = definition.RequestPolicy,
-            AllowManualRestart = definition.AllowManualRestart
-        };
-    }
-
     private ServiceRequestResponseEnvelope CreateAndRegisterNewInstance(
         string blueprintKey,
         string tenantId,
@@ -1006,7 +908,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
         instance = _instances.Save(instance, userId);
 
         Logger.LogInformation("Created service request {Id} for key={Key} ({Reason})", instance.InstanceId, blueprintKey, reason);
-        return BuildEnvelope(instance, definition, accessProfile, userId);
+        return _envelopes.BuildEnvelope(instance, definition, accessProfile, userId);
     }
 
     private static ServiceRequest CreateNewInstance(
