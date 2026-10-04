@@ -100,7 +100,6 @@
         "src/service-blueprint-editor/service-blueprint-validation.ts",
         "src/service-blueprint-editor/wayfinder-service-blueprint-graph.ts",
         "src/service-blueprint-editor/wayfinder-service-blueprint-outline.ts",
-        "src/service-blueprint-editor/wayfinder-stage-action-editor.ts",
         "src/service-blueprint-editor/inspector/components-controller.ts",
         "src/service-blueprint-editor/inspector/gateway-inspector-controller.ts",
         "src/service-blueprint-editor/inspector/route-editor-controller.ts",

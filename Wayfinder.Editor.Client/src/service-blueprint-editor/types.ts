@@ -75,7 +75,7 @@ export type {
   WarningTextComponent,
 } from './generated/wayfinder-model.js';
 
-export { gatewayKindValues, stageKindValues } from './generated/wayfinder-model.js';
+export { componentPropertyValueKindValues, gatewayKindValues, stageKindValues } from './generated/wayfinder-model.js';
 
 import type {
   ActionDefinition,
