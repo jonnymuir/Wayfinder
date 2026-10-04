@@ -246,7 +246,7 @@ internal sealed partial class InstanceEntry(
             return true;
         }
 
-        var visibleItem = workItems.FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
+        var visibleItem = workItems.FindActorWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
         return visibleItem is not null && visibleItem.IsTerminal(definition);
     }
 

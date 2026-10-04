@@ -9,7 +9,7 @@
 // Budgets: C# file 400 lines, C# method 60 lines; TypeScript/JavaScript file 500 lines. Anything already over is
 // recorded in .policy/size-baseline.json at its current size and may only shrink.
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 
@@ -84,7 +84,12 @@ function compare(kind, actual, baseline, budget, errors, tighten) {
 
 function checkSizes(update) {
   const actual = measure();
-  const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : { files: {}, methods: {}, casts: {} };
+  let baseline = { files: {}, methods: {}, casts: {} };
+  try {
+    baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
   baseline.casts ??= {};
   if (update) {
     const next = { files: {}, methods: {}, casts: {} };

@@ -88,7 +88,7 @@ internal sealed partial class InstanceAdvancer(
             return Envelopes.Error($"State '{targetStageKey}' not found in definition.", "STATE_NOT_FOUND");
         }
 
-        // FindAccessibleWorkItems (called when the response is built) renders from instance.Cursors, not
+        // FindActorWorkItems (called when the response is built) renders from instance.Cursors, not
         // instance.CurrentStage, the moment ANY cursor exists — which is every blueprint that has passed a
         // gateway. Updating only CurrentStage left a "change:" jump a silent no-op past the first stage.
         // Move whichever active, non-gateway cursor belongs to the target stage's own queue — the same cursor
@@ -126,7 +126,7 @@ internal sealed partial class InstanceAdvancer(
     {
         var (instance, definition, accessProfile, userId, action, _, fieldValues) = request;
 
-        var visibleWorkItem = workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId)
+        var visibleWorkItem = workItems.FindActorWorkItems(instance, definition, accessProfile, userId)
             .FirstOrDefault(item => item.AvailableActions.Any(candidate =>
                 string.Equals(candidate.ActionKey, action, StringComparison.Ordinal)));
 

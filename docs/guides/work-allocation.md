@@ -118,7 +118,7 @@ Ownership lives on `RequestCursor.AssignedTo`/`AssignedAt`, per-cursor, not per-
 the engine's own multi-cursor model (a Split/Join instance can have simultaneous cursors in
 different queues) and `GetQueueWorkItems`' own per-row granularity. A picked-up cursor is **hidden
 entirely** from every other actor (not shown as a disabled row) enforced at the same
-`FindAccessibleWorkItems` choke point `Advance`'s own target resolution uses, so a teammate who
+`FindActorWorkItems` choke point `Advance`'s own target resolution uses, so a teammate who
 already has the `instanceId`/`cursorId` of a picked-up item and calls `Advance` directly on it gets
 `INVALID_TRANSITION`, the same as any other genuinely inaccessible item.
 
