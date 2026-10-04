@@ -187,13 +187,15 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     // Reach the Definition tab via the tab list using arrow keys.
     const tabsRoot = editor.locator('wayfinder-confidence-tabs');
     await tabsRoot.locator('button[data-wayfinder-confidence-tab="canvas"]').focus();
-    // Five tabs sit before "definition": Canvas, Validation, Preview, Simulation, then Definition.
-    for (let i = 0; i < 4; i++) {
+    // Arrow right through the tabs until Definition is the selected one, rather than counting how
+    // many tabs precede it (that count has changed before and will again).
+    const definitionTab = tabsRoot.locator('button[data-wayfinder-confidence-tab="definition"]');
+    const tabCount = await tabsRoot.locator('button[data-wayfinder-confidence-tab]').count();
+    for (let i = 0; i < tabCount && (await definitionTab.getAttribute('aria-selected')) !== 'true'; i++) {
       await page.keyboard.press('ArrowRight');
       // Allow the tab harness's requestAnimationFrame focus shift to complete.
       await page.waitForTimeout(50);
     }
-    const definitionTab = tabsRoot.locator('button[data-wayfinder-confidence-tab="definition"]');
     await expect(definitionTab).toHaveAttribute('aria-selected', 'true');
 
     // The editor renders. Focus inside the editor host and type.

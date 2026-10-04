@@ -130,7 +130,7 @@ function ServiceBlueprintGraphCanvas({ bridge, props }: { bridge: GraphBridge; p
       edges={model.edges}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
-      minZoom={0.4}
+      minZoom={0.1}
       maxZoom={2}
       defaultViewport={{ x: 0, y: 0, zoom: 1 }}
       nodesDraggable={!props.readOnly}

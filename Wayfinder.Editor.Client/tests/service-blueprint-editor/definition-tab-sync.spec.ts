@@ -110,20 +110,21 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     }, original);
 
     await replaceDefinitionViaCm(page, updated);
-    await page.waitForTimeout(350);
 
-    // Internal model should now have the extra route.
-    const actionsAfter = await page.evaluate(() => {
-      const host = document.querySelector('wayfinder-service-blueprint-editor') as
-        | (HTMLElement & { _serviceBlueprint?: { gateways?: Array<{ key?: string; routes?: Array<{ trigger?: string }> }> } | null })
-        | null;
-      return (
-        host?._serviceBlueprint?.gateways
-          ?.find((gateway) => gateway.key === 'route-check-answers')
-          ?.routes?.map((route) => route.trigger) ?? []
-      );
-    });
-    expect(actionsAfter).toContain('fast-track');
+    // Internal model should now have the extra route. JSON edits apply after a debounce, so poll
+    // rather than sleep a fixed time (a fixed wait lost the race under parallel load).
+    const routeTriggers = () =>
+      page.evaluate(() => {
+        const host = document.querySelector('wayfinder-service-blueprint-editor') as
+          | (HTMLElement & { _serviceBlueprint?: { gateways?: Array<{ key?: string; routes?: Array<{ trigger?: string }> }> } | null })
+          | null;
+        return (
+          host?._serviceBlueprint?.gateways
+            ?.find((gateway) => gateway.key === 'route-check-answers')
+            ?.routes?.map((route) => route.trigger) ?? []
+        );
+      });
+    await expect.poll(routeTriggers).toContain('fast-track');
 
     // Visual canvas should reflect the new transition.
     await clickCanvasTab(page);
@@ -148,11 +149,19 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     // First commit a clean rename so we have a known-good last state.
     const renamed = original.replace(/"displayName": "Application Form"/, '"displayName": "Pre-Invalid Form"');
     await replaceDefinitionViaCm(page, renamed);
-    await page.waitForTimeout(350);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = document.querySelector('wayfinder-service-blueprint-editor') as
+            | (HTMLElement & { _serviceBlueprint?: { stages?: Array<{ stageKey?: string; displayName?: string }> } | null })
+            | null;
+          return host?._serviceBlueprint?.stages?.find((stage) => stage.stageKey === 'application-form')?.displayName;
+        })
+      )
+      .toBe('Pre-Invalid Form');
 
     // Now break the JSON by stripping the trailing brace.
     await replaceDefinitionViaCm(page, renamed.slice(0, -3));
-    await page.waitForTimeout(350);
 
     const editor = page.locator('wayfinder-service-blueprint-editor');
     await expect(editor.locator('[data-wayfinder-definition-banner]')).toBeVisible();
