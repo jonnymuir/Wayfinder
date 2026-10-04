@@ -92,7 +92,7 @@ public class ProcessManagerEngine : IProcessManager
         if (!_registry.TryGet(blueprintKey, out var definition))
         {
             Logger.LogWarning("Service blueprint not found: {Key}", blueprintKey);
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 $"Blueprint '{blueprintKey}' is not registered with this application.",
                 "DEFINITION_NOT_FOUND");
         }
@@ -101,12 +101,12 @@ public class ProcessManagerEngine : IProcessManager
         {
             if (!_instances.TryGet(instanceId, out var specificInstance))
             {
-                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+                return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
             }
 
             if (!CanAccessInstance(specificInstance, tenantId, userId, accessProfile))
             {
-                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+                return Envelopes.Error("Access denied to this service request.", "ACCESS_DENIED");
             }
 
             Logger.LogInformation("Resuming specific instance {Id}", instanceId);
@@ -117,7 +117,7 @@ public class ProcessManagerEngine : IProcessManager
 
         if (!CanStartInitialState(definition, accessProfile))
         {
-            return ErrorEnvelope("Access denied to start this queue.", "ACCESS_DENIED");
+            return Envelopes.Error("Access denied to start this queue.", "ACCESS_DENIED");
         }
 
         if (string.Equals(action, "start-new", StringComparison.OrdinalIgnoreCase))
@@ -175,7 +175,7 @@ public class ProcessManagerEngine : IProcessManager
                             $"{customPolicy.GetType().Name} returned ReuseExisting with no ExistingInstance."),
                         definition, accessProfile, userId);
                 case RequestConcurrencyOutcome.Deny:
-                    return ErrorEnvelope(
+                    return Envelopes.Error(
                         decision.DenyReason ?? "This request was denied by a registered concurrency policy.",
                         "CONCURRENCY_POLICY_DENIED");
                 case RequestConcurrencyOutcome.AllowNew:
@@ -355,29 +355,29 @@ public class ProcessManagerEngine : IProcessManager
     {
         if (!_instances.TryGet(instanceId, out var instance))
         {
-            return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+            return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
         }
 
         if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
         {
-            return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+            return Envelopes.Error("Access denied to this service request.", "ACCESS_DENIED");
         }
 
         if (instance.StateVersion != expectedStateVersion)
         {
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 $"State version mismatch: expected {expectedStateVersion}, actual {instance.StateVersion}.",
                 "VERSION_MISMATCH");
         }
 
         if (instance.IsAborted)
         {
-            return AbortedInstanceEnvelope(instance);
+            return Envelopes.Aborted(instance);
         }
 
         if (!_registry.TryGet(instance.BlueprintKey, out var definition))
         {
-            return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+            return Envelopes.Error($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
         }
 
         if (action.StartsWith("change:", StringComparison.OrdinalIgnoreCase))
@@ -386,7 +386,7 @@ public class ProcessManagerEngine : IProcessManager
             var targetStage = definition.Stages.FirstOrDefault(s => s.StageKey == targetStageKey);
             if (targetStage is null)
             {
-                return ErrorEnvelope($"State '{targetStageKey}' not found in definition.", "STATE_NOT_FOUND");
+                return Envelopes.Error($"State '{targetStageKey}' not found in definition.", "STATE_NOT_FOUND");
             }
 
             // FindAccessibleWorkItems (called by BuildEnvelope below) renders from instance.Cursors,
@@ -422,7 +422,7 @@ public class ProcessManagerEngine : IProcessManager
             var savedJumped = _instances.TrySaveIfVersionMatches(jumped, userId, instance.StateVersion, jumpAuditEvent);
             if (savedJumped is null)
             {
-                return ErrorEnvelope(
+                return Envelopes.Error(
                     $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
                     "VERSION_MISMATCH");
             }
@@ -440,7 +440,7 @@ public class ProcessManagerEngine : IProcessManager
 
         if (visibleWorkItem is null)
         {
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 $"Action '{action}' is not valid from the current queue view.",
                 "INVALID_TRANSITION");
         }
@@ -451,7 +451,7 @@ public class ProcessManagerEngine : IProcessManager
 
         if (transition == null)
         {
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 $"Action '{action}' is not valid from stage '{visibleWorkItem.StageKey}'.",
                 "INVALID_TRANSITION");
         }
@@ -571,7 +571,7 @@ public class ProcessManagerEngine : IProcessManager
             var savedMulti = _instances.TrySaveIfVersionMatches(updatedMulti, userId, instance.StateVersion, multiAuditEvent);
             if (savedMulti is null)
             {
-                return ErrorEnvelope(
+                return Envelopes.Error(
                     $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
                     "VERSION_MISMATCH");
             }
@@ -596,7 +596,7 @@ public class ProcessManagerEngine : IProcessManager
         var savedUpdated = _instances.TrySaveIfVersionMatches(updated, userId, instance.StateVersion, advanceAuditEvent);
         if (savedUpdated is null)
         {
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 $"State version mismatch: expected {expectedStateVersion}, actual has changed concurrently.",
                 "VERSION_MISMATCH");
         }
@@ -840,17 +840,17 @@ public class ProcessManagerEngine : IProcessManager
         {
             if (!_instances.TryGet(instanceId, out var instance))
             {
-                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+                return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
             }
 
             if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
             {
-                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+                return Envelopes.Error("Access denied to this service request.", "ACCESS_DENIED");
             }
 
             if (!_registry.TryGet(instance.BlueprintKey, out var definition))
             {
-                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+                return Envelopes.Error($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
             }
 
             // Resolved WITHOUT the ownership filter (no userId) — unlike every other caller of
@@ -863,12 +863,12 @@ public class ProcessManagerEngine : IProcessManager
                 .FirstOrDefault(candidate => string.Equals(candidate.CursorId, cursorId, StringComparison.Ordinal));
             if (item is null)
             {
-                return ErrorEnvelope($"Cursor '{cursorId}' is not accessible on this instance.", "INVALID_TRANSITION");
+                return Envelopes.Error($"Cursor '{cursorId}' is not accessible on this instance.", "INVALID_TRANSITION");
             }
 
             if (accessProfile.RestrictToInstanceOwner)
             {
-                return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
+                return Envelopes.Error("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
             }
 
             ServiceRequest updatedInstance;
@@ -876,7 +876,7 @@ public class ProcessManagerEngine : IProcessManager
             {
                 // Always already owned by whoever started it — see docs/guides/team-assignment.md's
                 // reassignment scope note.
-                return ErrorEnvelope(
+                return Envelopes.Error(
                     "This item is always assigned to whoever started it — there's nothing to pick up.", "PICKUP_NOT_AVAILABLE");
             }
 
@@ -884,12 +884,12 @@ public class ProcessManagerEngine : IProcessManager
             {
                 if (!accessProfile.IsTeamMember(item.AssignedTeamId))
                 {
-                    return ErrorEnvelope("You must be a member of the owning team to pick up this item.", "TEAM_MEMBERSHIP_REQUIRED");
+                    return Envelopes.Error("You must be a member of the owning team to pick up this item.", "TEAM_MEMBERSHIP_REQUIRED");
                 }
 
                 if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
                 {
-                    return ErrorEnvelope("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
+                    return Envelopes.Error("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
                 }
 
                 // Not ClassifyStatus(item, definition) != Unassigned here: item was resolved via
@@ -899,7 +899,7 @@ public class ProcessManagerEngine : IProcessManager
                 // agnostic) is the right check for "is there really something to pick up here at all".
                 if (item.EligibleActions.Count == 0)
                 {
-                    return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
+                    return Envelopes.Error("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
                 }
 
                 var teamPickedUpAt = DateTimeOffset.UtcNow;
@@ -927,12 +927,12 @@ public class ProcessManagerEngine : IProcessManager
                 // row, since this call resolved the item via the userId-less internal peek.
                 if (item.AssignedTo is not null && !string.Equals(item.AssignedTo, userId, StringComparison.Ordinal))
                 {
-                    return ErrorEnvelope("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
+                    return Envelopes.Error("This item has already been picked up by someone else.", "ALREADY_PICKED_UP");
                 }
 
                 if (item.EligibleActions.Count == 0)
                 {
-                    return ErrorEnvelope("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
+                    return Envelopes.Error("This item is not available to pick up.", "PICKUP_NOT_AVAILABLE");
                 }
 
                 var pickedUpAt = DateTimeOffset.UtcNow;
@@ -975,7 +975,7 @@ public class ProcessManagerEngine : IProcessManager
             }
         }
 
-        return ErrorEnvelope(
+        return Envelopes.Error(
             $"Could not pick up '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
             "PICKUP_CONFLICT");
     }
@@ -994,23 +994,23 @@ public class ProcessManagerEngine : IProcessManager
         {
             if (!_instances.TryGet(instanceId, out var instance))
             {
-                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+                return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
             }
 
             if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
             {
-                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+                return Envelopes.Error("Access denied to this service request.", "ACCESS_DENIED");
             }
 
             if (!_registry.TryGet(instance.BlueprintKey, out var definition))
             {
-                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+                return Envelopes.Error($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
             }
 
             var cursor = instance.Cursors.FirstOrDefault(c => string.Equals(c.CursorId, cursorId, StringComparison.Ordinal));
             if (cursor is null)
             {
-                return ErrorEnvelope($"Cursor '{cursorId}' not found.", "INVALID_TRANSITION");
+                return Envelopes.Error($"Cursor '{cursorId}' not found.", "INVALID_TRANSITION");
             }
 
             var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
@@ -1028,7 +1028,7 @@ public class ProcessManagerEngine : IProcessManager
 
                 if (!string.Equals(existingAssignment.AssignedUserId, userId, StringComparison.Ordinal))
                 {
-                    return ErrorEnvelope("This item has been picked up by someone else.", "ALREADY_PICKED_UP_BY_OTHER");
+                    return Envelopes.Error("This item has been picked up by someone else.", "ALREADY_PICKED_UP_BY_OTHER");
                 }
 
                 // Back to the team tray — still team-owned, just not by a specific individual.
@@ -1042,7 +1042,7 @@ public class ProcessManagerEngine : IProcessManager
             }
             else if (queueDef?.AssignmentPolicy == AssignmentPolicies.AssignToInitiator)
             {
-                return ErrorEnvelope(
+                return Envelopes.Error(
                     "This item is always assigned to whoever started it and can't be put back.", "PICKUP_NOT_AVAILABLE");
             }
             else
@@ -1056,7 +1056,7 @@ public class ProcessManagerEngine : IProcessManager
 
                 if (!string.Equals(cursor.AssignedTo, userId, StringComparison.Ordinal))
                 {
-                    return ErrorEnvelope("This item has been picked up by someone else.", "ALREADY_PICKED_UP_BY_OTHER");
+                    return Envelopes.Error("This item has been picked up by someone else.", "ALREADY_PICKED_UP_BY_OTHER");
                 }
 
                 updatedInstance = instance with
@@ -1079,7 +1079,7 @@ public class ProcessManagerEngine : IProcessManager
             }
         }
 
-        return ErrorEnvelope(
+        return Envelopes.Error(
             $"Could not put back '{cursorId}' after {maxAttempts} attempts due to concurrent updates.",
             "PICKUP_CONFLICT");
     }
@@ -1099,17 +1099,17 @@ public class ProcessManagerEngine : IProcessManager
         {
             if (!_instances.TryGet(instanceId, out var instance))
             {
-                return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+                return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
             }
 
             if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
             {
-                return ErrorEnvelope("Access denied to this service request.", "ACCESS_DENIED");
+                return Envelopes.Error("Access denied to this service request.", "ACCESS_DENIED");
             }
 
             if (!_registry.TryGet(instance.BlueprintKey, out var definition))
             {
-                return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+                return Envelopes.Error($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
             }
 
             var serviceFields = definition.Calculations?.Fields;
@@ -1119,7 +1119,7 @@ public class ProcessManagerEngine : IProcessManager
                     || !serviceFields.TryGetValue(key, out var field)
                     || !string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase))
                 {
-                    return ErrorEnvelope(
+                    return Envelopes.Error(
                         $"Field '{key}' is not declared with source: \"service\" on this blueprint and cannot be synced.",
                         "NOT_SERVICE_FIELD");
                 }
@@ -1139,7 +1139,7 @@ public class ProcessManagerEngine : IProcessManager
             }
         }
 
-        return ErrorEnvelope(
+        return Envelopes.Error(
             $"Could not sync fields on '{instanceId}' after {maxAttempts} attempts due to concurrent updates.",
             "SYNC_CONFLICT");
     }
@@ -1150,12 +1150,12 @@ public class ProcessManagerEngine : IProcessManager
     {
         if (!_instances.TryGet(instanceId, out var instance))
         {
-            return ErrorEnvelope($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
+            return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
         }
 
         if (!_registry.TryGet(instance.BlueprintKey, out var definition))
         {
-            return ErrorEnvelope($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
+            return Envelopes.Error($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
         }
 
         var dirtyCountField = FindDeclaringBulkDatasetIngestAction(definition, instance.FieldValues, datasetId)
@@ -1717,7 +1717,7 @@ public class ProcessManagerEngine : IProcessManager
     {
         if (instance.IsAborted)
         {
-            return AbortedInstanceEnvelope(instance);
+            return Envelopes.Aborted(instance);
         }
 
         var workItems = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId);
@@ -1725,7 +1725,7 @@ public class ProcessManagerEngine : IProcessManager
 
         if (visibleItem is null)
         {
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 "Access denied to the current queue.",
                 "ACCESS_DENIED");
         }
@@ -1751,14 +1751,14 @@ public class ProcessManagerEngine : IProcessManager
                     return BuildEnvelope(refreshed, definition, accessProfile, userId);
                 }
 
-                return BuildJoinWaitingEnvelope(instance, definition, joinGateway);
+                return Envelopes.JoinWaiting(instance, definition, joinGateway);
             }
         }
 
         var stage = definition.Stages.FirstOrDefault(s => s.StageKey == visibleItem.StageKey);
         if (stage == null)
         {
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 $"State '{visibleItem.StageKey}' not found in definition '{definition.DefinitionKey}'.",
                 "STATE_NOT_FOUND");
         }
@@ -1804,44 +1804,6 @@ public class ProcessManagerEngine : IProcessManager
             AllowManualRestart = definition.AllowManualRestart
         };
     }
-
-    protected static ServiceRequestResponseEnvelope ErrorEnvelope(string message, string code) =>
-        new()
-        {
-            InstanceId = string.Empty,
-            ResponseState = "error",
-            StateVersion = 0,
-            CorrelationId = Guid.NewGuid().ToString(),
-            ServerTimeUtc = DateTimeOffset.UtcNow,
-            Problems = [new ServiceRequestProblem { FieldKey = string.Empty, Message = message, Code = code }]
-        };
-
-    /// <summary>
-    /// The uniform response for any render or advance attempt against an instance an admin has
-    /// stopped (<see cref="ServiceRequest.IsAborted"/>) — reuses the existing "error" response
-    /// shape every host already renders, rather than a new <c>ResponseState</c> value a host would
-    /// need new handling for. Carries the real <c>InstanceId</c> (unlike <see cref="ErrorEnvelope"/>,
-    /// which never does) so a host can still log/link back to exactly which instance this was.
-    /// </summary>
-    protected static ServiceRequestResponseEnvelope AbortedInstanceEnvelope(ServiceRequest instance) =>
-        new()
-        {
-            InstanceId = instance.InstanceId,
-            ResponseState = "error",
-            StateVersion = instance.StateVersion,
-            CorrelationId = instance.InstanceId,
-            ServerTimeUtc = DateTimeOffset.UtcNow,
-            Problems =
-            [
-                new ServiceRequestProblem
-                {
-                    FieldKey = string.Empty,
-                    Message = "This service request was stopped by an administrator" +
-                        (string.IsNullOrWhiteSpace(instance.AbortedReason) ? "." : $": {instance.AbortedReason}"),
-                    Code = "INSTANCE_ABORTED"
-                }
-            ]
-        };
 
     private ServiceRequestResponseEnvelope CreateAndRegisterNewInstance(
         string blueprintKey,
@@ -1926,7 +1888,7 @@ public class ProcessManagerEngine : IProcessManager
 
         if (outgoing.Count == 0)
         {
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 $"Split gateway '{splitGateway.Key}' has no outgoing transitions.",
                 "GATEWAY_NO_OUTGOING");
         }
@@ -2124,7 +2086,7 @@ public class ProcessManagerEngine : IProcessManager
                 "Join gateway '{Gateway}': instance {Id} waiting ({Arrived}/{Required} queues).",
                 gatewayKey, instance.InstanceId, arrivedQueues.Count, requiredQueues.Count);
 
-            return BuildJoinWaitingEnvelope(waitingInstance, definition, joinGateway);
+            return Envelopes.JoinWaiting(waitingInstance, definition, joinGateway);
         }
 
         var arrivedInstance = instance with
@@ -2138,67 +2100,8 @@ public class ProcessManagerEngine : IProcessManager
         };
 
         return TryReleaseJoinIfReady(arrivedInstance, definition, joinGateway, accessProfile, userId)
-               ?? BuildJoinWaitingEnvelope(arrivedInstance, definition, joinGateway);
+               ?? Envelopes.JoinWaiting(arrivedInstance, definition, joinGateway);
     }
-
-    private static ServiceRequestResponseEnvelope BuildJoinWaitingEnvelope(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        ServiceBlueprintGatewayDefinition joinGateway)
-    {
-        var waitingContent = joinGateway.WaitingContent
-                             ?? "Please wait while other parts of this blueprint are completed.";
-        var pollMs = joinGateway.WaitingPollIntervalMs > 0 ? joinGateway.WaitingPollIntervalMs : 3000;
-        var expectedSeconds = joinGateway.WaitingExpectedSeconds > 0 ? joinGateway.WaitingExpectedSeconds : 30;
-        var allowDefer = joinGateway.WaitingDeferMessage is not null || joinGateway.WaitingAllowDefer;
-
-        var waitingArrivals = instance.JoinArrivals.TryGetValue(joinGateway.Key, out var arr) ? arr : [];
-        var requiredQueues = joinGateway.RequiredIncomingQueues ?? [];
-        var pendingQueues = requiredQueues
-            .Where(queue => instance.Cursors.All(c =>
-                !(c.IsAtGateway
-                  && string.Equals(c.CurrentNodeKey, joinGateway.Key, StringComparison.Ordinal)
-                  && string.Equals(c.QueueKey, queue, StringComparison.Ordinal))))
-            .ToArray();
-
-        var statusContent = pendingQueues.Length > 0
-            ? $"{waitingContent} Waiting for: {string.Join(", ", pendingQueues)}."
-            : waitingContent;
-
-        var render = new StepContent
-        {
-            StepType = "status-timeline",
-            StateDisplayName = joinGateway.DisplayName,
-            Components =
-            [
-                new ComponentRenderPayload
-                {
-                    Type = "waiting",
-                    Content = statusContent,
-                    ExpectedWaitSeconds = expectedSeconds,
-                    PollIntervalMs = pollMs,
-                    AllowDefer = allowDefer,
-                    DeferMessage = joinGateway.WaitingDeferMessage
-                }
-            ],
-            AvailableActions = Array.Empty<ServiceRequestAction>()
-        };
-
-        return new ServiceRequestResponseEnvelope
-        {
-            InstanceId = instance.InstanceId,
-            ResponseState = "defer",
-            StateVersion = instance.StateVersion,
-            CorrelationId = instance.InstanceId,
-            ServerTimeUtc = DateTimeOffset.UtcNow,
-            PollAfterMs = pollMs,
-            Render = render,
-            RequestPolicy = definition.RequestPolicy,
-            AllowManualRestart = definition.AllowManualRestart
-        };
-    }
-
-    // ─── Support system helpers ──────────────────────────────────────────────
 
     /// <summary>
     /// Runs every <c>onEnter</c> <c>support-system-call</c> action declared on the stage a cursor
@@ -2679,7 +2582,7 @@ public class ProcessManagerEngine : IProcessManager
 
             if (owner is null)
             {
-                return ErrorEnvelope(
+                return Envelopes.Error(
                     $"No pending support-system invocation '{invocationId}' found.",
                     "SUPPORT_SYSTEM_INVOCATION_NOT_FOUND");
             }
@@ -2688,7 +2591,7 @@ public class ProcessManagerEngine : IProcessManager
             var capability = SupportSystemRegistry.FindCapability(invocation.SupportSystemKey, invocation.CapabilityKey);
             if (capability is null || capability.Outcomes.All(o => o.Key != outcomeKey))
             {
-                return ErrorEnvelope(
+                return Envelopes.Error(
                     $"'{outcomeKey}' is not a declared outcome of capability '{invocation.CapabilityKey}' on " +
                     $"support system '{invocation.SupportSystemKey}'.",
                     "SUPPORT_SYSTEM_INVALID_OUTCOME");
@@ -2738,7 +2641,7 @@ public class ProcessManagerEngine : IProcessManager
             }
         }
 
-        return ErrorEnvelope(
+        return Envelopes.Error(
             $"Could not resolve support-system invocation '{invocationId}' after {maxAttempts} attempts due to concurrent updates.",
             "SUPPORT_SYSTEM_RESOLUTION_CONFLICT");
     }
@@ -2805,7 +2708,7 @@ public class ProcessManagerEngine : IProcessManager
 
         if (outgoing.Count == 0)
         {
-            return ErrorEnvelope(
+            return Envelopes.Error(
                 $"Join gateway '{gatewayKey}' has no outgoing transitions.",
                 "GATEWAY_NO_OUTGOING");
         }
@@ -2833,7 +2736,7 @@ public class ProcessManagerEngine : IProcessManager
 
             if (matches.Count != 1)
             {
-                return ErrorEnvelope(
+                return Envelopes.Error(
                     $"Join gateway '{gatewayKey}' has {outgoing.Count} outgoing routes but could not " +
                     $"determine which to take (arrived actions: [{string.Join(", ", arrivedActions)}], " +
                     $"matched {matches.Count} route(s)). Exactly one outgoing route's trigger must match " +
