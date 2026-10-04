@@ -50,22 +50,6 @@ public record ServiceBlueprint
                     "by key, so a keyless gateway can never be reached — give it a unique key."));
             }
 
-            if (string.IsNullOrWhiteSpace(gateway.GatewayType))
-            {
-                // Not a runtime break — Advance() treats anything that isn't exactly "Split" as a
-                // Join, so routing through a blank-typed gateway still works for the common single
-                // in/single out case. But it IS an authoring-clarity gap (a reader can't tell fan
-                // out from pass-through at a glance), so warn rather than stay silent.
-                diagnostics.Add(new ServiceBlueprintDiagnostic(
-                    "GATEWAY_MISSING_TYPE",
-                    $"gateways[{gatewayIndex}].gatewayType",
-                    $"Gateway '{gateway.Key}' has no gatewayType. It still routes correctly (anything " +
-                    "other than \"Split\" behaves as a Join), but set it explicitly — \"Split\" for a " +
-                    "fan-out, \"Join\" for a merge or plain pass-through — so the shape is clear from " +
-                    "the definition alone.",
-                    ServiceBlueprintDiagnosticSeverity.Warning));
-            }
-
             if (string.IsNullOrWhiteSpace(gateway.QueueKey))
             {
                 // Also not a runtime break for the common case — but the editor canvas visually
@@ -190,7 +174,7 @@ public record ServiceBlueprint
             // trigger is irrelevant, the one route always fires), a blank or repeated trigger here
             // makes that match impossible or ambiguous and every real instance that reaches it will
             // hard-fail at runtime with GATEWAY_AMBIGUOUS_JOIN_ROUTE.
-            if (string.Equals(gateway.GatewayType, "Join", StringComparison.OrdinalIgnoreCase)
+            if (gateway.GatewayType == GatewayKind.Join
                 && (gateway.Routes ?? []).Count > 1)
             {
                 var seenTriggers = new HashSet<string>(StringComparer.Ordinal);
@@ -1209,45 +1193,6 @@ public record ServiceBlueprint
     }
 
     /// <summary>
-    /// The only <see cref="StageDefinition.StageType"/> values any authoring surface
-    /// recognises. StageType has no runtime meaning on its own — actual step-shell rendering
-    /// is inferred from the stage's components (see <c>ComponentExtensions.InferStepType</c>)
-    /// — but an unrecognised value passes every other check here and only surfaces later as an
-    /// editor-only rejection when someone opens the blueprint in the backoffice Definition tab,
-    /// after it's already been saved by another authoring surface (MCP, REST). Kept in sync by
-    /// hand with the client's <c>service-blueprint-lint.ts</c> <c>ALLOWED_STAGE_KINDS</c>.
-    /// </summary>
-    public static readonly IReadOnlyCollection<string> KnownStageKinds =
-        ["Question", "CheckAnswers", "Confirmation", "TaskList"];
-
-    /// <summary>
-    /// Validates that every stage's optional <see cref="StageDefinition.StageType"/>, when present,
-    /// is one of <see cref="KnownStageKinds"/>. StageType is optional — omitting it entirely and
-    /// relying on component-based shell inference remains valid — this only rejects a value that's
-    /// present but not recognised by any authoring surface.
-    /// Returns one diagnostic per stage with an unrecognised stageType; empty list means every
-    /// declared stageType (if any) is known.
-    /// </summary>
-    public IReadOnlyList<ServiceBlueprintDiagnostic> ValidateStageVocabulary()
-    {
-        var diagnostics = new List<ServiceBlueprintDiagnostic>();
-
-        foreach (var stage in Stages)
-        {
-            if (!string.IsNullOrWhiteSpace(stage.StageType) && !KnownStageKinds.Contains(stage.StageType))
-            {
-                diagnostics.Add(new ServiceBlueprintDiagnostic(
-                    "STAGE_UNKNOWN_TYPE",
-                    $"stages.{stage.StageKey}",
-                    $"Stage '{stage.StageKey}' has unrecognised stageType '{stage.StageType}'. Known kinds: " +
-                    $"{string.Join(", ", KnownStageKinds)}."));
-            }
-        }
-
-        return diagnostics;
-    }
-
-    /// <summary>
     /// The only <see cref="RequestPolicy"/> values <see cref="Services.ProcessManagerEngine"/>'s
     /// own instance-lookup switch recognises (<c>GetCurrent</c>'s <c>"multiple"</c>/<c>"prompt"</c>
     /// checks). An unrecognised value isn't rejected at runtime — it just falls straight through
@@ -1370,7 +1315,7 @@ public record StageDefinition
     public string? Description { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? StageType { get; init; }
+    public StageKind? StageType { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Actor { get; init; }
@@ -1496,7 +1441,7 @@ public record ServiceBlueprintGatewayDefinition
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; init; }
 
-    public string GatewayType { get; init; } = "";
+    public required GatewayKind GatewayType { get; init; }
 
     public string QueueKey
     {

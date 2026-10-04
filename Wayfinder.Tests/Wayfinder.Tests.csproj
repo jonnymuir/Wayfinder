@@ -30,6 +30,7 @@
     <ProjectReference Include="../Wayfinder.Engine.Mcp/Wayfinder.Engine.Mcp.csproj" />
     <ProjectReference Include="../Wayfinder.Engine.Worklist/Wayfinder.Engine.Worklist.csproj" />
     <ProjectReference Include="../Wayfinder.Rendering.GovUk/Wayfinder.Rendering.GovUk.csproj" />
+    <ProjectReference Include="../Wayfinder.TypeGen/Wayfinder.TypeGen.csproj" />
   </ItemGroup>
 
 </Project>

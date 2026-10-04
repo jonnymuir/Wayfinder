@@ -76,6 +76,11 @@ the `-live` specs need Aspire and stay local-only). It runs the editor client bu
 the TS conformance scripts → storybook a11y/interaction → editor Playwright. `Wayfinder.ReferenceApp.Tests`
 Playwright specs run via their own configs.
 
+The editor's TypeScript model (`Wayfinder.Editor.Client/src/service-blueprint-editor/generated/wayfinder-model.ts`)
+is **generated from the C# model**: change a C# model type, then run
+`dotnet run --project Wayfinder.TypeGen -- write Wayfinder.Editor.Client/src/service-blueprint-editor/generated/wayfinder-model.ts`
+and commit the result. CI fails on a stale file. Never hand-edit it, and never hand-mirror a C# type in the editor.
+
 ## Releasing
 
 Four packages release **in lockstep**: `Wayfinder`, `Wayfinder.Engine`, `Wayfinder.Engine.Api`,

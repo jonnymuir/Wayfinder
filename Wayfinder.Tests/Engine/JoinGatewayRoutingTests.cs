@@ -231,7 +231,7 @@ public class JoinGatewayRoutingTests
         // SafetyNet Underwriting call. Two Join gateways for two distinct reasons, not a
         // regression of the original merge this test guards.
         var joinGateways = definition.Gateways!
-            .Where(g => string.Equals(g.GatewayType, "Join", StringComparison.Ordinal))
+            .Where(g => g.GatewayType == GatewayKind.Join)
             .ToList();
         Assert.Equal(2, joinGateways.Count);
 

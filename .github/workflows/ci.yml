@@ -52,6 +52,11 @@ jobs:
       - name: Test
         run: dotnet test Wayfinder.slnx -c Release --no-build
 
+      # The editor's TypeScript model is generated from the C# model; a stale file means the two
+      # have drifted. Fix with: dotnet run --project Wayfinder.TypeGen -- write <path>
+      - name: Editor TypeScript model is current
+        run: dotnet run --project Wayfinder.TypeGen --no-build -c Release -- check Wayfinder.Editor.Client/src/service-blueprint-editor/generated/wayfinder-model.ts
+
       # Proves the JS calculation evaluator (Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-
       # calculations.js) stays behaviourally identical to the C# one just tested above — both
       # run the same shared fixture file. Plain Node, no npm install needed for this one script.
