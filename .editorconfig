@@ -103,10 +103,6 @@ dotnet_diagnostic.CA1506.severity = none
 dotnet_diagnostic.CA1502.severity = none
 dotnet_diagnostic.CA1506.severity = none
 
-[Wayfinder/Models/ServiceDesign/ServiceBlueprint.cs]
-dotnet_diagnostic.CA1502.severity = none
-dotnet_diagnostic.CA1506.severity = none
-
 [Wayfinder/Services/Calculations/CalculationEvaluator.cs]
 dotnet_diagnostic.CA1502.severity = none
 dotnet_diagnostic.CA1506.severity = none
@@ -116,6 +112,25 @@ dotnet_diagnostic.CA1502.severity = none
 dotnet_diagnostic.CA1506.severity = none
 
 [Wayfinder/Services/Validation/FieldValueValidator.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.BulkDatasetActions.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.DataDisplayBindings.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.GatewayRouting.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.Reachability.cs]
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1506.severity = none
+
+[Wayfinder/Models/ServiceDesign/ServiceBlueprint.SupportSystemActions.cs]
 dotnet_diagnostic.CA1502.severity = none
 dotnet_diagnostic.CA1506.severity = none
 # END complexity baseline

@@ -2,7 +2,7 @@
 //
 //   node scripts/check-policies.mjs            fail if a file or C# method grew past its budget or baseline, or a new
 //                                              `as unknown as` cast appeared (a cast that hides a model mismatch)
-//   node scripts/check-policies.mjs --update   lower the baseline to today's sizes (never raises it)
+//   node scripts/check-policies.mjs --update   lower the baseline to today's sizes (never raises it or adds paths)
 //   node scripts/check-policies.mjs --stale    fail if a complexity-baseline entry no longer has a finding
 //                                              (slow: rebuilds without the C# baseline and re-runs Biome)
 //
@@ -89,7 +89,9 @@ function checkSizes(update) {
   if (update) {
     const next = { files: {}, methods: {}, casts: {} };
     for (const kind of ['files', 'methods', 'casts']) {
-      for (const [path, size] of Object.entries(actual[kind])) next[kind][path] = Math.min(size, baseline[kind][path] ?? size);
+      // Only existing entries are lowered or dropped. Adding a path (e.g. after splitting a file) is a deliberate,
+      // reviewed edit of the JSON, never something --update does on its own.
+      for (const [path, size] of Object.entries(actual[kind])) if (path in baseline[kind]) next[kind][path] = Math.min(size, baseline[kind][path]);
     }
     writeFileSync(baselinePath, `${JSON.stringify(next, null, 2)}\n`);
     console.log(`Baseline written: ${Object.keys(next.files).length} large files, ${Object.keys(next.methods).length} files with a long method.`);
