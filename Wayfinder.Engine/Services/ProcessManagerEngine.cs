@@ -36,6 +36,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
     private readonly WorkQueues _queues;
     private readonly WorkAllocation _allocation;
     private readonly GatewayAdvancer _gateways;
+    private readonly SupportSystemOutcomes _outcomes;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly Dictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
@@ -72,9 +73,10 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
         _bulkDatasets = new BulkDatasetActions(bulkDatasetStore, logger);
         _supportSystems = new SupportSystemActions(_supportSystemClients, logger);
         _admin = new InstanceAdmin(_instances, _registry, logger);
-        _queues = new WorkQueues(_instances, _registry, _workItems, TryPollResolveSupportSystemInvocations);
         _allocation = new WorkAllocation(_instances, _registry, _workItems, this);
         _gateways = new GatewayAdvancer(_instances, _bulkDatasets, _supportSystems, this, logger);
+        _outcomes = new SupportSystemOutcomes(_instances, _supportSystemClients, this, logger);
+        _queues = new WorkQueues(_instances, _registry, _workItems, _outcomes.TryPollResolveSupportSystemInvocations);
     }
 
     protected ILogger Logger { get; }
@@ -744,6 +746,16 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
             new Dictionary<string, object?> { [dirtyCountField] = (decimal)summary.DirtyRowCount });
     }
 
+    /// <summary>
+    /// Settles a support-system invocation with the outcome an external system reported (the webhook receiver
+    /// and the poll check both call this), advancing the cursor that was waiting on it.
+    /// </summary>
+    public ServiceRequestResponseEnvelope ResolveSupportSystemOutcome(
+        string invocationId,
+        string outcomeKey,
+        JsonObject? resultPayload = null) =>
+        _outcomes.ResolveSupportSystemOutcome(invocationId, outcomeKey, resultPayload);
+
     /// <inheritdoc cref="IProcessManager.PickupWorkItem"/>
     public ServiceRequestResponseEnvelope PickupWorkItem(
         string instanceId, string cursorId, string tenantId, string userId, ActorProfile accessProfile) =>
@@ -914,7 +926,7 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
                 // fresh state (and possibly released the join outright); re-derive the response
                 // from that fresh state rather than the now-stale `instance` this method started
                 // with.
-                if (TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
+                if (_outcomes.TryPollResolveSupportSystemInvocations(instance, definition, joinGateway)
                     && _instances.TryGet(instance.InstanceId, out var refreshed))
                 {
                     return BuildEnvelope(refreshed, definition, accessProfile, userId);
@@ -1029,203 +1041,6 @@ public class ProcessManagerEngine : IProcessManager, IEnvelopeSource
     /// resolution its own request pipeline already performs.
     /// </summary>
     protected virtual bool ResolveIsAuthenticated(string tenantId, string userId) => false;
-
-    /// <summary>
-    /// Gives any support-system invocation still blocking <paramref name="joinGateway"/> a chance
-    /// to resolve via poll, the generic counterpart to the webhook receiver resolving one
-    /// asynchronously — called every time a client re-polls a waiting join gateway (see
-    /// <see cref="BuildEnvelope"/>). Only checks invocations whose capability actually declared
-    /// <see cref="SupportSystemCompletionMode.Poll"/> support; a webhook-only capability is never
-    /// polled, it can only resolve via <see cref="ResolveSupportSystemOutcome"/>. Returns true if
-    /// at least one invocation resolved (and therefore state has already been saved, possibly
-    /// including a full join release) — the caller should re-derive its response from a fresh
-    /// read rather than the <paramref name="instance"/> it started with.
-    /// </summary>
-    private bool TryPollResolveSupportSystemInvocations(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        ServiceBlueprintGatewayDefinition joinGateway)
-    {
-        var requiredQueues = joinGateway.RequiredIncomingQueues ?? [];
-        var pendingQueues = requiredQueues
-            .Where(queue => instance.Cursors.All(c =>
-                !(c.IsAtGateway
-                  && string.Equals(c.CurrentNodeKey, joinGateway.Key, StringComparison.Ordinal)
-                  && string.Equals(c.QueueKey, queue, StringComparison.Ordinal))))
-            .ToHashSet(StringComparer.Ordinal);
-
-        if (pendingQueues.Count == 0)
-        {
-            return false;
-        }
-
-        var pendingCursorIds = instance.Cursors
-            .Where(c => !c.IsAtGateway && pendingQueues.Contains(c.QueueKey))
-            .Select(c => c.CursorId)
-            .ToHashSet(StringComparer.Ordinal);
-
-        var candidates = instance.SupportSystemInvocations
-            .Where(invocation => !invocation.Resolved && pendingCursorIds.Contains(invocation.CursorId))
-            .ToList();
-
-        var resolvedAny = false;
-        foreach (var invocation in candidates)
-        {
-            var capability = SupportSystemRegistry.FindCapability(invocation.SupportSystemKey, invocation.CapabilityKey);
-            if (capability is null
-                || !capability.SupportedCompletionModes.Contains(SupportSystemCompletionMode.Poll)
-                || invocation.Receipt is null
-                || !_supportSystemClients.TryGetValue(invocation.SupportSystemKey, out var client))
-            {
-                continue;
-            }
-
-            SupportSystemOutcome? outcome;
-            try
-            {
-                outcome = client.CheckStatusAsync(invocation.CapabilityKey, invocation.Receipt).GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(
-                    ex,
-                    "Support system '{System}' capability '{Capability}' status check failed for invocation '{Invocation}'.",
-                    invocation.SupportSystemKey, invocation.CapabilityKey, invocation.InvocationId);
-                continue;
-            }
-
-            if (outcome is null)
-            {
-                continue;
-            }
-
-            var resolution = ResolveSupportSystemOutcome(invocation.InvocationId, outcome.OutcomeKey, outcome.ResultPayload);
-            resolvedAny = resolvedAny || resolution.ResponseState != "error";
-        }
-
-        return resolvedAny;
-    }
-
-    /// <summary>
-    /// Delivers a support-system capability's outcome back into the blueprint — the single code
-    /// path both the poll-check hook (<see cref="TryPollResolveSupportSystemInvocations"/>) and
-    /// the generic webhook receiver (<c>Wayfinder.Engine.Api</c>) call, so "what did the external
-    /// system decide" is resolved identically regardless of which mechanism delivered it. Looks
-    /// the owning instance up by <paramref name="invocationId"/> alone — a webhook callback only
-    /// ever carries that one opaque token, never the instance id — then advances the waiting
-    /// automation cursor exactly as if that cursor's own actor had called
-    /// <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>
-    /// with <paramref name="outcomeKey"/> as the action, retrying under this engine's normal
-    /// optimistic concurrency if something else updated the instance in between.
-    /// </summary>
-    public ServiceRequestResponseEnvelope ResolveSupportSystemOutcome(
-        string invocationId,
-        string outcomeKey,
-        JsonObject? resultPayload = null)
-    {
-        const int maxAttempts = 5;
-        for (var attempt = 0; attempt < maxAttempts; attempt++)
-        {
-            var owner = _instances.GetAll().FirstOrDefault(
-                i => i.SupportSystemInvocations.Any(inv => inv.InvocationId == invocationId && !inv.Resolved));
-
-            if (owner is null)
-            {
-                return Envelopes.Error(
-                    $"No pending support-system invocation '{invocationId}' found.",
-                    "SUPPORT_SYSTEM_INVOCATION_NOT_FOUND");
-            }
-
-            var invocation = owner.SupportSystemInvocations.First(inv => inv.InvocationId == invocationId);
-            var capability = SupportSystemRegistry.FindCapability(invocation.SupportSystemKey, invocation.CapabilityKey);
-            if (capability is null || capability.Outcomes.All(o => o.Key != outcomeKey))
-            {
-                return Envelopes.Error(
-                    $"'{outcomeKey}' is not a declared outcome of capability '{invocation.CapabilityKey}' on " +
-                    $"support system '{invocation.SupportSystemKey}'.",
-                    "SUPPORT_SYSTEM_INVALID_OUTCOME");
-            }
-
-            // Mark resolved and save before advancing — Advance() always re-reads the instance
-            // fresh from the store by id, so this is the only way this mutation actually reaches
-            // it. Marking it here, ahead of the Advance() call below, also makes a second
-            // concurrent delivery for the same invocation (poll racing a webhook for a
-            // Both-completion-mode capability) a safe no-op instead of a double-advance: it will
-            // no longer find an unresolved invocation on its own retry.
-            //
-            // resultPayload is merged into FieldValues directly here, NOT passed as Advance()'s
-            // own fieldValues argument — that argument is validated against the CURRENT stage's
-            // (the support-system-call stage's own) declared fields, a whitelist a result payload
-            // key has no reason to appear in, so it would always be rejected as "unknown field".
-            // Merging it into already-persisted instance state first sidesteps that check exactly
-            // the way any other previously-saved field value does.
-            var withResolvedInvocation = owner with
-            {
-                SupportSystemInvocations = owner.SupportSystemInvocations
-                    .Select(inv => inv.InvocationId == invocationId
-                        ? inv with { Resolved = true, OutcomeKey = outcomeKey }
-                        : inv)
-                    .ToArray(),
-                FieldValues = resultPayload is null ? owner.FieldValues : Merge(owner.FieldValues, ToFieldValues(resultPayload)),
-                StateVersion = owner.StateVersion + 1,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-
-            _instances.Save(withResolvedInvocation, withResolvedInvocation.UserId);
-
-            var advanced = Advance(
-                withResolvedInvocation.InstanceId,
-                withResolvedInvocation.TenantId,
-                withResolvedInvocation.UserId,
-                ActorProfile.UnrestrictedOwner,
-                outcomeKey,
-                withResolvedInvocation.StateVersion,
-                null);
-
-            var isConflict = advanced.ResponseState == "error"
-                && advanced.Problems.Any(p => p.Code == "VERSION_MISMATCH");
-            if (!isConflict)
-            {
-                return advanced;
-            }
-        }
-
-        return Envelopes.Error(
-            $"Could not resolve support-system invocation '{invocationId}' after {maxAttempts} attempts due to concurrent updates.",
-            "SUPPORT_SYSTEM_RESOLUTION_CONFLICT");
-    }
-
-    private static Dictionary<string, object?> ToFieldValues(JsonObject payload)
-    {
-        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var (key, value) in payload)
-        {
-            if (value is null)
-            {
-                result[key] = null;
-            }
-            else if (value is JsonValue stringValue && stringValue.TryGetValue<string>(out var s))
-            {
-                result[key] = s;
-            }
-            else if (value is JsonValue boolValue && boolValue.TryGetValue<bool>(out var b))
-            {
-                result[key] = b;
-            }
-            else if (value is JsonValue decimalValue && decimalValue.TryGetValue<decimal>(out var d))
-            {
-                result[key] = d;
-            }
-            else
-            {
-                result[key] = value.DeepClone();
-            }
-        }
-
-        return result;
-    }
-
-    // ─── end Support system helpers ──────────────────────────────────────────
 
     /// <summary>
     /// "Terminal" from <paramref name="accessProfile"/>'s own point of view — deliberately not a
