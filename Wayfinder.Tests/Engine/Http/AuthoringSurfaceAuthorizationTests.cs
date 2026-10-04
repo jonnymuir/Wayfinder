@@ -33,29 +33,6 @@ public class AuthoringSurfaceAuthorizationTests
 {
     private const string AdminPolicy = "BlueprintsAdmin";
 
-    /// <summary>Authenticated iff X-Test-User is present; carries role=admin iff its value is "admin".</summary>
-    private sealed class HeaderAuthHandler(
-        IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
-        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
-    {
-        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-        {
-            if (!Request.Headers.TryGetValue("X-Test-User", out var user))
-            {
-                return Task.FromResult(AuthenticateResult.NoResult());
-            }
-
-            var claims = new List<Claim> { new(ClaimTypes.Name, user.ToString()) };
-            if (user == "admin")
-            {
-                claims.Add(new Claim("role", "admin"));
-            }
-
-            var ticket = new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, "Test")), "Test");
-            return Task.FromResult(AuthenticateResult.Success(ticket));
-        }
-    }
-
     /// <summary>Nothing here is ever reached: every request in this suite is stopped by authorization first.</summary>
     private sealed class UnusedStore : IServiceBlueprintSourceStore
     {
@@ -65,38 +42,12 @@ public class AuthoringSurfaceAuthorizationTests
         public Task<bool> DeleteAsync(string definitionKey, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
-    private static (HttpClient Client, IReadOnlyList<RouteEndpoint> Endpoints) Host(Action<IEndpointRouteBuilder> map)
+    private static void AddAuthoringServices(IServiceCollection s)
     {
-        IEndpointRouteBuilder? builder = null;
-        var host = new HostBuilder()
-            .ConfigureWebHost(web => web
-                .UseTestServer()
-                .ConfigureServices(s =>
-                {
-                    s.AddLogging();
-                    s.AddRouting();
-                    s.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, HeaderAuthHandler>("Test", _ => { });
-                    s.AddAuthorization(o => o.AddPolicy(AdminPolicy, p => p.RequireClaim("role", "admin")));
-                    s.AddSingleton<IServiceBlueprintSourceStore, UnusedStore>();
-                    s.AddServiceBlueprintAuthoring();
-                    s.AddServiceBlueprintAuthoringApi();
-                    s.AddServiceBlueprintAuthoringMcp();
-                })
-                .Configure(app =>
-                {
-                    app.UseRouting();
-                    app.UseAuthentication();
-                    app.UseAuthorization();
-                    app.UseEndpoints(e =>
-                    {
-                        builder = e;
-                        map(e);
-                    });
-                }))
-            .Start();
-
-        var endpoints = builder!.DataSources.SelectMany(d => d.Endpoints).OfType<RouteEndpoint>().ToList();
-        return (host.GetTestClient(), endpoints);
+        s.AddSingleton<IServiceBlueprintSourceStore, UnusedStore>();
+        s.AddServiceBlueprintAuthoring();
+        s.AddServiceBlueprintAuthoringApi();
+        s.AddServiceBlueprintAuthoringMcp();
     }
 
     public static TheoryData<string, string, Action<IEndpointRouteBuilder>> DenyByDefaultSurfaces() => new()
@@ -111,7 +62,7 @@ public class AuthoringSurfaceAuthorizationTests
     public async Task ByDefault_AnUnauthenticatedCallerIsChallenged_AndNoRouteIsLeftWithoutAnAuthorizationRequirement(
         string surface, string path, Action<IEndpointRouteBuilder> map)
     {
-        var (client, endpoints) = Host(map);
+        var (client, endpoints) = AuthTestHost.Build(AddAuthoringServices, map);
 
         endpoints.Should().NotBeEmpty(because: surface);
         endpoints.Should().OnlyContain(
@@ -135,7 +86,7 @@ public class AuthoringSurfaceAuthorizationTests
     [Fact]
     public async Task ANamedPolicy_RejectsAnAuthenticatedCallerWhoLacksIt_WithForbidden()
     {
-        var (client, endpoints) = Host(e => e.MapServiceBlueprintAuthoringApi(authorizationPolicy: AdminPolicy));
+        var (client, endpoints) = AuthTestHost.Build(AddAuthoringServices, e => e.MapServiceBlueprintAuthoringApi(authorizationPolicy: AdminPolicy));
         endpoints.Should().OnlyContain(endpoint => endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Any(a => a.Policy == AdminPolicy));
 
         var request = new HttpRequestMessage(HttpMethod.Get, "/wayfinder/service-blueprint-authoring/blueprints");
@@ -157,7 +108,7 @@ public class AuthoringSurfaceAuthorizationTests
             _ => e => e.MapMockBusinessAppServiceBlueprints(allowAnonymous: true),
         };
 
-        var (_, endpoints) = Host(optOut);
+        var (_, endpoints) = AuthTestHost.Build(AddAuthoringServices, optOut);
 
         endpoints.Should().OnlyContain(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() != null, $"{surface} {path}");
     }
@@ -165,7 +116,7 @@ public class AuthoringSurfaceAuthorizationTests
     [Fact]
     public void AnAuthorizationPolicyAndAllowAnonymousTogether_AreRejected_RatherThanSilentlyPickingOne()
     {
-        var act = () => Host(e => e.MapServiceBlueprintAuthoringApi(authorizationPolicy: AdminPolicy, allowAnonymous: true));
+        var act = () => AuthTestHost.Build(AddAuthoringServices, e => e.MapServiceBlueprintAuthoringApi(authorizationPolicy: AdminPolicy, allowAnonymous: true));
 
         act.Should().Throw<ArgumentException>().WithMessage("*contradict*");
     }

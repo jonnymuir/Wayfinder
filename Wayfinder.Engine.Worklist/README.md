@@ -21,10 +21,16 @@ builder.Services.AddWorklist(options =>
 
 // ...
 
-app.MapWorklist(prefix: "/caseworker/queue")
-   .RequireAuthorization("Caseworker")
+app.MapWorklist(prefix: "/caseworker/queue", authorizationPolicy: "Caseworker")
    .ValidateWayfinderAntiforgery();   // if these routes are cookie-authenticated — see below
 ```
+
+`MapWorklist` and `MapBulkDatasetReview` are **deny by default**: every route requires an authenticated
+caller, or the policy you name with `authorizationPolicy`. Pickup assigns work to a named person, so a
+host that really wants an open worklist must say so with `allowAnonymous: true` (and write why next to the
+call). This does not affect the citizen-facing `MapJourney`, which stays anonymous-capable by design:
+who may start or continue an application, signed in or not, is decided by your `ResolveUserId` and
+`ResolveAccessProfile`.
 
 If a host authenticates this surface with an ambient browser cookie, chain
 `.ValidateWayfinderAntiforgery()` (from `Wayfinder.Engine.Http`) onto the group and register

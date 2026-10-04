@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Wayfinder.Editor;
@@ -243,26 +242,15 @@ app.MapGet("/service-blueprint-editor", (HttpRequest request) =>
 app.MapServiceBlueprintAuthoringApi(allowAnonymous: true);
 app.MapServiceBlueprintAuthoringMcp(allowAnonymous: true);
 
-// The webhook half of support-system outcome delivery — a host's own job, not something
-// Wayfinder.Engine.Api ships (that surface is scoped to blueprint authoring only, not runtime
-// request handling — see docs/guides/support-systems.md § Delivering the outcome). invocationId
-// is itself the unguessable correlation/auth token; ResolveSupportSystemOutcome is the same
-// method the engine's own poll-check path calls, so "what did the external system decide" is
-// resolved identically regardless of which mechanism delivered it.
-app.MapPost("/wayfinder/support-systems/callbacks/{invocationId}", async (
-    string invocationId, HttpContext ctx, ProcessManagerEngine engine, CancellationToken ct) =>
-{
-    var payload = await ctx.Request.ReadFromJsonAsync<JsonObject>(ct);
-    var outcomeKey = payload?["outcomeKey"]?.GetValue<string>();
-    if (string.IsNullOrWhiteSpace(outcomeKey))
-    {
-        return Results.BadRequest("outcomeKey is required.");
-    }
-
-    var resultPayload = payload?["resultPayload"] as JsonObject;
-    var result = engine.ResolveSupportSystemOutcome(invocationId, outcomeKey, resultPayload);
-    return result.ResponseState == "error" ? Results.BadRequest(result) : Results.Ok(result);
-});
+// The inbound half of support-system outcome delivery, via the shared helper (the same route and checks
+// every host uses) instead of a hand-rolled copy. AllowAnonymous is deliberate: this is a server-to-server
+// webhook with no browser session to authenticate, so its own gate is the X-Webhook-Secret header when
+// WAYFINDER_CALLBACK_SECRET is set. With no secret it is Development-only and accepts loopback callers
+// alone (SafetyNetUnderwriting runs on this machine); outside Development, mapping throws without one.
+app.MapWebhookSupportSystemCallbacks(
+        () => app.Services.GetRequiredService<ProcessManagerEngine>(),
+        sharedSecret: builder.Configuration["WAYFINDER_CALLBACK_SECRET"])
+    .AllowAnonymous();
 
 // See Wayfinder.Editor.Http's own README — the backend half of the contract Wayfinder.Editor's
 // packaged demo page (service-blueprint-editor.html) expects from its bundled
@@ -354,8 +342,8 @@ var caseworkerGroup = app.MapGroup("/caseworker").RequireAuthorization("Casework
 // The default worklist surface (list/item/advance/pickup/putback/file-download) plus bulk-data-review's
 // own REST endpoints — see Wayfinder.Engine.Worklist's own README. Everything else under
 // /caseworker (just the NJF "start new" entry point below) stays hand-wired here.
-app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker").ValidateWayfinderAntiforgery();
-app.MapBulkDatasetReview(prefix: "/caseworker/queue").RequireAuthorization("Caseworker").ValidateWayfinderAntiforgery();
+app.MapWorklist(prefix: "/caseworker/queue", authorizationPolicy: "Caseworker").ValidateWayfinderAntiforgery();
+app.MapBulkDatasetReview(prefix: "/caseworker/queue", authorizationPolicy: "Caseworker").ValidateWayfinderAntiforgery();
 
 // njf-contributions has no citizen frontstage to originate an instance from (see
 // docs/guides/bulk-data-review.md — the NJF's own operations staff are the only actor), so it

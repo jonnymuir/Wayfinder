@@ -17,8 +17,8 @@ namespace Wayfinder.Engine.Worklist;
 /// dataset store just to get list/item/advance/pickup/putback would be the wrong coupling. A host
 /// that wants bulk-data-review support calls both, with the same prefix:
 /// <code>
-/// app.MapWorklist(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
-/// app.MapBulkDatasetReview(prefix: "/caseworker/queue").RequireAuthorization("Caseworker");
+/// app.MapWorklist(prefix: "/caseworker/queue", authorizationPolicy: "Caseworker");
+/// app.MapBulkDatasetReview(prefix: "/caseworker/queue", authorizationPolicy: "Caseworker");
 /// </code>
 /// Ported verbatim from Wayfinder.ReferenceApp/Program.cs. Reuses <see cref="WorklistOptions"/> (via
 /// <see cref="IOptions{TOptions}"/>, so a host calling this always also calls
@@ -29,8 +29,8 @@ namespace Wayfinder.Engine.Worklist;
 /// <c>GovUkStageJourney.WithBulkDatasetApiUrls</c>, which already builds
 /// <c>{prefix}/{blueprintKey}/{instanceId}/bulk-datasets/...</c> from the item page.
 ///
-/// Trust model, unchanged from the reference app's own: every route relies on the host's own
-/// auth-gated group (e.g. <c>.RequireAuthorization("Caseworker")</c>) as its only access check —
+/// Trust model: every route's access check is the authorization this group now applies itself (see
+/// <c>authorizationPolicy</c>/<c>allowAnonymous</c>) —
 /// no extra per-instance ownership check here. <see cref="IBulkDatasetStore"/> itself still
 /// independently verifies <c>instanceId</c> owns <c>datasetId</c> regardless (defence in depth,
 /// throwing <see cref="UnauthorizedAccessException"/>), and both a dataset that doesn't exist and
@@ -39,9 +39,35 @@ namespace Wayfinder.Engine.Worklist;
 /// </summary>
 public static class BulkDatasetReviewExtensions
 {
-    public static RouteGroupBuilder MapBulkDatasetReview(this IEndpointRouteBuilder endpoints, string prefix)
+    /// <summary>
+    /// Deny by default, like <see cref="WorklistExtensions.MapWorklist"/>: every route requires an
+    /// authenticated caller (or the policy named by <paramref name="authorizationPolicy"/>) unless the host
+    /// writes <c>allowAnonymous: true</c>. These routes read and rewrite an uploaded dataset's rows.
+    /// </summary>
+    public static RouteGroupBuilder MapBulkDatasetReview(
+        this IEndpointRouteBuilder endpoints,
+        string prefix,
+        string? authorizationPolicy = null,
+        bool allowAnonymous = false)
     {
+        if (allowAnonymous && authorizationPolicy is not null)
+        {
+            throw new ArgumentException("authorizationPolicy and allowAnonymous: true contradict each other.", nameof(authorizationPolicy));
+        }
+
         var group = endpoints.MapGroup(prefix);
+        if (allowAnonymous)
+        {
+            group.AllowAnonymous();
+        }
+        else if (authorizationPolicy is null)
+        {
+            group.RequireAuthorization();
+        }
+        else
+        {
+            group.RequireAuthorization(authorizationPolicy);
+        }
 
         group.MapGet("/{blueprintKey}/{instanceId}/bulk-datasets/{datasetId}/summary", async (
             string blueprintKey, string instanceId, string datasetId, IBulkDatasetStore bulkDatasetStore) =>
