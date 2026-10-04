@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Mail;
 using System.Text.RegularExpressions;
 using Wayfinder.Models.ServiceDesign;
@@ -51,7 +52,7 @@ public static class FieldValueValidator
         // 1. Field key whitelist — reject unknown fields
         foreach (var submittedKey in submitted.Keys)
         {
-            var normalizedKey = submittedKey.EndsWith("[]") ? submittedKey[..^2] : submittedKey;
+            var normalizedKey = submittedKey.EndsWith("[]", StringComparison.Ordinal) ? submittedKey[..^2] : submittedKey;
             if (!authoritativeKeys.Contains(normalizedKey) && !authoritativeKeys.Contains(submittedKey))
             {
                 errors[submittedKey] = $"{submittedKey}: Unknown field";

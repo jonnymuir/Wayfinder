@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using SafetyNetUnderwriting;
 
 // SafetyNet Underwriting — a fictional insurer's own system, standing in for the "support
 // system" a Wayfinder-hosted caseworker calls out to (see docs/guides/support-systems.md). This
@@ -131,25 +132,16 @@ app.MapPost("/queue/{id}/decide", async (
             var response = await client.PostAsJsonAsync(decided.CallbackUrl, payload);
             if (response.IsSuccessStatusCode)
             {
-                logger.LogInformation(
-                    "Callback to {CallbackUrl} for submission {SubmissionId} succeeded ({Status}).",
-                    decided.CallbackUrl, id, (int)response.StatusCode);
+                logger.CallbackSucceeded(decided.CallbackUrl, id, (int)response.StatusCode);
             }
             else
             {
-                logger.LogError(
-                    "Callback to {CallbackUrl} for submission {SubmissionId} returned {Status}. " +
-                    "Wayfinder's poll fallback will have to cover this.",
-                    decided.CallbackUrl, id, (int)response.StatusCode);
+                logger.CallbackRejected(decided.CallbackUrl, id, (int)response.StatusCode);
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(
-                ex,
-                "Callback to {CallbackUrl} for submission {SubmissionId} failed outright. " +
-                "Wayfinder's poll fallback will have to cover this.",
-                decided.CallbackUrl, id);
+            logger.CallbackFailed(ex, decided.CallbackUrl, id);
         }
     }
 

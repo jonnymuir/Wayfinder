@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Wayfinder.Models.ServiceDesign;
 
@@ -116,20 +117,20 @@ public sealed class GovUkComponentRenderer
                 // "field:{fieldKey}" is the name= attribute's own convention (posted-form
                 // routing), never what's actually in a rendered id="" to jump focus to.
                 var href = string.IsNullOrWhiteSpace(problem.FieldKey) ? "" : $" href=\"#{GovUk.Esc(problem.FieldKey)}\"";
-                sb.Append($"<li><a{href}>{GovUk.Esc(problem.Message)}</a></li>");
+                sb.Append(CultureInfo.InvariantCulture, $"<li><a{href}>{GovUk.Esc(problem.Message)}</a></li>");
             }
             sb.Append("</ul></div></div></div>");
         }
 
         // multipart/form-data unconditionally, not only when a file-upload field is present —
         // simpler than detecting it, and file-free submissions work identically either way.
-        sb.Append($"<form method=\"post\" action=\"{GovUk.Esc(formAction)}\" enctype=\"multipart/form-data\">");
-        sb.Append($"<input type=\"hidden\" name=\"stateVersion\" value=\"{stateVersion}\" />");
+        sb.Append(CultureInfo.InvariantCulture, $"<form method=\"post\" action=\"{GovUk.Esc(formAction)}\" enctype=\"multipart/form-data\">");
+        sb.Append(CultureInfo.InvariantCulture, $"<input type=\"hidden\" name=\"stateVersion\" value=\"{stateVersion}\" />");
         // Present only when the host protects the advance route with antiforgery (see
         // WayfinderAntiforgery.MintRequestVerificationToken) — otherwise omitted entirely.
         if (!string.IsNullOrEmpty(antiforgeryToken))
         {
-            sb.Append($"<input type=\"hidden\" name=\"__RequestVerificationToken\" value=\"{GovUk.Esc(antiforgeryToken)}\" />");
+            sb.Append(CultureInfo.InvariantCulture, $"<input type=\"hidden\" name=\"__RequestVerificationToken\" value=\"{GovUk.Esc(antiforgeryToken)}\" />");
         }
 
         foreach (var component in render.Components)
@@ -147,7 +148,7 @@ public sealed class GovUkComponentRenderer
         // guard GovUkComponents.RenderChart already applies to its own embedded chart config.
         if (render.Data?["live"] is { } live)
         {
-            sb.Append($"""<script type="application/json" data-wayfinder-live-model>{live.ToJsonString().Replace("</", "<\\/")}</script>""");
+            sb.Append(CultureInfo.InvariantCulture, $"""<script type="application/json" data-wayfinder-live-model>{live.ToJsonString().Replace("</", "<\\/")}</script>""");
         }
 
         sb.Append(RenderActionButtons(render.AvailableActions, stateVersion));
@@ -208,6 +209,7 @@ public sealed class GovUkComponentRenderer
                     _ => ""
                 };
                 sb.Append(
+                    CultureInfo.InvariantCulture,
                     $"""<button class="govuk-button{styleClass}" data-module="govuk-button" type="submit" name="action" value="{GovUk.Esc(action.ActionKey)}">{GovUk.Esc(action.Label)}</button>""");
             }
             sb.Append("</div>");

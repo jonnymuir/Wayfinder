@@ -18,10 +18,12 @@ namespace Wayfinder.Tests.ServiceDesign.Components;
 /// </summary>
 public class ComponentDescriptorJsonTests
 {
+    private static readonly JsonSerializerOptions WebOptions = new(JsonSerializerDefaults.Web);
+
     [Fact]
     public void Serialize_WithPlainWebDefaults_WritesEnumsAsStrings()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = WebOptions;
         var descriptor = ComponentTypeRegistry.All.Single(d => d.Discriminator == "accordion");
 
         var json = JsonSerializer.Serialize(descriptor, options);
@@ -35,7 +37,7 @@ public class ComponentDescriptorJsonTests
     [Fact]
     public void Serialize_PropertyValueKind_WritesAsString()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = WebOptions;
         var descriptor = ComponentTypeRegistry.All.Single(d => d.Discriminator == "text");
 
         var json = JsonSerializer.Serialize(descriptor, options);
@@ -47,7 +49,7 @@ public class ComponentDescriptorJsonTests
     [Fact]
     public void Serialize_ClrType_WritesJustTheTypeName_UnderTheClrTypeKey()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = WebOptions;
         var descriptor = ComponentTypeRegistry.All.Single(d => d.Discriminator == "accordion");
 
         var json = JsonSerializer.Serialize(descriptor, options);
@@ -70,7 +72,7 @@ public class ComponentDescriptorJsonTests
     [Fact]
     public void Serialize_PropertyDescriptorKey_WritesAsCamelCase_NotTheRawClrPropertyName()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = WebOptions;
         var descriptor = ComponentTypeRegistry.All.Single(d => d.Discriminator == "email");
 
         var json = JsonSerializer.Serialize(descriptor, options);
@@ -90,7 +92,7 @@ public class ComponentDescriptorJsonTests
     [Fact]
     public void Serialize_ContainmentPropertyNames_WriteAsCamelCase()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = WebOptions;
         var fieldset = ComponentTypeRegistry.All.Single(d => d.Discriminator == "fieldset");
         var radio = ComponentTypeRegistry.All.Single(d => d.Discriminator == "radio");
 

@@ -146,7 +146,7 @@ public sealed class CalculationEvaluator
         return new CalculationEvaluationResult(new CalculationResult { Fields = fields, Series = series }, diagnostics);
     }
 
-    private IReadOnlyList<IReadOnlyDictionary<string, object?>> EvaluateSeries(
+    private List<IReadOnlyDictionary<string, object?>> EvaluateSeries(
         string seriesName,
         ServiceBlueprintCalculationSeries definition,
         Dictionary<string, object?> scope,
@@ -226,7 +226,7 @@ public sealed class CalculationEvaluator
             case CalcNode.Binary binary:
                 return EvaluateBinary(binary, scope, calculations, context);
 
-            case CalcNode.Call call:
+            case CalcNode.FunctionCall call:
                 return EvaluateCall(call, scope, calculations, context);
 
             default:
@@ -234,6 +234,8 @@ public sealed class CalculationEvaluator
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859:Use concrete types when possible",
+        Justification = "Comparisons yield bool and arithmetic yields decimal, so object is the honest common type.")]
     private object? EvaluateBinary(
         CalcNode.Binary binary,
         IReadOnlyDictionary<string, object?> scope,
@@ -296,7 +298,7 @@ public sealed class CalculationEvaluator
     }
 
     private object? EvaluateCall(
-        CalcNode.Call call,
+        CalcNode.FunctionCall call,
         IReadOnlyDictionary<string, object?> scope,
         ServiceBlueprintCalculationSet calculations,
         string context)

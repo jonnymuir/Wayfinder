@@ -102,7 +102,7 @@ public static class BuiltInComponentDescriptors
 
     public static IReadOnlyList<ComponentDescriptor> All { get; } = BuildAll();
 
-    private static IReadOnlyList<ComponentDescriptor> BuildAll()
+    private static List<ComponentDescriptor> BuildAll()
     {
         var descriptors = new List<ComponentDescriptor>();
 

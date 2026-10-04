@@ -39,7 +39,7 @@ public sealed record ServiceBlueprintSimulationResult(
 /// actions against a definition and inspect the resulting stage trace, exactly as
 /// <c>IProcessManager.GetCurrent</c>/<c>Advance</c> would report to a real client.
 /// </summary>
-public sealed class ServiceBlueprintSimulationRunner
+public static class ServiceBlueprintSimulationRunner
 {
     /// <param name="mockServiceInputs">
     /// Values to hand back for any <c>source: "service"</c> calculation field — the same shape
@@ -48,7 +48,7 @@ public sealed class ServiceBlueprintSimulationRunner
     /// service-sourced field simulates with those fields unresolved, exactly as it would
     /// against a host that hasn't wired one up.
     /// </param>
-    public ServiceBlueprintSimulationResult Run(
+    public static ServiceBlueprintSimulationResult Run(
         ServiceBlueprint definition,
         IReadOnlyList<ProcessManagerSimulationStep> steps,
         IReadOnlyDictionary<string, object?>? mockServiceInputs = null,

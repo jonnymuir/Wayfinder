@@ -4,6 +4,8 @@ using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
 
+namespace SafetyNetUnderwriting;
+
 /// <summary>
 /// SafetyNet Underwriting's own synthetic underwriting rules for the National Juggling
 /// Federation's monthly contributions file (see docs/guides/bulk-data-review.md and

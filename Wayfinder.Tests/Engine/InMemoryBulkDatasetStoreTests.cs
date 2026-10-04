@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using FluentAssertions;
 using Wayfinder.Engine.Abstractions;
@@ -402,7 +403,7 @@ public class InMemoryBulkDatasetStoreTests
         const int rowCount = 10_000;
         for (var i = 0; i < rowCount; i++)
         {
-            sb.Append('\n').Append($"NJF-{i:D6},Member {i},25.00,SN-{i},,");
+            sb.Append('\n').Append(CultureInfo.InvariantCulture, $"NJF-{i:D6},Member {i},25.00,SN-{i},,");
         }
 
         var file = await SaveCsvAsync(fileStorage, sb.ToString());

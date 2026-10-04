@@ -139,12 +139,12 @@ public static class ServiceBlueprintAuthoringApiExtensions
             };
         });
 
-        group.MapPost("/blueprints/simulate", (SimulateServiceBlueprintRequest request, ServiceBlueprintAuthoringService service) =>
+        group.MapPost("/blueprints/simulate", (SimulateServiceBlueprintRequest request) =>
         {
             var mockServiceInputs = request.MockServiceInputs is { } element
                 ? (IReadOnlyDictionary<string, object?>)CalculationScopeJson.ToScopeValue(element)!
                 : null;
-            return Results.Ok(service.Simulate(request.Blueprint, request.Steps, mockServiceInputs));
+            return Results.Ok(ServiceBlueprintSimulationRunner.Run(request.Blueprint, request.Steps, mockServiceInputs));
         });
 
         // Cheap enough to poll: a client that has a blueprint open (e.g. the visual editor) can

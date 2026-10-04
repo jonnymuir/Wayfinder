@@ -53,7 +53,7 @@ public sealed record WebhookSupportSystemEndpoint
 /// needs a bespoke client that reads bytes via <see cref="IServiceRequestFileStorage"/> (see
 /// <c>SafetyNetUnderwritingClient</c> in the reference app).
 /// </remarks>
-public sealed class WebhookSupportSystemClient(
+public sealed partial class WebhookSupportSystemClient(
     WebhookSupportSystemEndpoint endpoint,
     IHttpClientFactory httpClientFactory,
     ILogger<WebhookSupportSystemClient> logger) : ISupportSystemClient
@@ -124,9 +124,7 @@ public sealed class WebhookSupportSystemClient(
                     $"{response.ReasonPhrase} for capability '{capabilityKey}'.");
             }
 
-            logger.LogInformation(
-                "Support system '{System}' capability '{Capability}' invoked ({Status}); invocation {InvocationId}.",
-                SupportSystemKey, capabilityKey, (int)response.StatusCode, context.InvocationId);
+            CapabilityInvoked(logger, SupportSystemKey, capabilityKey, (int)response.StatusCode, context.InvocationId);
         }
 
         // A webhook consumer (Automate returns 202 with no useful body) has no external id of its
@@ -179,9 +177,7 @@ public sealed class WebhookSupportSystemClient(
             }
 
             case "none":
-                logger.LogWarning(
-                    "Support system '{System}' endpoint is configured with no outbound authentication — " +
-                    "acceptable only on a trusted network.", SupportSystemKey);
+                NoOutboundAuthentication(logger, SupportSystemKey);
                 break;
 
             default:
@@ -190,4 +186,10 @@ public sealed class WebhookSupportSystemClient(
                     "(expected 'hmac-sha256', 'header', or 'none').");
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Support system '{System}' capability '{Capability}' invoked ({Status}); invocation {InvocationId}.")]
+    private static partial void CapabilityInvoked(ILogger logger, string system, string capability, int status, string invocationId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Support system '{System}' endpoint is configured with no outbound authentication — acceptable only on a trusted network.")]
+    private static partial void NoOutboundAuthentication(ILogger logger, string system);
 }

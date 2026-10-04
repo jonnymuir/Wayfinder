@@ -371,7 +371,7 @@ public sealed class ServiceBlueprintAuthoringService(
     /// found. A field that references a tainted field/path, directly or transitively, was always
     /// going to fail evaluation too — that is expected, not an authoring mistake.
     /// </summary>
-    private static IReadOnlySet<string> ComputeTaintedFieldNames(
+    private static HashSet<string> ComputeTaintedFieldNames(
         ServiceBlueprintCalculationSet? calculations,
         IReadOnlySet<string> numericInputsWithoutDefault,
         IReadOnlySet<string> unresolvedServiceFields,
@@ -807,10 +807,4 @@ public sealed class ServiceBlueprintAuthoringService(
             ? ServiceBlueprintSaveOutcome.Saved(result.CurrentVersion)
             : ServiceBlueprintSaveOutcome.Conflict(result.CurrentVersion);
     }
-
-    public ServiceBlueprintSimulationResult Simulate(
-        ServiceBlueprint blueprint,
-        IReadOnlyList<ProcessManagerSimulationStep> steps,
-        IReadOnlyDictionary<string, object?>? mockServiceInputs = null) =>
-        new ServiceBlueprintSimulationRunner().Run(blueprint, steps, mockServiceInputs);
 }

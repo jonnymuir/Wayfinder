@@ -111,7 +111,7 @@ public static class CalculationScopeBuilder
         _ => raw,
     };
 
-    private static object? ParseNumeric(string raw)
+    private static decimal? ParseNumeric(string raw)
     {
         var cleaned = raw.Replace("£", "").Replace(",", "").Trim();
         return decimal.TryParse(cleaned, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)

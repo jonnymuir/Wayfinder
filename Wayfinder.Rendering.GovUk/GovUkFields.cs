@@ -1,3 +1,4 @@
+using System.Globalization;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.Components;
 
@@ -97,7 +98,7 @@ public static class GovUkFields
         // .ToString() is "True", not the lowercase JSON spelling) — case-insensitive anyway,
         // since nothing here depends on that particular capitalisation staying fixed.
         "boolean" => string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ? "Yes" : "No",
-        "date" => DateOnly.TryParse(value, out var date) ? date.ToString("d MMMM yyyy") : value,
+        "date" => DateOnly.TryParse(value, CultureInfo.InvariantCulture, out var date) ? date.ToString("d MMMM yyyy", CultureInfo.GetCultureInfo("en-GB")) : value,
         "file-upload" => string.IsNullOrEmpty(value) ? "Not provided" : value,
         _ => value
     };
@@ -428,7 +429,7 @@ public static class GovUkFields
         var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var min = field.Min ?? 0;
         var max = field.Max ?? 100;
-        var value = string.IsNullOrEmpty(field.Value?.ToString()) ? min.ToString() : field.Value!.ToString()!;
+        var value = string.IsNullOrEmpty(field.Value?.ToString()) ? min.ToString(CultureInfo.InvariantCulture) : field.Value!.ToString()!;
         var prefix = field.Prefix ?? "";
         var suffix = field.Suffix ?? "";
         var errorClass = error is null ? "" : " wayfinder-slider__input--error";

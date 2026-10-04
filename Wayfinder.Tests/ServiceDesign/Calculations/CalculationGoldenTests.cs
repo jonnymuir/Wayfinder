@@ -143,7 +143,7 @@ public class CalculationGoldenTests
         };
     }
 
-    private static IReadOnlyList<JsonElement> LoadCases()
+    private static List<JsonElement> LoadCases()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(FindFixtures()));
         return document.RootElement.GetProperty("cases").EnumerateArray().Select(c => c.Clone()).ToList();
