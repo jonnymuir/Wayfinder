@@ -49,12 +49,12 @@ internal sealed class WorkAllocation(
             }
 
             // Resolved WITHOUT the ownership filter (no userId) — unlike every other caller of
-            // FindAccessibleWorkItems, picking up needs to see a cursor that's genuinely eligible but
+            // FindActorWorkItems, picking up needs to see a cursor that's genuinely eligible but
             // already held by someone else, in order to report ALREADY_PICKED_UP rather than
             // INVALID_TRANSITION. Queue visibility/capability eligibility is still fully enforced
             // (CanViewQueue/HasQueueEligibility never depend on userId), so this can't be used to
             // discover anything about a queue this actor genuinely isn't eligible for.
-            var item = workItems.FindAccessibleWorkItems(instance, definition, accessProfile)
+            var item = workItems.FindActorWorkItems(instance, definition, accessProfile)
                 .FirstOrDefault(candidate => string.Equals(candidate.CursorId, cursorId, StringComparison.Ordinal));
             if (item is null)
             {
@@ -297,23 +297,23 @@ internal sealed class WorkAllocation(
             {
                 if (!registry.TryGet(instance.BlueprintKey, out var definition))
                 {
-                    return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
+                    return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, ActorWorkItem Item)>();
                 }
 
                 if (accessProfile.RestrictToInstanceOwner)
                 {
-                    return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, AccessibleWorkItem Item)>();
+                    return Array.Empty<(ServiceRequest Instance, ServiceBlueprint Definition, ActorWorkItem Item)>();
                 }
 
                 // EligibleActions.Count > 0, not ClassifyStatus — this resolves items via the
-                // userId-less internal peek (no userId passed to FindAccessibleWorkItems below), so
+                // userId-less internal peek (no userId passed to FindActorWorkItems below), so
                 // IsEntitledToActNow's own "no specific actor" shortcut always reports entitled,
                 // which would make ClassifyStatus report Actionable even for a genuinely
                 // not-picked-up row (the same reason PickupWorkItem's own two branches check
                 // EligibleActions rather than ClassifyStatus). Found live as a pre-existing gap:
                 // the team-tray clause here never correctly matched an unpicked row before this
                 // fix, since ClassifyStatus == Unassigned could never be true at this call site.
-                return workItems.FindAccessibleWorkItems(instance, definition, accessProfile)
+                return workItems.FindActorWorkItems(instance, definition, accessProfile)
                     .Where(item => item.AssignedTo is null
                         && item.EligibleActions.Count > 0
                         && (item.AssignmentPolicy is null
@@ -332,7 +332,7 @@ internal sealed class WorkAllocation(
             {
                 // Resolved from refreshedInstance, not the pre-pickup `instance` this loop iterates
                 // over — AssignedTo only reflects the pickup just performed once read fresh.
-                var refreshedItem = workItems.FindAccessibleWorkItems(refreshedInstance, definition, accessProfile, userId)
+                var refreshedItem = workItems.FindActorWorkItems(refreshedInstance, definition, accessProfile, userId)
                     .FirstOrDefault(candidate => string.Equals(candidate.CursorId, item.CursorId, StringComparison.Ordinal));
                 if (refreshedItem is not null)
                 {

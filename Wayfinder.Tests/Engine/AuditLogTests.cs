@@ -27,7 +27,7 @@ public class AuditLogTests
     private const string UserId = "user";
 
     // Restricted to "caseworker" only — not "automation" too — so this actor's own visible item at
-    // a join gateway resolves as the primary one (the actor-relative FindAccessibleWorkItems
+    // a join gateway resolves as the primary one (the actor-relative FindActorWorkItems
     // resolution), which is what makes the join's own poll-check path fire at all. Matches the
     // established CaseworkerOnlyProfile pattern from GetCurrentOrStartFreshTests.
     private static readonly ActorProfile CaseworkerProfile = new()

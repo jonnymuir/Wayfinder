@@ -135,6 +135,6 @@ public class CaseworkerQueueCrossVisibilityTests
             "njf-contributions", TenantId, CaseyUserId, CaseyProfile, njfInstance.InstanceId);
 
         caseyDirectAttempt.ResponseState.Should().Be("error",
-            "eligibility is enforced at FindAccessibleWorkItems itself, not just the worklist's own filtering");
+            "eligibility is enforced at FindActorWorkItems itself, not just the worklist's own filtering");
     }
 }

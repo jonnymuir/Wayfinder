@@ -1,0 +1,121 @@
+// Complexity budgets: functions at most 80 lines and cognitive complexity at most 15.
+// The last override lists files that already exceed them. It may only shrink: fix a file, then remove it
+// (scripts/check-policies.mjs fails on a stale entry).
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "files": {
+    "includes": ["src/**", "tests/**/*.ts", "scripts/**", "!**/generated", "!**/storybook-static", "!**/test-results"]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 140,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "es5"
+    },
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "complexity": {
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": {
+            "maxLines": 80,
+            "skipBlankLines": true,
+            "skipIifes": true
+          }
+        },
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": {
+            "maxAllowedComplexity": 15
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.css"],
+      "linter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": ["**/calculation-expression-editor-codemirror.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.test.ts", "**/*.stories.ts", "tests/**", "scripts/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": "off",
+            "noExcessiveCognitiveComplexity": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/service-blueprint-editor/action-editing.ts",
+        "src/service-blueprint-editor/calculation-diagnostics.ts",
+        "src/service-blueprint-editor/calculation-ordering.ts",
+        "src/service-blueprint-editor/component-child-editor.ts",
+        "src/service-blueprint-editor/component-json-schema.ts",
+        "src/service-blueprint-editor/component-property-editor.ts",
+        "src/service-blueprint-editor/component-property-references.ts",
+        "src/service-blueprint-editor/graph/chip-declutter.ts",
+        "src/service-blueprint-editor/graph/edges/route-edge.tsx",
+        "src/service-blueprint-editor/graph/graph-app.tsx",
+        "src/service-blueprint-editor/graph/graph-model.ts",
+        "src/service-blueprint-editor/graph/service-blueprint-graph-layout-block.ts",
+        "src/service-blueprint-editor/graph/service-blueprint-graph-layout.ts",
+        "src/service-blueprint-editor/service-blueprint-lint.ts",
+        "src/service-blueprint-editor/service-blueprint-validation.ts",
+        "src/service-blueprint-editor/wayfinder-service-blueprint-editor.ts",
+        "src/service-blueprint-editor/wayfinder-service-blueprint-graph.ts",
+        "src/service-blueprint-editor/wayfinder-service-blueprint-outline.ts",
+        "src/service-blueprint-editor/wayfinder-stage-action-editor.ts",
+        "src/service-blueprint-editor/inspector/components-controller.ts",
+        "src/service-blueprint-editor/inspector/gateway-inspector-controller.ts",
+        "src/service-blueprint-editor/inspector/route-editor-controller.ts",
+        "src/service-blueprint-editor/inspector/stage-inspector-controller.ts"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": "off",
+            "noExcessiveCognitiveComplexity": "off"
+          }
+        }
+      }
+    }
+  ]
+}

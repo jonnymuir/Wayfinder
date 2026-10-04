@@ -84,6 +84,23 @@ is **generated from the C# model**: change a C# model type, then run
 `dotnet run --project Wayfinder.TypeGen -- write Wayfinder.Editor.Client/src/service-blueprint-editor/generated/wayfinder-model.ts`
 and commit the result. CI fails on a stale file. Never hand-edit it, and never hand-mirror a C# type in the editor.
 
+## Keep things small
+
+Small, single-purpose pieces are a rule, not a preference. `node scripts/check-policies.mjs` (CI) enforces it:
+
+- **File budgets:** C# 400 lines, TypeScript/JavaScript 500. **C# method budget:** 60 lines. Complexity budgets: C#
+  cyclomatic complexity 15 and class coupling 40/60 (`CodeMetricsConfig.txt`, analyzers CA1502/CA1506); TypeScript
+  functions 80 lines and cognitive complexity 15 (Biome).
+- **Ratchet, not amnesty.** Code already over a budget is listed in `.policy/size-baseline.json`, the baseline block at
+  the end of `.editorconfig`, and the last override in `Wayfinder.Editor.Client/biome.jsonc`. Those lists may only
+  shrink: growing a listed file fails CI, and so does a stale entry. When you split something, run
+  `node scripts/check-policies.mjs --update` and delete its sections from the other two lists.
+- **One concern per class.** If a class needs more than about seven collaborators, or its name needs "And",
+  "Manager" or "Helper", split it. A constructor that only wires collaborators (like `ProcessManagerEngine`) is fine.
+- **One source of truth.** Never hand-mirror a C# type in TypeScript (it is generated), and never use
+  `as unknown as` to get past a mismatch: fix the type. Existing casts are baselined and may only decrease.
+- **New code starts within budget.** Do not add to a baselined file; add a new one.
+
 ## Releasing
 
 Four packages release **in lockstep**: `Wayfinder`, `Wayfinder.Engine`, `Wayfinder.Engine.Api`,

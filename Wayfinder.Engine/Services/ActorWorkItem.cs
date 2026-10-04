@@ -15,7 +15,7 @@ namespace Wayfinder.Engine.Services;
 /// docs/guides/team-assignment.md. <paramref name="AssignmentPolicy"/>/<paramref name="AssignedTeamId"/>
 /// are null for a queue without an assignment policy.
 /// </summary>
-internal sealed record AccessibleWorkItem(
+internal sealed record ActorWorkItem(
     string StageKey,
     string DisplayName,
     string? QueueName,

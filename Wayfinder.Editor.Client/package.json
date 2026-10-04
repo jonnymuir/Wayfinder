@@ -23,6 +23,7 @@
     "test:service-blueprint-validation": "node scripts/run-service-blueprint-validation-tests.mjs",
     "test:server-diagnostic-location": "node scripts/run-server-diagnostic-location-tests.mjs",
     "test:canonical-json": "node scripts/run-canonical-json-tests.mjs",
+    "test:units": "node scripts/run-unit-tests.mjs",
     "test:no-legacy-shapes": "node scripts/check-no-legacy-shapes.mjs",
     "test:no-unsafe-html-sinks": "node scripts/check-no-unsafe-html-sinks.mjs",
     "lint": "biome ci",

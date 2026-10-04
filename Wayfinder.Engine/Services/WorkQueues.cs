@@ -113,7 +113,7 @@ internal sealed class WorkQueues(
                 // everywhere else this hook is used.
                 instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
 
-                return workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId)
+                return workItems.FindActorWorkItems(instance, definition, accessProfile, userId)
                     .Select(item => (item, status: item.Classify(definition)))
                     .Where(pair => pair.status is not null && effectiveStatuses.Contains(pair.status.Value))
                     .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value, accessProfile, userId))
@@ -187,7 +187,7 @@ internal sealed class WorkQueues(
     }
 
     /// <summary>
-    /// Team-scoped counterpart to <see cref="FindAccessibleWorkItems"/> — every row whose queue is
+    /// Team-scoped counterpart to <see cref="FindActorWorkItems"/> — every row whose queue is
     /// owned by <paramref name="teamId"/>, regardless of which individual (if any) currently holds
     /// it, for a team's own aggregate dashboard rather than one caller's personal actionability.
     /// <c>AvailableActions</c> reflects whether *anyone* has picked the row up (not whether the
@@ -195,10 +195,10 @@ internal sealed class WorkQueues(
     /// act on this". See docs/guides/team-assignment.md. Never returns a row from a queue without an assignment policy (no
     /// <c>OwningTeamId</c> to match against).
     /// </summary>
-    private IReadOnlyList<AccessibleWorkItem> FindTeamWorkItems(
+    private IReadOnlyList<ActorWorkItem> FindTeamWorkItems(
         ServiceRequest instance, ServiceBlueprint definition, ActorProfile accessProfile, string teamId)
     {
-        var items = new List<AccessibleWorkItem>();
+        var items = new List<ActorWorkItem>();
 
         if (instance.Cursors.Count == 0)
         {
@@ -215,7 +215,7 @@ internal sealed class WorkQueues(
                     var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, cursorAssignedTo: null);
                     var eligibleActions = workItems.BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
 
-                    items.Add(new AccessibleWorkItem(
+                    items.Add(new ActorWorkItem(
                         stage.StageKey,
                         stage.DisplayName,
                         queueName,
@@ -252,7 +252,7 @@ internal sealed class WorkQueues(
             var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, cursor.QueueKey, cursor.AssignedTo);
             var eligibleActions = workItems.BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
 
-            items.Add(new AccessibleWorkItem(
+            items.Add(new ActorWorkItem(
                 stage.StageKey,
                 stage.DisplayName,
                 queueName,
@@ -281,7 +281,7 @@ internal sealed class WorkQueues(
             }
 
             var queueName = ResolveQueueName(definition, gateway);
-            items.Add(new AccessibleWorkItem(
+            items.Add(new ActorWorkItem(
                 gateway.Key,
                 gateway.DisplayName,
                 queueName,
@@ -315,7 +315,7 @@ internal sealed class WorkQueues(
         ServiceBlueprint definition,
         ActorProfile accessProfile)
     {
-        var visibleItem = workItems.FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
+        var visibleItem = workItems.FindActorWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
         if (visibleItem is not { IsJoinGateway: true })
         {
             return instance;
