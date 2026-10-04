@@ -103,7 +103,9 @@
         "src/service-blueprint-editor/wayfinder-service-blueprint-graph.ts",
         "src/service-blueprint-editor/wayfinder-service-blueprint-outline.ts",
         "src/service-blueprint-editor/wayfinder-stage-action-editor.ts",
-        "src/service-blueprint-editor/wayfinder-step-inspector.ts"
+        "src/service-blueprint-editor/inspector/gateway-inspector-controller.ts",
+        "src/service-blueprint-editor/inspector/route-editor-controller.ts",
+        "src/service-blueprint-editor/inspector/stage-inspector-controller.ts"
       ],
       "linter": {
         "rules": {

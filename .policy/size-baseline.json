@@ -13,7 +13,6 @@
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-graph.ts": 1083,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-outline.ts": 571,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-stage-action-editor.ts": 1392,
-    "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-step-inspector.ts": 1790,
     "Wayfinder.Engine/Services/GatewayAdvancer.cs": 414,
     "Wayfinder.Engine/Services/ServiceBlueprintAuthoringService.cs": 809,
     "Wayfinder.Engine/Services/StageRenderer.cs": 561,
@@ -74,7 +73,6 @@
     "Wayfinder.Editor.Client/src/service-blueprint-editor/component-property-references.ts": 1,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/integrations/mockapp-service-blueprint-source.ts": 1,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/service-blueprint-lint.ts": 1,
-    "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-stage-action-editor.ts": 1,
-    "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-step-inspector.ts": 1
+    "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-stage-action-editor.ts": 1
   }
 }

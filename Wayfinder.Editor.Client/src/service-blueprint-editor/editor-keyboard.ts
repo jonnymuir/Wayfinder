@@ -48,47 +48,54 @@ export class EditorKeyboard implements ReactiveController {
       return;
     }
 
-    if (SAVE_SHORTCUT && matchesShortcut(event, SAVE_SHORTCUT)) {
-      event.preventDefault();
-      this.commands.save();
+    const binding = this.bindings().find(({ shortcut }) => shortcut && matchesShortcut(event, shortcut));
+    if (!binding || (binding.skipWhileTyping && this.isTypingInAField(event))) {
       return;
     }
-
-    const isCopy = COPY_SHORTCUT && matchesShortcut(event, COPY_SHORTCUT);
-    const isPaste = PASTE_SHORTCUT && matchesShortcut(event, PASTE_SHORTCUT);
-    if ((isCopy || isPaste) && this.isTypingInAField(event)) {
-      return;
-    }
-
-    if (isCopy) {
-      if (this.commands.copy()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (isPaste) {
-      if (this.commands.paste()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (REDO_SHORTCUT && matchesShortcut(event, REDO_SHORTCUT)) {
-      event.preventDefault();
-      if (this.commands.canRedo()) {
-        this.commands.redo();
-      }
-      return;
-    }
-
-    if (UNDO_SHORTCUT && matchesShortcut(event, UNDO_SHORTCUT)) {
-      event.preventDefault();
-      if (this.commands.canUndo()) {
-        this.commands.undo();
-      }
-    }
+    binding.run(event);
   };
+
+  /** Checked in order; copy and paste leave the browser's own behaviour alone while an author is typing in a field. */
+  private bindings() {
+    const { commands } = this;
+    return [
+      {
+        shortcut: SAVE_SHORTCUT,
+        run: (event: KeyboardEvent) => {
+          event.preventDefault();
+          commands.save();
+        },
+      },
+      {
+        shortcut: COPY_SHORTCUT,
+        skipWhileTyping: true,
+        run: (event: KeyboardEvent) => {
+          if (commands.copy()) event.preventDefault();
+        },
+      },
+      {
+        shortcut: PASTE_SHORTCUT,
+        skipWhileTyping: true,
+        run: (event: KeyboardEvent) => {
+          if (commands.paste()) event.preventDefault();
+        },
+      },
+      {
+        shortcut: REDO_SHORTCUT,
+        run: (event: KeyboardEvent) => {
+          event.preventDefault();
+          if (commands.canRedo()) commands.redo();
+        },
+      },
+      {
+        shortcut: UNDO_SHORTCUT,
+        run: (event: KeyboardEvent) => {
+          event.preventDefault();
+          if (commands.canUndo()) commands.undo();
+        },
+      },
+    ];
+  }
 
   private isTypingInAField(event: KeyboardEvent): boolean {
     return event

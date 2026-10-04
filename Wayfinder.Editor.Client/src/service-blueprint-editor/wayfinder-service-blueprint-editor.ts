@@ -12,7 +12,7 @@ import { SaveController } from './save-controller.js';
 import { ToastController } from './toast-controller.js';
 import { StalenessController } from './staleness-controller.js';
 import { ValidationController } from './validation-controller.js';
-import { type ServiceBlueprintSource } from './service-blueprint-source.js';
+import type { ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import { BuiltInServiceBlueprintActionCatalog } from './action-catalog.js';
 import type { ServiceBlueprintComponentCatalog } from './component-catalog.js';
@@ -21,7 +21,7 @@ import type { ServiceBlueprintSupportSystemCatalog } from './support-system-cata
 import { HttpServiceBlueprintSupportSystemCatalog } from './support-system-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
-import { type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
+import type { ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
 import { flattenRoutes } from './route-model.js';
 import './wayfinder-service-blueprint-graph.js';
 import './wayfinder-step-inspector.js';
