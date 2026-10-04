@@ -71,10 +71,6 @@ dotnet_diagnostic.CA1506.severity = none
 dotnet_diagnostic.CA1502.severity = none
 dotnet_diagnostic.CA1506.severity = none
 
-[Wayfinder.Engine/Services/ServiceBlueprintAuthoringService.cs]
-dotnet_diagnostic.CA1502.severity = none
-dotnet_diagnostic.CA1506.severity = none
-
 [Wayfinder.Engine/Services/StageRenderer.cs]
 dotnet_diagnostic.CA1502.severity = none
 dotnet_diagnostic.CA1506.severity = none

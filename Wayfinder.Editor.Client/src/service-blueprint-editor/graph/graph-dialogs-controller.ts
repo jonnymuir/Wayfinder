@@ -4,6 +4,7 @@ import { html, unsafeStatic } from 'lit/static-html.js';
 import type { RouteView, ServiceBlueprint, ServiceBlueprintGatewayDefinition, StageKind } from '../types.js';
 import { applyQueueToStage, stageQueueKey, type StageSurface } from '../stage-assignment.js';
 import { STAGE_KIND_OPTIONS } from '../stage-kind-options.js';
+import { trapDialogFocus } from '../dialog-focus-trap.js';
 import {
   insertGateway,
   insertStage,
@@ -53,8 +54,6 @@ export interface GraphDialogsContext {
   gatewayCreated(blueprint: ServiceBlueprint, gatewayKey: string): void;
   nodeDeleted(blueprint: ServiceBlueprint, node: NodeKind): void;
 }
-
-const FOCUSABLE = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
 
 function defaultQueueForSurface(surface: StageSurface): string {
   return surface === 'back-stage' ? 'reviewer' : 'public';
@@ -244,36 +243,6 @@ export class GraphDialogsController implements ReactiveController {
     this._context.nodeDeleted(removeNode(blueprint, dialog.key), dialog.node);
   };
 
-  /** Escape closes; Tab wraps within the dialog so focus never leaves the modal. */
-  private _trapFocus(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this._close();
-      return;
-    }
-    if (event.key !== 'Tab') {
-      return;
-    }
-
-    const focusable = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-      (element) => !element.hasAttribute('disabled') && element.tabIndex >= 0
-    );
-    if (focusable.length === 0) {
-      return;
-    }
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = this._host.shadowRoot?.activeElement;
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   private _renderQueueDatalist(id: string) {
     return html`<datalist id=${id}>
       ${this._context.queueKeys().map((option) => html`<option value=${option}>${this._context.queueLabel(option)}</option>`)}
@@ -291,7 +260,7 @@ export class GraphDialogsController implements ReactiveController {
           aria-labelledby="create-stage-dialog-title"
           aria-describedby="create-stage-dialog-copy"
           data-wayfinder-create-stage-dialog
-          @keydown=${(event: KeyboardEvent) => this._trapFocus(event)}
+          @keydown=${(event: KeyboardEvent) => trapDialogFocus(event, () => this._host.shadowRoot?.activeElement, this._close)}
         >
           <div class="dialog-header">
             <div>
@@ -374,7 +343,7 @@ export class GraphDialogsController implements ReactiveController {
           aria-labelledby="create-gateway-dialog-title"
           aria-describedby="create-gateway-dialog-copy"
           data-wayfinder-create-gateway-dialog
-          @keydown=${(event: KeyboardEvent) => this._trapFocus(event)}
+          @keydown=${(event: KeyboardEvent) => trapDialogFocus(event, () => this._host.shadowRoot?.activeElement, this._close)}
         >
           <div class="dialog-header">
             <div>
@@ -454,7 +423,7 @@ export class GraphDialogsController implements ReactiveController {
           aria-labelledby="delete-${node}-dialog-title"
           aria-describedby="delete-${node}-dialog-copy"
           data-wayfinder-delete-${node}-dialog
-          @keydown=${(event: KeyboardEvent) => this._trapFocus(event)}
+          @keydown=${(event: KeyboardEvent) => trapDialogFocus(event, () => this._host.shadowRoot?.activeElement, this._close)}
         >
           <div class="dialog-header">
             <div>
