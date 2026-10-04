@@ -1,4 +1,5 @@
 using Wayfinder.Engine.Models;
+using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign;
 
 namespace Wayfinder.Engine.Services;
@@ -78,5 +79,47 @@ internal sealed record AccessibleWorkItem(
             },
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Which bucket a work item falls into — <see langword="null"/> for a row that is none of the
+    /// four: no eligible routes at all (the actor may simply lack permission to act in that queue,
+    /// or every outgoing route may be <c>showWhen</c>-hidden), not waiting at a join gateway, and
+    /// not genuinely terminal either. Those rows stay invisible under every status filter,
+    /// including all four selected at once — the same as they always have been. Eligible routes
+    /// exist but aren't individually available right now → <see cref="QueueWorkItemStatus.Unassigned"/>
+    /// (a team-tray row nobody has picked up — see docs/guides/team-assignment.md); eligible AND
+    /// available → <see cref="QueueWorkItemStatus.Actionable"/>.
+    /// </summary>
+    public QueueWorkItemStatus? Classify(ServiceBlueprint definition)
+    {
+        if (EligibleActions.Count > 0)
+        {
+            return AvailableActions.Count > 0 ? QueueWorkItemStatus.Actionable : QueueWorkItemStatus.Unassigned;
+        }
+
+        if (IsJoinGateway)
+        {
+            return QueueWorkItemStatus.Waiting;
+        }
+
+        return IsTerminal(definition) ? QueueWorkItemStatus.Done : null;
+    }
+
+    /// <summary>
+    /// The per-item predicate <c>IsTerminalInstance</c> is built from — extracted so
+    /// <c>GetQueueWorkItems</c> can classify every row of a multi-cursor instance
+    /// individually, rather than the first-accessible-item-only view <c>IsTerminalInstance</c>
+    /// needs for its own "is *the* instance terminal" question.
+    /// </summary>
+    public bool IsTerminal(ServiceBlueprint definition)
+    {
+        if (IsJoinGateway)
+        {
+            return false;
+        }
+
+        var stage = definition.Stages.FirstOrDefault(s => s.StageKey == StageKey);
+        return stage != null && stage.Components.InferStepType() == "confirmation";
     }
 }
