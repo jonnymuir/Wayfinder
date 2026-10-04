@@ -122,7 +122,7 @@ function runStaleChecks() {
     writeFileSync(editorconfig, original.replace(block[0], ''));
     let output = '';
     try {
-      output = execFileSync('dotnet', ['build', 'Wayfinder.slnx', '-c', 'Release', '--no-incremental', '-p:TreatWarningsAsErrors=false'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28 });
+      output = execFileSync('dotnet', ['build', 'Wayfinder.slnx', '-c', 'Release', '--no-incremental', '-p:TreatWarningsAsErrors=false'], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28, stdio: 'pipe' });
     } catch (error) {
       output = `${error.stdout ?? ''}${error.stderr ?? ''}`;
     }
@@ -147,7 +147,7 @@ function runStaleChecks() {
     copyFileSync(tempConfig, join(temp, 'biome.json'));
     let output = '';
     try {
-      output = execFileSync('npx', ['biome', 'lint', `--config-path=${tempConfig}`, '--max-diagnostics=5000', '--colors=off'], { cwd: clientDir, encoding: 'utf8', maxBuffer: 1 << 28 });
+      output = execFileSync('npx', ['biome', 'lint', `--config-path=${tempConfig}`, '--max-diagnostics=5000', '--colors=off'], { cwd: clientDir, encoding: 'utf8', maxBuffer: 1 << 28, stdio: 'pipe' });
     } catch (error) {
       output = `${error.stdout ?? ''}${error.stderr ?? ''}`;
     }
