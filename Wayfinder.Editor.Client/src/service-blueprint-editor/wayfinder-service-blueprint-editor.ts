@@ -3,6 +3,7 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import type { ActionCatalogEntry, ActionDefinition, ServiceBlueprint, ComponentDescriptor, SupportSystemDescriptor } from './types.js';
 import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
 import { EditHistory } from './edit-history.js';
+import { ValidationController } from './validation-controller.js';
 import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
 import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
@@ -13,8 +14,7 @@ import type { ServiceBlueprintSupportSystemCatalog } from './support-system-cata
 import { HttpServiceBlueprintSupportSystemCatalog } from './support-system-catalog.js';
 import type { ServiceBlueprintAuthorContext } from './service-blueprint-author-context.js';
 import type { QueueDefinition } from './stage-assignment.js';
-import { validateServiceBlueprint, type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
-import { mapServerDiagnosticsToIssues } from './server-diagnostic-location.js';
+import { type ServiceBlueprintValidationIssue } from './service-blueprint-validation.js';
 import { flattenRoutes } from './route-model.js';
 import { findServiceBlueprintShortcut, matchesShortcut, SERVICE_BLUEPRINT_SHORTCUT_GROUPS } from './editor-shortcuts.js';
 import './wayfinder-service-blueprint-graph.js';
@@ -211,17 +211,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _serviceBlueprintLoadRequestId = 0;
   private _versionPollTimer: number | null = null;
 
-  /**
-   * The validation-rail issue list. When the host's `ServiceBlueprintSource` implements
-   * `validate`, this holds the *server's* authoritative diagnostics (debounced via
-   * `_revalidate`); otherwise the in-browser `validateServiceBlueprint` fallback. Read by every
-   * `_*ValidationIssues` getter, the rail, the status line and the minimap counts.
-   */
-  @state() private _validationIssues: ServiceBlueprintValidationIssue[] = [];
-  /** A server `validate` call is in flight — the rail shows a "checking…" hint; Save stays gated on the last result. */
-  @state() private _validationPending = false;
-  private _validationDebounceHandle: number | null = null;
-  private _validationRequestId = 0;
+  private readonly _validation = new ValidationController(this, () => ({
+    blueprint: this._serviceBlueprint,
+    blueprintKey: this.blueprintKey,
+    source: this.serviceBlueprintSource,
+    actionCatalog: this._actionCatalog,
+    componentCatalog: this._componentCatalog,
+    supportSystemCatalog: this._supportSystemCatalog,
+  }));
 
   private get _selectedStageKey(): string | null {
     return this._selection?.kind === 'stage' ? this._selection.stageKey : null;
@@ -293,9 +290,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       _changedProperties.has('serviceBlueprintSource')
     ) {
       if (_changedProperties.has('_serviceBlueprint') && !_changedProperties.get('_serviceBlueprint') && this._serviceBlueprint) {
-        void this._revalidate();
+        void this._validation.run();
       } else {
-        this._scheduleRevalidate();
+        this._validation.schedule();
       }
     }
   }
@@ -303,10 +300,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   disconnectedCallback() {
     this.removeEventListener('keydown', this._handleEditorKeydown, true);
     this._clearVersionPollTimer();
-    if (this._validationDebounceHandle !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._validationDebounceHandle);
-      this._validationDebounceHandle = null;
-    }
     if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(this._toastDismissTimer);
     }
@@ -601,91 +594,10 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return currentSelection.kind === 'stage' && this._actionSelection.target === 'stage' ? this._actionSelection.index : null;
   }
 
-  /** ~400ms after the last edit the rail refreshes; long enough that a fast typist isn't firing a validate per keystroke. */
-  private static readonly VALIDATION_DEBOUNCE_MS = 400;
-
-  private _scheduleRevalidate() {
-    if (typeof window === 'undefined') {
-      void this._revalidate();
-      return;
-    }
-    if (this._validationDebounceHandle !== null) {
-      window.clearTimeout(this._validationDebounceHandle);
-    }
-    this._validationDebounceHandle = window.setTimeout(() => {
-      this._validationDebounceHandle = null;
-      void this._revalidate();
-    }, WayfinderServiceBlueprintEditorElement.VALIDATION_DEBOUNCE_MS);
-  }
-
-  private _fallbackValidationIssues(blueprint: ServiceBlueprint): ServiceBlueprintValidationIssue[] {
-    return validateServiceBlueprint(blueprint, this._actionCatalog, this._componentCatalog, this._supportSystemCatalog);
-  }
-
-  /**
-   * Refresh `_validationIssues`. If the host's source implements `validate`, that server call is
-   * authoritative — its diagnostics are exactly what Save enforces and what the
-   * `validate_service_blueprint` tool reports. Otherwise, and if that call fails, fall back to
-   * the in-browser `validateServiceBlueprint`. A stale in-flight response is discarded via
-   * `_validationRequestId`.
-   */
-  private async _revalidate() {
-    const blueprint = this._serviceBlueprint;
-    if (!blueprint) {
-      this._validationIssues = [];
-      this._validationPending = false;
-      return;
-    }
-
-    const source = this.serviceBlueprintSource;
-    if (!source || typeof source.validate !== 'function') {
-      this._validationIssues = this._fallbackValidationIssues(blueprint);
-      this._validationPending = false;
-      return;
-    }
-
-    const requestId = ++this._validationRequestId;
-    this._validationPending = true;
-    try {
-      const outcome = await source.validate(this.blueprintKey || blueprint.definitionKey, blueprint);
-      if (requestId !== this._validationRequestId) {
-        return;
-      }
-      this._validationIssues = mapServerDiagnosticsToIssues(outcome);
-    } catch {
-      if (requestId !== this._validationRequestId) {
-        return;
-      }
-      // Host/server unreachable — never wedge the rail or gate Save on a stale-blank result;
-      // show the best-effort in-browser check for this cycle.
-      this._validationIssues = this._fallbackValidationIssues(blueprint);
-    } finally {
-      if (requestId === this._validationRequestId) {
-        this._validationPending = false;
-      }
-    }
-  }
-
   /** Public hook for tests/host: run the pending revalidation now instead of after the debounce. */
   async flushValidationPending() {
-    if (this._validationDebounceHandle !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._validationDebounceHandle);
-      this._validationDebounceHandle = null;
-    }
-    await this._revalidate();
+    await this._validation.flush();
     await this.updateComplete;
-  }
-
-  private get _blockingValidationIssues() {
-    return this._validationIssues.filter((issue) => issue.blocking);
-  }
-
-  private get _warningValidationIssues() {
-    return this._validationIssues.filter((issue) => !issue.blocking);
-  }
-
-  private get _hasBlockingValidationIssues() {
-    return this._blockingValidationIssues.length > 0;
   }
 
   private get _isDirty() {
@@ -693,7 +605,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   private get _canSave() {
-    return Boolean(this._serviceBlueprint) && !this._hasBlockingValidationIssues && this._saveState !== 'saving' && this._canSaveByContext;
+    return Boolean(this._serviceBlueprint) && !this._validation.hasBlocking && this._saveState !== 'saving' && this._canSaveByContext;
   }
 
   private get _dirtyStateSummary() {
@@ -702,29 +614,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     return this._isDirty ? 'Unsaved changes' : 'All changes saved';
-  }
-
-  private get _validationStatusSummary() {
-    if (!this._serviceBlueprint) {
-      return 'Validation will appear when the service blueprint loads.';
-    }
-
-    if (this._validationPending && this._validationIssues.length === 0) {
-      return 'Checking the service blueprint…';
-    }
-
-    if (this._validationIssues.length === 0) {
-      return 'No validation issues. The service blueprint is ready to save.';
-    }
-
-    const parts: string[] = [];
-    if (this._blockingValidationIssues.length > 0) {
-      parts.push(`${this._blockingValidationIssues.length} blocking error${this._blockingValidationIssues.length === 1 ? '' : 's'}`);
-    }
-    if (this._warningValidationIssues.length > 0) {
-      parts.push(`${this._warningValidationIssues.length} warning${this._warningValidationIssues.length === 1 ? '' : 's'}`);
-    }
-    return `${parts.join(' and ')} in the validation rail.`;
   }
 
   private get _saveStatusSummary() {
@@ -740,7 +629,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return this._saveMessage ?? 'Save failed.';
     }
 
-    if (this._hasBlockingValidationIssues) {
+    if (this._validation.hasBlocking) {
       return 'Save is blocked until the blocking validation errors are fixed.';
     }
 
@@ -1329,7 +1218,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return;
     }
 
-    if (this._hasBlockingValidationIssues) {
+    if (this._validation.hasBlocking) {
       this._saveState = 'error';
       this._saveError = new ServiceBlueprintSaveError({
         title: 'Can’t save this service blueprint yet',
@@ -1448,19 +1337,19 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       return html`<div class="validation-empty-panel">No serviceBlueprint loaded</div>`;
     }
 
-    const issues = this._validationIssues;
-    const errorCount = this._blockingValidationIssues.length;
-    const warningCount = this._warningValidationIssues.length;
+    const issues = this._validation.issues;
+    const errorCount = this._validation.blocking.length;
+    const warningCount = this._validation.warnings.length;
 
     return html`
       <section class="validation-panel" aria-labelledby="service-blueprint-validation-panel-title" data-wayfinder-validation-rail>
         <div class="validation-panel-header">
           <div>
             <h2 id="service-blueprint-validation-panel-title" class="validation-panel-title">Service Blueprint validation</h2>
-            <p class="validation-panel-summary">${this._validationStatusSummary}</p>
+            <p class="validation-panel-summary">${this._validation.summary}</p>
           </div>
           <div class="validation-panel-meta">
-            ${this._validationPending ? html`<span class="validation-count" data-wayfinder-validation-pending>checking…</span>` : nothing}
+            ${this._validation.pending ? html`<span class="validation-count" data-wayfinder-validation-pending>checking…</span>` : nothing}
             <span class="validation-count validation-count-error" data-wayfinder-validation-errors>${errorCount} errors</span>
             <span class="validation-count validation-count-warning" data-wayfinder-validation-warnings>${warningCount} warnings</span>
           </div>
@@ -1912,8 +1801,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         <wayfinder-confidence-tabs
           class="editor-tabs"
           active-tab="${this._activeConfidenceTab}"
-          error-count="${this._blockingValidationIssues.length}"
-          warning-count="${this._warningValidationIssues.length}"
+          error-count="${this._validation.blocking.length}"
+          warning-count="${this._validation.warnings.length}"
           @tab-changed=${this._handleConfidenceTabChanged}
         >
           <!-- Canvas tab: main workspace -->
@@ -1975,8 +1864,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               <!-- Center: graph workspace -->
               <div class="editor-center">
                 ${(() => {
-                  const errorCount = this._blockingValidationIssues.length;
-                  const warningCount = this._warningValidationIssues.length;
+                  const errorCount = this._validation.blocking.length;
+                  const warningCount = this._validation.warnings.length;
                   const total = errorCount + warningCount;
                   if (total === 0) return nothing;
                   const summary =
