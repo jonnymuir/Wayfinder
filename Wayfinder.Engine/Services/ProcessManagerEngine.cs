@@ -14,6 +14,7 @@ using Wayfinder.Engine.Stores;
 using Wayfinder.Models.ServiceDesign.BulkData;
 using Wayfinder.Models.ServiceDesign.SupportSystems;
 using static Wayfinder.Engine.Services.BlueprintLookup;
+using static Wayfinder.Engine.Services.QueueAccess;
 using static Wayfinder.Engine.Services.FieldValueMerge;
 
 namespace Wayfinder.Engine.Services;
@@ -27,6 +28,7 @@ public class ProcessManagerEngine : IProcessManager
     private readonly BlueprintRegistry _registry;
     private readonly InstanceRepository _instances;
     private readonly StageCalculations _calculations;
+    private readonly WorkItemFinder _workItems;
     private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly Dictionary<string, ISupportSystemClient> _supportSystemClients;
     private readonly IBulkDatasetStore? _bulkDatasetStore;
@@ -58,6 +60,7 @@ public class ProcessManagerEngine : IProcessManager
             auditLogStore ?? new InMemoryAuditLogStore(),
             _registry);
         _calculations = new StageCalculations(logger, _instances, ResolveServiceInputs);
+        _workItems = new WorkItemFinder(_calculations);
     }
 
     protected ILogger Logger { get; }
@@ -429,7 +432,7 @@ public class ProcessManagerEngine : IProcessManager
             return BuildEnvelope(savedJumped, definition, accessProfile, userId);
         }
 
-        var visibleWorkItem = FindAccessibleWorkItems(instance, definition, accessProfile, userId)
+        var visibleWorkItem = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId)
             .FirstOrDefault(item => item.AvailableActions.Any(candidate =>
                 string.Equals(candidate.ActionKey, action, StringComparison.Ordinal)));
 
@@ -854,7 +857,7 @@ public class ProcessManagerEngine : IProcessManager
             // INVALID_TRANSITION. Queue visibility/capability eligibility is still fully enforced
             // (CanViewQueue/HasQueueEligibility never depend on userId), so this can't be used to
             // discover anything about a queue this actor genuinely isn't eligible for.
-            var item = FindAccessibleWorkItems(instance, definition, accessProfile)
+            var item = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile)
                 .FirstOrDefault(candidate => string.Equals(candidate.CursorId, cursorId, StringComparison.Ordinal));
             if (item is null)
             {
@@ -1238,7 +1241,7 @@ public class ProcessManagerEngine : IProcessManager
                 // EligibleActions rather than ClassifyStatus). Found live as a pre-existing gap:
                 // the team-tray clause here never correctly matched an unpicked row before this
                 // fix, since ClassifyStatus == Unassigned could never be true at this call site.
-                return FindAccessibleWorkItems(instance, definition, accessProfile)
+                return _workItems.FindAccessibleWorkItems(instance, definition, accessProfile)
                     .Where(item => item.AssignedTo is null
                         && item.EligibleActions.Count > 0
                         && (item.AssignmentPolicy is null
@@ -1257,7 +1260,7 @@ public class ProcessManagerEngine : IProcessManager
             {
                 // Resolved from refreshedInstance, not the pre-pickup `instance` this loop iterates
                 // over — AssignedTo only reflects the pickup just performed once read fresh.
-                var refreshedItem = FindAccessibleWorkItems(refreshedInstance, definition, accessProfile, userId)
+                var refreshedItem = _workItems.FindAccessibleWorkItems(refreshedInstance, definition, accessProfile, userId)
                     .FirstOrDefault(candidate => string.Equals(candidate.CursorId, item.CursorId, StringComparison.Ordinal));
                 if (refreshedItem is not null)
                 {
@@ -1395,7 +1398,7 @@ public class ProcessManagerEngine : IProcessManager
                 // everywhere else this hook is used.
                 instance = RefreshIfWaitingAtJoin(instance, definition, accessProfile);
 
-                return FindAccessibleWorkItems(instance, definition, accessProfile, userId)
+                return _workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId)
                     .Select(item => (item, status: ClassifyStatus(item, definition)))
                     .Where(pair => pair.status is not null && effectiveStatuses.Contains(pair.status.Value))
                     .Select(pair => pair.item.ToEnvelopeItem(instance, definition, pair.status!.Value, accessProfile, userId))
@@ -1495,7 +1498,7 @@ public class ProcessManagerEngine : IProcessManager
                 {
                     var queueName = ResolveQueueName(definition, stage);
                     var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, cursorAssignedTo: null);
-                    var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+                    var eligibleActions = _workItems.BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
 
                     items.Add(new AccessibleWorkItem(
                         stage.StageKey,
@@ -1532,7 +1535,7 @@ public class ProcessManagerEngine : IProcessManager
 
             var queueName = ResolveQueueName(definition, cursor.QueueKey);
             var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, cursor.QueueKey, cursor.AssignedTo);
-            var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
+            var eligibleActions = _workItems.BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
 
             items.Add(new AccessibleWorkItem(
                 stage.StageKey,
@@ -1597,7 +1600,7 @@ public class ProcessManagerEngine : IProcessManager
         ServiceBlueprint definition,
         ActorProfile accessProfile)
     {
-        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
+        var visibleItem = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
         if (visibleItem is not { IsJoinGateway: true })
         {
             return instance;
@@ -1715,7 +1718,7 @@ public class ProcessManagerEngine : IProcessManager
             return AbortedInstanceEnvelope(instance);
         }
 
-        var workItems = FindAccessibleWorkItems(instance, definition, accessProfile, userId);
+        var workItems = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile, userId);
         var visibleItem = workItems is [var firstItem, ..] ? firstItem : null;
 
         if (visibleItem is null)
@@ -1798,402 +1801,6 @@ public class ProcessManagerEngine : IProcessManager
             RequestPolicy = definition.RequestPolicy,
             AllowManualRestart = definition.AllowManualRestart
         };
-    }
-
-    private static bool CanAccessInstance(
-        ServiceRequest instance,
-        string tenantId,
-        string userId,
-        ActorProfile accessProfile)
-    {
-        if (!string.Equals(instance.TenantId, tenantId, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return !accessProfile.RestrictToInstanceOwner
-               || string.Equals(instance.UserId, userId, StringComparison.Ordinal);
-    }
-
-    private static bool CanStartInitialState(ServiceBlueprint definition, ActorProfile accessProfile)
-    {
-        var initialStage = definition.Stages.FirstOrDefault(stage =>
-            string.Equals(stage.StageKey, definition.InitialStage, StringComparison.Ordinal));
-
-        var queueName = initialStage is null ? null : ResolveQueueName(definition, initialStage);
-        var queueKey = initialStage is null ? null : GetQueueKey(initialStage);
-        return accessProfile.CanViewQueue(queueName)
-            && accessProfile.CanStartQueue(queueName)
-            && HasQueueEligibility(definition, queueKey, queueName, accessProfile);
-    }
-
-    /// <summary>
-    /// Whether <paramref name="accessProfile"/> holds a capability <see cref="QueueDefinition.RoleGates"/>
-    /// requires for this queue — a genuine, enforced check, unlike the pre-existing
-    /// <c>ServiceBlueprintRouteDefinition.RequiresRole</c> (declared on routes but never actually
-    /// validated against the accessing actor; see docs/guides/work-allocation.md). Null/no matching
-    /// <see cref="QueueDefinition"/>, or one with no declared <c>RoleGates</c>, is unrestricted.
-    /// </summary>
-    private static bool HasQueueEligibility(ServiceBlueprint definition, string? queueKey, string? queueName, ActorProfile accessProfile)
-    {
-        var lookupKey = FirstNonEmpty(queueKey, queueName);
-        if (string.IsNullOrWhiteSpace(lookupKey))
-        {
-            return true;
-        }
-
-        var queue = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, lookupKey, StringComparison.Ordinal));
-        return accessProfile.HasCapability(queue?.RoleGates);
-    }
-
-    protected IReadOnlyList<AccessibleWorkItem> FindAccessibleWorkItems(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        ActorProfile accessProfile,
-        string? userId = null)
-    {
-        var items = new List<AccessibleWorkItem>();
-
-        if (instance.Cursors.Count == 0)
-        {
-            var stage = definition.Stages.FirstOrDefault(candidate =>
-                string.Equals(candidate.StageKey, instance.CurrentStage, StringComparison.Ordinal));
-
-            if (stage is not null)
-            {
-                var queueKey = GetQueueKey(stage);
-                var queueName = ResolveQueueName(definition, stage);
-                if (CanViewQueue(definition, queueKey, queueName, accessProfile))
-                {
-                    var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, queueKey, StringComparison.Ordinal));
-                    var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, queueKey, cursorAssignedTo: null);
-
-                    if (IsVisibleToActor(queueDef, assignedTo, accessProfile, userId))
-                    {
-                        var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
-                        var availableActions = IsEntitledToActNow(accessProfile, assignedTo, userId) ? eligibleActions : [];
-
-                        items.Add(new AccessibleWorkItem(
-                            stage.StageKey,
-                            stage.DisplayName,
-                            queueName,
-                            queueKey,
-                            IsJoinGateway: false,
-                            eligibleActions,
-                            availableActions,
-                            queueDef?.AssignmentPolicy,
-                            CursorId: RequestCursor.PrimaryCursorId,
-                            AssignedTo: assignedTo,
-                            AssignedTeamId: assignedTeamId));
-                    }
-                }
-            }
-
-            return items;
-        }
-
-        foreach (var cursor in instance.Cursors.Where(candidate => !candidate.IsAtGateway))
-        {
-            var queueDef = GetQueues(definition).FirstOrDefault(q => string.Equals(q.Key, cursor.QueueKey, StringComparison.Ordinal));
-            var (assignedTo, assignedTeamId) = ResolveQueueOwnership(queueDef, instance, cursor.QueueKey, cursor.AssignedTo);
-
-            // A row held by someone else — a specific individual on a queue without an assignment policy, or a different
-            // team member on a team-owned one — is hidden entirely, not shown-but-disabled — the
-            // same enforcement Advance's own target resolution relies on (see
-            // docs/guides/work-allocation.md and docs/guides/team-assignment.md). No userId (an
-            // internal check that never resolves a specific actor, e.g. RefreshIfWaitingAtJoin
-            // peeking at the primary item) skips this filter rather than hiding everything.
-            if (!IsVisibleToActor(queueDef, assignedTo, accessProfile, userId))
-            {
-                continue;
-            }
-
-            var stage = definition.Stages.FirstOrDefault(candidate =>
-                string.Equals(candidate.StageKey, cursor.CurrentNodeKey, StringComparison.Ordinal));
-
-            if (stage is null)
-            {
-                continue;
-            }
-
-            var queueName = ResolveQueueName(definition, cursor.QueueKey);
-            if (!CanViewQueue(definition, cursor.QueueKey, queueName, accessProfile))
-            {
-                continue;
-            }
-
-            var eligibleActions = BuildEligibleActions(instance, definition, stage.StageKey, queueName, accessProfile);
-            var availableActions = IsEntitledToActNow(accessProfile, assignedTo, userId) ? eligibleActions : [];
-
-            items.Add(new AccessibleWorkItem(
-                stage.StageKey,
-                stage.DisplayName,
-                queueName,
-                cursor.QueueKey,
-                IsJoinGateway: false,
-                eligibleActions,
-                availableActions,
-                queueDef?.AssignmentPolicy,
-                CursorId: cursor.CursorId,
-                AssignedTo: assignedTo,
-                AssignedTeamId: assignedTeamId));
-        }
-
-        foreach (var cursor in instance.Cursors.Where(candidate => candidate.IsAtGateway))
-        {
-            var gateway = FindGateway(definition, cursor.CurrentNodeKey);
-            if (gateway is null || gateway.GatewayType != GatewayKind.Join)
-            {
-                continue;
-            }
-
-            var queueName = ResolveQueueName(definition, gateway);
-            if (!CanViewQueue(definition, gateway.QueueKey, queueName, accessProfile))
-            {
-                continue;
-            }
-
-            items.Add(new AccessibleWorkItem(
-                gateway.Key,
-                gateway.DisplayName,
-                queueName,
-                gateway.QueueKey,
-                IsJoinGateway: true,
-                [],
-                [],
-                AssignmentPolicy: null,
-                CursorId: cursor.CursorId,
-                AssignedTo: null,
-                AssignedTeamId: null));
-        }
-
-        return items
-            .OrderByDescending(item => string.Equals(item.StageKey, instance.CurrentStage, StringComparison.Ordinal))
-            .ThenBy(item => item.IsJoinGateway)
-            .ThenBy(item => item.StageKey, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    /// <summary>
-    /// Resolves who (if anyone) currently owns a queue's row on this instance — for a queue with no
-    /// declared <see cref="QueueDefinition.AssignmentPolicy"/>, that's just
-    /// <paramref name="cursorAssignedTo"/> (<see cref="RequestCursor.AssignedTo"/>), no team; for a
-    /// team-owned queue, it's <see cref="ServiceRequest.QueueAssignments"/> instead —
-    /// <see cref="RequestCursor.AssignedTo"/> is never touched for those. See
-    /// docs/guides/team-assignment.md.
-    /// </summary>
-    private static (string? AssignedTo, string? AssignedTeamId) ResolveQueueOwnership(
-        QueueDefinition? queueDef, ServiceRequest instance, string? queueKey, string? cursorAssignedTo)
-    {
-        if (queueDef?.AssignmentPolicy is null)
-        {
-            return (cursorAssignedTo, null);
-        }
-
-        var assignment = instance.QueueAssignments.GetValueOrDefault(queueKey ?? "");
-        return (assignment?.AssignedUserId, assignment?.TeamId ?? queueDef.OwningTeamId);
-    }
-
-    /// <summary>
-    /// Whether a row is visible to <paramref name="userId"/> at all. Held by a specific different
-    /// individual → hidden, always (whether or not the queue declares a team). Otherwise not yet
-    /// picked up: a queue with no declared team is visible to any eligible actor (pickup is
-    /// mandatory to *act*, but every eligible actor still needs to be able to see the row exists in
-    /// order to pick it up at all); a team-owned queue's unpicked tray row is visible only to team
-    /// members — except when <paramref name="accessProfile"/> is the synthetic
-    /// <see cref="ActorProfile.UnrestrictedOwner"/>, meaning this is an internal, system-driven call
-    /// recursing with a real <paramref name="userId"/> but no real resolved profile (e.g.
-    /// <see cref="ResolveSupportSystemOutcome"/>'s webhook resolution path) — such a call can never
-    /// carry real team membership and must not be blocked by a check it structurally can't satisfy.
-    /// See docs/guides/team-assignment.md.
-    /// </summary>
-    private static bool IsVisibleToActor(QueueDefinition? queueDef, string? assignedTo, ActorProfile accessProfile, string? userId)
-    {
-        if (userId is null)
-        {
-            return true;
-        }
-
-        if (assignedTo is not null)
-        {
-            return string.Equals(assignedTo, userId, StringComparison.Ordinal);
-        }
-
-        return queueDef?.AssignmentPolicy is null
-            || accessProfile.IsTeamMember(queueDef.OwningTeamId)
-            || ReferenceEquals(accessProfile, ActorProfile.UnrestrictedOwner);
-    }
-
-    /// <summary>
-    /// Whether the caller may actually submit an eligible action right now, as opposed to merely
-    /// being allowed to see the row exists. The rule is universal, no per-queue opt-out: if a row
-    /// isn't assigned to <paramref name="userId"/>, they can't act on it, full stop — whether that
-    /// queue declares a <c>QueueDefinition.AssignmentPolicy</c> or not. A queue declaring nothing
-    /// still requires an explicit <c>PickupWorkItem</c> first (see docs/guides/work-allocation.md);
-    /// it's simply not scoped to any particular team the way <c>"team-tray"</c> is, so any actor
-    /// already eligible to see the queue at all may pick it up. The one genuine exemption is
-    /// <paramref name="accessProfile"/>.<see cref="ActorProfile.RestrictToInstanceOwner"/> — an
-    /// owner-restricted (citizen-style) profile's own instance has exactly one possible actor by
-    /// construction, so "assignment" isn't a concept that applies there at all (the same
-    /// discriminator <see cref="AccessibleWorkItem.ResolvePickupState"/> already uses for the
-    /// identical reason). Internal peeks (no <paramref name="userId"/>) are always entitled too.
-    /// </summary>
-    private static bool IsEntitledToActNow(ActorProfile accessProfile, string? assignedTo, string? userId) =>
-        accessProfile.RestrictToInstanceOwner
-        || userId is null
-        || string.Equals(assignedTo, userId, StringComparison.Ordinal);
-
-    private static bool CanViewQueue(
-        ServiceBlueprint definition,
-        string? queueKey,
-        string? queueName,
-        ActorProfile accessProfile)
-    {
-        return accessProfile.CanViewQueue(queueName)
-            && HasQueueEligibility(definition, queueKey, queueName, accessProfile);
-    }
-
-    /// <summary>
-    /// Assignment-agnostic — route/role/showWhen-gated only. See
-    /// <see cref="AccessibleWorkItem.EligibleActions"/>'s own remarks for why this is a distinct
-    /// concept from what actually renders/what <c>Advance</c> accepts.
-    /// </summary>
-    protected IReadOnlyList<ServiceRequestAction> BuildEligibleActions(
-        ServiceRequest instance,
-        ServiceBlueprint definition,
-        string stageKey,
-        string? queueName,
-        ActorProfile accessProfile)
-    {
-        var transitions = GetOutgoingTransitions(definition, stageKey);
-
-        if (!string.IsNullOrWhiteSpace(queueName) && !accessProfile.CanActInQueue(queueName))
-        {
-            return [];
-        }
-
-        // ServiceBlueprintRouteDefinition.RequiresRole — genuinely enforced against
-        // ActorProfile.Capabilities, unlike the check this replaced (which only ever excluded a
-        // role-gated route when there was no queue context at all, and never validated the actor's
-        // specific role even then). Reuses Capabilities rather than a separate "Roles" set, since
-        // both already express "does this actor hold X" — see docs/guides/work-allocation.md for
-        // why this is a different, pre-existing concept from RequiredCapabilities/RoleGates'
-        // queue-eligibility gate above it.
-        transitions = transitions
-            .Where(transition => string.IsNullOrWhiteSpace(transition.RequiresRole)
-                || accessProfile.Capabilities.Contains(transition.RequiresRole))
-            .ToArray();
-
-        // ServiceBlueprintRouteDefinition.ShowWhen excludes a route from AvailableActions
-        // entirely (not merely disables it) — the same mechanism a stage's own components use via
-        // Component.ShowWhen. The Any() guard is deliberate: this runs once per stage per queue
-        // render (FindAccessibleWorkItems calls it for every visible cursor across every instance
-        // a queue lists), so a blueprint that never uses ShowWhen on a route — everything shipped
-        // before this — pays nothing extra for it.
-        if (transitions.Any(transition => !string.IsNullOrWhiteSpace(transition.ShowWhen)))
-        {
-            var stage = definition.Stages.FirstOrDefault(candidate =>
-                string.Equals(candidate.StageKey, stageKey, StringComparison.Ordinal));
-            if (stage is not null)
-            {
-                var scope = _calculations.BuildCalculationScope(instance, definition, stage, pendingFieldValues: null);
-                transitions = transitions
-                    .Where(transition => _calculations.EvaluateShowWhen(transition.ShowWhen, scope, definition.Calculations))
-                    .ToArray();
-            }
-        }
-
-        return transitions
-            .Select(transition => new ServiceRequestAction
-            {
-                ActionKey = transition.Action,
-                // `??` alone doesn't catch an empty-but-non-null Label, which is exactly what an
-                // agent leaving the field blank (rather than omitting it) produces — treat blank
-                // the same as absent. transition.Action is never blank by the time it gets here;
-                // GetOutgoingTransitions defaults it below, the one place raw route.Trigger values
-                // are read, so every consumer (this, and the action-matching in Advance) agrees.
-                Label = string.IsNullOrWhiteSpace(transition.Label) ? ActionLabel(transition.Action) : transition.Label,
-                Style = transition.Style ?? ActionStyle(transition.Action)
-            })
-            .ToArray();
-    }
-
-    /// <summary>
-    /// <paramref name="EligibleActions"/> is route/role/showWhen-gated only — assignment-agnostic,
-    /// feeds <see cref="ClassifyStatus"/>. <paramref name="AvailableActions"/> narrows that to
-    /// nothing unless the caller is individually entitled to act on this row *right now* — feeds
-    /// rendering (<see cref="BuildEnvelope"/>'s <c>StepContent.AvailableActions</c>) and what
-    /// <see cref="Advance(string,string,string,ActorProfile,string,int,Dictionary{string,object?}?)"/>
-    /// will accept. Splitting these two is what lets an unassigned team-tray row stay visible and
-    /// available to pick up (eligible) while still rendering zero action buttons (not yet available) — see
-    /// docs/guides/team-assignment.md. <paramref name="AssignmentPolicy"/>/<paramref name="AssignedTeamId"/>
-    /// are null for a queue without an assignment policy.
-    /// </summary>
-    protected sealed record AccessibleWorkItem(
-        string StageKey,
-        string DisplayName,
-        string? QueueName,
-        string? QueueKey,
-        bool IsJoinGateway,
-        IReadOnlyList<ServiceRequestAction> EligibleActions,
-        IReadOnlyList<ServiceRequestAction> AvailableActions,
-        string? AssignmentPolicy,
-        string CursorId,
-        string? AssignedTo,
-        string? AssignedTeamId)
-    {
-        public QueueWorkItem ToEnvelopeItem(
-            ServiceRequest instance,
-            ServiceBlueprint definition,
-            QueueWorkItemStatus status,
-            ActorProfile accessProfile,
-            string userId) =>
-            new()
-            {
-                InstanceId = instance.InstanceId,
-                BlueprintKey = instance.BlueprintKey,
-                BlueprintDisplayName = definition.DisplayName,
-                StageKey = StageKey,
-                StateDisplayName = DisplayName,
-                QueueName = QueueName,
-                CursorId = CursorId,
-                TenantId = instance.TenantId,
-                UserId = instance.UserId,
-                StateVersion = instance.StateVersion,
-                AvailableActions = AvailableActions,
-                CreatedAt = instance.CreatedAt,
-                UpdatedAt = instance.UpdatedAt,
-                Status = status,
-                PickupState = ResolvePickupState(status, accessProfile)
-            };
-
-        /// <summary>
-        /// See docs/guides/work-allocation.md and docs/guides/team-assignment.md. A queue with no
-        /// declared <c>AssignmentPolicy</c> behaves identically to <c>"team-tray"</c> here — pickup
-        /// is mandatory either way, the only difference is team-tray additionally scopes who may
-        /// pick a row up to a specific team's own members. Unassigned status is itself the "not
-        /// picked up, pick me up" affordance; Actionable means already picked up by this caller. An
-        /// assign-to-initiator queue always has nothing to pick up/put back — it's already owned
-        /// the moment it exists (see docs/guides/team-assignment.md's reassignment scope note).
-        /// </summary>
-        private QueueWorkItemPickupState? ResolvePickupState(QueueWorkItemStatus status, ActorProfile accessProfile)
-        {
-            if (accessProfile.RestrictToInstanceOwner)
-            {
-                return null;
-            }
-
-            return AssignmentPolicy switch
-            {
-                null or AssignmentPolicies.TeamTray => status switch
-                {
-                    QueueWorkItemStatus.Unassigned => QueueWorkItemPickupState.NotPickedUp,
-                    QueueWorkItemStatus.Actionable => QueueWorkItemPickupState.PickedUpByMe,
-                    _ => null
-                },
-                _ => null
-            };
-        }
     }
 
     protected static ServiceRequestResponseEnvelope ErrorEnvelope(string message, string code) =>
@@ -3878,7 +3485,7 @@ public class ProcessManagerEngine : IProcessManager
             return true;
         }
 
-        var visibleItem = FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
+        var visibleItem = _workItems.FindAccessibleWorkItems(instance, definition, accessProfile) is [var firstItem, ..] ? firstItem : null;
         return visibleItem is not null && IsTerminalWorkItem(visibleItem, definition);
     }
 
@@ -3920,21 +3527,4 @@ public class ProcessManagerEngine : IProcessManager
             .FirstOrDefault();
     }
 
-    private static string ActionLabel(string key) => key switch
-    {
-        "submit" => "Submit",
-        "save-draft" => "Save Draft",
-        "start-another" => "Start Another",
-        "approve" => "Approve",
-        "request-changes" => "Request Changes",
-        "continue" => "Continue",
-        _ => key
-    };
-
-    private static string ActionStyle(string key) => key switch
-    {
-        "submit" or "approve" => "primary",
-        "reject" or "cancel" => "destructive",
-        _ => "secondary"
-    };
 }
