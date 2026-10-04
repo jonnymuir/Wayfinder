@@ -5,6 +5,7 @@ import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard
 import { DefinitionController } from './definition-controller.js';
 import { cloneServiceBlueprint, serviceBlueprintsEqual } from './blueprint-snapshot.js';
 import { EditHistory } from './edit-history.js';
+import { PanelLayoutController } from './panel-layout-controller.js';
 import { SaveController } from './save-controller.js';
 import { ToastController } from './toast-controller.js';
 import { StalenessController } from './staleness-controller.js';
@@ -180,18 +181,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   });
   @state() private _helpOpen = false;
   @state() private _activeConfidenceTab: ConfidenceTab = 'canvas';
-  // Both start collapsed — the canvas is the primary surface, and either panel is one click
-  // away via its own toggle. The inspector auto-expands the moment something is selected (see
-  // _applySelection/_applyTransitionHighlight) since a closed Properties panel right after
-  // selecting a stage/gateway would just look broken; the outline has no equivalent trigger,
-  // so it stays exactly as the author left it.
-  @state() private _outlineCollapsed = true;
-  @state() private _inspectorCollapsed = true;
-  /** Expanded width of the Properties panel in px — dragged via .panel-resize-handle. */
-  @state() private _inspectorWidth = 380;
-  @state() private _inspectorResizing = false;
-  private _inspectorResizeStartX = 0;
-  private _inspectorResizeStartWidth = 0;
+  private readonly _layout = new PanelLayoutController(this);
   /** Relayed from the graph's own zoom-changed event — see graph-panel's hide-own-toolbar. */
   @state() private _graphZoom = 1;
   @query('.graph-panel') private _graphElement?: HTMLElementTagNameMap['wayfinder-service-blueprint-graph'];
@@ -288,8 +278,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   disconnectedCallback() {
     this.removeEventListener('keydown', this._handleEditorKeydown, true);
-    window.removeEventListener('pointermove', this._handleInspectorResizeMove);
-    window.removeEventListener('pointerup', this._handleInspectorResizeEnd);
     super.disconnectedCallback();
   }
 
@@ -410,7 +398,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       const exists = serviceBlueprint.stages.some((stage) => stage.stageKey === selection.stageKey);
       this._selection = exists ? { kind: 'stage', stageKey: selection.stageKey } : null;
       this._selectedTransitionIndex = null;
-      this._expandInspectorForSelection();
+      if (this._selection) {
+        this._layout.expandInspector();
+      }
       return;
     }
 
@@ -418,24 +408,14 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       const exists = serviceBlueprint.gateways?.some((gateway) => gateway.key === selection.gatewayKey) ?? false;
       this._selection = exists ? { kind: 'gateway', gatewayKey: selection.gatewayKey } : null;
       this._selectedTransitionIndex = null;
-      this._expandInspectorForSelection();
+      if (this._selection) {
+        this._layout.expandInspector();
+      }
       return;
     }
 
     this._selection = null;
     this._selectedTransitionIndex = null;
-  }
-
-  /**
-   * The Properties panel starts collapsed (see _outlineCollapsed/_inspectorCollapsed's
-   * comment) — expand it the moment a selection actually resolves to something real, so
-   * selecting a stage/gateway/route doesn't leave its own details panel closed. Never
-   * re-collapses on its own; the user's explicit toggle is the only way back.
-   */
-  private _expandInspectorForSelection() {
-    if (this._selection && this._inspectorCollapsed) {
-      this._inspectorCollapsed = false;
-    }
   }
 
   private _applyTransitionHighlight(transitionIndex: number, serviceBlueprint: ServiceBlueprint | null = this._serviceBlueprint) {
@@ -454,7 +434,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     const route = transitions[transitionIndex];
     this._selection = route.fromGateway ? { kind: 'gateway', gatewayKey: route.fromGateway } : { kind: 'stage', stageKey: route.fromStage };
     this._selectedTransitionIndex = transitionIndex;
-    this._expandInspectorForSelection();
+    if (this._selection) {
+      this._layout.expandInspector();
+    }
   }
 
   private _snapshotCurrentState(): ServiceBlueprintHistoryEntry | null {
@@ -728,7 +710,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   }
 
   private _handleInspectorRequested() {
-    this._inspectorCollapsed = false;
+    this._layout.expandInspector();
     requestAnimationFrame(() => {
       this.shadowRoot?.querySelector<HTMLElement>('wayfinder-step-inspector')?.focus();
     });
@@ -825,7 +807,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   private _focusInspectorForValidationIssue(issue: ServiceBlueprintValidationIssue) {
     const actionLocation = issue.location.kind === 'action' ? issue.location : null;
-    this._inspectorCollapsed = false;
+    this._layout.expandInspector();
     requestAnimationFrame(() => {
       const inspector = this.shadowRoot?.querySelector<HTMLElement>('wayfinder-step-inspector');
       inspector?.focus();
@@ -860,7 +842,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     this._activeConfidenceTab = 'canvas';
-    this._inspectorCollapsed = false;
+    this._layout.expandInspector();
     this._applySelection({ kind: 'stage', stageKey }, this._serviceBlueprint);
     this._actionSelection = null;
   }
@@ -881,7 +863,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
 
     this._activeConfidenceTab = 'canvas';
-    this._inspectorCollapsed = false;
+    this._layout.expandInspector();
 
     if (issue.location.kind === 'stage') {
       this._applySelection({ kind: 'stage', stageKey: issue.location.stageKey }, this._serviceBlueprint);
@@ -1100,53 +1082,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     return this.authorContext?.canSave !== false;
   }
 
-  private _toggleOutlineCollapsed = () => {
-    this._outlineCollapsed = !this._outlineCollapsed;
-  };
-
-  private _toggleInspectorCollapsed = () => {
-    this._inspectorCollapsed = !this._inspectorCollapsed;
-  };
-
-  private _clampInspectorWidth(width: number): number {
-    const minWidth = 280;
-    const maxWidth = 720;
-    return Math.min(maxWidth, Math.max(minWidth, width));
-  }
-
-  // The Properties panel sits on the right, so dragging the handle left (a shrinking clientX)
-  // should widen it — width tracks the *negative* of the pointer's horizontal movement.
-  private _handleInspectorResizeStart = (event: PointerEvent) => {
-    event.preventDefault();
-    this._inspectorResizeStartX = event.clientX;
-    this._inspectorResizeStartWidth = this._inspectorWidth;
-    this._inspectorResizing = true;
-    window.addEventListener('pointermove', this._handleInspectorResizeMove);
-    window.addEventListener('pointerup', this._handleInspectorResizeEnd);
-  };
-
-  private _handleInspectorResizeMove = (event: PointerEvent) => {
-    const delta = this._inspectorResizeStartX - event.clientX;
-    this._inspectorWidth = this._clampInspectorWidth(this._inspectorResizeStartWidth + delta);
-  };
-
-  private _handleInspectorResizeEnd = () => {
-    this._inspectorResizing = false;
-    window.removeEventListener('pointermove', this._handleInspectorResizeMove);
-    window.removeEventListener('pointerup', this._handleInspectorResizeEnd);
-  };
-
-  private _handleInspectorResizeKeydown = (event: KeyboardEvent) => {
-    const step = 16;
-    if (event.key === 'ArrowLeft') {
-      event.preventDefault();
-      this._inspectorWidth = this._clampInspectorWidth(this._inspectorWidth + step);
-    } else if (event.key === 'ArrowRight') {
-      event.preventDefault();
-      this._inspectorWidth = this._clampInspectorWidth(this._inspectorWidth - step);
-    }
-  };
-
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -1337,16 +1272,16 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           <!-- Canvas tab: main workspace -->
           <div slot="canvas" class="canvas-workspace">
             <div
-              class=${`editor-shell ${this._inspectorResizing ? 'editor-shell-resizing' : ''}`}
-              style=${`--outline-width:${this._outlineCollapsed ? '3.5rem' : '240px'};--inspector-width:${this._inspectorCollapsed ? '3.5rem' : `${this._inspectorWidth}px`};`}
+              class=${`editor-shell ${this._layout.resizing ? 'editor-shell-resizing' : ''}`}
+              style=${this._layout.shellStyle}
             >
               <!-- Left: outline -->
-              <section class=${`editor-outline-shell ${this._outlineCollapsed ? 'panel-collapsed' : ''}`}>
+              <section class=${`editor-outline-shell ${this._layout.outlineCollapsed ? 'panel-collapsed' : ''}`}>
                 <div class="panel-header">
                   <div class="panel-header-copy">
                     <h2 class="panel-title">Outline</h2>
                     ${
-                      this._outlineCollapsed
+                      this._layout.outlineCollapsed
                         ? nothing
                         : html`
                           <p class="panel-subtitle">
@@ -1361,18 +1296,18 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                     class="panel-toggle"
                     data-wayfinder-outline-toggle
                     aria-controls="service-blueprint-editor-outline-panel"
-                    aria-expanded=${String(!this._outlineCollapsed)}
-                    aria-label=${this._outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
-                    @click=${this._toggleOutlineCollapsed}
+                    aria-expanded=${String(!this._layout.outlineCollapsed)}
+                    aria-label=${this._layout.outlineCollapsed ? 'Expand outline panel' : 'Collapse outline panel'}
+                    @click=${this._layout.toggleOutline}
                   >
-                    ${this._outlineCollapsed ? renderToolbarIcon('chevronRight') : renderToolbarIcon('chevronLeft')}
-                    <span class="sr-only">${this._outlineCollapsed ? 'Expand outline' : 'Collapse outline'}</span>
+                    ${this._layout.outlineCollapsed ? renderToolbarIcon('chevronRight') : renderToolbarIcon('chevronLeft')}
+                    <span class="sr-only">${this._layout.outlineCollapsed ? 'Expand outline' : 'Collapse outline'}</span>
                   </button>
                 </div>
                 <div
                   id="service-blueprint-editor-outline-panel"
                   class="panel-body"
-                  ?hidden=${this._outlineCollapsed}
+                  ?hidden=${this._layout.outlineCollapsed}
                 >
                   <wayfinder-service-blueprint-outline
                     class="editor-outline"
@@ -1446,9 +1381,9 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
               </div>
 
               <!-- Right: inspector -->
-              <section class=${`editor-right ${this._inspectorCollapsed ? 'panel-collapsed' : ''}`}>
+              <section class=${`editor-right ${this._layout.inspectorCollapsed ? 'panel-collapsed' : ''}`}>
                 ${
-                  this._inspectorCollapsed
+                  this._layout.inspectorCollapsed
                     ? nothing
                     : html`
                       <div
@@ -1456,37 +1391,37 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                         role="separator"
                         aria-orientation="vertical"
                         aria-label="Resize properties panel"
-                        aria-valuenow=${this._inspectorWidth}
+                        aria-valuenow=${this._layout.inspectorWidth}
                         aria-valuemin="280"
                         aria-valuemax="720"
                         tabindex="0"
-                        @pointerdown=${this._handleInspectorResizeStart}
-                        @keydown=${this._handleInspectorResizeKeydown}
+                        @pointerdown=${this._layout.startResize}
+                        @keydown=${this._layout.resizeWithKeyboard}
                       ></div>
                     `
                 }
                 <div class="panel-header">
                   <div class="panel-header-copy">
                     <h2 class="panel-title">Properties</h2>
-                    ${this._inspectorCollapsed ? nothing : html`<p class="panel-subtitle">Selected stage, gateway, or route details</p>`}
+                    ${this._layout.inspectorCollapsed ? nothing : html`<p class="panel-subtitle">Selected stage, gateway, or route details</p>`}
                   </div>
                   <button
                     type="button"
                     class="panel-toggle"
                     data-wayfinder-inspector-toggle
                     aria-controls="service-blueprint-editor-inspector-panel"
-                    aria-expanded=${String(!this._inspectorCollapsed)}
-                    aria-label=${this._inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}
-                    @click=${this._toggleInspectorCollapsed}
+                    aria-expanded=${String(!this._layout.inspectorCollapsed)}
+                    aria-label=${this._layout.inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}
+                    @click=${this._layout.toggleInspector}
                   >
-                    ${this._inspectorCollapsed ? renderToolbarIcon('chevronLeft') : renderToolbarIcon('chevronRight')}
-                    <span class="sr-only">${this._inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}</span>
+                    ${this._layout.inspectorCollapsed ? renderToolbarIcon('chevronLeft') : renderToolbarIcon('chevronRight')}
+                    <span class="sr-only">${this._layout.inspectorCollapsed ? 'Expand properties drawer' : 'Collapse properties drawer'}</span>
                   </button>
                 </div>
                 <div
                   id="service-blueprint-editor-inspector-panel"
                   class="panel-body"
-                  ?hidden=${this._inspectorCollapsed}
+                  ?hidden=${this._layout.inspectorCollapsed}
                 >
                   <wayfinder-step-inspector
                     class="inspector-panel"
