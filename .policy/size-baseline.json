@@ -10,7 +10,7 @@
     "Wayfinder.Editor.Client/src/service-blueprint-editor/service-blueprint-validation.ts": 804,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-calculations-editor.ts": 975,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-editor.ts": 1202,
-    "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-graph.ts": 1815,
+    "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-graph.ts": 1083,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-outline.ts": 571,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-stage-action-editor.ts": 1392,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-step-inspector.ts": 1790,

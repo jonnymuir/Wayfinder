@@ -1,10 +1,8 @@
 import { LitElement, html, nothing, unsafeCSS } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { ServiceBlueprintGatewayDefinition, StageDefinition, StageKind, RouteView, ServiceBlueprint } from './types.js';
-import { STAGE_KIND_OPTIONS } from './stage-kind-options.js';
+import type { ServiceBlueprintGatewayDefinition, StageDefinition, ServiceBlueprint } from './types.js';
 import {
   applyQueueToStage,
-  stageQueueKey,
   stageQueueLabel,
   stageSurface,
   type StageSurface,
@@ -17,7 +15,8 @@ import { addRoute, buildRoute, deleteRoute, findOrCreateSplitGateway, flattenRou
 import type { GraphBridge } from './graph/graph-bridge.js';
 import type { GraphCallbacks, GraphNodeMove, GraphProps } from './graph/graph-callbacks.js';
 import { gatewayNodeId, parseGraphNodeId, stageNodeId } from './graph/service-blueprint-graph-layout.js';
-import { applyAutoArrange, pruneLayout, setNodePositions, setRouteWaypoint } from './graph/service-blueprint-graph-layout-block.js';
+import { applyAutoArrange, setNodePositions, setRouteWaypoint } from './graph/service-blueprint-graph-layout-block.js';
+import { GraphDialogsController } from './graph/graph-dialogs-controller.js';
 import graphStyles from './wayfinder-service-blueprint-graph.css?inline';
 
 type SelectionKind = 'stage' | 'transition' | 'gateway';
@@ -43,37 +42,6 @@ type ContextMenuTarget =
 type ContextMenuState = ContextMenuTarget & {
   x: number;
   y: number;
-};
-
-type CreateStageDialogState = {
-  surfaceHint: StageSurface;
-  position: 'append' | 'before' | 'after';
-  referenceStageKey: string | null;
-  title: string;
-  stageKey: string;
-  queueKey: string;
-  stageType: StageKind;
-  keyTouched: boolean;
-  error: string | null;
-};
-
-type DeleteStageDialogState = {
-  stageKey: string;
-  affectedTransitions: RouteView[];
-};
-
-type DeleteGatewayDialogState = {
-  gatewayKey: string;
-  affectedTransitions: RouteView[];
-};
-
-type CreateGatewayDialogState = {
-  title: string;
-  gatewayKey: string;
-  kind: 'Split' | 'Join';
-  queueKey: string;
-  keyTouched: boolean;
-  error: string | null;
 };
 
 /**
@@ -161,21 +129,39 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   @state()
   private _contextMenu: ContextMenuState | null = null;
 
-  @state()
-  private _createStageDialog: CreateStageDialogState | null = null;
-
-  @state()
-  private _deleteStageDialog: DeleteStageDialogState | null = null;
-
-  @state()
-  private _createGatewayDialog: CreateGatewayDialogState | null = null;
-
-  @state()
-  private _deleteGatewayDialog: DeleteGatewayDialogState | null = null;
-
   private _contextReturnTarget: HTMLElement | null = null;
+  private readonly _dialogs = new GraphDialogsController(this, {
+    blueprint: () => this.serviceBlueprint,
+    queueKeys: () => this._availableQueueKeys(),
+    queueLabel: (queueKey) => this._roleLabelForQueue(queueKey),
+    nodeLabel: (nodeKey) => this._labelForStage(nodeKey),
+    fallbackReturnTarget: () => this._contextReturnTarget,
+    dismissContextMenu: () => this._dismissContextMenu(false),
+    announce: (message) => this._announce(message),
+    stageCreated: (blueprint, stageKey) => {
+      this._selectedStageKey = stageKey;
+      this._selectedTransitionIndex = null;
+      this._emitSelectionChange({ kind: 'stage', stageKey });
+      this._emitServiceBlueprintUpdated(blueprint, { kind: 'stage', stageKey });
+      this._requestInspector({ kind: 'stage', stageKey });
+      // A new stage has no routes to anchor it near existing content — bring it into view.
+      requestAnimationFrame(() => this._bridge?.centerOnNode(stageNodeId(stageKey)));
+    },
+    gatewayCreated: (blueprint, gatewayKey) => {
+      this._emitServiceBlueprintUpdated(blueprint, { kind: 'gateway', gatewayKey });
+      requestAnimationFrame(() => this._bridge?.centerOnNode(gatewayNodeId(gatewayKey)));
+    },
+    nodeDeleted: (blueprint, node) => {
+      if (node === 'stage') {
+        this._selectedStageKey = null;
+      } else {
+        this._selectedGatewayKey = null;
+      }
+      this._selectedTransitionIndex = null;
+      this._emitServiceBlueprintUpdated(blueprint, null);
+    },
+  });
   private _statusTimer: number | null = null;
-  private _dialogReturnTarget: HTMLElement | null = null;
   private _bridge: GraphBridge | null = null;
   private _bridgeHost: HTMLElement | null = null;
   private _bridgeLoading = false;
@@ -270,12 +256,12 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       selectTransition: (transitionIndex, options) => this._selectTransition(transitionIndex, options),
       requestDeleteStage: (stageKey, returnTarget) => {
         if (!this.readOnly) {
-          this._openDeleteStageDialog(stageKey, returnTarget ?? null);
+          this._dialogs.openDelete('stage', stageKey, returnTarget);
         }
       },
       requestDeleteGateway: (gatewayKey, returnTarget) => {
         if (!this.readOnly) {
-          this._openDeleteGatewayDialog(gatewayKey, returnTarget ?? null);
+          this._dialogs.openDelete('gateway', gatewayKey, returnTarget);
         }
       },
       requestDeleteTransition: (transitionIndex) => {
@@ -513,16 +499,15 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
    */
   addStage(returnTarget?: HTMLElement | null) {
     const selectedStage = this.serviceBlueprint?.stages.find((stage) => stage.stageKey === this._selectedStageKey) ?? null;
-    this._openCreateStageDialog(
+    this._dialogs.openCreateStage(
       selectedStage ? this._surfaceForStage(selectedStage) : 'front-stage',
-      this._selectedStageKey ? 'after' : 'append',
-      this._selectedStageKey,
+      this._selectedStageKey ? { position: 'after', referenceStageKey: this._selectedStageKey } : { position: 'append' },
       returnTarget
     );
   }
 
   addGateway(returnTarget?: HTMLElement | null) {
-    this._openCreateGatewayDialog(returnTarget);
+    this._dialogs.openCreateGateway(returnTarget);
   }
 
   tidyLayout() {
@@ -689,386 +674,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     );
   }
 
-  private _makeUniqueStageKey(base: string) {
-    const usedKeys = new Set(this.serviceBlueprint?.stages.map((stage) => stage.stageKey) ?? []);
-    let candidate = base;
-    let suffix = 2;
-    while (usedKeys.has(candidate)) {
-      candidate = `${base}-${suffix}`;
-      suffix += 1;
-    }
-    return candidate;
-  }
-
-  private _slugifyStageKey(value: string, fallback: string) {
-    const slug =
-      value
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || fallback;
-    return this._makeUniqueStageKey(slug);
-  }
-
-  private _defaultQueueForSurface(surface: StageSurface) {
-    return surface === 'back-stage' ? 'reviewer' : 'public';
-  }
-
-  private _openCreateStageDialog(
-    surfaceHint: StageSurface,
-    position: 'append' | 'before' | 'after',
-    referenceStageKey: string | null,
-    returnTarget?: HTMLElement | null
-  ) {
-    const referenceStage = referenceStageKey
-      ? (this.serviceBlueprint?.stages.find((stage) => stage.stageKey === referenceStageKey) ?? null)
-      : null;
-    const defaultQueueKey = referenceStage ? stageQueueKey(referenceStage) : this._defaultQueueForSurface(surfaceHint);
-    const baseTitle = 'New stage';
-    this._dialogReturnTarget = returnTarget ?? this._contextReturnTarget ?? null;
-    this._createStageDialog = {
-      surfaceHint,
-      position,
-      referenceStageKey,
-      title: baseTitle,
-      stageKey: this._slugifyStageKey(baseTitle, 'new-stage'),
-      queueKey: defaultQueueKey,
-      stageType: 'Question',
-      keyTouched: false,
-      error: null,
-    };
-    this._dismissContextMenu(false);
-    requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLInputElement>('[data-wayfinder-create-stage-title]')?.focus();
-    });
-  }
-
-  private _updateCreateStageTitle(value: string) {
-    if (!this._createStageDialog) {
-      return;
-    }
-
-    this._createStageDialog = {
-      ...this._createStageDialog,
-      title: value,
-      stageKey: this._createStageDialog.keyTouched ? this._createStageDialog.stageKey : this._slugifyStageKey(value, 'new-stage'),
-      error: null,
-    };
-  }
-
-  private _updateCreateStageKey(value: string) {
-    if (!this._createStageDialog) {
-      return;
-    }
-
-    this._createStageDialog = {
-      ...this._createStageDialog,
-      stageKey: value,
-      keyTouched: true,
-      error: null,
-    };
-  }
-
-  private _updateCreateStageQueue(value: string) {
-    if (!this._createStageDialog) {
-      return;
-    }
-
-    const previewStage = applyQueueToStage(
-      {
-        stageKey: '',
-        displayName: '',
-        queueKey: '',
-        roleGates: [],
-        actions: [],
-        components: [],
-      },
-      value
-    );
-
-    this._createStageDialog = {
-      ...this._createStageDialog,
-      queueKey: value,
-      surfaceHint: stageSurface(previewStage),
-      error: null,
-    };
-  }
-
-  private _closeCreateStageDialog() {
-    this._createStageDialog = null;
-    const returnTarget = this._dialogReturnTarget;
-    this._dialogReturnTarget = null;
-    requestAnimationFrame(() => returnTarget?.focus());
-  }
-
-  private _submitCreateStage() {
-    if (!this.serviceBlueprint || !this._createStageDialog) {
-      return;
-    }
-
-    const dialog = this._createStageDialog;
-    const title = dialog.title.trim();
-    const stageKey = dialog.stageKey.trim().toLowerCase();
-    if (!title) {
-      this._createStageDialog = { ...this._createStageDialog, error: 'Stage name is required.' };
-      return;
-    }
-
-    if (!stageKey) {
-      this._createStageDialog = { ...this._createStageDialog, error: 'Stage key is required.' };
-      return;
-    }
-
-    if (this.serviceBlueprint.stages.some((stage) => stage.stageKey === stageKey)) {
-      this._createStageDialog = { ...this._createStageDialog, error: 'Stage key must be unique.' };
-      return;
-    }
-
-    const newStage = applyQueueToStage(
-      {
-        stageKey: stageKey,
-        displayName: title,
-        components: [],
-        stageType: dialog.stageType,
-        queueKey: '',
-        actions: [],
-        roleGates: [],
-      },
-      dialog.queueKey
-    );
-
-    const stages = [...this.serviceBlueprint.stages];
-    let insertIndex = stages.length;
-    if (dialog.referenceStageKey) {
-      const referenceIndex = stages.findIndex((stage) => stage.stageKey === dialog.referenceStageKey);
-      if (referenceIndex >= 0) {
-        insertIndex = dialog.position === 'before' ? referenceIndex : referenceIndex + 1;
-      }
-    }
-    stages.splice(insertIndex, 0, newStage);
-
-    const serviceBlueprint: ServiceBlueprint = {
-      ...this.serviceBlueprint,
-      initialStage: this.serviceBlueprint.initialStage || newStage.stageKey,
-      stages: stages,
-    };
-
-    this._selectedStageKey = newStage.stageKey;
-    this._selectedTransitionIndex = null;
-    this._emitSelectionChange({ kind: 'stage', stageKey: newStage.stageKey });
-    this._emitServiceBlueprintUpdated(serviceBlueprint, { kind: 'stage', stageKey: newStage.stageKey });
-    this._requestInspector({ kind: 'stage', stageKey: newStage.stageKey });
-    this._announce(`${newStage.displayName} added to the workspace.`);
-    this._closeCreateStageDialog();
-    // New stage starts with no routes, so nothing anchors it near existing
-    // content — pan/zoom to it so the author can see where it actually
-    // landed instead of hunting for it off-viewport.
-    requestAnimationFrame(() => this._bridge?.centerOnNode(stageNodeId(newStage.stageKey)));
-  }
-
-  private _openCreateGatewayDialog(returnTarget?: HTMLElement | null) {
-    if (!this.serviceBlueprint) {
-      return;
-    }
-    this._dialogReturnTarget = returnTarget ?? null;
-    // Prefer a queue an existing stage already lives in — defaulting to
-    // availableQueues[0] can pick a host-supplied queue the service blueprint itself
-    // never uses, which silently creates a same-labelled duplicate lane
-    // (the new gateway's queue key looks identical to an existing one in
-    // the UI but isn't, since lanes group by key, not label).
-    const defaultQueue =
-      stageQueueKey(this.serviceBlueprint.stages[0]) ||
-      serviceBlueprintQueueOptions(this.serviceBlueprint, this.availableQueues)[0] ||
-      'public';
-    this._createGatewayDialog = {
-      title: '',
-      gatewayKey: '',
-      kind: 'Split',
-      queueKey: defaultQueue,
-      keyTouched: false,
-      error: null,
-    };
-    requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLInputElement>('[data-wayfinder-create-gateway-title]')?.focus();
-    });
-  }
-
-  private _closeCreateGatewayDialog() {
-    this._createGatewayDialog = null;
-    this._dialogReturnTarget?.focus();
-    this._dialogReturnTarget = null;
-  }
-
-  private _submitCreateGateway() {
-    if (!this.serviceBlueprint || !this._createGatewayDialog) {
-      return;
-    }
-
-    const dialog = this._createGatewayDialog;
-    const title = dialog.title.trim();
-    const key = dialog.gatewayKey.trim();
-
-    if (!title) {
-      this._createGatewayDialog = { ...dialog, error: 'Gateway name is required.' };
-      return;
-    }
-
-    if (!key) {
-      this._createGatewayDialog = { ...dialog, error: 'Gateway key is required.' };
-      return;
-    }
-
-    const usedKeys = [...this.serviceBlueprint.stages.map((s) => s.stageKey), ...(this.serviceBlueprint.gateways ?? []).map((g) => g.key)];
-    if (usedKeys.includes(key)) {
-      this._createGatewayDialog = { ...dialog, error: 'Gateway key must be unique across all stages and gateways.' };
-      return;
-    }
-
-    const newGateway: ServiceBlueprintGatewayDefinition = {
-      key,
-      displayName: title,
-      gatewayType: dialog.kind,
-      queueKey: dialog.queueKey,
-      actor: dialog.queueKey,
-      roleGates: [],
-    };
-
-    const serviceBlueprint: ServiceBlueprint = {
-      ...this.serviceBlueprint,
-      gateways: [...serviceBlueprintGateways(this.serviceBlueprint), newGateway],
-    };
-
-    this._emitServiceBlueprintUpdated(serviceBlueprint, { kind: 'gateway', gatewayKey: newGateway.key });
-    this._announce(`${title} ${dialog.kind} gateway created.`);
-    this._closeCreateGatewayDialog();
-    // Same as stage creation: an unconnected gateway has no anchor, so it
-    // can land anywhere in its queue's rank-0 row — bring it into view.
-    requestAnimationFrame(() => this._bridge?.centerOnNode(gatewayNodeId(newGateway.key)));
-  }
-
-  private _openDeleteStageDialog(stageKey: string, returnTarget?: HTMLElement | null) {
-    if (!this.serviceBlueprint) {
-      return;
-    }
-
-    this._dialogReturnTarget = returnTarget ?? this._contextReturnTarget ?? null;
-    this._deleteStageDialog = {
-      stageKey,
-      affectedTransitions: flattenRoutes(this.serviceBlueprint).filter(
-        (transition) => transition.fromStage === stageKey || transition.toStage === stageKey
-      ),
-    };
-    this._dismissContextMenu(false);
-    requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLButtonElement>('[data-wayfinder-delete-stage-cancel]')?.focus();
-    });
-  }
-
-  private _closeDeleteStageDialog() {
-    this._deleteStageDialog = null;
-    const returnTarget = this._dialogReturnTarget;
-    this._dialogReturnTarget = null;
-    requestAnimationFrame(() => returnTarget?.focus());
-  }
-
-  private _confirmDeleteStage() {
-    if (!this.serviceBlueprint || !this._deleteStageDialog) {
-      return;
-    }
-
-    const stageKey = this._deleteStageDialog.stageKey;
-    const deletedLabel = this._labelForStage(stageKey);
-    const transitionCount = this._deleteStageDialog.affectedTransitions.length;
-    const stages = this.serviceBlueprint.stages.filter((stage) => stage.stageKey !== stageKey);
-
-    // Drop any gateway whose source was this stage, and remove any route
-    // that targeted this stage. The derived `transitions` view is rebuilt
-    // by `withDerivedTransitions` before we hand the service blueprint downstream.
-    const gateways = serviceBlueprintGateways(this.serviceBlueprint)
-      .filter((gateway) => gateway.key !== stageKey)
-      .map((gateway) => ({
-        ...gateway,
-        routes: (gateway.routes ?? []).filter((route) => route.target !== stageKey),
-      }));
-    const stagesWithRoutes = stages.map((stage) => ({
-      ...stage,
-      routes: (stage.routes ?? []).filter((route) => route.target !== stageKey),
-    }));
-
-    const serviceBlueprint: ServiceBlueprint = pruneLayout({
-      ...this.serviceBlueprint,
-      stages: stagesWithRoutes,
-      gateways,
-      initialStage: this.serviceBlueprint.initialStage === stageKey ? (stages[0]?.stageKey ?? '') : this.serviceBlueprint.initialStage,
-    });
-
-    this._selectedStageKey = null;
-    this._selectedTransitionIndex = null;
-    this._emitServiceBlueprintUpdated(serviceBlueprint, null);
-    this._announce(
-      `${deletedLabel} deleted.${transitionCount > 0 ? ` ${transitionCount} affected transition${transitionCount === 1 ? '' : 's'} removed.` : ''}`
-    );
-    this._closeDeleteStageDialog();
-  }
-
-  private _openDeleteGatewayDialog(gatewayKey: string, returnTarget?: HTMLElement | null) {
-    if (!this.serviceBlueprint) {
-      return;
-    }
-
-    this._dialogReturnTarget = returnTarget ?? this._contextReturnTarget ?? null;
-    this._deleteGatewayDialog = {
-      gatewayKey,
-      affectedTransitions: flattenRoutes(this.serviceBlueprint).filter(
-        (transition) => transition.fromStage === gatewayKey || transition.toStage === gatewayKey
-      ),
-    };
-    this._dismissContextMenu(false);
-    requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLButtonElement>('[data-wayfinder-delete-gateway-cancel]')?.focus();
-    });
-  }
-
-  private _closeDeleteGatewayDialog() {
-    this._deleteGatewayDialog = null;
-    const returnTarget = this._dialogReturnTarget;
-    this._dialogReturnTarget = null;
-    requestAnimationFrame(() => returnTarget?.focus());
-  }
-
-  private _confirmDeleteGateway() {
-    if (!this.serviceBlueprint || !this._deleteGatewayDialog) {
-      return;
-    }
-
-    const gatewayKey = this._deleteGatewayDialog.gatewayKey;
-    const deletedLabel = this._labelForStage(gatewayKey);
-    const transitionCount = this._deleteGatewayDialog.affectedTransitions.length;
-    const gateways = serviceBlueprintGateways(this.serviceBlueprint).filter((gateway) => gateway.key !== gatewayKey);
-    const gatewaysWithRoutes = gateways.map((gateway) => ({
-      ...gateway,
-      routes: (gateway.routes ?? []).filter((route) => route.target !== gatewayKey),
-    }));
-    const stagesWithRoutes = this.serviceBlueprint.stages.map((stage) => ({
-      ...stage,
-      routes: (stage.routes ?? []).filter((route) => route.target !== gatewayKey),
-    }));
-
-    const serviceBlueprint: ServiceBlueprint = pruneLayout({
-      ...this.serviceBlueprint,
-      stages: stagesWithRoutes,
-      gateways: gatewaysWithRoutes,
-    });
-
-    this._selectedGatewayKey = null;
-    this._selectedTransitionIndex = null;
-    this._emitServiceBlueprintUpdated(serviceBlueprint, null);
-    this._announce(
-      `${deletedLabel} deleted.${transitionCount > 0 ? ` ${transitionCount} affected transition${transitionCount === 1 ? '' : 's'} removed.` : ''}`
-    );
-    this._closeDeleteGatewayDialog();
-  }
-
   private async _copyGateway(gatewayKey: string) {
     const gateway = serviceBlueprintGateways(this.serviceBlueprint).find((candidate) => candidate.key === gatewayKey);
     if (!gateway) {
@@ -1199,10 +804,9 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       const referenceStage = referenceStageKey
         ? (this.serviceBlueprint?.stages.find((stage) => stage.stageKey === referenceStageKey) ?? null)
         : null;
-      this._openCreateStageDialog(
+      this._dialogs.openCreateStage(
         referenceStage ? this._surfaceForStage(referenceStage) : 'front-stage',
-        target.kind === 'stage' ? 'after' : 'append',
-        target.kind === 'stage' ? target.stageKey : null
+        target.kind === 'stage' ? { position: 'after', referenceStageKey: target.stageKey } : { position: 'append' }
       );
       return;
     }
@@ -1211,7 +815,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       if (action === 'copy-stage') {
         void this._copyStage(target.stageKey);
       } else if (action === 'delete-stage') {
-        this._openDeleteStageDialog(target.stageKey);
+        this._dialogs.openDelete('stage', target.stageKey);
       } else if (action === 'edit-stage') {
         this._selectStage(target.stageKey, { openInspector: true });
         this._dismissContextMenu(false);
@@ -1223,7 +827,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       if (action === 'copy-gateway') {
         void this._copyGateway(target.gatewayKey);
       } else if (action === 'delete-gateway') {
-        this._openDeleteGatewayDialog(target.gatewayKey);
+        this._dialogs.openDelete('gateway', target.gatewayKey);
       } else if (action === 'edit-gateway') {
         this._selectGateway(target.gatewayKey, { openInspector: true });
         this._dismissContextMenu(false);
@@ -1327,339 +931,6 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
             `
             : nothing
         }
-      </div>
-    `;
-  }
-
-  private _handleDialogKeydown(event: KeyboardEvent, onClose: () => void) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-
-    if (event.key !== 'Tab') {
-      return;
-    }
-
-    const root = event.currentTarget as HTMLElement;
-    const focusable = Array.from(
-      root.querySelectorAll<HTMLElement>('button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])')
-    ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex >= 0);
-    if (focusable.length === 0) {
-      return;
-    }
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const activeElement = this.shadowRoot?.activeElement as HTMLElement | null;
-    if (event.shiftKey && activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
-  private _renderCreateStageDialog() {
-    const dialog = this._createStageDialog;
-    if (!dialog) {
-      return nothing;
-    }
-
-    return html`
-      <div class="dialog-backdrop" role="presentation">
-        <div
-          class="dialog-panel"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-stage-dialog-title"
-          aria-describedby="create-stage-dialog-copy"
-          data-wayfinder-create-stage-dialog
-          @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeCreateStageDialog())}
-        >
-          <div class="dialog-header">
-            <div>
-              <p class="dialog-eyebrow">Stage creation</p>
-              <h2 id="create-stage-dialog-title" class="dialog-title">Create stage</h2>
-            </div>
-          </div>
-          <p id="create-stage-dialog-copy" class="dialog-copy">
-            Name the stage, choose its key, queue, and type, then continue editing in the inspector.
-          </p>
-          ${dialog.error ? html`<p class="dialog-error" data-wayfinder-create-stage-error>${dialog.error}</p>` : nothing}
-          <div class="dialog-grid">
-            <label class="dialog-field">
-              <span class="dialog-label">Name</span>
-              <input
-                class="dialog-control"
-                data-wayfinder-create-stage-title
-                .value=${dialog.title}
-                @input=${(event: Event) => this._updateCreateStageTitle((event.currentTarget as HTMLInputElement).value)}
-              />
-            </label>
-            <label class="dialog-field">
-              <span class="dialog-label">Key</span>
-              <input
-                class="dialog-control"
-                data-wayfinder-create-stage-key
-                .value=${dialog.stageKey}
-                @input=${(event: Event) => this._updateCreateStageKey((event.currentTarget as HTMLInputElement).value)}
-              />
-            </label>
-            <label class="dialog-field">
-              <span class="dialog-label">Queue</span>
-              <input
-                class="dialog-control"
-                data-wayfinder-create-stage-queue
-                .value=${dialog.queueKey}
-                list="create-stage-queue-options"
-                placeholder="planning"
-                @input=${(event: Event) => this._updateCreateStageQueue((event.currentTarget as HTMLInputElement).value)}
-              />
-              <datalist id="create-stage-queue-options">
-                ${this._availableQueueKeys().map(
-                  (option) => html`
-                  <option value=${option}>${this._roleLabelForQueue(option)}</option>
-                `
-                )}
-              </datalist>
-            </label>
-            <label class="dialog-field">
-              <span class="dialog-label">Type</span>
-              <select
-                class="dialog-control"
-                data-wayfinder-create-stage-type
-                @change=${(event: Event) => {
-                  const stageType = (event.currentTarget as HTMLSelectElement).value as StageKind;
-                  this._createStageDialog = this._createStageDialog ? { ...this._createStageDialog, stageType } : null;
-                }}
-              >
-                ${STAGE_KIND_OPTIONS.map(
-                  (option) => html`
-                  <option value=${option.value} ?selected=${dialog.stageType === option.value}>${option.label}</option>
-                `
-                )}
-              </select>
-            </label>
-          </div>
-          <div class="dialog-actions">
-            <button type="button" class="dialog-button secondary" @click=${this._closeCreateStageDialog}>Cancel</button>
-            <button type="button" class="dialog-button primary" data-wayfinder-create-stage-submit @click=${this._submitCreateStage}>Create stage</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderDeleteStageDialog() {
-    const dialog = this._deleteStageDialog;
-    if (!dialog) {
-      return nothing;
-    }
-
-    const stageLabel = this._labelForStage(dialog.stageKey);
-    return html`
-      <div class="dialog-backdrop" role="presentation">
-        <div
-          class="dialog-panel dialog-panel-danger"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-stage-dialog-title"
-          aria-describedby="delete-stage-dialog-copy"
-          data-wayfinder-delete-stage-dialog
-          @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeDeleteStageDialog())}
-        >
-          <div class="dialog-header">
-            <div>
-              <p class="dialog-eyebrow danger">Delete stage</p>
-              <h2 id="delete-stage-dialog-title" class="dialog-title">Delete ${stageLabel}?</h2>
-            </div>
-          </div>
-          <p id="delete-stage-dialog-copy" class="dialog-copy">
-            This removes the stage and every transition connected to it.
-          </p>
-          <div class="delete-impact" data-wayfinder-delete-stage-transitions>
-            ${
-              dialog.affectedTransitions.length === 0
-                ? html`<p>No transitions will be removed.</p>`
-                : html`
-                  <p>${dialog.affectedTransitions.length} affected transition${dialog.affectedTransitions.length === 1 ? '' : 's'}:</p>
-                  <ul>
-                    ${dialog.affectedTransitions.map(
-                      (transition) => html`
-                      <li>${this._labelForStage(transition.fromStage)} → ${this._labelForStage(transition.toStage)} (${transition.action})</li>
-                    `
-                    )}
-                  </ul>
-                `
-            }
-          </div>
-          <div class="dialog-actions">
-            <button type="button" class="dialog-button secondary" data-wayfinder-delete-stage-cancel @click=${this._closeDeleteStageDialog}>Cancel</button>
-            <button type="button" class="dialog-button danger" data-wayfinder-delete-stage-confirm @click=${this._confirmDeleteStage}>Delete stage</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderDeleteGatewayDialog() {
-    const dialog = this._deleteGatewayDialog;
-    if (!dialog) {
-      return nothing;
-    }
-
-    const gatewayLabel = this._labelForStage(dialog.gatewayKey);
-    return html`
-      <div class="dialog-backdrop" role="presentation">
-        <div
-          class="dialog-panel dialog-panel-danger"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-gateway-dialog-title"
-          aria-describedby="delete-gateway-dialog-copy"
-          data-wayfinder-delete-gateway-dialog
-          @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeDeleteGatewayDialog())}
-        >
-          <div class="dialog-header">
-            <div>
-              <p class="dialog-eyebrow danger">Delete gateway</p>
-              <h2 id="delete-gateway-dialog-title" class="dialog-title">Delete ${gatewayLabel}?</h2>
-            </div>
-          </div>
-          <p id="delete-gateway-dialog-copy" class="dialog-copy">
-            This removes the gateway and every transition connected to it.
-          </p>
-          <div class="delete-impact" data-wayfinder-delete-gateway-transitions>
-            ${
-              dialog.affectedTransitions.length === 0
-                ? html`<p>No transitions will be removed.</p>`
-                : html`
-                  <p>${dialog.affectedTransitions.length} affected transition${dialog.affectedTransitions.length === 1 ? '' : 's'}:</p>
-                  <ul>
-                    ${dialog.affectedTransitions.map(
-                      (transition) => html`
-                      <li>${this._labelForStage(transition.fromStage)} → ${this._labelForStage(transition.toStage)} (${transition.action})</li>
-                    `
-                    )}
-                  </ul>
-                `
-            }
-          </div>
-          <div class="dialog-actions">
-            <button type="button" class="dialog-button secondary" data-wayfinder-delete-gateway-cancel @click=${this._closeDeleteGatewayDialog}>Cancel</button>
-            <button type="button" class="dialog-button danger" data-wayfinder-delete-gateway-confirm @click=${this._confirmDeleteGateway}>Delete gateway</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderCreateGatewayDialog() {
-    const dialog = this._createGatewayDialog;
-    if (!dialog) {
-      return nothing;
-    }
-
-    return html`
-      <div class="dialog-backdrop" role="presentation">
-        <div
-          class="dialog-panel"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-gateway-dialog-title"
-          aria-describedby="create-gateway-dialog-copy"
-          data-wayfinder-create-gateway-dialog
-          @keydown=${(event: KeyboardEvent) => this._handleDialogKeydown(event, () => this._closeCreateGatewayDialog())}
-        >
-          <div class="dialog-header">
-            <div>
-              <p class="dialog-eyebrow">Gateway creation</p>
-              <h2 id="create-gateway-dialog-title" class="dialog-title">Add gateway</h2>
-            </div>
-          </div>
-          <p id="create-gateway-dialog-copy" class="dialog-copy">
-            Add a Split or Join gateway to the workspace. Continue editing in the inspector after creation.
-          </p>
-          ${dialog.error ? html`<p class="dialog-error" data-wayfinder-create-gateway-error>${dialog.error}</p>` : nothing}
-          <div class="dialog-grid">
-            <label class="dialog-field">
-              <span class="dialog-label">Name</span>
-              <input
-                class="dialog-control"
-                data-wayfinder-create-gateway-title
-                .value=${dialog.title}
-                @input=${(event: Event) => {
-                  const title = (event.currentTarget as HTMLInputElement).value;
-                  const gatewayKey = dialog.keyTouched
-                    ? dialog.gatewayKey
-                    : title
-                        .toLowerCase()
-                        .replace(/\s+/g, '-')
-                        .replace(/[^a-z0-9-]/g, '');
-                  this._createGatewayDialog = this._createGatewayDialog
-                    ? { ...this._createGatewayDialog, title, gatewayKey, error: null }
-                    : null;
-                }}
-              />
-            </label>
-            <label class="dialog-field">
-              <span class="dialog-label">Key</span>
-              <input
-                class="dialog-control"
-                data-wayfinder-create-gateway-key
-                .value=${dialog.gatewayKey}
-                @input=${(event: Event) => {
-                  const gatewayKey = (event.currentTarget as HTMLInputElement).value;
-                  this._createGatewayDialog = this._createGatewayDialog
-                    ? { ...this._createGatewayDialog, gatewayKey, keyTouched: true, error: null }
-                    : null;
-                }}
-              />
-            </label>
-            <label class="dialog-field">
-              <span class="dialog-label">Kind</span>
-              <select
-                class="dialog-control"
-                data-wayfinder-create-gateway-kind
-                @change=${(event: Event) => {
-                  const kind = (event.currentTarget as HTMLSelectElement).value as 'Split' | 'Join';
-                  this._createGatewayDialog = this._createGatewayDialog ? { ...this._createGatewayDialog, kind } : null;
-                }}
-              >
-                <option value="Split" ?selected=${dialog.kind === 'Split'}>Split — branches into multiple paths</option>
-                <option value="Join" ?selected=${dialog.kind === 'Join'}>Join — converges multiple paths</option>
-              </select>
-            </label>
-            <label class="dialog-field">
-              <span class="dialog-label">Queue</span>
-              <input
-                class="dialog-control"
-                data-wayfinder-create-gateway-queue
-                .value=${dialog.queueKey}
-                list="create-gateway-queue-options"
-                placeholder="applicant"
-                @input=${(event: Event) => {
-                  const queueKey = (event.currentTarget as HTMLInputElement).value;
-                  this._createGatewayDialog = this._createGatewayDialog ? { ...this._createGatewayDialog, queueKey } : null;
-                }}
-              />
-              <datalist id="create-gateway-queue-options">
-                ${this._availableQueueKeys().map(
-                  (option) => html`
-                  <option value=${option}>${this._roleLabelForQueue(option)}</option>
-                `
-                )}
-              </datalist>
-            </label>
-          </div>
-          <div class="dialog-actions">
-            <button type="button" class="dialog-button secondary" @click=${this._closeCreateGatewayDialog}>Cancel</button>
-            <button type="button" class="dialog-button primary" data-wayfinder-create-gateway-submit @click=${this._submitCreateGateway}>Create gateway</button>
-          </div>
-        </div>
       </div>
     `;
   }
@@ -1779,7 +1050,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
                   type="button"
                   class="hud-button"
                   data-wayfinder-empty-add-stage
-                  @click=${(event: Event) => this._openCreateStageDialog('front-stage', 'append', null, event.currentTarget as HTMLElement)}
+                  @click=${(event: Event) => this._dialogs.openCreateStage('front-stage', { position: 'append' }, event.currentTarget as HTMLElement)}
                 >
                   Add first stage
                 </button>
@@ -1797,10 +1068,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
 
         ${this._renderGraph()}
         ${this.readOnly ? nothing : this._renderContextMenu()}
-        ${this.readOnly ? nothing : this._renderCreateStageDialog()}
-        ${this.readOnly ? nothing : this._renderDeleteStageDialog()}
-        ${this.readOnly ? nothing : this._renderCreateGatewayDialog()}
-        ${this.readOnly ? nothing : this._renderDeleteGatewayDialog()}
+        ${this.readOnly ? nothing : this._dialogs.render()}
       </div>
     `;
   }
