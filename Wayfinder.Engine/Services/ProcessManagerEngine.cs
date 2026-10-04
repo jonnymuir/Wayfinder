@@ -1,50 +1,39 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Wayfinder.Models.ServiceDesign.Calculations;
 using Wayfinder.Services.Calculations;
 using Microsoft.Extensions.Logging;
 using Wayfinder.Models.ServiceDesign;
-using Wayfinder.Extensions;
-using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Services.Sanitization;
-using Wayfinder.Services.Validation;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Stores;
-using Wayfinder.Models.ServiceDesign.BulkData;
-using Wayfinder.Models.ServiceDesign.SupportSystems;
-using static Wayfinder.Engine.Services.BlueprintLookup;
 using static Wayfinder.Engine.Services.QueueAccess;
-using static Wayfinder.Engine.Services.FieldValueMerge;
 
 namespace Wayfinder.Engine.Services;
 
 /// <summary>
 /// Generic in-memory runtime engine that executes Wayfinder service blueprints.
 /// </summary>
-public class ProcessManagerEngine : IProcessManager
+public partial class ProcessManagerEngine : IProcessManager
 {
-    private readonly IServiceContentSanitizer _sanitizer;
+    private readonly ILogger _logger;
+    private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
     private readonly BlueprintRegistry _registry;
     private readonly InstanceRepository _instances;
-    private readonly StageCalculations _calculations;
-    private readonly WorkItemFinder _workItems;
-    private readonly StageRenderer _renderer;
-    private readonly EnvelopeBuilder _envelopes;
-    private readonly BulkDatasetActions _bulkDatasets;
-    private readonly SupportSystemActions _supportSystems;
-    private readonly InstanceAdmin _admin;
-    private readonly WorkQueues _queues;
-    private readonly WorkAllocation _allocation;
-    private readonly GatewayAdvancer _gateways;
     private readonly SupportSystemOutcomes _outcomes;
     private readonly InstanceEntry _entry;
     private readonly InstanceAdvancer _advancer;
-    private readonly Func<ServiceRequest, ServiceBlueprint, StageDefinition, IReadOnlyDictionary<string, object?>?>? _serviceInputsResolver;
-    private readonly Dictionary<string, ISupportSystemClient> _supportSystemClients;
-    private readonly IBulkDatasetStore? _bulkDatasetStore;
-    private readonly Dictionary<string, IRequestConcurrencyPolicy> _requestConcurrencyPolicies;
+    private readonly ServiceFieldSync _sync;
+    private readonly InstanceAdmin _admin;
+    private readonly WorkQueues _queues;
+    private readonly WorkAllocation _allocation;
 
+    /// <summary>
+    /// The engine is a thin front door: the constructor wires the collaborators that each own one concern
+    /// (entry, advancing, gateways, work allocation, rendering, support systems, bulk data) and every public
+    /// method hands off to one of them. A host customises it by overriding <see cref="ResolveServiceInputs"/>,
+    /// <see cref="ResolveIsAuthenticated"/> and <see cref="BuildRenderData"/>.
+    /// </summary>
     public ProcessManagerEngine(
         ILogger logger,
         IServiceBlueprintStore definitionStore,
@@ -56,41 +45,39 @@ public class ProcessManagerEngine : IProcessManager
         IEnumerable<IRequestConcurrencyPolicy>? requestConcurrencyPolicies = null,
         IAuditLogStore? auditLogStore = null)
     {
-        Logger = logger;
-        _sanitizer = sanitizer;
+        _logger = logger;
         _serviceInputsResolver = serviceInputsResolver;
-        _supportSystemClients = (supportSystemClients ?? [])
+
+        var clients = (supportSystemClients ?? [])
             .ToDictionary(client => client.SupportSystemKey, StringComparer.Ordinal);
-        _bulkDatasetStore = bulkDatasetStore;
-        _requestConcurrencyPolicies = (requestConcurrencyPolicies ?? [])
+        var concurrencyPolicies = (requestConcurrencyPolicies ?? [])
             .SelectMany(policy => policy.DefinitionKeys.Select(key => (key, policy)))
             .ToDictionary(pair => pair.key, pair => pair.policy, StringComparer.OrdinalIgnoreCase);
+
         _registry = new BlueprintRegistry(definitionStore, logger);
         _instances = new InstanceRepository(
             instanceStore ?? new InMemoryServiceRequestStore(),
             auditLogStore ?? new InMemoryAuditLogStore(),
             _registry);
-        _calculations = new StageCalculations(logger, _instances, ResolveServiceInputs);
-        _workItems = new WorkItemFinder(_calculations);
-        _renderer = new StageRenderer(sanitizer, _calculations, logger);
-        _outcomes = new SupportSystemOutcomes(_instances, _supportSystemClients, this, logger);
-        _envelopes = new EnvelopeBuilder(
-            _instances, _workItems, _calculations, _renderer, BuildRenderData,
-            _outcomes.TryPollResolveSupportSystemInvocations);
-        _entry = new InstanceEntry(
-            _registry, _instances, _workItems, _envelopes, _requestConcurrencyPolicies,
-            ResolveIsAuthenticated, logger);
-        _bulkDatasets = new BulkDatasetActions(bulkDatasetStore, logger);
-        _supportSystems = new SupportSystemActions(_supportSystemClients, logger);
-        _admin = new InstanceAdmin(_instances, _registry, logger);
-        _allocation = new WorkAllocation(_instances, _registry, _workItems, _envelopes);
-        _gateways = new GatewayAdvancer(_instances, _bulkDatasets, _supportSystems, _envelopes, logger);
-        _advancer = new InstanceAdvancer(
-            _registry, _instances, _workItems, _calculations, _renderer, _envelopes, _gateways, _supportSystems, logger);
-        _queues = new WorkQueues(_instances, _registry, _workItems, _outcomes.TryPollResolveSupportSystemInvocations);
-    }
 
-    protected ILogger Logger { get; }
+        var calculations = new StageCalculations(logger, _instances, ResolveServiceInputs);
+        var workItems = new WorkItemFinder(calculations);
+        var renderer = new StageRenderer(sanitizer, calculations, logger);
+        _outcomes = new SupportSystemOutcomes(_instances, clients, this, logger);
+        var envelopes = new EnvelopeBuilder(
+            _instances, workItems, calculations, renderer, BuildRenderData, _outcomes.TryPollResolveSupportSystemInvocations);
+        var bulkDatasets = new BulkDatasetActions(bulkDatasetStore, logger);
+        var supportSystems = new SupportSystemActions(clients, logger);
+        var gateways = new GatewayAdvancer(_instances, bulkDatasets, supportSystems, envelopes, logger);
+
+        _entry = new InstanceEntry(_registry, _instances, workItems, envelopes, concurrencyPolicies, ResolveIsAuthenticated, logger);
+        _advancer = new InstanceAdvancer(
+            _registry, _instances, workItems, calculations, renderer, envelopes, gateways, supportSystems, logger);
+        _sync = new ServiceFieldSync(_registry, _instances, envelopes, _entry, bulkDatasetStore);
+        _admin = new InstanceAdmin(_instances, _registry, logger);
+        _allocation = new WorkAllocation(_instances, _registry, workItems, envelopes);
+        _queues = new WorkQueues(_instances, _registry, workItems, _outcomes.TryPollResolveSupportSystemInvocations);
+    }
 
     public ServiceRequestResponseEnvelope GetCurrent(
         string blueprintKey,
@@ -149,6 +136,17 @@ public class ProcessManagerEngine : IProcessManager
         Dictionary<string, object?>? fieldValues) =>
         _advancer.Advance(instanceId, tenantId, userId, accessProfile, action, expectedStateVersion, fieldValues);
 
+    /// <inheritdoc cref="IProcessManager.SyncServiceFields"/>
+    public ServiceRequestResponseEnvelope SyncServiceFields(
+        string instanceId, string tenantId, string userId, ActorProfile accessProfile,
+        Dictionary<string, object?> updates) =>
+        _sync.SyncServiceFields(instanceId, tenantId, userId, accessProfile, updates);
+
+    /// <inheritdoc cref="IProcessManager.SyncBulkDatasetSyncState"/>
+    public ServiceRequestResponseEnvelope SyncBulkDatasetSyncState(
+        string instanceId, string tenantId, string userId, ActorProfile accessProfile, string datasetId) =>
+        _sync.SyncBulkDatasetSyncState(instanceId, tenantId, userId, accessProfile, datasetId);
+
     /// <inheritdoc cref="IProcessManager.TryGetAccessibleInstance"/>
     public ServiceRequest? TryGetAccessibleInstance(string instanceId, string tenantId, string userId, ActorProfile accessProfile)
     {
@@ -175,101 +173,6 @@ public class ProcessManagerEngine : IProcessManager
 
     public IReadOnlyList<string> ClaimInstances(string tenantId, string fromUserId, string toUserId) =>
         _admin.ClaimInstances(tenantId, fromUserId, toUserId);
-
-    /// <summary>
-    /// See <see cref="IProcessManager.SyncServiceFields"/>. Every key in <paramref name="updates"/>
-    /// is checked against <c>definition.Calculations.Fields</c> before anything is written — the
-    /// sole authorization boundary this method has — so a caller can never use this to smuggle a
-    /// write into a captured-input or formula-computed field.
-    /// </summary>
-    public ServiceRequestResponseEnvelope SyncServiceFields(
-        string instanceId, string tenantId, string userId, ActorProfile accessProfile,
-        Dictionary<string, object?> updates)
-    {
-        const int maxAttempts = 5;
-        for (var attempt = 0; attempt < maxAttempts; attempt++)
-        {
-            if (!_instances.TryGet(instanceId, out var instance))
-            {
-                return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
-            }
-
-            if (!CanAccessInstance(instance, tenantId, userId, accessProfile))
-            {
-                return Envelopes.Error("Access denied to this service request.", "ACCESS_DENIED");
-            }
-
-            if (!_registry.TryGet(instance.BlueprintKey, out var definition))
-            {
-                return Envelopes.Error($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
-            }
-
-            var serviceFields = definition.Calculations?.Fields;
-            foreach (var key in updates.Keys)
-            {
-                if (serviceFields is null
-                    || !serviceFields.TryGetValue(key, out var field)
-                    || !string.Equals(field.Source, "service", StringComparison.OrdinalIgnoreCase))
-                {
-                    return Envelopes.Error(
-                        $"Field '{key}' is not declared with source: \"service\" on this blueprint and cannot be synced.",
-                        "NOT_SERVICE_FIELD");
-                }
-            }
-
-            var updatedInstance = instance with
-            {
-                FieldValues = Merge(instance.FieldValues, updates),
-                StateVersion = instance.StateVersion + 1,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-
-            var savedSync = _instances.TrySaveIfVersionMatches(updatedInstance, userId, instance.StateVersion, auditEvent: null);
-            if (savedSync is not null)
-            {
-                return _envelopes.BuildEnvelope(savedSync, definition, accessProfile, userId);
-            }
-        }
-
-        return Envelopes.Error(
-            $"Could not sync fields on '{instanceId}' after {maxAttempts} attempts due to concurrent updates.",
-            "SYNC_CONFLICT");
-    }
-
-    /// <summary>See <see cref="IProcessManager.SyncBulkDatasetSyncState"/>.</summary>
-    public ServiceRequestResponseEnvelope SyncBulkDatasetSyncState(
-        string instanceId, string tenantId, string userId, ActorProfile accessProfile, string datasetId)
-    {
-        if (!_instances.TryGet(instanceId, out var instance))
-        {
-            return Envelopes.Error($"Service request '{instanceId}' not found.", "INSTANCE_NOT_FOUND");
-        }
-
-        if (!_registry.TryGet(instance.BlueprintKey, out var definition))
-        {
-            return Envelopes.Error($"Blueprint '{instance.BlueprintKey}' not found.", "DEFINITION_NOT_FOUND");
-        }
-
-        var dirtyCountField = BulkDatasetActions.FindDeclaringIngestAction(definition, instance.FieldValues, datasetId)
-            ?.Parameters["dirtyCountField"]?.GetValue<string>();
-
-        if (_bulkDatasetStore is null || string.IsNullOrWhiteSpace(dirtyCountField))
-        {
-            // Not opted in for this blueprint/dataset — same "declared-but-unused count field is a
-            // no-op" convention errorCountField/warningCountField/acceptedCountField already follow.
-            return GetCurrent(instance.BlueprintKey, tenantId, userId, accessProfile, instanceId);
-        }
-
-        var summary = _bulkDatasetStore.GetSummaryAsync(instanceId, datasetId).GetAwaiter().GetResult();
-        if (summary is null)
-        {
-            return GetCurrent(instance.BlueprintKey, tenantId, userId, accessProfile, instanceId);
-        }
-
-        return SyncServiceFields(
-            instanceId, tenantId, userId, accessProfile,
-            new Dictionary<string, object?> { [dirtyCountField] = (decimal)summary.DirtyRowCount });
-    }
 
     /// <summary>
     /// Settles a support-system invocation with the outcome an external system reported (the webhook receiver
@@ -353,14 +256,14 @@ public class ProcessManagerEngine : IProcessManager
             return false;
         }
 
-        Logger.LogInformation("Reset (deleted) instance {Id}", instanceId);
+        InstanceReset(_logger, instanceId);
         return true;
     }
 
     public void ResetAll()
     {
         _instances.Clear();
-        Logger.LogInformation("ResetAll: all service requests cleared");
+        AllInstancesReset(_logger);
     }
 
     /// <summary>
@@ -408,4 +311,9 @@ public class ProcessManagerEngine : IProcessManager
     /// </summary>
     protected virtual bool ResolveIsAuthenticated(string tenantId, string userId) => false;
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Reset (deleted) instance {Id}")]
+    private static partial void InstanceReset(ILogger logger, string id);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "ResetAll: all service requests cleared")]
+    private static partial void AllInstancesReset(ILogger logger);
 }
