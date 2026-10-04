@@ -4,6 +4,7 @@ import type { ActionCatalogEntry, ActionDefinition, ServiceBlueprint, ComponentD
 import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
 import { DefinitionController } from './definition-controller.js';
 import { EditHistory } from './edit-history.js';
+import { StalenessController } from './staleness-controller.js';
 import { ValidationController } from './validation-controller.js';
 import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
 import { ServiceBlueprintSaveError, normaliseServiceBlueprintSaveError, type ServiceBlueprintSource } from './service-blueprint-source.js';
@@ -155,9 +156,12 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   @state() private _selectedTransitionIndex: number | null = null;
   @state() private _toastMessage: string | null = null;
   private _toastDismissTimer: number | null = null;
-  @state() private _serviceBlueprintStale = false;
-  @state() private _staleCurrentVersion: number | null = null;
-  @state() private _staleBannerDismissed = false;
+  private readonly _staleness = new StalenessController(this, {
+    source: () => this.serviceBlueprintSource,
+    blueprintKey: () => this.blueprintKey,
+    loadedVersion: () => this._serviceBlueprint?.version ?? null,
+    reload: () => this._handleReloadAfterConflict(),
+  });
   @state() private _loading = false;
   @state() private _error: string | null = null;
   @state() private _actionCatalog: ActionCatalogEntry[] = [];
@@ -201,7 +205,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   private _helpReturnTarget: HTMLElement | null = null;
   private _lastLoadedBlueprintKey: string | null = null;
   private _serviceBlueprintLoadRequestId = 0;
-  private _versionPollTimer: number | null = null;
 
   private readonly _validation = new ValidationController(this, () => ({
     blueprint: this._serviceBlueprint,
@@ -291,7 +294,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   disconnectedCallback() {
     this.removeEventListener('keydown', this._handleEditorKeydown, true);
-    this._clearVersionPollTimer();
     if (this._toastDismissTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(this._toastDismissTimer);
     }
@@ -379,10 +381,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._definition.reset();
     this._applySelection(null, this._serviceBlueprint);
     this._announceHistory('Service blueprint loaded. Undo history is ready for your next edit.');
-    this._serviceBlueprintStale = false;
-    this._staleCurrentVersion = null;
-    this._staleBannerDismissed = false;
-    this._scheduleVersionPoll();
+    this._staleness.reset();
   }
 
   private _reflectServiceBlueprintLoadedState() {
@@ -469,82 +468,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     this._selection = route.fromGateway ? { kind: 'gateway', gatewayKey: route.fromGateway } : { kind: 'stage', stageKey: route.fromStage };
     this._selectedTransitionIndex = transitionIndex;
     this._expandInspectorForSelection();
-  }
-
-  /**
-   * Proactive staleness check, not just reactive-on-save: while a service blueprint is open, poll
-   * every 15s for whether someone else (a human, or an AI agent) has saved a newer version.
-   * MVP — a `checkVersion(key) => { version }` scalar poll is cheap enough that it doesn't
-   * need push infrastructure; Server-Sent Events is the natural upgrade path if that ever
-   * stops being true. Only fires if the host's ServiceBlueprintSource implements `checkVersion` —
-   * hosts that don't wire up versioning simply don't get this (no error, no polling).
-   */
-  private static readonly VERSION_POLL_INTERVAL_MS = 15_000;
-
-  private _clearVersionPollTimer() {
-    if (this._versionPollTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(this._versionPollTimer);
-    }
-    this._versionPollTimer = null;
-  }
-
-  private _scheduleVersionPoll() {
-    this._clearVersionPollTimer();
-
-    // No point polling once we already know it's stale — nothing more to learn until reload.
-    if (
-      typeof window === 'undefined' ||
-      !this.serviceBlueprintSource?.checkVersion ||
-      !this._serviceBlueprint ||
-      this._serviceBlueprintStale
-    ) {
-      return;
-    }
-
-    this._versionPollTimer = window.setTimeout(() => {
-      void this._pollServiceBlueprintVersion();
-    }, WayfinderServiceBlueprintEditorElement.VERSION_POLL_INTERVAL_MS);
-  }
-
-  /**
-   * Single source of truth for "someone else saved a newer version" — set proactively by
-   * polling or reactively by a failed save's 409. Locks the editor read-only (see
-   * `_renderStaleServiceBlueprintOverlay`) until `_handleReloadAfterConflict` runs: any further edit
-   * would just be heading toward another guaranteed conflict, so there's no honest "keep
-   * working" option. The overlay always carries its own Reload action regardless of whether
-   * the more detailed banner (`_renderStaleServiceBlueprintBanner`) has been dismissed — dismissing
-   * that banner only hides the extra detail, it doesn't give back editing or lose Reload.
-   */
-  private _markServiceBlueprintStale(currentVersion: number | null) {
-    this._serviceBlueprintStale = true;
-    this._staleCurrentVersion = currentVersion;
-    this._staleBannerDismissed = false;
-    this._clearVersionPollTimer();
-  }
-
-  private async _pollServiceBlueprintVersion() {
-    if (!this.serviceBlueprintSource?.checkVersion || !this._serviceBlueprint) {
-      return;
-    }
-
-    const key = this.blueprintKey;
-    const loadedVersion = this._serviceBlueprint.version;
-
-    try {
-      const currentVersion = await this.serviceBlueprintSource.checkVersion(key);
-      // The user may have navigated to a different serviceBlueprint, or reloaded, while this was in flight.
-      if (key !== this.blueprintKey || !this._serviceBlueprint) {
-        return;
-      }
-
-      if (currentVersion !== null && currentVersion !== loadedVersion && !this._serviceBlueprintStale) {
-        this._markServiceBlueprintStale(currentVersion);
-      }
-    } catch {
-      // Best-effort — a transient poll failure shouldn't disrupt editing.
-    } finally {
-      this._scheduleVersionPoll();
-    }
   }
 
   private _snapshotCurrentState(): ServiceBlueprintHistoryEntry | null {
@@ -1126,7 +1049,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         this._saveMessage = null;
         this._saveError = null;
         this._saveErrorCopyStatus = null;
-        this._markServiceBlueprintStale(normalised.currentVersion);
+        this._staleness.markStale(normalised.currentVersion);
         return;
       }
 
@@ -1147,7 +1070,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     // _initialiseEditorState clears it on success. If the reload itself fails, we're
     // correctly still stale/read-only rather than briefly unlocked with old content.
     await this._loadServiceBlueprint();
-    if (!this._serviceBlueprintStale) {
+    if (!this._staleness.stale) {
       this._showToast('Reloaded the latest version.');
     }
   }
@@ -1402,7 +1325,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         ${this._loading ? html`<div class="loading-banner" role="status">Loading serviceBlueprint…</div>` : nothing}
         ${this._error ? html`<div class="error-banner" role="alert">${this._error}</div>` : nothing}
         ${this._renderSaveErrorSurface()}
-        ${this._renderStaleServiceBlueprintBanner()}
+        ${this._staleness.renderBanner()}
 
         <!-- Toolbar header: sits above the whole tabbed area (not slotted into any one tab), so
              save/undo/redo — which act on the whole serviceBlueprint, not just the canvas — stay
@@ -1566,7 +1489,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
         <!-- Tab-based navigation -->
         <div class="editor-content-wrapper">
-        ${this._renderStaleServiceBlueprintOverlay()}
+        ${this._staleness.renderOverlay()}
         <wayfinder-confidence-tabs
           class="editor-tabs"
           active-tab="${this._activeConfidenceTab}"
@@ -1770,90 +1693,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         data-wayfinder-toast
       >
         ${this._toastMessage}
-      </div>
-    `;
-  }
-
-  /**
-   * Detailed, dismissible notice at the top of the editor. Dismissing this only hides the
-   * detail — it does not clear `_serviceBlueprintStale`, so the read-only overlay (which has its own,
-   * always-present Reload action) stays in effect. The only reason to dismiss without
-   * reloading is to look at your own in-progress changes first, per the read-only overlay
-   * leaving content visible rather than hiding it.
-   */
-  private _renderStaleServiceBlueprintBanner() {
-    if (!this._serviceBlueprintStale || this._staleBannerDismissed) {
-      return nothing;
-    }
-
-    return html`
-      <section
-        class="stale-service-blueprint-banner"
-        aria-labelledby="service-blueprint-stale-title"
-        tabindex="-1"
-        data-wayfinder-stale-service-blueprint-banner
-      >
-        <div class="stale-service-blueprint-header">
-          <p class="stale-service-blueprint-eyebrow">Changed elsewhere</p>
-          <h2 id="service-blueprint-stale-title" class="stale-service-blueprint-title">This service blueprint was updated elsewhere</h2>
-          <p class="stale-service-blueprint-summary" role="alert">
-            Someone else — a person in the editor, or an AI agent — saved a newer version
-            ${this._staleCurrentVersion != null ? html`(now at version ${this._staleCurrentVersion})` : ''}
-            while you were editing. The editor is read-only until you reload; reloading
-            replaces your current view with the latest version, so copy anything you want to
-            keep first.
-          </p>
-        </div>
-        <div class="stale-service-blueprint-actions">
-          <button
-            type="button"
-            class="toolbar-btn govuk-button"
-            data-wayfinder-reload-after-conflict
-            @click=${this._handleReloadAfterConflict}
-          >
-            Reload latest version
-          </button>
-          <button
-            type="button"
-            class="toolbar-btn govuk-button govuk-button--secondary"
-            aria-label="Dismiss — I just want to look at my changes first"
-            data-wayfinder-dismiss-stale-banner
-            @click=${() => {
-              this._staleBannerDismissed = true;
-            }}
-          >
-            Dismiss
-          </button>
-        </div>
-      </section>
-    `;
-  }
-
-  /**
-   * Blocks interaction with the canvas/inspector while `_serviceBlueprintStale` — any edit made now
-   * would just be heading toward another conflict. Deliberately a translucent scrim, not an
-   * opaque one: the whole point of letting someone dismiss the detailed banner above is so
-   * they can still see their own in-progress content before reloading over it. Always carries
-   * its own Reload action so it's reachable regardless of whether that banner was dismissed.
-   */
-  private _renderStaleServiceBlueprintOverlay() {
-    if (!this._serviceBlueprintStale) {
-      return nothing;
-    }
-
-    return html`
-      <div class="stale-service-blueprint-overlay" data-wayfinder-stale-service-blueprint-overlay>
-        <div class="stale-service-blueprint-overlay-ribbon" role="status">
-          <span>Read-only — this service blueprint changed elsewhere.</span>
-          <button
-            type="button"
-            class="toolbar-btn govuk-button stale-service-blueprint-overlay-reload"
-            data-wayfinder-reload-after-conflict-overlay
-            @click=${this._handleReloadAfterConflict}
-          >
-            Reload latest version
-          </button>
-        </div>
       </div>
     `;
   }
