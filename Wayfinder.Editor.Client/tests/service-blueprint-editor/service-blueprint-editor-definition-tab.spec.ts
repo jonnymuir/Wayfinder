@@ -20,6 +20,20 @@ async function openDefinitionTab(page: Page): Promise<void> {
   await expect.poll(async () => readDefinitionText(page), { timeout: 10_000 }).not.toEqual('');
 }
 
+/** Arrow right from the focused tab until `tab` is selected, rather than counting how many tabs
+ * precede it (that count has changed before and will again). */
+async function arrowRightToTab(page: Page, tab: string) {
+  const tabsRoot = page.locator('wayfinder-service-blueprint-editor wayfinder-confidence-tabs');
+  const target = tabsRoot.locator(`button[data-wayfinder-confidence-tab="${tab}"]`);
+  const tabCount = await tabsRoot.locator('button[data-wayfinder-confidence-tab]').count();
+  for (let i = 0; i < tabCount && (await target.getAttribute('aria-selected')) !== 'true'; i++) {
+    await page.keyboard.press('ArrowRight');
+    // Allow the tab harness's requestAnimationFrame focus shift to complete.
+    await page.waitForTimeout(50);
+  }
+  return target;
+}
+
 async function readDefinitionText(page: Page): Promise<string> {
   return await page.evaluate(() => {
     const editorEl = document.querySelector('wayfinder-service-blueprint-editor') as HTMLElement | null;
@@ -187,15 +201,7 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     // Reach the Definition tab via the tab list using arrow keys.
     const tabsRoot = editor.locator('wayfinder-confidence-tabs');
     await tabsRoot.locator('button[data-wayfinder-confidence-tab="canvas"]').focus();
-    // Arrow right through the tabs until Definition is the selected one, rather than counting how
-    // many tabs precede it (that count has changed before and will again).
-    const definitionTab = tabsRoot.locator('button[data-wayfinder-confidence-tab="definition"]');
-    const tabCount = await tabsRoot.locator('button[data-wayfinder-confidence-tab]').count();
-    for (let i = 0; i < tabCount && (await definitionTab.getAttribute('aria-selected')) !== 'true'; i++) {
-      await page.keyboard.press('ArrowRight');
-      // Allow the tab harness's requestAnimationFrame focus shift to complete.
-      await page.waitForTimeout(50);
-    }
+    const definitionTab = await arrowRightToTab(page, 'definition');
     await expect(definitionTab).toHaveAttribute('aria-selected', 'true');
 
     // The editor renders. Focus inside the editor host and type.
