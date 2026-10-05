@@ -225,10 +225,11 @@ public class ConfiguredWebhookSupportSystemTests
     }
 
     [Fact]
-    public async Task InvokeAsync_Throws_WhenAnInputResolvesToAnUploadedFile()
+    public async Task InvokeAsync_SendsAnUploadedFileInputAsItsReferenceAndNothingElse()
     {
+        var handler = new RecordingHandler();
         var client = new WebhookSupportSystemClient(
-            Endpoint(), new SingleClientFactory(new HttpClient(new RecordingHandler())),
+            Endpoint(), new SingleClientFactory(new HttpClient(handler)),
             NullLogger<WebhookSupportSystemClient>.Instance);
 
         var fileValue = SupportSystemInputValue.Resolve(JsonSerializer.SerializeToNode(new ServiceRequestFileReference
@@ -237,12 +238,41 @@ public class ConfiguredWebhookSupportSystemTests
         }));
         fileValue.FileReference.Should().NotBeNull("guards the test's own premise");
 
-        var act = () => client.InvokeAsync(
+        await client.InvokeAsync(
             "check-coaching-standards",
             new Dictionary<string, SupportSystemInputValue> { ["file"] = fileValue },
             Context());
 
-        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("*scalar inputs only*");
+        var file = JsonNode.Parse(handler.LastBody!)!["inputs"]!["file"]!.AsObject();
+        file.Select(p => p.Key).Should().BeEquivalentTo("storageKey", "originalFileName", "contentType", "sizeBytes");
+        file["storageKey"]!.GetValue<string>().Should().Be("k");
+        file["originalFileName"]!.GetValue<string>().Should().Be("risk.pdf");
+        file["contentType"]!.GetValue<string>().Should().Be("application/pdf");
+        file["sizeBytes"]!.GetValue<long>().Should().Be(10);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_SendsAFileInputInTheShapeAFileOutputComesBackIn()
+    {
+        var handler = new RecordingHandler();
+        var client = new WebhookSupportSystemClient(
+            Endpoint(), new SingleClientFactory(new HttpClient(handler)),
+            NullLogger<WebhookSupportSystemClient>.Instance);
+        var reference = new ServiceRequestFileReference
+        {
+            StorageKey = "k", OriginalFileName = "photo.jpg", ContentType = "image/jpeg", SizeBytes = 2048,
+        };
+
+        await client.InvokeAsync(
+            "check-coaching-standards",
+            new Dictionary<string, SupportSystemInputValue>
+            {
+                ["photo"] = SupportSystemInputValue.Resolve(JsonSerializer.SerializeToNode(reference)),
+            },
+            Context());
+
+        var sent = JsonNode.Parse(handler.LastBody!)!["inputs"]!["photo"]!;
+        ServiceRequestFileReference.FromFieldValue(sent).Should().Be(reference);
     }
 
     [Fact]

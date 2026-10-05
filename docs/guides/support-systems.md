@@ -200,9 +200,14 @@ and a keyed `WebhookSupportSystemClient`:
   It deliberately carries **no callback URL**. The consumer owns its own callback target as its
   own configuration. A caller-supplied callback URL would let anyone reaching the endpoint (say,
   with a leaked signing key) turn the host into an HTTP client aimed anywhere.
-- **Scalar inputs only.** A `file-upload`-backed input throws. That needs a bespoke client that
-  reads bytes via `IServiceRequestFileStorage` (see `SafetyNetUnderwritingClient` in
-  `Wayfinder.ReferenceApp`).
+- **File inputs travel as a reference, never as bytes.** An input bound to a `file-upload` field
+  is sent as the file reference object (`storageKey`, `originalFileName`, `contentType`,
+  `sizeBytes`), the same shape a file-typed output comes back in. The envelope carries no file
+  content and no download URL. `storageKey` is whatever the host's `IServiceRequestFileStorage`
+  returned, so it is meaningful to a consumer that shares that storage (an automation on the same
+  site, with a storage whose key is a media-library key) and opaque to any other. A consumer
+  outside the host that needs the bytes requires a bespoke client that reads them via
+  `IServiceRequestFileStorage` (see `SafetyNetUnderwritingClient` in `Wayfinder.ReferenceApp`).
 - **Webhook completion only.** The outcome always arrives through the callback (see
   [Delivering the outcome](#delivering-the-outcome)). A capability declared with `Poll` in
   configuration never resolves, because the configured client has no status URL to ask. Use a

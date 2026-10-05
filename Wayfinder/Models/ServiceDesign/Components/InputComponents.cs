@@ -223,6 +223,21 @@ public sealed record FileUploadComponent : InputComponent
 
     /// <summary>Maximum upload size in bytes. Null falls back to the platform's own default limit.</summary>
     public long? MaxSizeBytes { get; init; }
+
+    /// <summary>
+    /// How a phone offers the file: <c>choose</c> (or null) lets the operating system offer both the
+    /// camera and existing files; <c>camera</c> opens the rear camera directly, with no existing-file option.
+    /// </summary>
+    public string? CaptureMode { get; init; }
+}
+
+/// <summary>
+/// Captures one geographic point as a <c>latitude,longitude</c> string in WGS84 decimal degrees
+/// (for example <c>51.5074,-0.1278</c>). A plain text field is always the working control; a
+/// map and a "use my current location" button are progressive enhancement over it.
+/// </summary>
+public sealed record LocationPickerComponent : InputComponent
+{
 }
 
 /// <summary>

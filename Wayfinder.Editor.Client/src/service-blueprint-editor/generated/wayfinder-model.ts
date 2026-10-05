@@ -144,6 +144,7 @@ export interface FileUploadComponent {
   type: 'file-upload';
   acceptedFileTypes?: string[];
   maxSizeBytes?: number;
+  captureMode?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -178,6 +179,19 @@ export interface HeadingComponent {
 export interface InsetTextComponent {
   type: 'inset-text';
   content: string;
+  showWhen?: string;
+}
+export interface LocationPickerComponent {
+  type: 'location-picker';
+  fieldKey: string;
+  label: string;
+  hint?: string;
+  required?: boolean;
+  conditionalOn?: string;
+  visibleWhen?: string;
+  default?: string;
+  defaultFrom?: string;
+  changeStateKey?: string;
   showWhen?: string;
 }
 export interface NotificationBannerComponent {
@@ -335,6 +349,7 @@ export type Component =
   | GuidanceChecklistComponent
   | HeadingComponent
   | InsetTextComponent
+  | LocationPickerComponent
   | NotificationBannerComponent
   | NumberInputComponent
   | PanelComponent

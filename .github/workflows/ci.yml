@@ -159,6 +159,21 @@ jobs:
       - name: Bulk-data review escaping (real browser)
         run: node Wayfinder.Rendering.GovUk/test/wayfinder-bulk-data-review.xss.mjs
 
+      - name: Location picker point rules
+        run: node Wayfinder.Rendering.GovUk/test/wayfinder-location-point.behaviour.mjs
+
+      # The geolocation prompt, the map and the text field's two-way sync only exist in a browser.
+      - name: Location picker (real browser)
+        run: node Wayfinder.Rendering.GovUk/test/wayfinder-location-picker.browser.mjs
+
+      # The committed bundle is built from src/ (OpenLayers is bundled in): rebuild it and fail on any drift.
+      - name: Location picker bundle is up to date
+        working-directory: Wayfinder.Rendering.GovUk
+        run: |
+          npm ci
+          npm run build
+          git diff --exit-code -- wwwroot/location-picker
+
       - name: Storybook interaction/a11y tests
         working-directory: Wayfinder.Editor.Client
         run: npm run test-storybook

@@ -7,6 +7,11 @@
     "govuk-frontend": "6.5.1"
   },
   "scripts": {
-    "vendor": "node vendor.mjs"
+    "vendor": "node vendor.mjs",
+    "build": "esbuild src/location-picker.js --bundle --minify --format=esm --target=es2020 --legal-comments=none --outfile=wwwroot/location-picker/wayfinder-location-picker.js"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "ol": "10.11.0"
   }
 }

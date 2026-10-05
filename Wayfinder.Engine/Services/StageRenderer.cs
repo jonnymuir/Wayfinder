@@ -402,16 +402,9 @@ internal sealed partial class StageRenderer(IServiceContentSanitizer sanitizer, 
             ConditionalOn = input.ConditionalOn,
             VisibleWhen = input.VisibleWhen,
             ChangeStateKey = input.ChangeStateKey,
-            AcceptedFileTypes = input switch
-            {
-                FileUploadComponent file => file.AcceptedFileTypes,
-                _ => null
-            },
-            MaxSizeBytes = input switch
-            {
-                FileUploadComponent file => file.MaxSizeBytes,
-                _ => null
-            },
+            AcceptedFileTypes = (input as FileUploadComponent)?.AcceptedFileTypes,
+            MaxSizeBytes = (input as FileUploadComponent)?.MaxSizeBytes,
+            CaptureMode = (input as FileUploadComponent)?.CaptureMode,
             GuidanceItems = input switch
             {
                 GuidanceChecklistComponent guidance => guidance.Items,

@@ -30,6 +30,7 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 [JsonDerivedType(typeof(SummaryListComponent), typeDiscriminator: "summary-list")]
 [JsonDerivedType(typeof(TaskListComponent), typeDiscriminator: "task-list")]
 [JsonDerivedType(typeof(FileUploadComponent), typeDiscriminator: "file-upload")]
+[JsonDerivedType(typeof(LocationPickerComponent), typeDiscriminator: "location-picker")]
 [JsonDerivedType(typeof(GuidanceChecklistComponent), typeDiscriminator: "guidance-checklist")]
 [JsonDerivedType(typeof(SliderComponent), typeDiscriminator: "slider")]
 [JsonDerivedType(typeof(StatGroupComponent), typeDiscriminator: "stat-group")]

@@ -23,7 +23,7 @@ public static class BuiltInComponentDescriptors
     // it's the one case where "Default value" has a real closed set (the component's own
     // Options), so those three call sites tag Default with "own-options-ref"; every other input
     // type has no useful closed set for its default, so it stays untagged (free text).
-    private static IReadOnlyList<ComponentPropertyDescriptor> InputBaseProperties(bool hasOwnOptions = false) =>
+    internal static IReadOnlyList<ComponentPropertyDescriptor> InputBaseProperties(bool hasOwnOptions = false) =>
     [
         new()
         {
@@ -87,7 +87,7 @@ public static class BuiltInComponentDescriptors
         },
     ];
 
-    private static ComponentPropertyDescriptor Prop(
+    internal static ComponentPropertyDescriptor Prop(
         string key, string title, ComponentPropertyValueKind valueKind,
         string? description = null, string? format = null, string? editor = null,
         IReadOnlyList<string>? allowedValues = null, bool required = false, object? defaultValue = null,
@@ -318,20 +318,7 @@ public static class BuiltInComponentDescriptors
             Properties = InputBaseProperties(),
         });
 
-        descriptors.Add(new ComponentDescriptor
-        {
-            Discriminator = "file-upload", DisplayName = "File upload", Category = ComponentCategory.Input,
-            Description = "A single named document slot — one component per document a blueprint needs.",
-            ClrType = typeof(FileUploadComponent), IsInput = true,
-            Properties =
-            [
-                .. InputBaseProperties(),
-                Prop(nameof(FileUploadComponent.AcceptedFileTypes), "Accepted file types", ComponentPropertyValueKind.StringArray,
-                    "e.g. [\".pdf\", \".jpg\", \".png\"]. Omit for no restriction."),
-                Prop(nameof(FileUploadComponent.MaxSizeBytes), "Maximum size (bytes)", ComponentPropertyValueKind.Integer,
-                    "Falls back to the platform's own default limit if omitted."),
-            ],
-        });
+        descriptors.AddRange([FileUploadDescriptor.Build(), LocationPickerDescriptor.Build()]);
 
         descriptors.Add(new ComponentDescriptor
         {
