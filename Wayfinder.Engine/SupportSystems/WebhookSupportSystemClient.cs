@@ -48,10 +48,13 @@ public sealed record WebhookSupportSystemEndpoint
 /// anyone who can reach this endpoint (e.g. with a leaked webhook secret) turn the host into an
 /// HTTP client aimed at an arbitrary address.
 /// <para/>
-/// Scalar inputs only. A capability input that resolves to an uploaded file
-/// (<see cref="SupportSystemInputValue.FileReference"/>) throws — a file-carrying integration
-/// needs a bespoke client that reads bytes via <see cref="IServiceRequestFileStorage"/> (see
-/// <c>SafetyNetUnderwritingClient</c> in the reference app).
+/// A capability input that resolves to an uploaded file
+/// (<see cref="SupportSystemInputValue.FileReference"/>) is sent as the
+/// <see cref="Wayfinder.Models.ServiceDesign.ServiceRequestFileReference"/> object (storage key
+/// and descriptive metadata), the same shape a file-typed output uses on the way back in. No
+/// bytes and no URL travel: the key is meaningful to a consumer that shares the host's
+/// <see cref="IServiceRequestFileStorage"/> (for example an automation on the same site), and
+/// opaque to any other.
 /// </remarks>
 public sealed partial class WebhookSupportSystemClient(
     WebhookSupportSystemEndpoint endpoint,
@@ -69,16 +72,9 @@ public sealed partial class WebhookSupportSystemClient(
         var inputObject = new JsonObject();
         foreach (var (key, value) in inputs)
         {
-            if (value.FileReference is not null)
-            {
-                throw new NotSupportedException(
-                    $"Support system '{SupportSystemKey}' capability '{capabilityKey}' input '{key}' resolved " +
-                    "to an uploaded file. The configuration-driven webhook support system supports scalar " +
-                    "inputs only — a file-upload input needs a bespoke ISupportSystemClient that reads bytes " +
-                    "via IServiceRequestFileStorage (see SafetyNetUnderwritingClient in the reference app).");
-            }
-
-            inputObject[key] = value.RawValue is null ? null : JsonSerializer.SerializeToNode(value.RawValue);
+            inputObject[key] = value.FileReference is { } file
+                ? JsonSerializer.SerializeToNode(file, JsonSerializerOptions.Web)
+                : value.RawValue is null ? null : JsonSerializer.SerializeToNode(value.RawValue);
         }
 
         var envelope = new JsonObject
