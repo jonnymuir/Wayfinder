@@ -130,12 +130,15 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     const editor = page.locator('wayfinder-service-blueprint-editor');
     const graph = editor.locator('wayfinder-service-blueprint-graph');
     await expect(graph).toBeVisible();
-    const hasRoute = await graph.evaluate((el) => {
-      const root = (el as HTMLElement).shadowRoot;
-      if (!root) return false;
-      return root?.textContent?.includes('fast-track') ?? false;
-    });
-    expect(hasRoute).toBe(true);
+    // The graph renders after the tab switch, so wait for the route to appear rather than reading once.
+    await expect
+      .poll(() =>
+        graph.evaluate((el) => {
+          const root = (el as HTMLElement).shadowRoot;
+          return root?.textContent?.includes('fast-track') ?? false;
+        })
+      )
+      .toBe(true);
   });
 
   test('c) Invalid JSON → inline error appears AND canvas keeps last good state', async ({ page }) => {
