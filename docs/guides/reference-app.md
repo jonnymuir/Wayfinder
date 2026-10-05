@@ -247,12 +247,12 @@ host-specific:
   documents the exact version), not hand-copied per host. `GovUkComponentRenderer`'s generated
   markup targets a *specific* `govuk-frontend` version's class names and structure, so shipping
   the matching build alongside the renderer that assumes it keeps them permanently in lockstep,
-  no host can accidentally load a mismatched version. One real wrinkle: `govuk-frontend.min.css`'s
-  own `@font-face` rules hard-code an absolute `/assets/fonts/...` URL regardless of where the CSS
-  itself is served from, so `Wayfinder.ReferenceApp/Program.cs` re-roots that one sub-path onto
-  its own site root with a second `SubPathFileProvider`-backed `UseStaticFiles()` call, the exact
-  same trick already used to serve `Wayfinder.Editor`'s compiled bundle at plain `/`, just applied
-  to a font sub-path instead of a whole site root.
+  no host can accidentally load a mismatched version. The pre-built CSS requests its fonts and images
+  at an absolute `/assets/...`, so `Wayfinder.Rendering.GovUk/vendor.mjs` rewrites those URLs to be
+  relative to the CSS file when it vendors a new version. The assets then resolve wherever the
+  package is served from (`/_content/Wayfinder.Rendering.GovUk/`), and a host has nothing to
+  configure. `test/govuk-frontend-assets.mjs` fails if any URL in the CSS is absolute or points at a
+  file the package does not ship.
 - **The join-gateway poll script and the govuk-frontend `initAll()` bootstrap**, previously two
   raw JavaScript strings hand-authored as C# constants inside `PageShell.cs`, are now real files,
   `wayfinder-poll.js` and `wayfinder-govuk-frontend-init.js`, shipped the same way. Neither had

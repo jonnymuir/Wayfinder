@@ -12,7 +12,7 @@
     "Wayfinder.Engine/Services/GatewayAdvancer.cs": 414,
     "Wayfinder.Engine/Services/StageRenderer.cs": 561,
     "Wayfinder.Engine/Stores/InMemoryBulkDatasetStore.cs": 456,
-    "Wayfinder.ReferenceApp/Program.cs": 441,
+    "Wayfinder.ReferenceApp/Program.cs": 438,
     "Wayfinder.Rendering.GovUk/GovUkComponents.cs": 413,
     "Wayfinder.Rendering.GovUk/GovUkFields.cs": 523,
     "Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-bulk-data-review.js": 509,

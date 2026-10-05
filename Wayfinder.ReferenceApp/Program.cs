@@ -213,13 +213,10 @@ app.MapDefaultEndpoints();
 // whatever that package's own generated markup actually targets — see PageShell.cs.
 app.UseStaticFiles();
 
-// Wayfinder.Editor's own compiled bundle and Wayfinder.Rendering.GovUk's own vendored
-// govuk-frontend assets, each served by the package that owns them — see their own
-// UseWayfinderEditorAssets()/UseGovUkFrontendAssets() extensions. Distinct sub-path from this
-// app's own "/assets/images/..." favicon set above — static-files middleware calls just fall
-// through to the next on a miss, so there's no collision.
+// Wayfinder.Editor's own compiled bundle, served by the package that owns it — see its own
+// UseWayfinderEditorAssets() extension. Wayfinder.Rendering.GovUk needs nothing here: its vendored
+// govuk-frontend CSS references its fonts relative to itself, under /_content/.
 app.UseWayfinderEditorAssets();
-app.UseGovUkFrontendAssets();
 
 app.UseAuthentication();
 app.UseAuthorization();
