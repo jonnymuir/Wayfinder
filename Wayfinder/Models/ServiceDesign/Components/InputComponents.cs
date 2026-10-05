@@ -223,6 +223,12 @@ public sealed record FileUploadComponent : InputComponent
 
     /// <summary>Maximum upload size in bytes. Null falls back to the platform's own default limit.</summary>
     public long? MaxSizeBytes { get; init; }
+
+    /// <summary>
+    /// How a phone offers the file: <c>choose</c> (or null) lets the operating system offer both the
+    /// camera and existing files; <c>camera</c> opens the rear camera directly, with no existing-file option.
+    /// </summary>
+    public string? CaptureMode { get; init; }
 }
 
 /// <summary>

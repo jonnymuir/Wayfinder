@@ -38,7 +38,7 @@ public static class GovUkFields
             "radio" => RenderRadio(field, errors),
             "checkboxlist" => RenderCheckboxList(field, errors),
             "slider" => RenderSlider(field, errors),
-            "file-upload" => RenderFileUpload(field, errors),
+            "file-upload" => GovUkFileUploadField.Render(field, errors),
             "guidance-checklist" => RenderGuidanceChecklist(field, errors),
             _ => RenderText(field, errors),
         };
@@ -162,7 +162,7 @@ public static class GovUkFields
     /// conflated into one string here, which broke id-based selectors even though name-based
     /// posting was already correct.
     /// </summary>
-    private static (string Id, string Name, string Hint, string DescribedBy, string Required, string? Error) Common(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
+    internal static (string Id, string Name, string Hint, string DescribedBy, string Required, string? Error) Common(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
         var id = field.FieldKey;
         var name = GovUk.FieldName(field.FieldKey);
@@ -180,7 +180,7 @@ public static class GovUkFields
         return (id, name, hint, describedBy, required, hasError ? error : null);
     }
 
-    private static string ErrorMessage(string errorId, string? error) =>
+    internal static string ErrorMessage(string errorId, string? error) =>
         error is null ? "" : $"""<p class="govuk-error-message" id="{errorId}"><span class="govuk-visually-hidden">Error:</span> {GovUk.Esc(error)}</p>""";
 
     private static string RenderText(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
@@ -450,35 +450,6 @@ public static class GovUkFields
                 <span>{GovUk.Esc(prefix)}{min}{GovUk.Esc(suffix)}</span>
                 <span>{GovUk.Esc(prefix)}{max}{GovUk.Esc(suffix)}</span>
               </div>
-            </div>
-            """;
-    }
-
-    /// <summary>
-    /// A plain, synchronous <c>govuk-file-upload</c> — posted as part of the normal form submit,
-    /// with the host saving it and swapping the value for a reference before it reaches the
-    /// engine (the engine itself never sees raw bytes). Deliberately not Wayfinder.Umbraco's
-    /// async progressive-upload-with-token pattern — that needs its own JS runtime this package
-    /// doesn't ship.
-    /// </summary>
-    private static string RenderFileUpload(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
-    {
-        var (id, name, hint, describedBy, required, error) = Common(field, errors);
-        var alreadyUploaded = !string.IsNullOrEmpty(field.Value?.ToString());
-        var accept = field.AcceptedFileTypes is { Count: > 0 }
-            ? $" accept=\"{GovUk.Esc(string.Join(",", field.AcceptedFileTypes))}\""
-            : "";
-        var errorClass = error is null ? "" : " govuk-file-upload--error";
-        var uploadedNotice = alreadyUploaded
-            ? $"""<p class="govuk-body">Currently uploaded: {GovUk.Esc(field.Value?.ToString())}</p>"""
-            : "";
-        return $"""
-            <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
-              {hint}
-              {ErrorMessage($"{id}-error", error)}
-              {uploadedNotice}
-              <input class="govuk-file-upload{errorClass}" id="{id}" name="{name}" type="file"{accept}{describedBy} {(alreadyUploaded ? "" : required)}>
             </div>
             """;
     }

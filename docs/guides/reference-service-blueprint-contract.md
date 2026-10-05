@@ -270,7 +270,10 @@ container), server-side saved via a host-registered file storage service and ref
 from `FieldValues` by a `ServiceRequestFileReference` (never the raw bytes). `required: true`
 means a file must actually be posted, checked the same way any other required field is.
 Optional `acceptedFileTypes` (e.g. `[".pdf", ".jpg"]`) and `maxSizeBytes` narrow what's
-accepted; `maxSizeBytes` is enforced server-side on submit.
+accepted; `maxSizeBytes` is enforced server-side on submit. Optional `captureMode` decides how
+a phone offers the file: `choose` (the default) lets the operating system offer both the camera
+and existing files, `camera` opens the rear camera directly with no existing-file option. For a
+photo that may have been taken earlier, leave it on `choose`.
 
 `guidance-checklist` lists linked guidance articles (each with its own `key`, `label`,
 `href`) alongside an acknowledgement checkbox per item, unlike `checkboxlist`, where

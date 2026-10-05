@@ -144,6 +144,7 @@ export interface FileUploadComponent {
   type: 'file-upload';
   acceptedFileTypes?: string[];
   maxSizeBytes?: number;
+  captureMode?: string;
   fieldKey: string;
   label: string;
   hint?: string;
