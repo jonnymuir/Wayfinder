@@ -17,6 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const { chromium } = createRequire(join(__dirname, '..', '..', 'Wayfinder.Editor.Client', 'package.json'))('playwright');
 const js = join(__dirname, '..', 'wwwroot', 'location-picker') + '/';
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const EXISTING_VALUE = '52.2053,0.1218';
 const page = (value) => `<!doctype html><html><head><meta charset="utf-8">
 <meta name="wayfinder-map-tile-url" content="/tiles/{z}/{x}/{y}.png"><meta name="wayfinder-map-attribution" content="test tiles"></head><body>
 <form><div class="govuk-form-group" data-wayfinder-location-picker>
@@ -26,7 +27,9 @@ const page = (value) => `<!doctype html><html><head><meta charset="utf-8">
 </div></form><script type="module" src="/lp/wayfinder-location-picker.js"></script></body></html>`;
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/') { res.setHeader('content-type', 'text/html'); return res.end(page(url.searchParams.get('v') ?? '')); }
+  // Fixed fixtures only: nothing from the request is ever written into the page.
+  const fixtures = { '/': '', '/existing': EXISTING_VALUE };
+  if (Object.hasOwn(fixtures, url.pathname)) { res.setHeader('content-type', 'text/html'); return res.end(page(fixtures[url.pathname])); }
   if (url.pathname.startsWith('/tiles/')) { res.setHeader('content-type', 'image/png'); return res.end(png); }
   if (url.pathname.startsWith('/lp/')) {
     const f = js + url.pathname.slice(4); if (!fs.existsSync(f)) { res.statusCode = 404; return res.end(); }
@@ -39,12 +42,12 @@ const browser = await chromium.launch();
 let failed = 0;
 const check = (name, ok, extra = '') => { console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${ok ? '' : ' ' + extra}`); if (!ok) failed++; };
 const errors = [];
-async function open(ctxOpts, query = '') {
+async function open(ctxOpts, path = '/') {
   const ctx = await browser.newContext(ctxOpts);
   const p = await ctx.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
   p.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  await p.goto(`${base}/${query}`);
+  await p.goto(`${base}${path}`);
   return p;
 }
 const geo = { permissions: ['geolocation'], geolocation: { latitude: 51.5074, longitude: -0.1278, accuracy: 25 } };
@@ -90,9 +93,9 @@ check('a declined permission leaves the field empty with guidance', (await p.inp
 await p.context().close();
 
 // 6. Existing value is kept (no auto-locate overwrite) and shown on the map.
-p = await open(geo, '?v=52.2053,0.1218');
+p = await open(geo, '/existing');
 await p.waitForTimeout(400);
-check('an existing value is not overwritten by the device location', (await p.inputValue('#location')) === '52.2053,0.1218');
+check('an existing value is not overwritten by the device location', (await p.inputValue('#location')) === EXISTING_VALUE);
 await p.context().close();
 
 // 7. No script: the markup alone is a working labelled text input (the script never ran here).
