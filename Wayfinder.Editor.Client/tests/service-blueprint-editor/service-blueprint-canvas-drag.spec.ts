@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { waitForStablePosition } from './support/canvas-helpers';
 
 /**
  * Manual canvas arrangement: dragging nodes persists positions in the
@@ -66,7 +67,8 @@ async function dragBy(page: Page, selector: string, dx: number, dy: number) {
   await page.mouse.down();
   await page.mouse.move(startX + dx, startY + dy, { steps: 8 });
   await page.mouse.up();
-  await page.waitForTimeout(200);
+  // The drop commit and any settle animation are done once the node has stopped moving.
+  await waitForStablePosition(page.locator(`wayfinder-service-blueprint-graph ${selector}`));
 }
 
 test.describe('ServiceBlueprint canvas — manual arrangement', () => {
@@ -124,10 +126,9 @@ test.describe('ServiceBlueprint canvas — manual arrangement', () => {
     await recordServiceBlueprintUpdates(page);
 
     await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-auto-arrange]').click();
-    await page.waitForTimeout(500);
+    await expect.poll(() => page.evaluate(() => window.__layoutUpdates!.length), { message: 'Tidy layout is one commit' }).toBe(1);
 
     const updates = await page.evaluate(() => window.__layoutUpdates!);
-    expect(updates, 'Tidy layout is one commit').toHaveLength(1);
     expect(updates[0].layoutNodeIds.length, 'every node gets an explicit position').toBe(nodeCount);
   });
 

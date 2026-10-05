@@ -116,14 +116,15 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     } else {
       await page.keyboard.press('Control+f');
     }
-    await page.waitForTimeout(100);
-
-    const panelAfter = await page.evaluate(() => {
-      const host = document.querySelector('wayfinder-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
-      return !!def?.shadowRoot?.querySelector('.cm-search');
-    });
-    expect(panelAfter).toBe(true);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = document.querySelector('wayfinder-service-blueprint-editor');
+          const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
+          return !!def?.shadowRoot?.querySelector('.cm-search');
+        })
+      )
+      .toBe(true);
 
     // The search panel should have an input field.
     const hasInput = await page.evaluate(() => {
@@ -146,25 +147,27 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     } else {
       await page.keyboard.press('Control+f');
     }
-    await page.waitForTimeout(100);
-
-    const panelOpen = await page.evaluate(() => {
-      const host = document.querySelector('wayfinder-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
-      return !!def?.shadowRoot?.querySelector('.cm-search');
-    });
-    expect(panelOpen).toBe(true);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = document.querySelector('wayfinder-service-blueprint-editor');
+          const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
+          return !!def?.shadowRoot?.querySelector('.cm-search');
+        })
+      )
+      .toBe(true);
 
     // Press Esc to close the panel.
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(100);
-
-    const panelClosed = await page.evaluate(() => {
-      const host = document.querySelector('wayfinder-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
-      return !!def?.shadowRoot?.querySelector('.cm-search');
-    });
-    expect(panelClosed).toBe(false);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = document.querySelector('wayfinder-service-blueprint-editor');
+          const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor');
+          return !!def?.shadowRoot?.querySelector('.cm-search');
+        })
+      )
+      .toBe(false);
   });
 
   test('Line numbers are visible', async ({ page }) => {
@@ -200,17 +203,17 @@ test.describe('Definition editor UX — wheel scrolling + Find', () => {
     } else {
       await page.keyboard.press('Control+a');
     }
-    await page.waitForTimeout(100);
-
-    const selectionLength = await page.evaluate(() => {
-      const host = document.querySelector('wayfinder-service-blueprint-editor');
-      const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as
-        | (HTMLElement & { _view?: { state: { selection: { main: { from: number; to: number } } } } })
-        | null;
-      const sel = def?._view?.state.selection.main;
-      return sel ? sel.to - sel.from : 0;
-    });
-
-    expect(selectionLength).toBe(docLength);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const host = document.querySelector('wayfinder-service-blueprint-editor');
+          const def = host?.shadowRoot?.querySelector('wayfinder-definition-editor') as
+            | (HTMLElement & { _view?: { state: { selection: { main: { from: number; to: number } } } } })
+            | null;
+          const sel = def?._view?.state.selection.main;
+          return sel ? sel.to - sel.from : 0;
+        })
+      )
+      .toBe(docLength);
   });
 });

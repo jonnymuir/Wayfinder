@@ -80,7 +80,6 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     const renamed = original.replace(/"displayName": "Application Form"/, '"displayName": "Real-Typed Form"');
     await replaceDefinitionViaCm(page, renamed);
 
-    await page.waitForTimeout(350); // > 250ms debounce
     await clickCanvasTab(page);
 
     const editor = page.locator('wayfinder-service-blueprint-editor');
@@ -202,7 +201,6 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     const current = await readDefinitionText(page);
     const next = current.replace('"Canvas-Edited Display"', '"JSON-Then-Canvas"');
     await replaceDefinitionViaCm(page, next);
-    await page.waitForTimeout(350);
 
     // Confirm internal service blueprint updated and canvas reflects it.
     await expect.poll(() => readInternalServiceBlueprintDisplayName(page), { timeout: 2_000 }).toBe('JSON-Then-Canvas');

@@ -68,7 +68,6 @@ test.describe('Inspector "+ Add route" affordance', () => {
 
     // Click — a second route row should appear and the summary updates.
     await addBtn.click();
-    await page.waitForTimeout(200); // allow Lit re-render
 
     const updatedSummary = inspector.locator('[data-wayfinder-gateway-routes-summary]');
     await expect(updatedSummary).toContainText('2 routes');
@@ -90,16 +89,8 @@ test.describe('Inspector "+ Add route" affordance', () => {
     const addBtn = inspector.locator('[data-wayfinder-add-route]');
     await addBtn.click();
 
-    // Give Lit + requestAnimationFrame time to settle.
-    await page.waitForTimeout(300);
-
     // The Target picker for the new blank route should be focused.
-    const focused = await page.evaluate(() => {
-      const el = document.querySelector('wayfinder-step-inspector') as HTMLElement & { shadowRoot: ShadowRoot };
-      const active = el.shadowRoot?.activeElement;
-      return active?.getAttribute('data-wayfinder-route-target-select') !== null && active?.tagName === 'SELECT';
-    });
-    expect(focused).toBe(true);
+    await expect(inspector.locator('select[data-wayfinder-route-target-select]').last()).toBeFocused();
   });
 
   // -----------------------------------------------------------------------
@@ -113,7 +104,6 @@ test.describe('Inspector "+ Add route" affordance', () => {
 
     // Create a blank route.
     await inspector.locator('[data-wayfinder-add-route]').click();
-    await page.waitForTimeout(200);
 
     // The inline "Choose a destination" warning should be visible.
     const warning = inspector.locator('[data-wayfinder-route-target-warning]').last();
@@ -126,7 +116,6 @@ test.describe('Inspector "+ Add route" affordance', () => {
 
     // Choose a destination — pick the first non-empty option.
     await targetSelect.selectOption({ index: 1 });
-    await page.waitForTimeout(200);
 
     // Warning should disappear and aria-invalid should be false.
     await expect(warning).not.toBeVisible();
@@ -154,14 +143,8 @@ test.describe('Inspector "+ Add route" affordance', () => {
 
     // Activate via Enter.
     await addBtn.press('Enter');
-    await page.waitForTimeout(300);
 
     // After creation the Target picker for the new route should be focused.
-    const focused = await page.evaluate(() => {
-      const el = document.querySelector('wayfinder-step-inspector') as HTMLElement & { shadowRoot: ShadowRoot };
-      const active = el.shadowRoot?.activeElement;
-      return active?.tagName === 'SELECT' && active?.hasAttribute('data-wayfinder-route-target-select');
-    });
-    expect(focused).toBe(true);
+    await expect(inspector.locator('select[data-wayfinder-route-target-select]').last()).toBeFocused();
   });
 });

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { scrollGraphCanvasAndSettle } from './support/canvas-helpers';
 
 /**
  * Behavioral proof for service blueprint editor overflow and responsive layout contracts.
@@ -204,17 +205,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       const outlineBefore = await outline.boundingBox();
       expect(outlineBefore).not.toBeNull();
 
-      // Scroll the graph-canvas vertically
-      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
-        const graph = graphElement as HTMLElement;
-        const shadowRoot = graph.shadowRoot;
-        const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
-        if (canvas) {
-          canvas.scrollTop = 200;
-        }
-      });
-
-      await page.waitForTimeout(150);
+      await scrollGraphCanvasAndSettle(page, 200);
 
       // Verify outline position hasn't moved
       const outlineAfter = await outline.boundingBox();
@@ -238,17 +229,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       const inspectorBefore = await inspector.boundingBox();
       expect(inspectorBefore).not.toBeNull();
 
-      // Scroll the graph-canvas
-      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
-        const graph = graphElement as HTMLElement;
-        const shadowRoot = graph.shadowRoot;
-        const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
-        if (canvas) {
-          canvas.scrollTop = 200;
-        }
-      });
-
-      await page.waitForTimeout(150);
+      await scrollGraphCanvasAndSettle(page, 200);
 
       const inspectorAfter = await inspector.boundingBox();
       expect(inspectorAfter?.y).toBe(inspectorBefore?.y);
@@ -267,17 +248,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
       const toolbarBefore = await toolbar.boundingBox();
       expect(toolbarBefore).not.toBeNull();
 
-      // Scroll the graph-canvas
-      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
-        const graph = graphElement as HTMLElement;
-        const shadowRoot = graph.shadowRoot;
-        const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
-        if (canvas) {
-          canvas.scrollTop = 200;
-        }
-      });
-
-      await page.waitForTimeout(150);
+      await scrollGraphCanvasAndSettle(page, 200);
 
       const toolbarAfter = await toolbar.boundingBox();
       expect(toolbarAfter?.y).toBe(toolbarBefore?.y);
@@ -310,17 +281,7 @@ test.describe('ServiceBlueprint editor overflow and responsive behavioral proof'
         toolbar: await toolbar.boundingBox(),
       };
 
-      // Scroll the graph-canvas significantly
-      await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
-        const graph = graphElement as HTMLElement;
-        const shadowRoot = graph.shadowRoot;
-        const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
-        if (canvas) {
-          canvas.scrollTop = 320;
-        }
-      });
-
-      await page.waitForTimeout(150);
+      await scrollGraphCanvasAndSettle(page, 320);
 
       // Verify all positions remain unchanged
       expect((await outline.boundingBox())?.y).toBe(positions.outline?.y);
