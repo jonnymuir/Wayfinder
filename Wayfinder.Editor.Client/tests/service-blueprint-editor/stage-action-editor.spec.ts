@@ -55,6 +55,38 @@ test.describe('ServiceBlueprint action editor', () => {
     await captureDocScreenshot(page.locator('wayfinder-step-inspector'), `${DOCS_DIR}/stage-action-editor.png`);
   });
 
+  test('edits to two parameters made in the same tick both survive', async ({ page }) => {
+    await page.goto(storyUrl('service-blueprint-editor-step-inspector--transition-action-configuration'));
+    await expect(page.locator('wayfinder-step-inspector')).toBeVisible({ timeout: 10_000 });
+
+    await page.locator('[data-wayfinder-open-action-picker]').click();
+    await page.locator('[data-wayfinder-action-picker-option="notifications.send-email"]').click();
+    await page.locator('[data-wayfinder-action-picker-add]').click();
+    const templateId = page.locator('[data-wayfinder-action-param="1-templateId"]');
+    await expect(templateId).toBeVisible();
+
+    // Both inputs change before the host has re-rendered with the first change — a fast paste or
+    // autofill does exactly this. The second edit must build on the first, not on stale state.
+    const lastEmitted = await templateId.evaluate((first) => {
+      const editor = (first.getRootNode() as ShadowRoot).host as HTMLElement;
+      let params: Record<string, unknown> | undefined;
+      editor.addEventListener('actions-updated', (event) => {
+        params = (event as CustomEvent<{ actions: Array<{ params?: Record<string, unknown> }> }>).detail.actions[1]?.params;
+      });
+      const second = first.getRootNode().querySelector('[data-wayfinder-action-param="1-recipientEmail"]') as HTMLInputElement;
+      for (const [input, value] of [
+        [first as HTMLInputElement, 'review-routed'],
+        [second, 'planning@council.example'],
+      ] as const) {
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      }
+      return params;
+    });
+
+    expect(lastEmitted).toMatchObject({ templateId: 'review-routed', recipientEmail: 'planning@council.example' });
+  });
+
   test('transition action picker filters to transition scope and validates email parameters with keyboard input', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-step-inspector--transition-action-configuration'));
 
@@ -112,15 +144,8 @@ test.describe('ServiceBlueprint action editor', () => {
     await expect(stage.locator('[data-wayfinder-action-errors="2"]')).toBeHidden();
     await expect(stage.locator('[data-wayfinder-stage-action="2"] .action-summary')).toContainText('+441234567890');
 
-    // For buttons inside action-list items, use the double-focus pattern: explicit focus()
-    // then locator.press(). The action list's @focusin→requestAnimationFrame can move focus
-    // between steps, but locator.press() refocuses the target before dispatching the key,
-    // so the key always lands on the intended element.
     const addFieldButton = stage.locator('[data-wayfinder-add-form-field="1"]');
     await addFieldButton.focus();
-    // Drain the rAF scheduled by _setSelectedAction(1) (focus moved from action 2 to action 1).
-    // Without this, the rAF fires between press()'s internal focus and keydown, stealing focus.
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     await addFieldButton.press('Enter');
     await expect(stage.locator('[data-wayfinder-form-field="1-1"]')).toBeVisible({ timeout: 10_000 });
 
@@ -137,10 +162,6 @@ test.describe('ServiceBlueprint action editor', () => {
     await actionItem2.focus();
     await actionItem2.press('Alt+ArrowUp');
     await expect(stage.locator('[data-wayfinder-stage-action="1"] .action-title')).toContainText('Send SMS');
-    // _moveAction calls _setSelectedAction(1), triggering a Lit render → updated() → rAF for
-    // _focusActionEditor(1). That rAF can fire between press()'s internal focus CDP call and its
-    // keydown CDP call, stealing focus from the remove button. Drain it here so state is stable.
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 
     const removeButton = stage.locator('[data-wayfinder-stage-action-remove="1"]');
     await removeButton.focus();

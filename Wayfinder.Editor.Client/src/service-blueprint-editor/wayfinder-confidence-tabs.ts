@@ -37,9 +37,9 @@ export class WayfinderConfidenceTabs extends LitElement {
     const nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
     const nextTab = tabs[nextIndex];
     this._handleTabClick(nextTab);
-    requestAnimationFrame(() => {
-      this.shadowRoot?.querySelector<HTMLButtonElement>(`#confidence-tab-${nextTab}`)?.focus();
-    });
+    // Focus synchronously: the tab buttons are always rendered, and deferring a frame lets a second
+    // key press (or key-repeat) land on the tab we just left.
+    this.shadowRoot?.querySelector<HTMLButtonElement>(`#confidence-tab-${nextTab}`)?.focus();
   }
 
   private _handleTabKeydown(event: KeyboardEvent, tab: ConfidenceTab) {
@@ -57,16 +57,12 @@ export class WayfinderConfidenceTabs extends LitElement {
       case 'Home':
         event.preventDefault();
         this._handleTabClick('canvas');
-        requestAnimationFrame(() => {
-          this.shadowRoot?.querySelector<HTMLButtonElement>('#confidence-tab-canvas')?.focus();
-        });
+        this.shadowRoot?.querySelector<HTMLButtonElement>('#confidence-tab-canvas')?.focus();
         break;
       case 'End':
         event.preventDefault();
         this._handleTabClick('definition');
-        requestAnimationFrame(() => {
-          this.shadowRoot?.querySelector<HTMLButtonElement>('#confidence-tab-definition')?.focus();
-        });
+        this.shadowRoot?.querySelector<HTMLButtonElement>('#confidence-tab-definition')?.focus();
         break;
       default:
         break;

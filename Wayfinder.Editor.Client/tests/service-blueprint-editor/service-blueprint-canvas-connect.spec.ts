@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { waitForStablePosition } from './support/canvas-helpers';
 
 /**
  * Drag-to-connect and multi-select behaviours on the React Flow canvas:
@@ -68,12 +69,21 @@ test.describe('ServiceBlueprint canvas — drag-to-connect', () => {
     // payment-complete sits below the story host's fixed-height canvas — no
     // viewport size brings it into view, only panning the canvas itself does.
     await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-fit-screen]').click();
-    // fitView animates over 200ms.
-    await page.waitForTimeout(500);
+    // fitView animates: wait for the target card to land inside the canvas, then for it to stop
+    // moving (two reads a frame apart agree), before measuring anything to drag between.
+    const targetCard = page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage-card="payment-complete"]');
+    const canvas = page.locator('wayfinder-service-blueprint-graph .graph-canvas');
+    await expect
+      .poll(async () => {
+        const [card, area] = await Promise.all([targetCard.boundingBox(), canvas.boundingBox()]);
+        return !!card && !!area && card.y >= area.y && card.y + 20 <= area.y + area.height;
+      })
+      .toBe(true);
+    await waitForStablePosition(targetCard);
 
     const handle = await sourceHandleCentre(page, 'confirm-payment-received');
     // payment-complete sits low in the canvas — drop on its visible top band.
-    const target = await page.locator('wayfinder-service-blueprint-graph [data-wayfinder-stage-card="payment-complete"]').boundingBox();
+    const target = await targetCard.boundingBox();
     await page.mouse.move(handle.x, handle.y);
     await page.mouse.down();
     await page.mouse.move(target!.x + target!.width / 2, target!.y + 20, { steps: 10 });

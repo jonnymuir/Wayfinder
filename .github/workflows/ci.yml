@@ -160,13 +160,12 @@ jobs:
         working-directory: Wayfinder.Editor.Client
         run: npm run test-storybook
 
-      # The rest of tests/service-blueprint-editor/ (canvas drag, pixel-perfect arrow
-      # endpoints, undo/redo timing) is pixel- and timing-sensitive and isn't part of
-      # Umbraco.Prism's own CI gate for the same code either — kept as a local/manual
-      # regression suite, not a CI gate.
-      - name: Service blueprint graph visual regression
+      # The whole Playwright suite (canvas drag, arrow endpoints, undo/redo, definition-tab sync,
+      # graph visual regression) against the Storybook the config boots. Specs wait on state, not
+      # fixed sleeps, so this is deterministic; a failure here is a real regression.
+      - name: Service blueprint editor Playwright suite
         working-directory: Wayfinder.Editor.Client
-        run: npm run test:playwright:service-blueprint-graph-visual
+        run: npm run test:playwright -- --reporter=line
 
   # Single aggregate check so branch protection only needs to name one required status
   # check ("all") instead of every job individually — same pattern as Umbraco.Prism's

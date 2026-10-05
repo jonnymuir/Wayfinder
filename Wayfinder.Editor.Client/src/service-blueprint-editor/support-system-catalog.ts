@@ -44,6 +44,7 @@ export class HttpServiceBlueprintSupportSystemCatalog implements ServiceBlueprin
       credentials: 'same-origin',
     });
     if (!response.ok) {
+      await response.body?.cancel();
       throw new Error(`Failed to load the support system catalog (${response.status} ${response.statusText}).`);
     }
     return (await response.json()) as SupportSystemDescriptor[];

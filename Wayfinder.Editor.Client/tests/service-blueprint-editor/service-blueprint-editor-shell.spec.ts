@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { measureGraph, rectanglesOverlap } from './support/canvas-helpers';
+import { measureGraph, rectanglesOverlap, scrollGraphCanvasAndSettle } from './support/canvas-helpers';
 
 function storyUrl(storyId: string): string {
   return `/iframe.html?id=${storyId}&viewMode=story`;
@@ -266,18 +266,7 @@ test.describe('ServiceBlueprint editor shell proof', () => {
     const inspectorBefore = await inspector.boundingBox();
     const toolbarBefore = await toolbar.boundingBox();
 
-    // Scroll the graph-canvas
-    await page.locator('wayfinder-service-blueprint-graph').evaluate((graphElement) => {
-      const graph = graphElement as HTMLElement;
-      const shadowRoot = graph.shadowRoot;
-      const canvas = shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
-      if (canvas) {
-        canvas.scrollTop = 150;
-      }
-    });
-
-    // Wait a bit for any unintended reflows
-    await page.waitForTimeout(200);
+    await scrollGraphCanvasAndSettle(page, 150);
 
     // Verify shell chrome positions haven't moved
     const outlineAfter = await outline.boundingBox();

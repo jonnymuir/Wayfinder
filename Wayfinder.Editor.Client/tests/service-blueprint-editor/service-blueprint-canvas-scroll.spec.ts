@@ -101,16 +101,13 @@ test.describe('ServiceBlueprint canvas — pan and fit behaviour', () => {
     await gotoCanonicalScenario(page, scenario);
 
     await graphLocator(page).locator('[data-wayfinder-fit-screen]').click();
-    // fitView animates over 200ms.
-    await page.waitForTimeout(500);
-
-    const rect = await canvasRect(page);
-    const tops = await nodeScreenTops(page);
-    expect(tops.length).toBeGreaterThan(0);
-    expect(
-      tops.every((top) => top >= rect.top - 1 && top <= rect.bottom + 1),
-      'after fit-to-screen every stage top must be inside the canvas'
-    ).toBe(true);
+    // fitView animates, so poll until the transform has settled with every stage top in the canvas.
+    const allTopsInCanvas = async () => {
+      const rect = await canvasRect(page);
+      const tops = await nodeScreenTops(page);
+      return tops.length > 0 && tops.every((top) => top >= rect.top - 1 && top <= rect.bottom + 1);
+    };
+    await expect.poll(allTopsInCanvas, { message: 'after fit-to-screen every stage top must be inside the canvas' }).toBe(true);
   });
 
   // Carried over as fixme from the scroll-era suite: the canonical scenario

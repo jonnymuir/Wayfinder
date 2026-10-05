@@ -20,6 +20,20 @@ async function openDefinitionTab(page: Page): Promise<void> {
   await expect.poll(async () => readDefinitionText(page), { timeout: 10_000 }).not.toEqual('');
 }
 
+/** Arrow right from the first tab (which must be focused and selected) to `tab`, pressing once per
+ * tab in between rather than hard-coding how many precede it (that count has changed before). */
+async function arrowRightToTab(page: Page, tab: string) {
+  const tabs = page.locator('wayfinder-service-blueprint-editor wayfinder-confidence-tabs button[data-wayfinder-confidence-tab]');
+  const names = await tabs.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-wayfinder-confidence-tab')));
+  const to = names.indexOf(tab);
+  // One press per tab, each waiting for selection to land on the next tab before pressing again.
+  for (let index = 1; index <= to; index++) {
+    await page.keyboard.press('ArrowRight');
+    await expect(tabs.nth(index)).toHaveAttribute('aria-selected', 'true');
+  }
+  return tabs.nth(to);
+}
+
 async function readDefinitionText(page: Page): Promise<string> {
   return await page.evaluate(() => {
     const editorEl = document.querySelector('wayfinder-service-blueprint-editor') as HTMLElement | null;
@@ -73,9 +87,7 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     const renamed = original.replace(/"displayName": "Application Form"/, '"displayName": "Renamed Form"');
     await setDefinitionText(page, renamed);
 
-    // Auto-apply after 250 ms debounce.
-    await page.waitForTimeout(400);
-
+    // Auto-applies after a 250 ms debounce; the assertion below waits for it.
     const announcement = page.locator('[data-wayfinder-definition-announcement]');
     await expect(announcement).toContainText('Definition updated', { timeout: 2_000 });
 
@@ -94,7 +106,6 @@ test.describe('Definition (JSON twin-pane) tab', () => {
 
     // Corrupt the JSON.
     await setDefinitionText(page, original.slice(0, original.length - 5));
-    await page.waitForTimeout(400);
 
     const banner = page.locator('[data-wayfinder-definition-banner]');
     await expect(banner).toBeVisible();
@@ -117,7 +128,6 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     const broken = original.replace(/"stageType":\s*"Question"/, '"stageType": "Waiting"');
     expect(broken).not.toEqual(original);
     await setDefinitionText(page, broken);
-    await page.waitForTimeout(400);
 
     const banner = page.locator('[data-wayfinder-definition-banner]');
     await expect(banner).toBeVisible();
@@ -164,7 +174,6 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     expect(renamed).not.toEqual(original);
 
     await setDefinitionText(page, renamed);
-    await page.waitForTimeout(400);
     await waitForDefinitionTextContains(page, 'From Definition Tab');
 
     // Switch to Canvas and use document-level undo.
@@ -187,13 +196,7 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     // Reach the Definition tab via the tab list using arrow keys.
     const tabsRoot = editor.locator('wayfinder-confidence-tabs');
     await tabsRoot.locator('button[data-wayfinder-confidence-tab="canvas"]').focus();
-    // Five tabs sit before "definition": Canvas, Validation, Preview, Simulation, then Definition.
-    for (let i = 0; i < 4; i++) {
-      await page.keyboard.press('ArrowRight');
-      // Allow the tab harness's requestAnimationFrame focus shift to complete.
-      await page.waitForTimeout(50);
-    }
-    const definitionTab = tabsRoot.locator('button[data-wayfinder-confidence-tab="definition"]');
+    const definitionTab = await arrowRightToTab(page, 'definition');
     await expect(definitionTab).toHaveAttribute('aria-selected', 'true');
 
     // The editor renders. Focus inside the editor host and type.
@@ -223,8 +226,6 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     await page.keyboard.press('End');
     await page.keyboard.type(' ');
 
-    await page.waitForTimeout(50);
-    const after = await readDefinitionText(page);
-    expect(after.length).toBeGreaterThanOrEqual(before.length);
+    await expect.poll(async () => (await readDefinitionText(page)).length).toBeGreaterThan(before.length);
   });
 });

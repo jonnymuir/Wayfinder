@@ -46,6 +46,7 @@ export class HttpServiceBlueprintComponentCatalog implements ServiceBlueprintCom
       credentials: 'same-origin',
     });
     if (!response.ok) {
+      await response.body?.cancel();
       throw new Error(`Failed to load the component type catalog (${response.status} ${response.statusText}).`);
     }
     return (await response.json()) as ComponentDescriptor[];

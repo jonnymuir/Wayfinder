@@ -66,8 +66,9 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement imp
 
   protected updated(changed: Map<string, unknown>) {
     if (changed.has('selectedActionIndex') && this.selectedActionIndex !== null) {
-      const index = this.selectedActionIndex;
-      requestAnimationFrame(() => this._focusActionEditor(index));
+      // Focus now, in the same task as the render that created the row: deferring to a later frame
+      // lets focus be stolen from wherever the user has moved to in the meantime.
+      this._focusActionEditor(this.selectedActionIndex);
     }
 
     if (changed.has('actions') && this.selectedActionIndex !== null && this.selectedActionIndex >= this.actions.length) {
@@ -76,6 +77,10 @@ export class WayfinderServiceBlueprintActionEditorElement extends LitElement imp
   }
 
   emitActionsUpdated(actions: ActionDefinition[]) {
+    // Adopt the new list straight away: the parent only hands it back after its own re-render, and
+    // a second edit made before then (a fast paste, autofill) would otherwise be built on the
+    // stale list and silently discard this one.
+    this.actions = actions;
     this.dispatchEvent(
       new CustomEvent<ActionsUpdatedDetail>('actions-updated', {
         detail: { actions },

@@ -146,8 +146,7 @@ export type GraphGeometry = {
  * Measure the rendered canvas: lanes, nodes (stages + gateways), and SVG
  * route endpoint coordinates. All coordinates are relative to the React Flow
  * viewport (the transformed scene container) so they are stable across
- * panning; the visual suite runs at the default zoom of 1, where viewport
- * coordinates equal flow coordinates.
+ * panning, and in screen space (so also correct when the canvas is zoomed).
  */
 export async function measureGraph(page: Page): Promise<GraphGeometry> {
   return graphLocator(page).evaluate((graphElement) => {
@@ -204,18 +203,18 @@ export async function measureGraph(page: Page): Promise<GraphGeometry> {
       .map((path) => {
         const length = (path as SVGPathElement).getTotalLength?.() ?? 0;
         if (!length) return null;
-        const start = path.getPointAtLength(0);
-        const end = path.getPointAtLength(length);
-        const svg = path.ownerSVGElement;
-        const svgRect = svg?.getBoundingClientRect();
-        const offsetX = (svgRect?.left ?? 0) - sceneRect.left;
-        const offsetY = (svgRect?.top ?? 0) - sceneRect.top;
+        // Through the path's own screen transform, so the endpoints are in the same (screen)
+        // space as the node rectangles at any zoom, not only at 1.
+        const toScene = (point: DOMPoint) => {
+          const screen = point.matrixTransform(path.getScreenCTM() ?? new DOMMatrix());
+          return { x: screen.x - sceneRect.left, y: screen.y - sceneRect.top };
+        };
         return {
           key: path.getAttribute('data-wayfinder-route-path') ?? '',
           from: path.getAttribute('data-wayfinder-route-from') ?? '',
           to: path.getAttribute('data-wayfinder-route-to') ?? '',
-          start: { x: start.x + offsetX, y: start.y + offsetY },
-          end: { x: end.x + offsetX, y: end.y + offsetY },
+          start: toScene(path.getPointAtLength(0)),
+          end: toScene(path.getPointAtLength(length)),
         };
       })
       .filter((route): route is RouteEndpoints => route !== null);
@@ -249,4 +248,38 @@ export function rectanglesOverlap(
   tolerance = 1
 ): boolean {
   return a.left + tolerance < b.right && b.left + tolerance < a.right && a.top + tolerance < b.bottom && b.top + tolerance < a.bottom;
+}
+
+/** Scroll the graph canvas to `top`, then resolve once the browser has rendered two frames — scroll
+ * events fire before the next frame's rAF callbacks, so by then every reaction to the scroll
+ * (re-layout, sticky/anchored chrome repositioning) has happened. Use before asserting that
+ * something did NOT move. */
+export async function scrollGraphCanvasAndSettle(page: Page, top: number): Promise<void> {
+  await page.locator('wayfinder-service-blueprint-graph').evaluate(async (graphElement, scrollTop) => {
+    const canvas = (graphElement as HTMLElement).shadowRoot?.querySelector<HTMLElement>('.graph-canvas');
+    if (canvas) {
+      canvas.scrollTop = scrollTop;
+    }
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  }, top);
+}
+
+/** Resolve once `locator`'s box is identical on three consecutive animation frames — i.e. any
+ * pan/zoom/fit animation moving it has finished. Use before measuring positions to drag between. */
+export async function waitForStablePosition(locator: Locator): Promise<void> {
+  await locator.evaluate(async (element) => {
+    const read = () => {
+      const { x, y, width, height } = element.getBoundingClientRect();
+      return `${x},${y},${width},${height}`;
+    };
+    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    let previous = read();
+    let unchangedFrames = 0;
+    while (unchangedFrames < 3) {
+      await nextFrame();
+      const current = read();
+      unchangedFrames = current === previous ? unchangedFrames + 1 : 0;
+      previous = current;
+    }
+  });
 }

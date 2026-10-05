@@ -240,6 +240,9 @@ test.describe('ServiceBlueprint editor validation rail', () => {
   });
 
   test('keeps save failures visible and copyable for support handoff', async ({ page }) => {
+    // A fake clock lets the test prove "no timer ever dismisses the error" by advancing time,
+    // instead of sleeping real seconds and hoping a timer would have fired by then.
+    await page.clock.install();
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
 
     await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
@@ -250,7 +253,7 @@ test.describe('ServiceBlueprint editor validation rail', () => {
     const saveError = page.locator('[data-wayfinder-save-error]');
     await expect(saveError).toBeVisible();
 
-    await page.waitForTimeout(3_500);
+    await page.clock.fastForward('01:00');
     await expect(saveError).toBeVisible();
     await expect(page.locator('[data-wayfinder-save-error-details]')).toHaveValue(
       [

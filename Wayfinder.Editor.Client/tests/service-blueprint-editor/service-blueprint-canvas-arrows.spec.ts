@@ -3,8 +3,8 @@ import { CANONICAL_SCENARIOS, gotoCanonicalScenario, measureGraph, VISUAL_VIEWPO
 
 /**
  * Concern 4 from `docs/testing/service-blueprint-editor-visual-tests.md`: every
- * route's SVG endpoint must land on the node it claims to attach to (±4
- * px), so authors can read the diagram as "from this stage, through this
+ * route's SVG endpoint must land on the node it claims to attach to (within
+ * the connection handle's reach), so authors can read the diagram as "from this stage, through this
  * gateway, to that stage".
  *
  * A handful of canonical layouts also have committed screenshot baselines
@@ -12,7 +12,9 @@ import { CANONICAL_SCENARIOS, gotoCanonicalScenario, measureGraph, VISUAL_VIEWPO
  * (maxDiffPixelRatio 0.02) absorbs sub-pixel font rendering differences
  * between local and CI runs — see strategy doc.
  */
-const ENDPOINT_TOLERANCE_PX = 4;
+// A route ends at the outer edge of its connection handle, which sits centred on the node's edge:
+// half of the 14px editable handle (10px + 2px border each side) is outside the node.
+const ENDPOINT_TOLERANCE_PX = 8;
 
 test.use({ viewport: { ...VISUAL_VIEWPORT } });
 
