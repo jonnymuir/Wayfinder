@@ -207,6 +207,7 @@ this table is a human-readable snapshot of the same data.
 | `guidance-checklist` | Input | Linked guidance articles, each with its own acknowledgement checkbox, `required` means every item must be acknowledged. |
 | `heading` | Content | A heading, levels 1-6. |
 | `inset-text` | Content | Highlights important content in an inset box. |
+| `location-picker` | Input | One geographic point, stored as `latitude,longitude` in WGS84 decimal degrees, with a map and current-location button as enhancement. |
 | `notification-banner` | Content | Info/success/warning banner. |
 | `number` | Input | Integer values. |
 | `panel` | Content | Confirmation-style panel, typically the heading of an outcome stage. |
@@ -274,6 +275,19 @@ accepted; `maxSizeBytes` is enforced server-side on submit. Optional `captureMod
 a phone offers the file: `choose` (the default) lets the operating system offer both the camera
 and existing files, `camera` opens the rear camera directly with no existing-file option. For a
 photo that may have been taken earlier, leave it on `choose`.
+
+`location-picker` captures one geographic point. Its value is the string `latitude,longitude`
+in WGS84 decimal degrees (for example `51.5074,-0.1278`), so it works unchanged in calculations,
+the configured webhook support system, CSV and GIS tooling. It is validated server-side:
+exactly two finite numbers, latitude within -90 to 90 and longitude within -180 to 180, and
+`required: true` rejects an empty value. A plain text field is always the working control. With
+`wayfinder-location-picker.js` loaded it gains a map and a "use my current location" button, kept
+in sync with the text field. The script announces each change as a bubbling
+`wayfinder:location-changed` event (`detail`: `latitude`, `longitude`, `source` of `device`,
+`map` or `typed`, and `accuracyMetres` for a device fix), so a host can record where a position
+came from. Map tiles come from `<meta name="wayfinder-map-tile-url">` (a `{z}/{x}/{y}` template,
+with `wayfinder-map-attribution` and `wayfinder-map-default-centre` as `latitude,longitude`); the
+default is the public OpenStreetMap tile server, which suits demos only.
 
 `guidance-checklist` lists linked guidance articles (each with its own `key`, `label`,
 `href`) alongside an acknowledgement checkbox per item, unlike `checkboxlist`, where

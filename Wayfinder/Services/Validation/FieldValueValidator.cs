@@ -235,6 +235,13 @@ public static class FieldValueValidator
                 }
                 break;
 
+            case "location-picker":
+                if (!LocationValue.TryParse(raw, out _, out _))
+                {
+                    return $"{field.Label} must be a latitude between -90 and 90 and a longitude between -180 and 180, separated by a comma, for example 51.5074, -0.1278.";
+                }
+                break;
+
             case "email":
                 try
                 {

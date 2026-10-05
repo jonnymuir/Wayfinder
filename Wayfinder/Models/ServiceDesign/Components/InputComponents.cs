@@ -232,6 +232,15 @@ public sealed record FileUploadComponent : InputComponent
 }
 
 /// <summary>
+/// Captures one geographic point as a <c>latitude,longitude</c> string in WGS84 decimal degrees
+/// (for example <c>51.5074,-0.1278</c>). A plain text field is always the working control; a
+/// map and a "use my current location" button are progressive enhancement over it.
+/// </summary>
+public sealed record LocationPickerComponent : InputComponent
+{
+}
+
+/// <summary>
 /// Range slider input. Renders as a native range control with its current value
 /// displayed alongside; submits like a number field.
 /// </summary>

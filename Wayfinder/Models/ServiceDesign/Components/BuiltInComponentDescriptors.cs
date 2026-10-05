@@ -318,7 +318,7 @@ public static class BuiltInComponentDescriptors
             Properties = InputBaseProperties(),
         });
 
-        descriptors.Add(FileUploadDescriptor.Build());
+        descriptors.AddRange([FileUploadDescriptor.Build(), LocationPickerDescriptor.Build()]);
 
         descriptors.Add(new ComponentDescriptor
         {

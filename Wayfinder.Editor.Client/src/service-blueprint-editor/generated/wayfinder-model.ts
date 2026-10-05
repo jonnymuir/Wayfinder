@@ -181,6 +181,19 @@ export interface InsetTextComponent {
   content: string;
   showWhen?: string;
 }
+export interface LocationPickerComponent {
+  type: 'location-picker';
+  fieldKey: string;
+  label: string;
+  hint?: string;
+  required?: boolean;
+  conditionalOn?: string;
+  visibleWhen?: string;
+  default?: string;
+  defaultFrom?: string;
+  changeStateKey?: string;
+  showWhen?: string;
+}
 export interface NotificationBannerComponent {
   type: 'notification-banner';
   bannerType: string;
@@ -336,6 +349,7 @@ export type Component =
   | GuidanceChecklistComponent
   | HeadingComponent
   | InsetTextComponent
+  | LocationPickerComponent
   | NotificationBannerComponent
   | NumberInputComponent
   | PanelComponent

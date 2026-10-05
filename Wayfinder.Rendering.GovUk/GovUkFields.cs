@@ -39,7 +39,8 @@ public static class GovUkFields
             "checkboxlist" => RenderCheckboxList(field, errors),
             "slider" => RenderSlider(field, errors),
             "file-upload" => GovUkFileUploadField.Render(field, errors),
-            "guidance-checklist" => RenderGuidanceChecklist(field, errors),
+            "guidance-checklist" => GovUkGuidanceChecklistField.Render(field, errors),
+            "location-picker" => GovUkLocationPickerField.Render(field, errors),
             _ => RenderText(field, errors),
         };
     }
@@ -450,41 +451,6 @@ public static class GovUkFields
                 <span>{GovUk.Esc(prefix)}{min}{GovUk.Esc(suffix)}</span>
                 <span>{GovUk.Esc(prefix)}{max}{GovUk.Esc(suffix)}</span>
               </div>
-            </div>
-            """;
-    }
-
-    private static string RenderGuidanceChecklist(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
-    {
-        var (id, name, hint, describedBy, _, error) = Common(field, errors);
-        var checkedValues = (field.Value?.ToString() ?? "")
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var items = field.GuidanceItems ?? Array.Empty<GuidanceChecklistItem>();
-        var completed = items.Count(i => checkedValues.Contains(i.Key));
-        var rows = items.Select(item =>
-        {
-            var itemId = $"{id}-{item.Key}";
-            return $"""
-                <div class="govuk-checkboxes__item">
-                  <input class="govuk-checkboxes__input" type="checkbox" id="{itemId}" name="{name}[]" value="{GovUk.Esc(item.Key)}" {(checkedValues.Contains(item.Key) ? "checked" : "")}>
-                  <label class="govuk-label govuk-checkboxes__label" for="{itemId}">
-                    <a class="govuk-link" href="{GovUk.Esc(item.Href)}" target="_blank" rel="noopener">{GovUk.Esc(item.Label)}</a>
-                  </label>
-                </div>
-                """;
-        });
-        return $"""
-            <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}">
-              <fieldset class="govuk-fieldset"{describedBy}>
-                <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">{GovUk.Esc(field.Label)}</legend>
-                {hint}
-                {ErrorMessage($"{id}-error", error)}
-                <p class="govuk-body">{completed} of {items.Count} guidance articles completed</p>
-                <div class="govuk-checkboxes" data-module="govuk-checkboxes">
-                  {string.Join("\n", rows)}
-                </div>
-              </fieldset>
             </div>
             """;
     }
