@@ -220,71 +220,15 @@ public static class FieldValueValidator
     private static bool IsMultiCheckboxFieldType(string lowercaseFieldType) =>
         lowercaseFieldType is "checkboxlist" or "checkboxes" or "guidance-checklist";
 
-    private static string? ValidateType(FieldRenderPayload field, string raw)
+    private static string? ValidateType(FieldRenderPayload field, string raw) => field.FieldType.ToLowerInvariant() switch
     {
-        switch (field.FieldType.ToLowerInvariant())
-        {
-            case "number":
-            case "currency":
-            case "decimal":
-            case "slider":
-                if (!decimal.TryParse(raw, System.Globalization.NumberStyles.AllowDecimalPoint | System.Globalization.NumberStyles.AllowLeadingSign,
-                    System.Globalization.CultureInfo.InvariantCulture, out _))
-                {
-                    return $"{field.Label} must be a number.";
-                }
-                break;
-
-            case "location-picker":
-                if (!LocationValue.TryParse(raw, out _, out _))
-                {
-                    return $"{field.Label} must be a latitude between -90 and 90 and a longitude between -180 and 180, separated by a comma, for example 51.5074, -0.1278.";
-                }
-                break;
-
-            case "email":
-                try
-                {
-                    var addr = new MailAddress(raw);
-                    if (addr.Address != raw)
-                    {
-                        return $"{field.Label} must be a valid email address.";
-                    }
-                }
-                catch (FormatException)
-                {
-                    return $"{field.Label} must be a valid email address.";
-                }
-                break;
-
-            case "date":
-                // GDS multi-input date: GetSubmittedValue reconstructs as YYYY-MM-DD,
-                // or returns "PARTIAL" when only some sub-inputs are filled.
-                if (raw == "PARTIAL")
-                {
-                    return $"{field.Label} must include day, month, and year.";
-                }
-                if (!DateTime.TryParse(raw, out var parsedDate))
-                {
-                    return $"{field.Label} must be a valid date.";
-                }
-                // Year range check: 1900-2100 inclusive
-                if (parsedDate.Year < 1900 || parsedDate.Year > 2100)
-                {
-                    return $"{field.Label} year must be between 1900 and 2100.";
-                }
-                break;
-
-            case "datetime":
-                if (!DateTime.TryParse(raw, out _))
-                {
-                    return $"{field.Label} must be a valid date and time.";
-                }
-                break;
-        }
-
-        return null;
-    }
+        "number" or "currency" or "decimal" or "slider" => FieldTypeValidators.Number(field, raw),
+        "location-picker" => FieldTypeValidators.Location(field, raw),
+        "email" => FieldTypeValidators.Email(field, raw),
+        "date" => FieldTypeValidators.Date(field, raw),
+        "datetime" => FieldTypeValidators.DateAndTime(field, raw),
+        _ => null,
+    };
 
     private static string? ValidateOptions(FieldRenderPayload field, string raw)
     {

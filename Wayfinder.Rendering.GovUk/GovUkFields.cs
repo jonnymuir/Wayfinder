@@ -11,6 +11,14 @@ namespace Wayfinder.Rendering.GovUk;
 /// </summary>
 public static class GovUkFields
 {
+    // The field types whose rendering lives in a file of its own.
+    private static readonly Dictionary<string, Func<FieldRenderPayload, IReadOnlyDictionary<string, string>, string>> OwnFileRenderers = new()
+    {
+        ["file-upload"] = GovUkFileUploadField.Render,
+        ["guidance-checklist"] = GovUkGuidanceChecklistField.Render,
+        ["location-picker"] = GovUkLocationPickerField.Render,
+    };
+
     /// <summary>
     /// Renders one editable field, including its <c>govuk-error-message</c> when
     /// <paramref name="errors"/> carries an entry for its <see cref="FieldRenderPayload.FieldKey"/>.
@@ -27,6 +35,11 @@ public static class GovUkFields
             return inline;
         }
 
+        if (OwnFileRenderers.TryGetValue(field.FieldType, out var renderOwn))
+        {
+            return renderOwn(field, errors);
+        }
+
         return field.FieldType switch
         {
             "boolean" => RenderBoolean(field, errors),
@@ -38,9 +51,6 @@ public static class GovUkFields
             "radio" => RenderRadio(field, errors),
             "checkboxlist" => RenderCheckboxList(field, errors),
             "slider" => RenderSlider(field, errors),
-            "file-upload" => GovUkFileUploadField.Render(field, errors),
-            "guidance-checklist" => GovUkGuidanceChecklistField.Render(field, errors),
-            "location-picker" => GovUkLocationPickerField.Render(field, errors),
             _ => RenderText(field, errors),
         };
     }
