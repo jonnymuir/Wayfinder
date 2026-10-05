@@ -11,14 +11,6 @@ namespace Wayfinder.Rendering.GovUk;
 /// </summary>
 public static class GovUkFields
 {
-    // The field types whose rendering lives in a file of its own.
-    private static readonly Dictionary<string, Func<FieldRenderPayload, IReadOnlyDictionary<string, string>, string>> OwnFileRenderers = new()
-    {
-        ["file-upload"] = GovUkFileUploadField.Render,
-        ["guidance-checklist"] = GovUkGuidanceChecklistField.Render,
-        ["location-picker"] = GovUkLocationPickerField.Render,
-    };
-
     /// <summary>
     /// Renders one editable field, including its <c>govuk-error-message</c> when
     /// <paramref name="errors"/> carries an entry for its <see cref="FieldRenderPayload.FieldKey"/>.
@@ -35,7 +27,7 @@ public static class GovUkFields
             return inline;
         }
 
-        if (OwnFileRenderers.TryGetValue(field.FieldType, out var renderOwn))
+        if (GovUkFieldRenderers.TryGet(field.FieldType, out var renderOwn))
         {
             return renderOwn(field, errors);
         }
@@ -50,7 +42,6 @@ public static class GovUkFields
             "select" => RenderSelect(field, errors),
             "radio" => RenderRadio(field, errors),
             "checkboxlist" => RenderCheckboxList(field, errors),
-            "slider" => RenderSlider(field, errors),
             _ => RenderText(field, errors),
         };
     }
@@ -424,43 +415,6 @@ public static class GovUkFields
                   {string.Join("\n", items)}
                 </div>
               </fieldset>
-            </div>
-            """;
-    }
-
-    /// <summary>
-    /// Real GOV.UK Design System has no official "slider" component, so this is Wayfinder's own —
-    /// a live-updating <c>wayfinder-slider__*</c>-classed range input with a progressive-enhancement
-    /// hook (<c>data-wayfinder-slider-input</c>/<c>data-wayfinder-slider-value</c>) a host wires its
-    /// own JS to, same as govuk-frontend's own components need a host to load govuk-frontend's JS.
-    /// This is the gold-standard rendering — hosts don't need their own override for this type.
-    /// </summary>
-    private static string RenderSlider(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
-    {
-        var (id, name, hint, describedBy, required, error) = Common(field, errors);
-        var min = field.Min ?? 0;
-        var max = field.Max ?? 100;
-        var value = string.IsNullOrEmpty(field.Value?.ToString()) ? min.ToString(CultureInfo.InvariantCulture) : field.Value!.ToString()!;
-        var prefix = field.Prefix ?? "";
-        var suffix = field.Suffix ?? "";
-        var errorClass = error is null ? "" : " wayfinder-slider__input--error";
-        return $"""
-            <div class="govuk-form-group{(error is null ? "" : " govuk-form-group--error")}" data-wayfinder-slider>
-              <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
-              {hint}
-              {ErrorMessage($"{id}-error", error)}
-              <div class="wayfinder-slider__row">
-                <input class="wayfinder-slider__input{errorClass}"
-                       type="range" id="{id}" name="{name}" value="{GovUk.Esc(value)}"
-                       data-label="{GovUk.Esc(field.Label)}" data-wayfinder-slider-input{describedBy} {required}
-                       min="{min}" max="{max}" step="{field.Step ?? 1}" />
-                <span class="wayfinder-slider__value" data-wayfinder-slider-value
-                      data-prefix="{GovUk.Esc(prefix)}" data-suffix="{GovUk.Esc(suffix)}" aria-hidden="true">{GovUk.Esc(prefix)}{GovUk.Esc(value)}{GovUk.Esc(suffix)}</span>
-              </div>
-              <div class="wayfinder-slider__bounds" aria-hidden="true">
-                <span>{GovUk.Esc(prefix)}{min}{GovUk.Esc(suffix)}</span>
-                <span>{GovUk.Esc(prefix)}{max}{GovUk.Esc(suffix)}</span>
-              </div>
             </div>
             """;
     }

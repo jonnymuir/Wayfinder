@@ -14,7 +14,7 @@
     "Wayfinder.Engine/Stores/InMemoryBulkDatasetStore.cs": 456,
     "Wayfinder.ReferenceApp/Program.cs": 438,
     "Wayfinder.Rendering.GovUk/GovUkComponents.cs": 413,
-    "Wayfinder.Rendering.GovUk/GovUkFields.cs": 460,
+    "Wayfinder.Rendering.GovUk/GovUkFields.cs": 424,
     "Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-bulk-data-review.js": 509,
     "Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-calculations.js": 774
   },
