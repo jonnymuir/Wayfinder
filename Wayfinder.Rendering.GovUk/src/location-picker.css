@@ -1,0 +1,15 @@
+.wayfinder-location__map {
+  height: 20rem;
+  margin-bottom: 15px;
+  border: 1px solid #0b0c0c;
+}
+
+.wayfinder-location__map:focus {
+  outline: 3px solid #fd0;
+  outline-offset: 0;
+}
+
+.wayfinder-location__status {
+  margin-top: 10px;
+  margin-bottom: 15px;
+}

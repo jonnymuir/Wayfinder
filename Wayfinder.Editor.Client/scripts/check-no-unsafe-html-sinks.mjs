@@ -16,7 +16,12 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
-const ROOTS = [join(repo, 'Wayfinder.Rendering.GovUk', 'wwwroot', 'js'), join(repo, 'Wayfinder.Editor.Client', 'src')];
+// The location picker's built bundle (wwwroot/location-picker) inlines OpenLayers, so its own source is what is checked.
+const ROOTS = [
+  join(repo, 'Wayfinder.Rendering.GovUk', 'wwwroot', 'js'),
+  join(repo, 'Wayfinder.Rendering.GovUk', 'src'),
+  join(repo, 'Wayfinder.Editor.Client', 'src'),
+];
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'bin', 'obj', 'fixtures']);
 const SKIP_FILE = /\.(test|spec|stories)\.ts$/;
 

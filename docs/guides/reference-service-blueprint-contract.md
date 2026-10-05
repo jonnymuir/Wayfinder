@@ -281,7 +281,8 @@ in WGS84 decimal degrees (for example `51.5074,-0.1278`), so it works unchanged 
 the configured webhook support system, CSV and GIS tooling. It is validated server-side:
 exactly two finite numbers, latitude within -90 to 90 and longitude within -180 to 180, and
 `required: true` rejects an empty value. A plain text field is always the working control. With
-`wayfinder-location-picker.js` loaded it gains a map and a "use my current location" button, kept
+`/_content/Wayfinder.Rendering.GovUk/location-picker/wayfinder-location-picker.js` loaded as a module (it
+loads its own stylesheet) it gains a map and a "use my current location" button, kept
 in sync with the text field. The script announces each change as a bubbling
 `wayfinder:location-changed` event (`detail`: `latitude`, `longitude`, `source` of `device`,
 `map` or `typed`, and `accuracyMetres` for a device fix), so a host can record where a position
