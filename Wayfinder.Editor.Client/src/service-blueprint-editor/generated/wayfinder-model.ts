@@ -86,6 +86,7 @@ export interface CheckboxesComponent {
 }
 export interface DateInputComponent {
   type: 'date';
+  defaultToToday?: boolean;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -293,6 +294,7 @@ export interface TextInputComponent {
   maxLength?: number;
   pattern?: string;
   prefix?: string;
+  defaultToCurrentTime?: boolean;
   fieldKey: string;
   label: string;
   hint?: string;

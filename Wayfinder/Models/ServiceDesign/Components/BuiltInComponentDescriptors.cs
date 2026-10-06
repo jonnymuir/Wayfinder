@@ -199,19 +199,7 @@ public static class BuiltInComponentDescriptors
         });
 
         // ── Input components ─────────────────────────────────────────────────────────────
-        descriptors.Add(new ComponentDescriptor
-        {
-            Discriminator = "text", DisplayName = "Text input", Category = ComponentCategory.Input,
-            ClrType = typeof(TextInputComponent), IsInput = true,
-            Properties =
-            [
-                .. InputBaseProperties(),
-                Prop(nameof(TextInputComponent.MinLength), "Minimum length", ComponentPropertyValueKind.Integer),
-                Prop(nameof(TextInputComponent.MaxLength), "Maximum length", ComponentPropertyValueKind.Integer),
-                Prop(nameof(TextInputComponent.Pattern), "Pattern (regex)", ComponentPropertyValueKind.String, format: "pattern"),
-                Prop(nameof(TextInputComponent.Prefix), "Prefix", ComponentPropertyValueKind.String, "e.g. \"£\"."),
-            ],
-        });
+        descriptors.Add(DeviceClockDescriptors.Text());
 
         descriptors.Add(new ComponentDescriptor
         {
@@ -280,12 +268,7 @@ public static class BuiltInComponentDescriptors
                 nameof(CheckboxesComponent.ConditionalChildren), nameof(CheckboxesComponent.Options)),
         });
 
-        descriptors.Add(new ComponentDescriptor
-        {
-            Discriminator = "date", DisplayName = "Date input", Category = ComponentCategory.Input,
-            ClrType = typeof(DateInputComponent), IsInput = true,
-            Properties = InputBaseProperties(),
-        });
+        descriptors.Add(DeviceClockDescriptors.Date());
 
         descriptors.Add(new ComponentDescriptor
         {

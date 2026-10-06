@@ -326,14 +326,8 @@ internal sealed partial class StageRenderer(IServiceContentSanitizer sanitizer, 
             Hint = input.Hint,
             FieldType = fieldType,
             Required = input.Required,
-            Options = input switch
-            {
-                SelectComponent select => select.Options,
-                RadiosComponent radios => radios.Options,
-                CheckboxesComponent checkboxes => checkboxes.Options,
-                GuidanceChecklistComponent guidance => guidance.Items.Select(i => i.Key).ToList(),
-                _ => null
-            },
+            Options = OptionsOf(input),
+            DeviceDefault = DeviceDefaultOf(input),
             Value = GetDisplayValue(input, fieldType, savedValues) ?? ResolveDefaultFrom(input, calc) ?? input.Default,
             MinLength = input switch
             {

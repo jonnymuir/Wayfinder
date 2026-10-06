@@ -1,6 +1,6 @@
 {
   "files": {
-    "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 464,
+    "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 447,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.DataDisplayBindings.cs": 412,
     "Wayfinder/Models/ServiceDesign/ServiceRequestResponseEnvelope.cs": 419,
     "Wayfinder/Services/Calculations/CalculationEvaluator.cs": 544,
@@ -10,7 +10,7 @@
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-editor.ts": 743,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-outline.ts": 571,
     "Wayfinder.Engine/Services/GatewayAdvancer.cs": 414,
-    "Wayfinder.Engine/Services/StageRenderer.cs": 540,
+    "Wayfinder.Engine/Services/StageRenderer.cs": 534,
     "Wayfinder.Engine/Stores/InMemoryBulkDatasetStore.cs": 456,
     "Wayfinder.ReferenceApp/Program.cs": 438,
     "Wayfinder.Rendering.GovUk/GovUkFields.cs": 424,
@@ -20,7 +20,7 @@
   "methods": {
     "SafetyNetUnderwriting/ContributionsValidation.cs": 74,
     "Wayfinder/Extensions/ComponentExtensions.cs": 101,
-    "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 359,
+    "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 342,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.BulkDatasetActions.cs": 188,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.DataDisplayBindings.cs": 274,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.FieldReferences.cs": 66,

@@ -105,6 +105,13 @@ public sealed record TextInputComponent : InputComponent
 
     /// <summary>Currency/unit prefix displayed before the input (e.g., "£").</summary>
     public string? Prefix { get; init; }
+
+    /// <summary>
+    /// Fills the field with the current time (24-hour <c>HH:mm</c>, for example <c>14:30</c>) from the
+    /// visitor's own device clock when they have not entered one. It is a starting value they can change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool DefaultToCurrentTime { get; init; }
 }
 
 /// <summary>
@@ -181,6 +188,12 @@ public sealed record CheckboxesComponent : InputComponent
 /// </summary>
 public sealed record DateInputComponent : InputComponent
 {
+    /// <summary>
+    /// Fills the field with today's date from the visitor's own device clock when they have not entered
+    /// one, so a record made in the field starts on the right day. It is a starting value they can change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool DefaultToToday { get; init; }
 }
 
 /// <summary>

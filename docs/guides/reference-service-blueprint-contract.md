@@ -290,6 +290,14 @@ came from. Map tiles come from `<meta name="wayfinder-map-tile-url">` (a `{z}/{x
 with `wayfinder-map-attribution` and `wayfinder-map-default-centre` as `latitude,longitude`); the
 default is the public OpenStreetMap tile server, which suits demos only.
 
+A `date` input can set `"defaultToToday": true`, and a `text` input `"defaultToCurrentTime": true`
+(24-hour `HH:mm`), to start on the visitor's own device clock when they have not entered a value, which
+suits a record made in the field. The server cannot know the visitor's local day or time, so the markup
+carries `data-wayfinder-device-default` and
+`/_content/Wayfinder.Rendering.GovUk/js/wayfinder-device-clock.js` fills the field in. A field that
+already has a value (a saved answer, or one being typed) is left alone, and without the script the
+field is simply empty. It is a starting value, not a locked one.
+
 To show a captured point back to the person (a confirmation or "recorded" stage), give a `stat-group`
 item `"display": "map"` and bind its `fieldKey` to the location field. The tile takes the full row,
 writes the point out as text (so it reads without the script and to a screen reader) and, with the same
