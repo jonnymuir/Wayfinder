@@ -276,6 +276,14 @@ a phone offers the file: `choose` (the default) lets the operating system offer 
 and existing files, `camera` opens the rear camera directly with no existing-file option. For a
 photo that may have been taken earlier, leave it on `choose`.
 
+An image `file-upload` (any accepted type that is an image) is marked `data-wayfinder-file-preview`, and
+`/_content/Wayfinder.Rendering.GovUk/js/wayfinder-file-preview.js` then shows the visitor a small picture
+and a caption of what they chose beneath the input. The control a browser draws for a chosen file is not a
+reliable preview (a phone's webview can draw it black), so the script makes its own: scaled down on a canvas
+and shown as a `data:` image, which a strict Content-Security-Policy (`img-src 'self' data:`) allows and which
+never holds a full-size photo on a phone. The input is untouched and still carries the file; a file the browser
+cannot decode gets an honest caption instead of a picture, and without the script nothing changes.
+
 `location-picker` captures one geographic point. Its value is the string `latitude,longitude`
 in WGS84 decimal degrees (for example `51.5074,-0.1278`), so it works unchanged in calculations,
 the configured webhook support system, CSV and GIS tooling. It is validated server-side:

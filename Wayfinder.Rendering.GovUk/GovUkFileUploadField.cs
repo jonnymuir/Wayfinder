@@ -18,7 +18,7 @@ public static class GovUkFileUploadField
         var accept = field.AcceptedFileTypes is { Count: > 0 }
             ? $" accept=\"{GovUk.Esc(string.Join(",", field.AcceptedFileTypes))}\""
             : "";
-        var capture = CaptureAttribute(field.CaptureMode);
+        var capture = CaptureAttribute(field.CaptureMode) + PreviewAttribute(field.AcceptedFileTypes);
         var errorClass = error is null ? "" : " govuk-file-upload--error";
         var uploadedNotice = alreadyUploaded
             ? $"""<p class="govuk-body">Currently uploaded: {GovUk.Esc(field.Value?.ToString())}</p>"""
@@ -33,6 +33,26 @@ public static class GovUkFileUploadField
             </div>
             """;
     }
+
+    private static readonly HashSet<string> ImageTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp", ".heic", ".heif",
+    };
+
+    /// <summary>
+    /// Whether any accepted file type is an image, so a chosen file can be previewed. Public so a host that
+    /// renders its own file input (Wayfinder.Umbraco's progressive upload) loads the preview script on the
+    /// same rule. A field with no accepted types could be anything, so it is never previewed.
+    /// </summary>
+    public static bool AcceptsImages(IReadOnlyList<string>? acceptedFileTypes) =>
+        acceptedFileTypes is not null && acceptedFileTypes.Any(type => ImageTypes.Contains(type.Trim()));
+
+    /// <summary>
+    /// The attribute <c>wayfinder-file-preview.js</c> looks for, so an image input shows what was chosen: the
+    /// control the browser draws for a chosen file is not a reliable preview (a phone's webview can draw it black).
+    /// </summary>
+    public static string PreviewAttribute(IReadOnlyList<string>? acceptedFileTypes) =>
+        AcceptsImages(acceptedFileTypes) ? " data-wayfinder-file-preview" : "";
 
     /// <summary>
     /// The <c>capture</c> attribute for a capture mode, or nothing. Public so a host that renders its
