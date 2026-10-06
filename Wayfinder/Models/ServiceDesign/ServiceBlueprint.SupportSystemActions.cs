@@ -78,8 +78,7 @@ public partial record ServiceBlueprint
                 }
 
                 var inputMapping = action.Parameters["inputs"]?.AsObject();
-                var mappedInputKeys = inputMapping?.Select(kvp => kvp.Key).ToHashSet(StringComparer.Ordinal)
-                    ?? new HashSet<string>(StringComparer.Ordinal);
+                var mappedInputKeys = inputMapping?.Select(kvp => kvp.Key).ToHashSet(StringComparer.Ordinal) ?? [];
                 var declaredInputKeys = capability.Inputs.Select(i => i.Key).ToHashSet(StringComparer.Ordinal);
 
                 foreach (var input in capability.Inputs.Where(i => i.Required))
@@ -118,6 +117,7 @@ public partial record ServiceBlueprint
                 }
 
                 var declaredOutcomeKeys = capability.Outcomes.Select(o => o.Key).ToHashSet(StringComparer.Ordinal);
+                diagnostics.AddRange(SupportSystems.SupportCallFailurePolicy.Validate(action.Parameters, path, declaredOutcomeKeys));
                 foreach (var route in stage.Routes ?? [])
                 {
                     if (!string.IsNullOrWhiteSpace(route.Trigger) && !declaredOutcomeKeys.Contains(route.Trigger))

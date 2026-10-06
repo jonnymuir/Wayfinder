@@ -88,6 +88,36 @@ free, `ServiceBlueprint.ValidateSupportSystemActions()` (surfaced through
   resolve to (`SUPPORT_SYSTEM_ACTION_ROUTE_TRIGGER_UNKNOWN_OUTCOME`), a route whose trigger isn't
   a declared outcome can never fire, since `ResolveSupportSystemOutcome` only ever delivers one.
 
+- The optional failure settings below are in range and `onFailure.outcome` is one the capability
+  declares (`SUPPORT_SYSTEM_ACTION_INVALID_FAILURE_POLICY`).
+
+### When the call cannot be sent
+
+If the support system is unreachable or answers with an error status, the engine does **not** let
+the journey advance into a wait that nothing will ever end. By default the advance is abandoned:
+nothing is saved, the visitor stays on the stage they submitted with what they typed, and sees a
+`SUPPORT_SYSTEM_UNAVAILABLE` problem ("We could not send this to the service just now. Try again,
+and if it keeps happening, contact us."). Pressing Continue again is the retry.
+
+Both of these are opt-in, set in the action's `params`:
+
+```json
+"params": {
+  "supportSystemKey": "…", "capabilityKey": "…", "inputs": { … },
+  "retries": 2,
+  "retryDelaySeconds": 2,
+  "onFailure": { "outcome": "unclear", "outputs": { "habitatNotes": "No suggestion was available." } }
+}
+```
+
+- `retries` (0–5, default 0) re-sends the call before giving up, waiting `retryDelaySeconds`
+  (1–30, default 2) and doubling the wait each time. The request waits while it does, so keep
+  it small, and only use it against a consumer that tolerates the same call twice.
+- `onFailure` resolves the call as one of the capability's declared outcomes (with the literal
+  `outputs` merged into the instance) instead of failing, so the journey carries on down that
+  outcome's normal route. Use it where carrying on without the support system's answer is
+  acceptable. The fallback resolves the next time the waiting join gateway is checked.
+
 Separately, `ValidateDataDisplayBindings()` treats every field key declared in a referenced
 capability's `Outputs` as a known, legitimate binding for a `summary-list`/`stat-group` anywhere
 in the blueprint, the same as a captured input field or a `calculations.fields` entry, so
