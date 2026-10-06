@@ -1,5 +1,7 @@
 .wayfinder-location__map {
-  height: 20rem;
+  /* Tall enough to place a pin, short enough that there is always page left to scroll with: the map takes
+     one-finger drags (below), so it must never fill the screen. */
+  height: min(20rem, 55vh);
   margin-bottom: 15px;
   border: 1px solid #0b0c0c;
 }
@@ -15,7 +17,7 @@
 }
 
 .wayfinder-location-view {
-  height: 16rem;
+  height: min(16rem, 45vh);
   margin-top: 0.75rem;
   border: 1px solid #0b0c0c;
 }
@@ -23,4 +25,21 @@
 .wayfinder-location-view:focus {
   outline: 3px solid #fd0;
   outline-offset: 0;
+}
+
+/* OpenLayers asks the browser to handle one-finger drags itself (touch-action: pan-x pan-y), so on a phone the page
+   scrolls and the map only ever sees a pinch. A map has to own its drags. */
+.wayfinder-location__map .ol-viewport,
+.wayfinder-location-view .ol-viewport {
+  touch-action: none;
+}
+
+.wayfinder-location__results {
+  margin-top: 0.5rem;
+}
+
+.wayfinder-location__result {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
 }

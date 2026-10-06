@@ -11,9 +11,12 @@
 //   wayfinder-map-tile-url        a {z}/{x}/{y} tile template (default: public OpenStreetMap, demos only)
 //   wayfinder-map-attribution     attribution for that tile source
 //   wayfinder-map-default-centre  "latitude,longitude" the map opens on when there is no value or fix
+//   wayfinder-map-search-url      a place-search URL with a {query} placeholder that returns a JSON array of
+//                                 { lat, lon, display_name } (the shape of OpenStreetMap's Nominatim, the default,
+//                                 which suits demos only). An empty value turns the search off.
 //
 // Each change fires a bubbling `wayfinder:location-changed` event on the input, detail:
-//   { latitude, longitude, source: 'device' | 'map' | 'typed', accuracyMetres? }
+//   { latitude, longitude, source: 'device' | 'map' | 'typed' | 'search', accuracyMetres? }
 // so a host can record where a position came from.
 import 'ol/ol.css';
 import './location-picker.css';
@@ -22,6 +25,8 @@ import Feature from 'ol/Feature.js';
 import OlMap from 'ol/Map.js';
 import View from 'ol/View.js';
 import Point from 'ol/geom/Point.js';
+import { defaults as defaultInteractions } from 'ol/interaction/defaults.js';
+import MouseWheelZoom from 'ol/interaction/MouseWheelZoom.js';
 import Translate from 'ol/interaction/Translate.js';
 import TileLayer from 'ol/layer/Tile.js';
 import VectorLayer from 'ol/layer/Vector.js';
@@ -34,6 +39,8 @@ import { formatPoint, parsePoint, wrapLongitude } from './location-point.mjs';
 const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const FALLBACK_CENTRE = { latitude: 54, longitude: -2 };
+const OSM_SEARCH = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q={query}';
+const SEARCH_TIMEOUT_MS = 8000;
 const PIN_STYLE = new Style({
   image: new CircleStyle({
     radius: 9,
@@ -44,6 +51,12 @@ const PIN_STYLE = new Style({
 
 const meta = (name) => document.querySelector(`meta[name="wayfinder-map-${name}"]`)?.content || undefined;
 
+// Unlike the other settings, an empty search url means "off", so unset and empty have to be told apart.
+const searchUrl = () => {
+  const tag = document.querySelector('meta[name="wayfinder-map-search-url"]');
+  return tag ? tag.content : OSM_SEARCH;
+};
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -53,6 +66,12 @@ function element(tag, className, text) {
 
 const tileLayer = () =>
   new TileLayer({ source: new XYZ({ url: meta('tile-url') ?? OSM_TILES, attributions: meta('attribution') ?? OSM_ATTRIBUTION }) });
+
+// OpenLayers' Map defaults to interacting only while it has focus, and our map element is focusable (tabindex, for the
+// keyboard), so a drag on an unfocused map was ignored and a phone, where nothing focuses it first, could not pan at
+// all. Dragging always works; the mouse wheel still zooms only while the map has focus, so scrolling the page past a
+// map on a desktop does not get stuck on it.
+const interactions = () => defaultInteractions({ onFocusOnly: false, mouseWheelZoom: false }).extend([new MouseWheelZoom({ onFocusOnly: true })]);
 
 const pinLayer = (marker) => new VectorLayer({ source: new VectorSource({ features: [marker] }), style: PIN_STYLE });
 
@@ -70,6 +89,106 @@ const GEOLOCATION_ERRORS = {
   2: 'Your device could not work out its location. Enter it above, or select it on the map.',
   3: 'Finding your location took too long. Try again, enter it above, or select it on the map.',
 };
+
+const MAX_RESULTS = 5;
+
+const isUsablePlace = (place) => place.name && Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
+
+// Asks the search service for places matching a query: up to MAX_RESULTS with a name and a usable point.
+async function findPlaces(template, query, signal) {
+  const response = await fetch(template.replace('{query}', encodeURIComponent(query)), { signal, headers: { accept: 'application/json' } });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return (await response.json())
+    .map((place) => ({ name: String(place.display_name ?? ''), latitude: Number(place.lat), longitude: Number(place.lon) }))
+    .filter(isUsablePlace)
+    .slice(0, MAX_RESULTS);
+}
+
+function describeResults(count) {
+  if (count === 0) return 'No places found. Try a town, a street or a postcode.';
+  return count === 1 ? '1 place found.' : `${count} places found. Choose one to move the pin there.`;
+}
+
+function resultItem(place, onPick) {
+  const item = element('li');
+  const choice = element('button', 'govuk-button govuk-button--secondary govuk-!-margin-bottom-1 wayfinder-location__result', place.name);
+  choice.type = 'button';
+  choice.dataset.module = 'govuk-button';
+  choice.addEventListener('click', () => onPick(place));
+  item.append(choice);
+  return item;
+}
+
+// A place or postcode search above the map. The query goes to the configured search service, so it only
+// happens when the visitor presses Search (or Enter), never as they type. Up to five results are listed to
+// choose from, so a vague query never silently picks the wrong place.
+function addSearch(wrapper, id, choose) {
+  const template = searchUrl();
+  if (!template) return null;
+
+  const group = element('div', 'govuk-form-group wayfinder-location__search');
+  const label = element('label', 'govuk-label', 'Search for a place or postcode');
+  label.htmlFor = `${id}-search`;
+  const field = element('input', 'govuk-input govuk-!-width-two-thirds');
+  field.id = `${id}-search`;
+  field.type = 'search';
+  field.autocomplete = 'off';
+  const go = element('button', 'govuk-button govuk-button--secondary govuk-!-margin-bottom-0', 'Search');
+  go.type = 'button';
+  go.dataset.module = 'govuk-button';
+  const note = element('p', 'govuk-hint wayfinder-location__search-status');
+  note.setAttribute('role', 'status');
+  const results = element('ul', 'govuk-list wayfinder-location__results');
+  results.hidden = true;
+  group.append(label, field, go, note, results);
+
+  const pick = (place) => {
+    results.hidden = true;
+    note.textContent = `Location set to ${place.name}. Check the pin, or move it.`;
+    choose({ latitude: place.latitude, longitude: place.longitude });
+  };
+
+  let pending;
+  const run = async () => {
+    const query = field.value.trim();
+    if (!query) {
+      note.textContent = 'Enter a town, a street or a postcode to search for.';
+      return;
+    }
+    pending?.abort();
+    pending = new AbortController();
+    const timer = setTimeout(() => pending.abort(), SEARCH_TIMEOUT_MS);
+    results.hidden = true;
+    results.replaceChildren();
+    note.textContent = 'Searching…';
+    try {
+      const found = await findPlaces(template, query, pending.signal);
+      note.textContent = describeResults(found.length);
+      results.replaceChildren(...found.map((place) => resultItem(place, pick)));
+      results.hidden = found.length === 0;
+    } catch {
+      note.textContent = 'The search is not available just now. You can use your location, or select it on the map.';
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  go.addEventListener('click', run);
+  // Enter in this field must search, not submit the whole stage form it sits inside.
+  field.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    run();
+  });
+  return group;
+}
+
+// A hook for hosts and tests: where the map is currently centred.
+function trackCentre(map, target) {
+  map.on('moveend', () => {
+    const [longitude, latitude] = toLonLat(map.getView().getCenter());
+    target.dataset.wayfinderCentre = formatPoint(latitude, wrapLongitude(longitude));
+  });
+}
 
 function enhance(wrapper) {
   const input = wrapper.querySelector('[data-wayfinder-location-input]');
@@ -89,7 +208,12 @@ function enhance(wrapper) {
     'aria-label',
     `Map for ${label}. Pan with the arrow keys. To set the location without a mouse or touch, type it in the field above.`,
   );
-  wrapper.append(button, status, mapElement);
+  const search = addSearch(wrapper, input.id || 'location', (point) => {
+    commit(point, 'search');
+    // The device-location message ("accurate to about 18 metres") no longer describes this point.
+    status.textContent = '';
+  });
+  wrapper.append(...[button, status, search, mapElement].filter(Boolean));
   loadStylesheet();
 
   const initial = parsePoint(input.value) ?? parsePoint(meta('default-centre')) ?? FALLBACK_CENTRE;
@@ -99,7 +223,10 @@ function enhance(wrapper) {
     target: mapElement,
     view,
     layers: [tileLayer(), pinLayer(marker)],
+    interactions: interactions(),
   });
+
+  trackCentre(map, mapElement);
 
   const place = (point, centre) => {
     const coordinate = fromLonLat([point.longitude, point.latitude]);
@@ -111,6 +238,7 @@ function enhance(wrapper) {
     input.value = formatPoint(point.latitude, point.longitude);
     place(point, source !== 'map');
     if (source === 'device') view.setZoom(Math.max(view.getZoom(), 15));
+    if (source === 'search') view.setZoom(16);
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new CustomEvent('wayfinder:location-changed', { bubbles: true, detail: { ...point, source, accuracyMetres } }));
   };
@@ -181,7 +309,8 @@ function show(wrapper) {
 
   const coordinate = fromLonLat([point.longitude, point.latitude]);
   const marker = new Feature(new Point(coordinate));
-  new OlMap({ target: wrapper, view: new View({ center: coordinate, zoom: 15 }), layers: [tileLayer(), pinLayer(marker)] });
+  const map = new OlMap({ target: wrapper, view: new View({ center: coordinate, zoom: 15 }), layers: [tileLayer(), pinLayer(marker)], interactions: interactions() });
+  trackCentre(map, wrapper);
 }
 
 document.querySelectorAll('[data-wayfinder-location-picker]').forEach(enhance);

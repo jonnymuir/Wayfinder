@@ -293,10 +293,20 @@ exactly two finite numbers, latitude within -90 to 90 and longitude within -180 
 loads its own stylesheet) it gains a map and a "use my current location" button, kept
 in sync with the text field. The script announces each change as a bubbling
 `wayfinder:location-changed` event (`detail`: `latitude`, `longitude`, `source` of `device`,
-`map` or `typed`, and `accuracyMetres` for a device fix), so a host can record where a position
+`map`, `typed` or `search`, and `accuracyMetres` for a device fix), so a host can record where a position
 came from. Map tiles come from `<meta name="wayfinder-map-tile-url">` (a `{z}/{x}/{y}` template,
 with `wayfinder-map-attribution` and `wayfinder-map-default-centre` as `latitude,longitude`); the
 default is the public OpenStreetMap tile server, which suits demos only.
+
+The map takes one-finger drags on a phone (the page scrolls from outside it, and the map is never taller than
+55% of the screen so there is always some to scroll with); the mouse wheel zooms it only while it has focus, so
+scrolling a desktop page past it does not get stuck. A "Search for a place or postcode" field sits above the map:
+pressing Search (or Enter, which does not submit the stage form) lists up to five matches to choose from, and
+choosing one moves the pin and zooms in. The query is sent to the search service only when the visitor presses
+Search, never as they type. `<meta name="wayfinder-map-search-url">` sets the service: a URL with a `{query}`
+placeholder that returns a JSON array of `{ lat, lon, display_name }` (the shape of OpenStreetMap's Nominatim, which
+is the default and suits demos only, under its usage policy). An empty value turns the search off. A host whose
+Content-Security-Policy sets `connect-src` must allow the service's origin.
 
 A `date` input can set `"defaultToToday": true`, and a `text` input `"defaultToCurrentTime": true`
 (24-hour `HH:mm`), to start on the visitor's own device clock when they have not entered a value, which
