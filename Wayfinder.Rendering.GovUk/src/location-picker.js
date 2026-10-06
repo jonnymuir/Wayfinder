@@ -194,7 +194,11 @@ function enhance(wrapper) {
     'aria-label',
     `Map for ${label}. Pan with the arrow keys. To set the location without a mouse or touch, type it in the field above.`,
   );
-  const search = addSearch(wrapper, input.id || 'location', (point) => commit(point, 'search'));
+  const search = addSearch(wrapper, input.id || 'location', (point) => {
+    commit(point, 'search');
+    // The device-location message ("accurate to about 18 metres") no longer describes this point.
+    status.textContent = '';
+  });
   wrapper.append(...[button, status, search, mapElement].filter(Boolean));
   loadStylesheet();
 

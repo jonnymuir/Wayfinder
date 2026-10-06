@@ -168,7 +168,7 @@ async function drag(ctx, p, fromX, fromY, dy) {
 }
 
 // 10. Place search: results to choose from, never a silent guess, and Enter must not submit the stage form.
-p = await open({}, '/');
+p = await open(geo, '/');
 check('the search field is labelled', await p.getByLabel('Search for a place or postcode').isVisible());
 await p.evaluate(() => { window.__events = []; document.addEventListener('wayfinder:location-changed', (e) => window.__events.push(e.detail)); });
 await p.getByLabel('Search for a place or postcode').fill('Leeds');
@@ -180,6 +180,7 @@ check('the number of places is announced', /2 places found/.test(await p.locator
 await p.locator('.wayfinder-location__result', { hasText: 'Leeds, West Yorkshire' }).click();
 await p.waitForFunction(() => document.querySelector('#location').value === '53.799600,-1.549100').catch(() => {});
 check('choosing a place sets the field to that point', (await p.inputValue('#location')) === '53.799600,-1.549100', await p.inputValue('#location'));
+check('and clears the stale device-location message above it', (await p.locator('.wayfinder-location__status').innerText()) === '', await p.locator('.wayfinder-location__status').innerText());
 check('and reports source=search', (await p.evaluate(() => window.__events.at(-1)?.source)) === 'search');
 await p.waitForFunction(() => document.querySelector('.wayfinder-location__map').dataset.wayfinderCentre === '53.799600,-1.549100', null, { timeout: 5000 }).catch(() => {});
 check('and moves the map there', (await p.locator('.wayfinder-location__map').getAttribute('data-wayfinder-centre')) === '53.799600,-1.549100', await p.locator('.wayfinder-location__map').getAttribute('data-wayfinder-centre'));
