@@ -90,7 +90,7 @@ internal sealed partial class GatewayAdvancer(
         var onEnter = RunOnEnterActions(instance, definition, newCursors, mergedFieldValues);
         if (onEnter.Failed)
         {
-            return SupportCallFailed(instance, onEnter.FieldValues, definition, arrivingTransition.FromState, accessProfile, userId);
+            return SupportCallFailed(instance with { FieldValues = onEnter.FieldValues }, definition, accessProfile, userId);
         }
 
         mergedFieldValues = onEnter.FieldValues;

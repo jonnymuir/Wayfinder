@@ -47,17 +47,15 @@ internal sealed partial class GatewayAdvancer
         return new OnEnterResult(fieldValues, invocations, Failed: false);
     }
 
-    /// <summary>Nothing is saved: the visitor is shown the stage they submitted, with what they typed, and a try-again message.</summary>
+    /// <summary>
+    /// Nothing is saved: the visitor is shown the stage they submitted (<paramref name="submitted"/> still sits on
+    /// it, carrying what they typed) with a try-again message.
+    /// </summary>
     private ServiceRequestResponseEnvelope SupportCallFailed(
-        ServiceRequest instance,
-        IReadOnlyDictionary<string, object?> fieldValues,
+        ServiceRequest submitted,
         ServiceBlueprint definition,
-        string stageKey,
         ActorProfile accessProfile,
-        string userId)
-    {
-        var preview = instance with { FieldValues = new Dictionary<string, object?>(fieldValues, StringComparer.Ordinal) };
-        return envelopes.BuildEnvelope(preview, definition, accessProfile, userId)
-            with { Problems = [SupportCallBatch.UnavailableProblem(stageKey)] };
-    }
+        string userId) =>
+        envelopes.BuildEnvelope(submitted, definition, accessProfile, userId)
+            with { Problems = [SupportCallBatch.UnavailableProblem(submitted.CurrentStage)] };
 }

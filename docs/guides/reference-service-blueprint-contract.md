@@ -322,6 +322,10 @@ writes the point out as text (so it reads without the script and to a screen rea
 script loaded, adds a read-only map with a pin. A value that is not a point is left as text. The map
 reads the same tile `<meta>` tags as the picker.
 
+Any `stat-group` item can ask for more room with `"width": "full"`: the tile takes the whole row instead of
+one grid cell, which suits a long free-text value. The blueprint says how much room the value needs; the
+renderer decides what that means on the screen in front of it.
+
 `guidance-checklist` lists linked guidance articles (each with its own `key`, `label`,
 `href`) alongside an acknowledgement checkbox per item, unlike `checkboxlist`, where
 `required: true` only means *some* option was chosen, here it means **every** listed

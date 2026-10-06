@@ -16,12 +16,16 @@ namespace Wayfinder.Models.ServiceDesign.SupportSystems;
 /// </list>
 /// Retries re-send the same call, so use them only against an idempotent consumer.
 /// </summary>
-public sealed record SupportCallFailurePolicy(
-    int Retries,
-    TimeSpan InitialRetryDelay,
-    string? FallbackOutcome,
-    JsonObject? FallbackOutputs)
+public sealed record SupportCallFailurePolicy
 {
+    public int Retries { get; init; }
+
+    public TimeSpan InitialRetryDelay { get; init; }
+
+    public string? FallbackOutcome { get; init; }
+
+    public JsonObject? FallbackOutputs { get; init; }
+
     public const int MaxRetries = 5;
 
     public const int MaxRetryDelaySeconds = 30;
@@ -33,40 +37,39 @@ public sealed record SupportCallFailurePolicy(
         var retries = Math.Clamp(ReadInt(parameters, "retries") ?? 0, 0, MaxRetries);
         var delaySeconds = Math.Clamp(ReadInt(parameters, "retryDelaySeconds") ?? DefaultRetryDelaySeconds, 1, MaxRetryDelaySeconds);
         var onFailure = parameters["onFailure"] as JsonObject;
-        return new SupportCallFailurePolicy(
-            retries,
-            TimeSpan.FromSeconds(delaySeconds),
-            onFailure?["outcome"]?.GetValue<string>(),
-            onFailure?["outputs"] as JsonObject);
+        return new SupportCallFailurePolicy
+        {
+            Retries = retries,
+            InitialRetryDelay = TimeSpan.FromSeconds(delaySeconds),
+            FallbackOutcome = onFailure?["outcome"]?.GetValue<string>(),
+            FallbackOutputs = onFailure?["outputs"] as JsonObject,
+        };
     }
 
     /// <summary>Authoring diagnostics for the failure settings of one action; <paramref name="path"/> is the action's path.</summary>
     public static IEnumerable<ServiceBlueprintDiagnostic> Validate(
         JsonObject parameters, string path, IReadOnlySet<string> declaredOutcomeKeys)
     {
-        if (parameters["retries"] is { } retries && !InRange(retries, 0, MaxRetries))
+        foreach (var (key, min, max) in new[] { ("retries", 0, MaxRetries), ("retryDelaySeconds", 1, MaxRetryDelaySeconds) })
         {
-            yield return Invalid($"{path}.params.retries", $"params.retries must be a whole number from 0 to {MaxRetries}.");
+            if (parameters[key] is { } value && !InRange(value, min, max))
+            {
+                yield return Invalid($"{path}.params.{key}", $"params.{key} must be a whole number from {min} to {max}.");
+            }
         }
 
-        if (parameters["retryDelaySeconds"] is { } delay && !InRange(delay, 1, MaxRetryDelaySeconds))
-        {
-            yield return Invalid($"{path}.params.retryDelaySeconds", $"params.retryDelaySeconds must be a whole number from 1 to {MaxRetryDelaySeconds}.");
-        }
-
-        if (parameters["onFailure"] is not { } onFailure)
-        {
-            yield break;
-        }
-
-        var outcome = (onFailure as JsonObject)?["outcome"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
-        if (string.IsNullOrWhiteSpace(outcome) || !declaredOutcomeKeys.Contains(outcome))
+        if (parameters["onFailure"] is { } onFailure && !IsDeclaredOutcome(onFailure, declaredOutcomeKeys))
         {
             yield return Invalid(
                 $"{path}.params.onFailure.outcome",
                 $"params.onFailure.outcome must be one of the capability's declared outcomes ({string.Join(", ", declaredOutcomeKeys)}).");
         }
     }
+
+    private static bool IsDeclaredOutcome(JsonNode onFailure, IReadOnlySet<string> declaredOutcomeKeys) =>
+        (onFailure as JsonObject)?["outcome"] is JsonValue value
+        && value.TryGetValue<string>(out var outcome)
+        && declaredOutcomeKeys.Contains(outcome);
 
     private static ServiceBlueprintDiagnostic Invalid(string path, string message) =>
         new("SUPPORT_SYSTEM_ACTION_INVALID_FAILURE_POLICY", path, message);

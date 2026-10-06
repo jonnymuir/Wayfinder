@@ -17,6 +17,7 @@ internal sealed partial class StageRenderer
             Qualifier = item.Qualifier,
             Emphasis = item.Emphasis,
             Display = item.Display,
+            Width = item.Width,
         }).ToArray(),
     };
 }

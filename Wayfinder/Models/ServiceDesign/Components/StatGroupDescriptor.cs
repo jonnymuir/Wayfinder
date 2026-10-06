@@ -34,6 +34,10 @@ internal static class StatGroupDescriptor
                                 "How the value is shown. \"map\" shows a read-only map when the value is a " +
                                 "\"latitude,longitude\" point, such as a location-picker's; anything else is text.",
                                 allowedValues: ["text", "map"]),
+                            Prop(nameof(StatItemDefinition.Width), "Width", ComponentPropertyValueKind.String,
+                                "How much room the tile needs. \"full\" takes the whole row, for a long value such " +
+                                "as free text; the default is one grid cell.",
+                                allowedValues: ["auto", "full"]),
                         ],
                     },
                 },
