@@ -94,6 +94,15 @@
   overflow-wrap: anywhere;
 }
 
+/* A tile that shows a point on a map takes the full row, and writes the coordinates smaller above it. */
+.wayfinder-stat-card--map {
+  grid-column: 1 / -1;
+}
+
+.wayfinder-stat-card__value--point {
+  font-size: 1.125rem;
+}
+
 .wayfinder-stat-card__qualifier {
   font-size: 0.75rem;
   margin-top: 0.25rem;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Behavioural test for the location picker (../wwwroot/location-picker/wayfinder-location-picker.js), driven in a real
-// browser: the geolocation prompt, the map and the text field's two-way sync only exist in one. Serves the
+// Behavioural test for the location picker and the read-only map (../wwwroot/location-picker/wayfinder-location-picker.js),
+// driven in a real browser: the geolocation prompt, the map and the text field's two-way sync only exist in one. Serves the
 // built bundle with the markup GovUkLocationPickerField renders, a mocked device location, and a local tile
 // route so nothing touches the network. Also proves the plain input still works with no script at all.
 // Playwright is resolved from Wayfinder.Editor.Client, which CI already installs with its browsers.
@@ -25,11 +25,20 @@ const page = (value) => `<!doctype html><html><head><meta charset="utf-8">
 <div id="location-hint" class="govuk-hint">Latitude and longitude</div>
 <input class="govuk-input" id="location" name="field:location" type="text" value="${value}" data-wayfinder-location-input aria-describedby="location-hint" required>
 </div></form><script type="module" src="/lp/wayfinder-location-picker.js"></script></body></html>`;
+// The markup GovUkStatGroup renders for a tile with display "map".
+const tile = (value, extra = '') => `<div class="wayfinder-stat-card wayfinder-stat-card--map" data-wayfinder-stat="Where"${extra}>
+<div class="wayfinder-stat-card__label">Where</div><div class="wayfinder-stat-card__value wayfinder-stat-card__value--point">${value}</div>
+<div class="wayfinder-location-view" data-wayfinder-location-map data-wayfinder-location="${value}" data-wayfinder-label="Where"></div></div>`;
+const viewPage = (value) => `<!doctype html><html><head><meta charset="utf-8">
+<meta name="wayfinder-map-tile-url" content="/tiles/{z}/{x}/{y}.png"><meta name="wayfinder-map-attribution" content="test tiles"></head><body>
+<div class="wayfinder-stat-group" role="group">${tile(value)}</div><script type="module" src="/lp/wayfinder-location-picker.js"></script></body></html>`;
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   // Fixed fixtures only: nothing from the request is ever written into the page.
   const fixtures = { '/': '', '/existing': EXISTING_VALUE };
   if (Object.hasOwn(fixtures, url.pathname)) { res.setHeader('content-type', 'text/html'); return res.end(page(fixtures[url.pathname])); }
+  const views = { '/view': EXISTING_VALUE, '/view-bad': 'nonsense' };
+  if (Object.hasOwn(views, url.pathname)) { res.setHeader('content-type', 'text/html'); return res.end(viewPage(views[url.pathname])); }
   if (url.pathname.startsWith('/tiles/')) { res.setHeader('content-type', 'image/png'); return res.end(png); }
   if (url.pathname.startsWith('/lp/')) {
     const f = js + url.pathname.slice(4); if (!fs.existsSync(f)) { res.statusCode = 404; return res.end(); }
@@ -102,6 +111,24 @@ await p.context().close();
 const bare = await browser.newContext({ javaScriptEnabled: false }); const bp = await bare.newPage(); await bp.goto(base + '/');
 check('without script the plain labelled input still works', await bp.getByLabel('Where did you see it?').isVisible());
 await bare.close();
+
+// 8. The read-only map: shows the point, keeps the text, and cannot change the value.
+p = await open({}, '/view');
+await p.waitForFunction(() => document.querySelectorAll('.wayfinder-location-view canvas').length === 1, null, { timeout: 8000 }).catch(() => {});
+check('a map tile renders a map for a valid point', (await p.locator('.wayfinder-location-view canvas').count()) === 1);
+check('the point is still written out as text', (await p.locator('.wayfinder-stat-card__value').innerText()) === EXISTING_VALUE);
+check('the map is labelled with the tile and the point', new RegExp(`Map showing Where at 52\\.205300,0\\.121800`).test(await p.locator('.wayfinder-location-view').getAttribute('aria-label')), await p.locator('.wayfinder-location-view').getAttribute('aria-label'));
+const viewBox = await p.locator('.wayfinder-location-view canvas').boundingBox();
+await p.mouse.click(viewBox.x + viewBox.width * 0.75, viewBox.y + viewBox.height * 0.5);
+await p.waitForTimeout(150);
+check('clicking the map does not change the value', (await p.locator('.wayfinder-stat-card__value').innerText()) === EXISTING_VALUE);
+await p.context().close();
+
+p = await open({}, '/view-bad');
+await p.waitForTimeout(300);
+check('a value that is not a point shows no map', (await p.locator('.wayfinder-location-view').count()) === 0);
+check('and keeps its text', (await p.locator('.wayfinder-stat-card__value').innerText()) === 'nonsense');
+await p.context().close();
 
 check('no page or console errors', errors.length === 0, errors.join(' | '));
 await browser.close(); server.close();

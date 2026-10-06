@@ -33,6 +33,14 @@ public sealed record StatItemDefinition
     /// <summary>Whether to render this tile with visual emphasis.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Emphasis { get; init; }
+
+    /// <summary>
+    /// How the value is shown: omitted (or <c>"text"</c>) for the usual figure, or <c>"map"</c> to
+    /// show a read-only map when the bound value is a <c>"latitude,longitude"</c> point (what a
+    /// <c>location-picker</c> captures). A value that is not a point is shown as text.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Display { get; init; }
 }
 
 /// <summary>

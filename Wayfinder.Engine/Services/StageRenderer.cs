@@ -180,21 +180,7 @@ internal sealed partial class StageRenderer(IServiceContentSanitizer sanitizer, 
                     break;
 
                 case StatGroupComponent statGroup:
-                    result.Add(new ComponentRenderPayload
-                    {
-                        Type = "stat-group",
-                        Title = statGroup.Title,
-                        Stats = statGroup.Items.Select(item => new StatItem
-                        {
-                            Label = item.Label,
-                            FieldKey = item.FieldKey,
-                            Value = displayValues.TryGetValue(item.FieldKey, out var statValue)
-                                ? statValue?.ToString()
-                                : null,
-                            Qualifier = item.Qualifier,
-                            Emphasis = item.Emphasis
-                        }).ToArray()
-                    });
+                    result.Add(StatGroupPayload(statGroup, displayValues));
                     break;
 
                 case ChartComponent chart:

@@ -290,6 +290,12 @@ came from. Map tiles come from `<meta name="wayfinder-map-tile-url">` (a `{z}/{x
 with `wayfinder-map-attribution` and `wayfinder-map-default-centre` as `latitude,longitude`); the
 default is the public OpenStreetMap tile server, which suits demos only.
 
+To show a captured point back to the person (a confirmation or "recorded" stage), give a `stat-group`
+item `"display": "map"` and bind its `fieldKey` to the location field. The tile takes the full row,
+writes the point out as text (so it reads without the script and to a screen reader) and, with the same
+script loaded, adds a read-only map with a pin. A value that is not a point is left as text. The map
+reads the same tile `<meta>` tags as the picker.
+
 `guidance-checklist` lists linked guidance articles (each with its own `key`, `label`,
 `href`) alongside an acknowledgement checkbox per item, unlike `checkboxlist`, where
 `required: true` only means *some* option was chosen, here it means **every** listed

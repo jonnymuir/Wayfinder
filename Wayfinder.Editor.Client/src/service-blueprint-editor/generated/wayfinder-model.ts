@@ -587,6 +587,7 @@ export interface StatItemDefinition {
   fieldKey: string;
   qualifier?: string;
   emphasis?: boolean;
+  display?: string;
 }
 
 export interface SupportSystemCapabilityDescriptor {

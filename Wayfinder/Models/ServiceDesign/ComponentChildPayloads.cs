@@ -13,6 +13,8 @@ public record StatItem
     public string? Qualifier { get; init; }
     /// <summary>Whether to render this tile with visual emphasis.</summary>
     public bool Emphasis { get; init; }
+    /// <summary>How the value is shown: null or "text" for a figure, "map" for a read-only map of a point.</summary>
+    public string? Display { get; init; }
 }
 
 /// <summary>A section within a rendered task-list component.</summary>
