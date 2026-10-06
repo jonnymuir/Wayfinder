@@ -32,28 +32,39 @@ const tile = (value, extra = '') => `<div class="wayfinder-stat-card wayfinder-s
 const viewPage = (value) => `<!doctype html><html><head><meta charset="utf-8">
 <meta name="wayfinder-map-tile-url" content="/tiles/{z}/{x}/{y}.png"><meta name="wayfinder-map-attribution" content="test tiles"></head><body>
 <div class="wayfinder-stat-group" role="group">${tile(value)}</div><script type="module" src="/lp/wayfinder-location-picker.js"></script></body></html>`;
+const sendHtml = (res, body) => { res.setHeader('content-type', 'text/html'); res.end(body); };
+// Fixed fixtures only: nothing from the request is ever written into the page.
+const pages = {
+  '/': () => page(''),
+  '/existing': () => page(EXISTING_VALUE),
+  '/nosearch': () => page('', '<meta name="wayfinder-map-search-url" content="">'),
+  '/view': () => viewPage(EXISTING_VALUE),
+  '/view-bad': () => viewPage('nonsense'),
+};
+const PLACES = {
+  leeds: [
+    { lat: '53.7996', lon: '-1.5491', display_name: 'Leeds, West Yorkshire, England' },
+    { lat: '53.8008', lon: '-1.5489', display_name: 'Leeds railway station, Leeds' },
+  ],
+};
+function sendSearch(res, query) {
+  if (query === 'boom') { res.statusCode = 500; return res.end('no'); }
+  res.setHeader('content-type', 'application/json');
+  return res.end(JSON.stringify(PLACES[query] ?? []));
+}
+function sendAsset(res, name) {
+  const file = js + name;
+  if (!fs.existsSync(file)) { res.statusCode = 404; return res.end(); }
+  res.setHeader('content-type', file.endsWith('.css') ? 'text/css' : 'text/javascript');
+  return res.end(fs.readFileSync(file));
+}
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://x');
-  // Fixed fixtures only: nothing from the request is ever written into the page.
-  const fixtures = { '/': '', '/existing': EXISTING_VALUE };
-  if (Object.hasOwn(fixtures, url.pathname)) { res.setHeader('content-type', 'text/html'); return res.end(page(fixtures[url.pathname])); }
-  if (url.pathname === '/nosearch') { res.setHeader('content-type', 'text/html'); return res.end(page('', '<meta name="wayfinder-map-search-url" content="">')); }
-  if (url.pathname === '/search') {
-    const q = (url.searchParams.get('q') ?? '').toLowerCase();
-    if (q === 'boom') { res.statusCode = 500; return res.end('no'); }
-    res.setHeader('content-type', 'application/json');
-    return res.end(JSON.stringify(q === 'leeds'
-      ? [{ lat: '53.7996', lon: '-1.5491', display_name: 'Leeds, West Yorkshire, England' }, { lat: '53.8008', lon: '-1.5489', display_name: 'Leeds railway station, Leeds' }]
-      : []));
-  }
-  const views = { '/view': EXISTING_VALUE, '/view-bad': 'nonsense' };
-  if (Object.hasOwn(views, url.pathname)) { res.setHeader('content-type', 'text/html'); return res.end(viewPage(views[url.pathname])); }
-  if (url.pathname.startsWith('/tiles/')) { res.setHeader('content-type', 'image/png'); return res.end(png); }
-  if (url.pathname.startsWith('/lp/')) {
-    const f = js + url.pathname.slice(4); if (!fs.existsSync(f)) { res.statusCode = 404; return res.end(); }
-    res.setHeader('content-type', f.endsWith('.css') ? 'text/css' : 'text/javascript'); return res.end(fs.readFileSync(f));
-  }
-  res.statusCode = 404; res.end();
+  const { pathname, searchParams } = new URL(req.url, 'http://x');
+  if (Object.hasOwn(pages, pathname)) return sendHtml(res, pages[pathname]());
+  if (pathname === '/search') return sendSearch(res, (searchParams.get('q') ?? '').toLowerCase());
+  if (pathname.startsWith('/tiles/')) { res.setHeader('content-type', 'image/png'); return res.end(png); }
+  if (pathname.startsWith('/lp/')) return sendAsset(res, pathname.slice(4));
+  res.statusCode = 404; return res.end();
 }).listen(0);
 const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch();
@@ -137,8 +148,7 @@ await p.context().close();
 
 // 9. One-finger pan on a phone. OpenLayers asks the browser to handle one-finger drags (touch-action: pan-x pan-y),
 // so without our override the page scrolls and the map only ever sees a pinch. Driven with real touch events.
-async function drag(ctx, p, fromX, fromY, dy) {
-  const cdp = await ctx.newCDPSession(p);
+async function drag(cdp, fromX, fromY, dy) {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fromX, y: fromY }] });
   for (let i = 1; i <= 12; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: fromX, y: fromY + (dy * i) / 12 }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
@@ -148,11 +158,12 @@ async function drag(ctx, p, fromX, fromY, dy) {
   p = await ctx.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(`${base}/existing`);
+  const finger = await ctx.newCDPSession(p);
   await p.waitForFunction(() => document.querySelector('.wayfinder-location__map')?.dataset.wayfinderCentre);
   const before = await p.locator('.wayfinder-location__map').getAttribute('data-wayfinder-centre');
   const mapBox = await p.locator('.wayfinder-location__map canvas').boundingBox();
   await p.evaluate(() => window.scrollTo(0, 0));
-  await drag(ctx, p, mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height * 0.75, -mapBox.height * 0.5);
+  await drag(finger, mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height * 0.75, -mapBox.height * 0.5);
   await p.waitForFunction((was) => document.querySelector('.wayfinder-location__map').dataset.wayfinderCentre !== was, before, { timeout: 4000 }).catch(() => {});
   const after = await p.locator('.wayfinder-location__map').getAttribute('data-wayfinder-centre');
   check('the map tells the browser it owns drags (touch-action: none), which is what a real phone obeys', (await p.locator('.wayfinder-location__map .ol-viewport').evaluate((el) => getComputedStyle(el).touchAction)) === 'none');
@@ -161,7 +172,7 @@ async function drag(ctx, p, fromX, fromY, dy) {
   check('the pan does not change the stored value (only a click or the pin does)', (await p.inputValue('#location')) === EXISTING_VALUE);
   const box = await p.locator('.wayfinder-location__map').boundingBox();
   check('the map leaves room to scroll the page (at most 55% of the screen)', box.height <= 844 * 0.55 + 1, String(box.height));
-  await drag(ctx, p, 195, 780, -300);
+  await drag(finger, 195, 780, -300);
   await p.waitForTimeout(300);
   check('a drag outside the map still scrolls the page', (await p.evaluate(() => window.scrollY)) > 0);
   await ctx.close();

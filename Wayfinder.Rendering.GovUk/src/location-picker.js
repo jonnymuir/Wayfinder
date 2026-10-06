@@ -90,6 +90,35 @@ const GEOLOCATION_ERRORS = {
   3: 'Finding your location took too long. Try again, enter it above, or select it on the map.',
 };
 
+const MAX_RESULTS = 5;
+
+const isUsablePlace = (place) => place.name && Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
+
+// Asks the search service for places matching a query: up to MAX_RESULTS with a name and a usable point.
+async function findPlaces(template, query, signal) {
+  const response = await fetch(template.replace('{query}', encodeURIComponent(query)), { signal, headers: { accept: 'application/json' } });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return (await response.json())
+    .map((place) => ({ name: String(place.display_name ?? ''), latitude: Number(place.lat), longitude: Number(place.lon) }))
+    .filter(isUsablePlace)
+    .slice(0, MAX_RESULTS);
+}
+
+function describeResults(count) {
+  if (count === 0) return 'No places found. Try a town, a street or a postcode.';
+  return count === 1 ? '1 place found.' : `${count} places found. Choose one to move the pin there.`;
+}
+
+function resultItem(place, onPick) {
+  const item = element('li');
+  const choice = element('button', 'govuk-button govuk-button--secondary govuk-!-margin-bottom-1 wayfinder-location__result', place.name);
+  choice.type = 'button';
+  choice.dataset.module = 'govuk-button';
+  choice.addEventListener('click', () => onPick(place));
+  item.append(choice);
+  return item;
+}
+
 // A place or postcode search above the map. The query goes to the configured search service, so it only
 // happens when the visitor presses Search (or Enter), never as they type. Up to five results are listed to
 // choose from, so a vague query never silently picks the wrong place.
@@ -113,6 +142,12 @@ function addSearch(wrapper, id, choose) {
   results.hidden = true;
   group.append(label, field, go, note, results);
 
+  const pick = (place) => {
+    results.hidden = true;
+    note.textContent = `Location set to ${place.name}. Check the pin, or move it.`;
+    choose({ latitude: place.latitude, longitude: place.longitude });
+  };
+
   let pending;
   const run = async () => {
     const query = field.value.trim();
@@ -127,31 +162,10 @@ function addSearch(wrapper, id, choose) {
     results.replaceChildren();
     note.textContent = 'Searching…';
     try {
-      const response = await fetch(template.replace('{query}', encodeURIComponent(query)), { signal: pending.signal, headers: { accept: 'application/json' } });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const found = (await response.json())
-        .map((place) => ({ name: String(place.display_name ?? ''), latitude: Number(place.lat), longitude: Number(place.lon) }))
-        .filter((place) => place.name && Number.isFinite(place.latitude) && Number.isFinite(place.longitude))
-        .slice(0, 5);
-      if (!found.length) {
-        note.textContent = 'No places found. Try a town, a street or a postcode.';
-        return;
-      }
-      note.textContent = found.length === 1 ? '1 place found.' : `${found.length} places found. Choose one to move the pin there.`;
-      for (const place of found) {
-        const item = element('li');
-        const pick = element('button', 'govuk-button govuk-button--secondary govuk-!-margin-bottom-1 wayfinder-location__result', place.name);
-        pick.type = 'button';
-        pick.dataset.module = 'govuk-button';
-        pick.addEventListener('click', () => {
-          results.hidden = true;
-          note.textContent = `Location set to ${place.name}. Check the pin, or move it.`;
-          choose({ latitude: place.latitude, longitude: place.longitude });
-        });
-        item.append(pick);
-        results.append(item);
-      }
-      results.hidden = false;
+      const found = await findPlaces(template, query, pending.signal);
+      note.textContent = describeResults(found.length);
+      results.replaceChildren(...found.map((place) => resultItem(place, pick)));
+      results.hidden = found.length === 0;
     } catch {
       note.textContent = 'The search is not available just now. You can use your location, or select it on the map.';
     } finally {
