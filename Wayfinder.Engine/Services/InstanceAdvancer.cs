@@ -250,9 +250,13 @@ internal sealed partial class InstanceAdvancer(
         var primaryStage = GatewayAdvancer.FirstActiveStageCursorKey(updatedCursors) ?? transition.ToState;
         var mergedFieldValues = Merge(instance.FieldValues, fieldValues);
         var movedCursor = updatedCursors.FirstOrDefault(c => c.CursorId == sourceCursor?.CursorId);
-        var newInvocations = movedCursor is not null
-            ? supportSystems.ExecuteOnEnterSupportSystemActions(instance.InstanceId, definition, mergedFieldValues, movedCursor)
-            : [];
+        var batch = supportSystems.ExecuteOnEnterSupportSystemActions(instance.InstanceId, definition, mergedFieldValues, movedCursor);
+        if (batch.Failed)
+        {
+            return RenderWithProblems(request, [SupportCallBatch.UnavailableProblem(fromStageKey)]);
+        }
+
+        var newInvocations = batch.Invocations;
         var updated = instance with
         {
             CurrentStage = primaryStage,

@@ -60,36 +60,52 @@ internal sealed partial class SupportSystemOutcomes(
         var resolvedAny = false;
         foreach (var invocation in candidates)
         {
-            var capability = SupportSystemRegistry.FindCapability(invocation.SupportSystemKey, invocation.CapabilityKey);
-            if (capability is null
-                || !capability.SupportedCompletionModes.Contains(SupportSystemCompletionMode.Poll)
-                || invocation.Receipt is null
-                || !clients.TryGetValue(invocation.SupportSystemKey, out var client))
-            {
-                continue;
-            }
-
-            SupportSystemOutcome? outcome;
-            try
-            {
-                outcome = client.CheckStatusAsync(invocation.CapabilityKey, invocation.Receipt).GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                StatusCheckFailed(logger, ex, invocation.SupportSystemKey, invocation.CapabilityKey, invocation.InvocationId);
-                continue;
-            }
-
-            if (outcome is null)
-            {
-                continue;
-            }
-
-            var resolution = ResolveSupportSystemOutcome(invocation.InvocationId, outcome.OutcomeKey, outcome.ResultPayload);
-            resolvedAny = resolvedAny || resolution.ResponseState != "error";
+            resolvedAny |= TryResolveInvocation(invocation);
         }
 
         return resolvedAny;
+    }
+
+    private static bool SupportsPolling(SupportSystemInvocation invocation) =>
+        SupportSystemRegistry.FindCapability(invocation.SupportSystemKey, invocation.CapabilityKey)
+            ?.SupportedCompletionModes.Contains(SupportSystemCompletionMode.Poll) == true;
+
+    private bool TryResolveInvocation(SupportSystemInvocation invocation)
+    {
+        if (invocation.FailureOutcomeKey is { } failureOutcome)
+        {
+            // The call could not be dispatched and its action asked to carry on instead of failing.
+            return ResolveSupportSystemOutcome(invocation.InvocationId, failureOutcome, invocation.FailurePayload)
+                .ResponseState != "error";
+        }
+
+        if (!SupportsPolling(invocation) || invocation.Receipt is null)
+        {
+            return false;
+        }
+
+        if (!clients.TryGetValue(invocation.SupportSystemKey, out var client))
+        {
+            return false;
+        }
+
+        SupportSystemOutcome? outcome;
+        try
+        {
+            outcome = client.CheckStatusAsync(invocation.CapabilityKey, invocation.Receipt).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            StatusCheckFailed(logger, ex, invocation.SupportSystemKey, invocation.CapabilityKey, invocation.InvocationId);
+            return false;
+        }
+
+        if (outcome is null)
+        {
+            return false;
+        }
+
+        return ResolveSupportSystemOutcome(invocation.InvocationId, outcome.OutcomeKey, outcome.ResultPayload).ResponseState != "error";
     }
 
     /// <summary>

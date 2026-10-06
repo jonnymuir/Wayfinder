@@ -30,7 +30,8 @@ internal static class GovUkStatGroup
         // The point is always written out as text too, so the tile reads without the script and to a screen
         // reader; the script adds the map beneath it, and removes it again if the value is not a point.
         var isMap = hasValue && string.Equals(stat.Display, "map", StringComparison.Ordinal);
-        var classes = "wayfinder-stat-card" + (stat.Emphasis ? " wayfinder-stat-card--emphasis" : "") + (isMap ? " wayfinder-stat-card--map" : "");
+        var classes = "wayfinder-stat-card" + (stat.Emphasis ? " wayfinder-stat-card--emphasis" : "") + (isMap ? " wayfinder-stat-card--map" : "")
+            + (string.Equals(stat.Width, "full", StringComparison.Ordinal) ? " wayfinder-stat-card--full" : "");
         var map = isMap
             ? $"""<div class="wayfinder-location-view" data-wayfinder-location-map data-wayfinder-location="{GovUk.Esc(stat.Value)}" data-wayfinder-label="{GovUk.Esc(stat.Label)}"></div>"""
             : "";

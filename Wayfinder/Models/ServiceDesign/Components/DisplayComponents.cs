@@ -41,6 +41,13 @@ public sealed record StatItemDefinition
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Display { get; init; }
+
+    /// <summary>
+    /// How much room the tile needs: omitted (or <c>"auto"</c>) for one grid cell, or <c>"full"</c>
+    /// for the whole row (a long value such as free text). A map tile is always full width.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Width { get; init; }
 }
 
 /// <summary>

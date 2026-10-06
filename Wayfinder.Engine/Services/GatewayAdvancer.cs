@@ -86,24 +86,15 @@ internal sealed partial class GatewayAdvancer(
         var joinArrivals = new Dictionary<string, IReadOnlyList<string>>(instance.JoinArrivals);
         var mergedFieldValues = Merge(instance.FieldValues, fieldValues);
 
-        // A branch that lands straight on a stage (not another gateway) may carry its own
-        // onEnter support-system-call action — the automation-queue branch of a "send to
-        // support system" split, e.g. See ExecuteOnEnterSupportSystemActions's own remarks for
-        // why this only runs for multi-cursor branches, not the single-cursor path. Bulk-dataset
-        // actions run first, per cursor, so a bulk-dataset-materialize action's refreshed file
-        // (a resubmission loop re-firing this same split) is what support-system-call reads —
-        // see ExecuteOnEnterBulkDatasetActions's own remarks.
-        var newInvocations = new List<SupportSystemInvocation>();
-        foreach (var cursor in newCursors.Where(cursor => !cursor.IsAtGateway))
+        // Branches landing straight on a stage may carry onEnter actions (see RunOnEnterActions).
+        var onEnter = RunOnEnterActions(instance, definition, newCursors, mergedFieldValues);
+        if (onEnter.Failed)
         {
-            var bulkDatasetUpdates = bulkDatasets.ExecuteOnEnterBulkDatasetActions(instance.InstanceId, definition, mergedFieldValues, cursor);
-            if (bulkDatasetUpdates.Count > 0)
-            {
-                mergedFieldValues = Merge(mergedFieldValues, bulkDatasetUpdates);
-            }
-
-            newInvocations.AddRange(supportSystems.ExecuteOnEnterSupportSystemActions(instance.InstanceId, definition, mergedFieldValues, cursor));
+            return SupportCallFailed(instance with { FieldValues = onEnter.FieldValues }, definition, accessProfile, userId);
         }
+
+        mergedFieldValues = onEnter.FieldValues;
+        var newInvocations = onEnter.Invocations;
 
         foreach (var joinGroup in newCursors
                      .Where(cursor => cursor.IsAtGateway)

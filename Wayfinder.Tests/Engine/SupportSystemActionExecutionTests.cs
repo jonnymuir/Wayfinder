@@ -149,6 +149,11 @@ public class SupportSystemActionExecutionTests
 
         public int CheckStatusCallCount { get; private set; }
 
+        /// <summary>How many of the next dispatches fail with an exception before the client recovers.</summary>
+        public int FailuresRemaining { get; set; }
+
+        public int Attempts { get; private set; }
+
         public Func<string, SupportSystemInvocationReceipt, SupportSystemOutcome?>? OnCheckStatus { get; set; }
 
         public Task<SupportSystemInvocationReceipt> InvokeAsync(
@@ -157,6 +162,13 @@ public class SupportSystemActionExecutionTests
             SupportSystemInvocationContext context,
             CancellationToken ct = default)
         {
+            Attempts++;
+            if (FailuresRemaining > 0)
+            {
+                FailuresRemaining--;
+                throw new InvalidOperationException("support system unreachable");
+            }
+
             Invocations.Add((capabilityKey, inputs, context));
             return Task.FromResult(new SupportSystemInvocationReceipt { ExternalReference = "external-" + Invocations.Count });
         }
@@ -193,12 +205,16 @@ public class SupportSystemActionExecutionTests
     };
 
     private static (ProcessManagerEngine Engine, ScriptedSupportSystemClient Client) BuildEngine(
+        params SupportSystemCompletionMode[] modes) => BuildEngine(BlueprintJson, modes);
+
+    private static (ProcessManagerEngine Engine, ScriptedSupportSystemClient Client) BuildEngine(
+        string blueprintJson,
         params SupportSystemCompletionMode[] modes)
     {
         SupportSystemRegistry.ResetForTests();
         SupportSystemRegistry.Register(FixtureDescriptor(modes));
 
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(blueprintJson, JsonOptions)!;
         var client = new ScriptedSupportSystemClient();
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
@@ -232,6 +248,108 @@ public class SupportSystemActionExecutionTests
             // same wait/poll envelope shape as juggling-licence's citizen-facing post-review join.
             afterSplit.ResponseState.Should().Be("defer");
             afterSplit.PollAfterMs.Should().Be(2000);
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    private static string WithActionParams(string extraParams) =>
+        BlueprintJson.Replace("\"inputs\": { \"notes\": \"notes\" }", "\"inputs\": { \"notes\": \"notes\" }, " + extraParams);
+
+    [Fact]
+    public void FailedDispatch_ShowsATryAgainMessageAndSavesNothing_ThenSucceedsOnceTheSystemRecovers()
+    {
+        var (engine, client) = BuildEngine(SupportSystemCompletionMode.Poll);
+        try
+        {
+            client.FailuresRemaining = 1;
+            var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+            var values = new Dictionary<string, object?> { ["notes"] = "typed before the failure" };
+
+            var failed = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, values);
+
+            failed.Problems.Should().ContainSingle(p => p.Code == "SUPPORT_SYSTEM_UNAVAILABLE");
+            failed.Render!.StateDisplayName.Should().Be("Start", "the visitor stays where they were");
+            var unchanged = engine.GetAllInstances().Single(i => i.InstanceId == started.InstanceId);
+            unchanged.StateVersion.Should().Be(pickedUp.StateVersion);
+            unchanged.SupportSystemInvocations.Should().BeEmpty("nothing is left waiting for a call that never left");
+
+            var retried = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, values);
+
+            retried.ResponseState.Should().Be("defer");
+            client.Invocations.Should().ContainSingle();
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public void OptedInRetries_ResendTheCallWithoutBotheringTheVisitor()
+    {
+        var (engine, client) = BuildEngine(WithActionParams("\"retries\": 1, \"retryDelaySeconds\": 1"), SupportSystemCompletionMode.Poll);
+        try
+        {
+            client.FailuresRemaining = 1;
+            var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+
+            var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
+
+            afterSplit.ResponseState.Should().Be("defer");
+            client.Attempts.Should().Be(2);
+            client.Invocations.Should().ContainSingle();
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public void OnFailureFallback_CarriesTheJourneyOnAsTheDeclaredOutcome_WithItsLiteralOutputs()
+    {
+        var (engine, client) = BuildEngine(
+            WithActionParams("\"onFailure\": { \"outcome\": \"approved\", \"outputs\": { \"decisionNotes\": \"No suggestion was available.\" } }"),
+            SupportSystemCompletionMode.Poll);
+        try
+        {
+            client.FailuresRemaining = 1;
+            var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+            var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion, null);
+
+            afterSplit.Problems.Should().BeEmpty();
+            var resolved = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile, afterSplit.InstanceId);
+
+            resolved.Render!.StateDisplayName.Should().Be("Approved");
+            var instance = engine.GetAllInstances().Single(i => i.InstanceId == afterSplit.InstanceId);
+            instance.FieldValues["decisionNotes"].Should().Be("No suggestion was available.");
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public void Validation_RejectsAnOnFailureOutcomeTheCapabilityDoesNotDeclare()
+    {
+        SupportSystemRegistry.ResetForTests();
+        SupportSystemRegistry.Register(FixtureDescriptor(SupportSystemCompletionMode.Poll));
+        try
+        {
+            var blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(
+                WithActionParams("\"retries\": 9, \"onFailure\": { \"outcome\": \"exploded\" }"), JsonOptions)!;
+
+            var diagnostics = blueprint.ValidateSupportSystemActions();
+
+            diagnostics.Should().Contain(d => d.Code == "SUPPORT_SYSTEM_ACTION_INVALID_FAILURE_POLICY" && d.Path.EndsWith("params.retries"));
+            diagnostics.Should().Contain(d => d.Code == "SUPPORT_SYSTEM_ACTION_INVALID_FAILURE_POLICY" && d.Path.EndsWith("params.onFailure.outcome"));
         }
         finally
         {

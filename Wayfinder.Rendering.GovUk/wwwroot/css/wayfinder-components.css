@@ -94,7 +94,9 @@
   overflow-wrap: anywhere;
 }
 
-/* A tile that shows a point on a map takes the full row, and writes the coordinates smaller above it. */
+/* A tile that shows a point on a map takes the full row, and writes the coordinates smaller above it. A tile
+   that asks for width "full" (a long free-text value) takes the full row too. */
+.wayfinder-stat-card--full,
 .wayfinder-stat-card--map {
   grid-column: 1 / -1;
 }

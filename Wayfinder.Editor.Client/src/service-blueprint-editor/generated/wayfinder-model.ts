@@ -590,6 +590,7 @@ export interface StatItemDefinition {
   qualifier?: string;
   emphasis?: boolean;
   display?: string;
+  width?: string;
 }
 
 export interface SupportSystemCapabilityDescriptor {

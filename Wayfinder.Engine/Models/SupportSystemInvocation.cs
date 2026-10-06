@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Wayfinder.Engine.Abstractions;
 
 namespace Wayfinder.Engine.Models;
@@ -34,4 +35,13 @@ public sealed record SupportSystemInvocation
     public bool Resolved { get; init; }
 
     public string? OutcomeKey { get; init; }
+
+    /// <summary>
+    /// Set when the call could not be dispatched and its action declared an <c>onFailure</c>
+    /// fallback: the invocation has no <see cref="Receipt"/> and resolves as this outcome (with
+    /// <see cref="FailurePayload"/> merged into the instance) the next time the waiting join is checked.
+    /// </summary>
+    public string? FailureOutcomeKey { get; init; }
+
+    public JsonObject? FailurePayload { get; init; }
 }

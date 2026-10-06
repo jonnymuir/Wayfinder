@@ -121,17 +121,14 @@ test.describe('Accessibility: WCAG 2.2 AA', () => {
     await expect(page.getByRole('heading', { name: 'Review application' })).toBeVisible();
     await auditPage(page, 'Caseworker review');
 
-    // The waiting state introduced by the support-systems work — its own distinct rendering
-    // (status-timeline on the item, status tag in the worklist), so its own audit of each. The
-    // caseworker lands on the item's own wait screen directly (ResponseState "defer" — see
-    // Program.cs's post-advance redirect), the same way the citizen's own post-review join
-    // always has; the queue list's "Waiting" tag is audited separately by navigating there.
+    // This suite boots the reference app alone, so SafetyNet Underwriting is not there to take the call
+    // (the live suite, support-systems-live.spec.ts, runs both and proves the real wait). A call that
+    // cannot be sent keeps the caseworker on the stage with a try-again problem rather than parking the
+    // case at a join that nothing will ever release, and that error state is the screen audited here.
     await page.getByRole('button', { name: 'Send risk assessment to insurer' }).click();
-    await expect(page.getByText('SafetyNet Underwriting is reviewing the risk assessment.')).toBeVisible();
-    await auditPage(page, 'Caseworker waiting screen');
-
-    await page.goto('/caseworker/queue');
-    await auditPage(page, 'Caseworker queue (waiting on a support system)');
+    await expect(page.locator('.govuk-error-summary')).toContainText('We could not send this to the service just now');
+    await expect(page.getByRole('heading', { name: 'Review application' })).toBeVisible();
+    await auditPage(page, 'Caseworker review (support system unavailable)');
   });
 
   test('every control on the event-details form is keyboard reachable, in visual order, and operable', async ({
