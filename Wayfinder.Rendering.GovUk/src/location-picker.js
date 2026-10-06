@@ -1,7 +1,11 @@
-// Progressive enhancement for the location-picker markup Wayfinder.Rendering.GovUk renders: the plain
-// "latitude,longitude" text input always stays the working control. This adds a "use my current
-// location" button and a map, kept in sync with that input. Without this script (or if the map
-// fails) the page still works.
+// Progressive enhancement for the location markup Wayfinder.Rendering.GovUk renders.
+//
+// A location-picker: the plain "latitude,longitude" text input always stays the working control. This
+// adds a "use my current location" button and a map, kept in sync with that input. Without this script
+// (or if the map fails) the page still works.
+//
+// A read-only map (a stat tile with display "map"): the point is already written out as text; this adds a
+// map showing it, and removes the empty map box again if the value is not a point.
 //
 // Configuration comes from <meta> tags the host can add (all optional):
 //   wayfinder-map-tile-url        a {z}/{x}/{y} tile template (default: public OpenStreetMap, demos only)
@@ -47,6 +51,11 @@ function element(tag, className, text) {
   return node;
 }
 
+const tileLayer = () =>
+  new TileLayer({ source: new XYZ({ url: meta('tile-url') ?? OSM_TILES, attributions: meta('attribution') ?? OSM_ATTRIBUTION }) });
+
+const pinLayer = (marker) => new VectorLayer({ source: new VectorSource({ features: [marker] }), style: PIN_STYLE });
+
 function loadStylesheet() {
   const href = new URL('wayfinder-location-picker.css', import.meta.url).href;
   if (document.querySelector(`link[href="${href}"]`)) return;
@@ -89,10 +98,7 @@ function enhance(wrapper) {
   const map = new OlMap({
     target: mapElement,
     view,
-    layers: [
-      new TileLayer({ source: new XYZ({ url: meta('tile-url') ?? OSM_TILES, attributions: meta('attribution') ?? OSM_ATTRIBUTION }) }),
-      new VectorLayer({ source: new VectorSource({ features: [marker] }), style: PIN_STYLE }),
-    ],
+    layers: [tileLayer(), pinLayer(marker)],
   });
 
   const place = (point, centre) => {
@@ -159,4 +165,24 @@ function enhance(wrapper) {
   else if (!input.value.trim()) locate();
 }
 
+function show(wrapper) {
+  if (wrapper.dataset.wayfinderEnhanced) return;
+  const point = parsePoint(wrapper.dataset.wayfinderLocation);
+  if (!point) {
+    wrapper.remove();
+    return;
+  }
+  wrapper.dataset.wayfinderEnhanced = 'true';
+  const label = wrapper.dataset.wayfinderLabel || 'location';
+  wrapper.tabIndex = 0;
+  wrapper.setAttribute('role', 'group');
+  wrapper.setAttribute('aria-label', `Map showing ${label} at ${formatPoint(point.latitude, point.longitude)}. Pan with the arrow keys.`);
+  loadStylesheet();
+
+  const coordinate = fromLonLat([point.longitude, point.latitude]);
+  const marker = new Feature(new Point(coordinate));
+  new OlMap({ target: wrapper, view: new View({ center: coordinate, zoom: 15 }), layers: [tileLayer(), pinLayer(marker)] });
+}
+
 document.querySelectorAll('[data-wayfinder-location-picker]').forEach(enhance);
+document.querySelectorAll('[data-wayfinder-location-map]').forEach(show);

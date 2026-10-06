@@ -180,21 +180,7 @@ internal sealed partial class StageRenderer(IServiceContentSanitizer sanitizer, 
                     break;
 
                 case StatGroupComponent statGroup:
-                    result.Add(new ComponentRenderPayload
-                    {
-                        Type = "stat-group",
-                        Title = statGroup.Title,
-                        Stats = statGroup.Items.Select(item => new StatItem
-                        {
-                            Label = item.Label,
-                            FieldKey = item.FieldKey,
-                            Value = displayValues.TryGetValue(item.FieldKey, out var statValue)
-                                ? statValue?.ToString()
-                                : null,
-                            Qualifier = item.Qualifier,
-                            Emphasis = item.Emphasis
-                        }).ToArray()
-                    });
+                    result.Add(StatGroupPayload(statGroup, displayValues));
                     break;
 
                 case ChartComponent chart:
@@ -340,14 +326,8 @@ internal sealed partial class StageRenderer(IServiceContentSanitizer sanitizer, 
             Hint = input.Hint,
             FieldType = fieldType,
             Required = input.Required,
-            Options = input switch
-            {
-                SelectComponent select => select.Options,
-                RadiosComponent radios => radios.Options,
-                CheckboxesComponent checkboxes => checkboxes.Options,
-                GuidanceChecklistComponent guidance => guidance.Items.Select(i => i.Key).ToList(),
-                _ => null
-            },
+            Options = OptionsOf(input),
+            DeviceDefault = DeviceDefaultOf(input),
             Value = GetDisplayValue(input, fieldType, savedValues) ?? ResolveDefaultFrom(input, calc) ?? input.Default,
             MinLength = input switch
             {

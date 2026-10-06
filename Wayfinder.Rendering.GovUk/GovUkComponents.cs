@@ -39,7 +39,7 @@ public static class GovUkComponents
         "notification-banner" => RenderNotificationBanner(component),
         "waiting" => RenderWaiting(component),
         "task-list" => RenderTaskList(component),
-        "stat-group" => RenderStatGroup(component),
+        "stat-group" => GovUkStatGroup.Render(component),
         "chart" => RenderChart(component),
         "bulk-data-review" => RenderBulkDataReview(component),
         _ => "",
@@ -200,35 +200,6 @@ public static class GovUkComponents
         });
 
         return $"""<ul class="govuk-task-list">{string.Join("\n", items)}</ul>""";
-    }
-
-    /// <summary>
-    /// A real GOV.UK Design System has no official "stat card" component, so this is Wayfinder's
-    /// own — <c>wayfinder-stat-*</c>-classed cards a host styles with its own CSS, same as
-    /// govuk-frontend's own components need a host to load govuk-frontend's CSS. This is the
-    /// gold-standard rendering — hosts don't need their own override for this type.
-    /// </summary>
-    private static string RenderStatGroup(ComponentRenderPayload component)
-    {
-        var stats = component.Stats ?? Array.Empty<StatItem>();
-        var heading = string.IsNullOrEmpty(component.Title) ? "" : $"""<h2 class="govuk-heading-m">{GovUk.Esc(component.Title)}</h2>""";
-        var cards = stats.Select(stat =>
-        {
-            var qualifier = string.IsNullOrEmpty(stat.Qualifier) ? "" : $"""<div class="wayfinder-stat-card__qualifier">{GovUk.Esc(stat.Qualifier)}</div>""";
-            return $"""
-                <div class="wayfinder-stat-card{(stat.Emphasis ? " wayfinder-stat-card--emphasis" : "")}" data-wayfinder-stat="{GovUk.Esc(stat.Label)}" data-wayfinder-stat-field="{GovUk.Esc(stat.FieldKey)}">
-                  <div class="wayfinder-stat-card__label">{GovUk.Esc(stat.Label)}</div>
-                  <div class="wayfinder-stat-card__value">{(string.IsNullOrEmpty(stat.Value) ? "—" : GovUk.Esc(stat.Value))}</div>
-                  {qualifier}
-                </div>
-                """;
-        });
-        return $"""
-            {heading}
-            <div class="wayfinder-stat-group" data-wayfinder-stat-group role="group" aria-label="{GovUk.Esc(component.Title ?? "Key figures")}" aria-live="polite">
-              {string.Join("\n", cards)}
-            </div>
-            """;
     }
 
     /// <summary>

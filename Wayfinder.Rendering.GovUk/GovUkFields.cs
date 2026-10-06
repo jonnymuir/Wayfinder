@@ -196,7 +196,7 @@ public static class GovUkFields
               <label class="govuk-label" for="{id}">{GovUk.Esc(field.Label)}</label>
               {hint}
               {ErrorMessage($"{id}-error", error)}
-              <input class="govuk-input{errorClass}" id="{id}" name="{name}" type="text" value="{GovUk.Esc(value)}"{describedBy} {required}{lengthAttrs}>
+              <input class="govuk-input{errorClass}" id="{id}" name="{name}" type="text" value="{GovUk.Esc(value)}"{describedBy} {required}{lengthAttrs}{GovUk.DeviceDefaultAttribute(field)}>
             </div>
             """;
     }
@@ -315,7 +315,7 @@ public static class GovUkFields
                 <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">{GovUk.Esc(field.Label)}</legend>
                 {hint}
                 {ErrorMessage($"{id}-error", error)}
-                <div class="govuk-date-input" id="{id}">
+                <div class="govuk-date-input" id="{id}"{GovUk.DeviceDefaultAttribute(field)}>
                   <div class="govuk-date-input__item">
                     <div class="govuk-form-group">
                       <label class="govuk-label govuk-date-input__label" for="{id}-day">Day</label>

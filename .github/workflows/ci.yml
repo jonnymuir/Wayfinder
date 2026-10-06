@@ -166,6 +166,14 @@ jobs:
       - name: Location picker (real browser)
         run: node Wayfinder.Rendering.GovUk/test/wayfinder-location-picker.browser.mjs
 
+      # Whether a long value stays inside its tile is layout, which only a browser computes.
+      - name: Stat tiles keep long values inside the card (real browser)
+        run: node Wayfinder.Rendering.GovUk/test/wayfinder-stat-card.browser.mjs
+
+      # "Today" and "now" are the visitor's own, which only a browser with a clock and a timezone can show.
+      - name: Date and time default to the device clock (real browser)
+        run: node Wayfinder.Rendering.GovUk/test/wayfinder-device-clock.browser.mjs
+
       # The committed bundle is built from src/ (OpenLayers is bundled in): rebuild it and fail on any drift.
       - name: Location picker bundle is up to date
         working-directory: Wayfinder.Rendering.GovUk

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using Wayfinder.Models.ServiceDesign;
 
 namespace Wayfinder.Rendering.GovUk;
 
@@ -9,6 +10,10 @@ namespace Wayfinder.Rendering.GovUk;
 public static class GovUk
 {
     public static string Esc(string? value) => WebUtility.HtmlEncode(value ?? "");
+
+    /// <summary>The attribute a script reads to start a date or time field on the visitor's device clock, or nothing.</summary>
+    public static string DeviceDefaultAttribute(FieldRenderPayload field) =>
+        string.IsNullOrEmpty(field.DeviceDefault) ? "" : $" data-wayfinder-device-default=\"{Esc(field.DeviceDefault)}\"";
 
     /// <summary>The <c>name</c> attribute a rendered form field posts under — <c>field:{fieldKey}</c>
     /// throughout this package, matching the convention its host-side field coercion expects.</summary>

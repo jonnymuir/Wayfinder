@@ -199,19 +199,7 @@ public static class BuiltInComponentDescriptors
         });
 
         // ── Input components ─────────────────────────────────────────────────────────────
-        descriptors.Add(new ComponentDescriptor
-        {
-            Discriminator = "text", DisplayName = "Text input", Category = ComponentCategory.Input,
-            ClrType = typeof(TextInputComponent), IsInput = true,
-            Properties =
-            [
-                .. InputBaseProperties(),
-                Prop(nameof(TextInputComponent.MinLength), "Minimum length", ComponentPropertyValueKind.Integer),
-                Prop(nameof(TextInputComponent.MaxLength), "Maximum length", ComponentPropertyValueKind.Integer),
-                Prop(nameof(TextInputComponent.Pattern), "Pattern (regex)", ComponentPropertyValueKind.String, format: "pattern"),
-                Prop(nameof(TextInputComponent.Prefix), "Prefix", ComponentPropertyValueKind.String, "e.g. \"£\"."),
-            ],
-        });
+        descriptors.Add(DeviceClockDescriptors.Text());
 
         descriptors.Add(new ComponentDescriptor
         {
@@ -280,12 +268,7 @@ public static class BuiltInComponentDescriptors
                 nameof(CheckboxesComponent.ConditionalChildren), nameof(CheckboxesComponent.Options)),
         });
 
-        descriptors.Add(new ComponentDescriptor
-        {
-            Discriminator = "date", DisplayName = "Date input", Category = ComponentCategory.Input,
-            ClrType = typeof(DateInputComponent), IsInput = true,
-            Properties = InputBaseProperties(),
-        });
+        descriptors.Add(DeviceClockDescriptors.Date());
 
         descriptors.Add(new ComponentDescriptor
         {
@@ -337,35 +320,7 @@ public static class BuiltInComponentDescriptors
         });
 
         // ── Data-display components ──────────────────────────────────────────────────────
-        descriptors.Add(new ComponentDescriptor
-        {
-            Discriminator = "stat-group", DisplayName = "Statistic group", Category = ComponentCategory.DataDisplay,
-            Description = "A group of headline statistic tiles, resolved from instance/calculated field values.",
-            ClrType = typeof(StatGroupComponent),
-            Properties =
-            [
-                Prop(nameof(StatGroupComponent.Title), "Title", ComponentPropertyValueKind.String),
-                new()
-                {
-                    Key = nameof(StatGroupComponent.Items), Title = "Statistic tiles",
-                    ValueKind = ComponentPropertyValueKind.Array, Required = true,
-                    Items = new ComponentPropertyDescriptor
-                    {
-                        Key = "item", Title = "Statistic tile", ValueKind = ComponentPropertyValueKind.Object,
-                        Properties =
-                        [
-                            Prop(nameof(StatItemDefinition.Label), "Label", ComponentPropertyValueKind.String, required: true),
-                            Prop(nameof(StatItemDefinition.FieldKey), "Field key", ComponentPropertyValueKind.String,
-                                "The instance/calculated field this tile's value is read from. Must be a " +
-                                "calculations.fields name or an input field's fieldKey captured anywhere in the " +
-                                "blueprint (not just this stage).", format: "field-or-calc-ref", required: true),
-                            Prop(nameof(StatItemDefinition.Qualifier), "Qualifier", ComponentPropertyValueKind.String, "e.g. \"a year, for life\"."),
-                            Prop(nameof(StatItemDefinition.Emphasis), "Emphasis", ComponentPropertyValueKind.Boolean, editor: "toggle"),
-                        ],
-                    },
-                },
-            ],
-        });
+        descriptors.Add(StatGroupDescriptor.Build());
 
         descriptors.Add(new ComponentDescriptor
         {

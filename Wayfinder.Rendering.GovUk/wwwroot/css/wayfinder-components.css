@@ -66,6 +66,9 @@
   border: 1px solid #b1b4b6;
   border-radius: 8px;
   padding: 1rem 1.125rem;
+  /* A grid item will not shrink below its content, so a long unbroken value (a pair of coordinates, an
+     email address) would otherwise push out of its card. */
+  min-width: 0;
 }
 
 .wayfinder-stat-card--emphasis {
@@ -88,6 +91,16 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+/* A tile that shows a point on a map takes the full row, and writes the coordinates smaller above it. */
+.wayfinder-stat-card--map {
+  grid-column: 1 / -1;
+}
+
+.wayfinder-stat-card__value--point {
+  font-size: 1.125rem;
 }
 
 .wayfinder-stat-card__qualifier {

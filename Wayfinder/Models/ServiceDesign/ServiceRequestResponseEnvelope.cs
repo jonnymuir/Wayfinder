@@ -216,7 +216,7 @@ public record ComponentRenderPayload
 /// <summary>
 /// Individual field render payload.
 /// </summary>
-public record FieldRenderPayload
+public partial record FieldRenderPayload
 {
     /// <summary>
     /// Gets the field key.

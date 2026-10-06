@@ -1,6 +1,6 @@
 {
   "files": {
-    "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 492,
+    "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 447,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.DataDisplayBindings.cs": 412,
     "Wayfinder/Models/ServiceDesign/ServiceRequestResponseEnvelope.cs": 419,
     "Wayfinder/Services/Calculations/CalculationEvaluator.cs": 544,
@@ -10,10 +10,9 @@
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-editor.ts": 743,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-service-blueprint-outline.ts": 571,
     "Wayfinder.Engine/Services/GatewayAdvancer.cs": 414,
-    "Wayfinder.Engine/Services/StageRenderer.cs": 554,
+    "Wayfinder.Engine/Services/StageRenderer.cs": 534,
     "Wayfinder.Engine/Stores/InMemoryBulkDatasetStore.cs": 456,
     "Wayfinder.ReferenceApp/Program.cs": 438,
-    "Wayfinder.Rendering.GovUk/GovUkComponents.cs": 413,
     "Wayfinder.Rendering.GovUk/GovUkFields.cs": 424,
     "Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-bulk-data-review.js": 509,
     "Wayfinder.Rendering.GovUk/wwwroot/js/wayfinder-calculations.js": 774
@@ -21,7 +20,7 @@
   "methods": {
     "SafetyNetUnderwriting/ContributionsValidation.cs": 74,
     "Wayfinder/Extensions/ComponentExtensions.cs": 101,
-    "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 387,
+    "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 342,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.BulkDatasetActions.cs": 188,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.DataDisplayBindings.cs": 274,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.FieldReferences.cs": 66,
@@ -40,7 +39,7 @@
     "Wayfinder.Engine/Services/GatewayAdvancer.cs": 144,
     "Wayfinder.Engine/Services/InstanceRepository.cs": 64,
     "Wayfinder.Engine/Services/ProcessManagerEngine.cs": 78,
-    "Wayfinder.Engine/Services/StageRenderer.cs": 233,
+    "Wayfinder.Engine/Services/StageRenderer.cs": 219,
     "Wayfinder.Engine/Services/SupportSystemActions.cs": 65,
     "Wayfinder.Engine/Services/SupportSystemOutcomes.cs": 76,
     "Wayfinder.Engine/Services/WorkAllocation.cs": 147,
