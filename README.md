@@ -67,23 +67,46 @@ for the full schema):
       "displayName": "Your details",
       "queueKey": "citizen",
       "components": [ { "type": "text", "fieldKey": "fullName", "label": "Full name", "required": true } ],
-      "routes": [ { "id": "start--submit--done", "target": "done", "trigger": "submit" } ]
+      "routes": [ { "id": "start--submit--to-done", "target": "to-done", "trigger": "submit" } ]
     },
     { "stageKey": "done", "displayName": "Application submitted", "queueKey": "citizen", "components": [ { "type": "panel", "heading": "Application complete" } ] }
+  ],
+  "gateways": [
+    {
+      "key": "to-done",
+      "displayName": "Submit the application",
+      "gatewayType": "Split",
+      "queueKey": "citizen",
+      "routes": [ { "id": "to-done--continue--done", "target": "done", "trigger": "continue" } ]
+    }
   ]
 }
 ```
 
-Register the engine and round-trip an instance:
+A stage's routes always target a gateway, never another stage directly, so even a one-step
+journey has a pass-through gateway. That uniform shape is what lets a gateway grow branching
+or join logic later without restructuring the stages around it.
+
+Register the engine, plus the HTML sanitizer every host supplies for content authored in a
+blueprint:
 
 ```csharp
 using Wayfinder.Engine.Extensions;
+using Wayfinder.Services.Sanitization;
 
 builder.Services.AddProcessManager("blueprints"); // folder containing the JSON above
+// Passthrough is only safe for developer-authored seed files like this one. A host rendering
+// content written by real authors registers an HTML allowlist sanitizer instead.
+builder.Services.AddSingleton<IServiceContentSanitizer, PassthroughContentSanitizer>();
 ```
 
+Then resolve `IProcessManager` and round-trip an instance:
+
 ```csharp
+using Wayfinder.Engine.Abstractions;
 using Wayfinder.Models.ServiceDesign;
+
+var processManager = app.Services.GetRequiredService<IProcessManager>();
 
 var envelope = processManager.GetCurrent(
     blueprintKey: "apply-for-a-licence", tenantId: "default", userId: "user-1",
@@ -94,8 +117,11 @@ var advanced = processManager.Advance(
     instanceId: envelope.InstanceId, tenantId: "default", userId: "user-1",
     accessProfile: ActorProfile.UnrestrictedOwner, action: "submit", expectedStateVersion: envelope.StateVersion,
     fieldValues: new Dictionary<string, object?> { ["fullName"] = "Ada Lovelace" });
-// advanced.Render.StateDisplayName == "Application submitted"
+// advanced.ResponseState == "complete", advanced.Render.StateDisplayName == "Application submitted"
 ```
+
+`ActorProfile.UnrestrictedOwner` lets this single-user example act on every queue. A real host
+resolves a profile per signed-in user, which is what limits each person to their own queues.
 
 That's the whole engine surface a host needs: `GetCurrent` to render the current step, `Advance`
 to submit it. [`Wayfinder.Umbraco`](https://github.com/jonnymuir/Wayfinder.Umbraco) wraps exactly
