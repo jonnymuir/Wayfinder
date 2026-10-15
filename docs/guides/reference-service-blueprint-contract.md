@@ -364,8 +364,7 @@ own via `ComponentTypeRegistry.Register<T>()` (see
 so `ComponentTypeRegistry.AllDiscriminators` is a ready-made, honest
 declaration of exactly what *this* host actually knows how to render,
 provable locally with no dependency on any other app actually running. A
-host with bespoke or extended rendering (like Umbraco.Prism's
-`UmbracoPrism.MockBusinessApp` admin surface, or this repo's own
+host with bespoke or extended rendering (like this repo's own
 `Wayfinder.ReferenceApp`, which registers a `rating` type of its own, see
 `Wayfinder.ReferenceApp/Services/CustomComponents.cs`) declares its own
 smaller or extended list instead, matching exactly what it implements. A
@@ -407,13 +406,11 @@ This repo's own reference blueprint, `Wayfinder.ReferenceApp/service-blueprints/
 a single-queue-pair applicant/caseworker flow with Split gateways only, is the simplest
 starting point; see [the reference app guide](./reference-app.md).
 
-For richer examples,
-[`UmbracoPrism.MockBusinessApp/service-blueprints/`](https://github.com/jonnymuir/Umbraco.Prism/tree/main/src/UmbracoPrism.MockBusinessApp/service-blueprints)
-in the real deployed consumer [Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism) has
-six service blueprints to read as reference, in roughly increasing order of complexity:
+For richer examples, [`docs/examples/`](../examples/) has five service blueprints to read
+as reference, in roughly increasing order of complexity. Each one passes validation in CI
+(`DocumentedExampleBlueprintTests`):
 
-- **`planning.json`**, single-queue, linear applicant flow.
-- **`planning-notification.json`**, a planning variant.
+- **`planning-notification.json`**, a planning application flow.
 - **`community-enquiry.json`**, two-queue applicant/reviewer flow with an approval loop.
 - **`information-request.json`**, two-queue, SLA-driven review flow.
 - **`payment-demo.json`**, two-queue, Split **and** Join gateways, a payment flow.
@@ -428,7 +425,6 @@ six service blueprints to read as reference, in roughly increasing order of comp
 - [The Wayfinder Calculation Language](./calculation-language.md), grammar, functions, `showWhen`
 - [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md), the MCP/REST toolkit, the author loop, saving/conflicts
 - [The Wayfinder Reference App](./reference-app.md), this repo's own runnable example
-- [Umbraco.Prism's MockBusinessApp README](https://github.com/jonnymuir/Umbraco.Prism/blob/main/src/UmbracoPrism.MockBusinessApp/README.md), configuration and setup for the richer worked examples above
 
 ---
 

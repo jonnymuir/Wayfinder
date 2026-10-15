@@ -83,9 +83,10 @@ gets authored:
    own variant.
 4. **Make the service simple to use**: fewer stages and routes wins; push
    decision logic into gateways and calculations rather than showing it to users.
-5. **Make sure everyone can use the service**: see
-   [Using GDS Design System Components](./service-blueprint-gds-components.md) for the
-   accessible component catalogue.
+5. **Make sure everyone can use the service**: build stages from the GOV.UK Design System
+   components in the catalog (`list_component_types` over MCP), which carry their accessibility
+   work with them. See [Extending the Component Catalog](./extending-the-component-catalog.md)
+   for adding a new one without losing that.
 6. **Have a multidisciplinary team**: outside Wayfinder's scope; an organisational
    commitment, not a service blueprint property.
 7. **Use agile ways of working**: outside Wayfinder's scope; a team practice.
@@ -95,7 +96,7 @@ gets authored:
    just cheaply built once.
 9. **Create a secure service which protects users' privacy**: Wayfinder doesn't ship
    an auth story for the authoring surface; see
-   [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md#auth), the host's
+   [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md#wiring-it-up), the host's
    responsibility.
 10. **Define what success looks like and publish performance data**: outside
     Wayfinder's scope today; worth naming explicitly in a service blueprint's own
@@ -108,7 +109,7 @@ gets authored:
     is what Wayfinder's component catalog *is*. Reach for an existing generic
     component (`stat-group`, `summary-list`, `chart`, `showWhen`) before inventing
     a bespoke one. See the
-    [Money Modeller pattern](../../CLAUDE.md#declarative-calculations--live-stages-money-modeller-pattern).
+    [money-modeller worked example](./calculation-language.md#worked-example-money-modellerjson).
 14. **Operate a reliable service**: `validate_service_blueprint` and `simulate_service_blueprint`
     exist to catch a broken journey before it ever reaches a real user.
 
