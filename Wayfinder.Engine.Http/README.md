@@ -1,15 +1,16 @@
 # Wayfinder.Engine.Http
 
-The engine's own HTTP-request-processing glue a host otherwise hand-copies per route. Plain
-functions, no routing of its own, a host calls these from inside its own minimal-API handlers,
-the same way [`Wayfinder.Rendering.GovUk`](../Wayfinder.Rendering.GovUk)'s `GovUkStageJourney`
-functions are called (see that package's own README for the sibling functions this one pairs
-with, posted-form field coercion, file-download URL injection).
+The engine's HTTP request-processing glue that a host would otherwise hand-copy into every
+route. These are plain functions with no routing of their own: a host calls them from inside its
+own minimal-API handlers, the same way it calls
+[`Wayfinder.Rendering.GovUk`](https://github.com/jonnymuir/Wayfinder/tree/main/Wayfinder.Rendering.GovUk)'s
+`GovUkStageJourney` functions (posted-form field coercion and file-download URL injection, the
+siblings these pair with).
 
 ## Why a separate package from `Wayfinder.Rendering.GovUk`
 
-`Wayfinder.Rendering.GovUk` deliberately has no dependency on `Wayfinder.Engine`, it only ever
-touches `Wayfinder.Models.ServiceDesign` types plus its own rendering functions. File-upload
+`Wayfinder.Rendering.GovUk` deliberately has no dependency on `Wayfinder.Engine`; it only
+touches `Wayfinder.Models.ServiceDesign` types and its own rendering functions. File-upload
 handling genuinely needs `IServiceRequestFileStorage` (`Wayfinder.Engine.Abstractions`), so it
 lives here instead, keeping that dependency boundary honest rather than pulling the whole engine
 into a package that otherwise works from any HTTP host.
@@ -25,8 +26,8 @@ Validates every `file-upload` field on the current stage against its own declare
 `MaxSizeBytes`/`AcceptedFileTypes`, saves an accepted file via `IServiceRequestFileStorage`, and
 writes the resulting `ServiceRequestFileReference` into `fieldValues`. A field with no file posted
 this time round is left untouched entirely, so the engine's own merge preserves whatever reference
-(if any) the instance already has stored. Returns one `ServiceRequestProblem` per rejected file,
-empty means every posted file was accepted, or none were posted at all.
+(if any) the instance already has stored. Returns one `ServiceRequestProblem` per rejected file. An empty result means every posted file
+was accepted, or none were posted at all.
 
 ## CSRF: `WayfinderAntiforgery`
 

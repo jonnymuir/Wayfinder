@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 474" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<svg role="img" aria-labelledby="sbm-title sbm-desc" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 474" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title id="sbm-title">The service blueprint model in Wayfinder</title>
+  <desc id="sbm-desc">Four horizontal lanes from the Nielsen Norman Group service blueprint, read left to right over time. Customer actions: discovers, applies, submits, gets outcome. Frontstage: guidance and forms, confirmation, notification. Backstage: caseworker review, checks, decision. Support processes: payment, records system, third-party checks. The line of interaction separates customer actions from frontstage, the line of visibility separates frontstage from backstage, and the line of internal interaction separates backstage from support processes. Each lane is a Wayfinder queue, each step is a stage, and the routes between stages pass through gateways, which can cross from any lane to any lane.</desc>
   <rect x="0" y="0" width="1000" height="474" fill="#ffffff"/>
   <rect x="0.5" y="0.5" width="999" height="473" fill="none" stroke="#d0d7de"/>
   <defs>
@@ -10,7 +12,7 @@
   <text x="24" y="28" font-size="16" font-weight="700" fill="#1f2328">The service blueprint model in Wayfinder</text>
   <text x="24" y="47" font-size="11.5" fill="#57606a">Nielsen Norman Group's lanes and lines of separation, and how a ServiceBlueprint maps onto them</text>
 
-  <text x="150" y="68" font-size="10" fill="#8c959f" text-anchor="end">time / phases</text>
+  <text x="150" y="68" font-size="10" fill="#57606a" text-anchor="end">time / phases</text>
   <line x1="166" y1="64" x2="974" y2="64" stroke="#c9d1d9" stroke-width="1" marker-end="url(#arrow)"/>
 
   <!-- Customer actions -->
@@ -103,7 +105,7 @@
   <g font-size="10.5" fill="#1f2328">
     <text x="60" y="376"><tspan font-weight="700">queue</tspan> = one of NN/g's horizontal lanes, one per team or system that does the work</text>
 
-    <rect x="24" y="386" width="26" height="12" rx="2" fill="#ffffff" stroke="#8c959f"/>
+    <rect x="24" y="386" width="26" height="12" rx="2" fill="#ffffff" stroke="#57606a"/>
     <text x="60" y="396"><tspan font-weight="700">stage</tspan> = a step in the journey. A stage sits in a queue, and the queue sets which lane it is in</text>
 
     <line x1="24" y1="412" x2="50" y2="412" stroke="#57606a" stroke-width="1.4" marker-end="url(#arrow)"/>
@@ -112,5 +114,5 @@
     <text x="24" y="436"><tspan font-weight="700">Support Systems</tspan> = NN/g's support-processes lane, made first-class in Wayfinder</text>
   </g>
 
-  <text x="24" y="462" font-size="9.5" fill="#8c959f">Based on the Nielsen Norman Group service blueprint (Sarah Gibbons, 2017): nngroup.com/articles/service-blueprints-definition/</text>
+  <text x="24" y="462" font-size="9.5" fill="#57606a">Based on the Nielsen Norman Group service blueprint (Sarah Gibbons, 2017): nngroup.com/articles/service-blueprints-definition/</text>
 </svg>

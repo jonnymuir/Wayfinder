@@ -11,7 +11,7 @@ not bump a contract.
 
 | Bundle | Entry | Use |
 |---|---|---|
-| `service-blueprint-editor.js` | `service-blueprint-editor.html` | Standalone host page, a business app with no backoffice serves this directly (see MockBusinessApp, TestSite Razor pages, the Storybook harness). |
+| `service-blueprint-editor.js` | `service-blueprint-editor.html` | Standalone host page. A host with no backoffice serves this directly (see `Wayfinder.ReferenceApp` and the Storybook harness). |
 | `wayfinder-elements.js` | `src/index.ts` | Bare ES module, no HTML wrapper, registers the same three custom elements for a host that embeds them into its own page, e.g. loaded by URL from an Umbraco backoffice extension manifest the same way Umbraco loads any other extension bundle. |
 
 Both bundles are fully self-contained (React, Lit, and `@xyflow/react` ship
@@ -19,20 +19,14 @@ bundled in) since there's no host-side bundler to dedupe against, a browser
 loading a URL, not a `node_modules` resolution.
 
 > **Host it wherever the implementation needs it.** The editor is a plain Lit
-> bundle with no assumptions about its host, the toolkit's job is to make
-> hosting trivial anywhere, not to prescribe one hosting model. Today's only
-> backoffice host is Umbraco.Prism's own CMS Service Blueprint feature
-> (`UmbracoPrism.Core`), whose entire reason for existing is the backoffice
-> editing experience, it mounts the same components natively as a Collection +
-> entity-actions + Workspace backoffice screen instead (`vite.config.ts`'s
-> `prism-cms-service-blueprint-tab` entry → `UmbracoPrism.Core`'s own bundle;
-> `<wayfinder-service-blueprint-editor>` itself is mounted by
-> `cms-service-blueprint-workspace-editor.element.ts` in
-> `UmbracoPrism.Client/src/backoffice/cms-service-blueprint/workspace/`, scoped to whichever
-> definitionKey the workspace route is currently editing). This is expected to
-> move to a `Wayfinder.Umbraco`-native backoffice section that instead loads
-> `wayfinder-elements.js` by URL from `Wayfinder.Editor`'s static web assets,
-> see the Phase 2 plan.
+> bundle with no assumptions about its host. The toolkit's job is to make
+> hosting trivial anywhere, not to prescribe one hosting model. Two hosts use it
+> today: `Wayfinder.ReferenceApp` in this repo serves the standalone
+> `service-blueprint-editor.html` page, and
+> [`Wayfinder.Umbraco`](https://github.com/jonnymuir/Wayfinder.Umbraco)'s
+> **Settings → Advanced → Blueprints** workspace loads `wayfinder-elements.js` by
+> URL (`/_content/Wayfinder.Editor/dist/wayfinder-elements.js`) and mounts
+> `<wayfinder-service-blueprint-editor>` for the blueprint being edited.
 
 ## Public elements
 
@@ -137,9 +131,9 @@ Author-facing copy uses "Definition", JSON is the implementation detail.
 
 ### `<wayfinder-service-blueprint-editor-shell>`
 
-Thin shell that lists available serviceBlueprints and mounts
-`<wayfinder-service-blueprint-editor>`. Suitable for TestSite Razor pages and the reference
-shell.
+Thin shell that lists available service blueprints and mounts
+`<wayfinder-service-blueprint-editor>`. Suitable for a standalone host page, such as
+`Wayfinder.ReferenceApp`'s.
 
 **Attributes**
 
@@ -242,7 +236,7 @@ Built artefacts land in `Wayfinder.Editor/wwwroot/dist/`, packaged into the
 `Wayfinder.Editor` NuGet package as static web assets:
 
 * `service-blueprint-editor.js`, Lit bundle that registers the three public elements, for the standalone host page.
-* `service-blueprint-editor.html`, host harness used by TestSite Razor pages.
+* `service-blueprint-editor.html`, the standalone host page (`Wayfinder.ReferenceApp` serves it).
 * `wayfinder-elements.js`, bare ES module registering the same three elements, for embedding into a host's own page (e.g. an Umbraco backoffice extension manifest).
 
 Build with `npm run build` from `Wayfinder.Editor.Client/`.
@@ -255,14 +249,14 @@ The canvas has a dedicated visual regression suite proving five reading-level
 concerns: lane fit, no-overlap, label fit (text doesn't crash), pan/fitView
 behaviour, and arrow legibility, plus an ergonomics suite covering the
 named author flows (add stage, selection survives a tab switch, keyboard
-reach). The full strategy lives in
-[`docs/testing/serviceBlueprint-editor-visual-tests.md`](../../../../docs/testing/serviceBlueprint-editor-visual-tests.md).
+reach). Each spec measures DOM geometry (bounding boxes, scroll sizes) rather
+than comparing screenshots, so a pass is a measured layout contract.
 
 **Run locally:**
 
 ```bash
-npx playwright test tests/service-blueprint-editor/serviceBlueprint-canvas-*.spec.ts \
-                    tests/service-blueprint-editor/serviceBlueprint-editor-ergonomics.spec.ts \
+npx playwright test tests/service-blueprint-editor/service-blueprint-canvas-*.spec.ts \
+                    tests/service-blueprint-editor/service-blueprint-editor-ergonomics.spec.ts \
                     --reporter=line
 ```
 

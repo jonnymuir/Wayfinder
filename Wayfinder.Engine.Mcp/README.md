@@ -7,16 +7,16 @@ transport (`ModelContextProtocol.AspNetCore`).
 
 This is a library, not a standalone process. A host adds `MapServiceBlueprintAuthoringMcp()`
 to its own ASP.NET Core pipeline, alongside
-[`MapServiceBlueprintAuthoringApi()`](../Wayfinder.Engine.Api), both hit the
-same live `ServiceBlueprintAuthoringService`/`IServiceBlueprintSourceStore`, in-process. That matters: an
-MCP server can't run *inside* an externally-spawned stdio process and still see an app's
-live state, but hosted this way, a `save_service_blueprint` call reaches the running engine
-immediately, no restart, no separate process to keep track of.
+[`MapServiceBlueprintAuthoringApi()`](https://github.com/jonnymuir/Wayfinder/tree/main/Wayfinder.Engine.Api). Both call the
+same live `ServiceBlueprintAuthoringService`/`IServiceBlueprintSourceStore`, in process. That matters:
+an MCP server running as a separate stdio process can't see an app's live state. Hosted this way,
+a `save_service_blueprint` call reaches the running engine immediately, with no restart and no
+separate process to keep track of.
 
-[`Wayfinder.ReferenceApp`](../Wayfinder.ReferenceApp) (in this repo) is the reference
-implementation, it calls both `MapServiceBlueprintAuthoringApi()` and
-`MapServiceBlueprintAuthoringMcp()` against its own live store, demonstrating what a real
-host app does to expose this surface. See [the reference app guide](../docs/guides/reference-app.md)
+[`Wayfinder.ReferenceApp`](https://github.com/jonnymuir/Wayfinder/tree/main/Wayfinder.ReferenceApp) (in this repo) is the reference
+implementation. It calls both `MapServiceBlueprintAuthoringApi()` and
+`MapServiceBlueprintAuthoringMcp()` against its own live store, which is all a real host app does
+to expose this surface. See [the reference app guide](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/reference-app.md)
 for the full picture.
 
 ## Tools
@@ -33,17 +33,17 @@ for the full picture.
 
 ## Resources
 
-Alongside the tools, this project also registers five MCP resources, the canonical
-authoring docs, embedded from `docs/guides/` at build time, fetchable directly by any
-MCP client with no repo checkout:
+Alongside the tools, this project registers five MCP resources: the canonical authoring docs,
+embedded from `docs/guides/` at build time, so any MCP client can fetch them with no repo
+checkout.
 
 | Resource URI | Content |
 |---|---|
-| `service-blueprint-docs://calculation-language` | [The Wayfinder Calculation Language](../../docs/guides/calculation-language.md), grammar, functions, tables/series, `showWhen`. |
-| `service-blueprint-docs://authoring-guide` | [Reference Service Blueprint Contract](../../docs/guides/reference-service-blueprint-contract.md), the full `ServiceBlueprint` JSON shape. |
-| `service-blueprint-docs://service-design-principles` | [Service Design Principles](../../docs/guides/service-design-principles.md), Double Diamond, the GOV.UK Service Standard, and Lou Downe's 15 principles of good services, industry-agnostic. |
-| `service-blueprint-docs://ai-service-blueprint-authoring` | [AI-Ready Service Blueprint Authoring, Integrator Guide](../../docs/guides/ai-service-blueprint-authoring.md), how a host app wires this MCP surface into its own pipeline. |
-| `service-blueprint-docs://extending-the-component-catalog` | [Extending the Component Catalog](../../docs/guides/extending-the-component-catalog.md), how to register a genuinely new `Component` type. |
+| `service-blueprint-docs://calculation-language` | [The Wayfinder Calculation Language](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/calculation-language.md), grammar, functions, tables/series, `showWhen`. |
+| `service-blueprint-docs://authoring-guide` | [Reference Service Blueprint Contract](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/reference-service-blueprint-contract.md), the full `ServiceBlueprint` JSON shape. |
+| `service-blueprint-docs://service-design-principles` | [Service Design Principles](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/service-design-principles.md), Double Diamond, the GOV.UK Service Standard, and Lou Downe's 15 principles of good services, industry-agnostic. |
+| `service-blueprint-docs://ai-service-blueprint-authoring` | [AI-Ready Service Blueprint Authoring, Integrator Guide](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/ai-service-blueprint-authoring.md), how a host app wires this MCP surface into its own pipeline. |
+| `service-blueprint-docs://extending-the-component-catalog` | [Extending the Component Catalog](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/extending-the-component-catalog.md), how to register a genuinely new `Component` type. |
 
 ## Connect it to Claude Code
 
@@ -55,11 +55,18 @@ link), then:
 claude mcp add --transport http wayfinder-service-blueprint http://localhost:<port>/wayfinder/service-blueprint-authoring/mcp
 ```
 
-Use the **HTTP** URL, not HTTPS. There's also a plain "Service Blueprint Authoring MCP" link on
-HTTPS in the dashboard, but most MCP HTTP clients (including Claude Code's) reject the
-local ASP.NET Core dev certificate with "unable to verify the first certificate" since
-it's self-signed. Plain HTTP is fine here: it never leaves localhost. SSE is deprecated;
-this uses the modern Streamable HTTP transport.
+Use the **HTTP** URL. The dashboard also has an HTTPS link, but Claude Code (like most MCP HTTP
+clients) rejects the self-signed ASP.NET Core dev certificate with "unable to verify the first
+certificate". Plain HTTP is fine here because it never leaves localhost. To use HTTPS, trust the
+dev certificate in Node instead of turning certificate checks off:
+
+```bash
+dotnet dev-certs https --export-path ~/.aspnet/dev-cert.pem --format Pem --no-password
+rm ~/.aspnet/dev-cert.key        # the export also writes the private key; Node only needs the certificate
+export NODE_EXTRA_CA_CERTS=~/.aspnet/dev-cert.pem
+```
+
+The transport is Streamable HTTP; the older SSE transport is not supported.
 
 ## Auth
 
@@ -71,17 +78,16 @@ host opts out with `allowAnonymous: true`. A client then passes credentials at r
 claude mcp add --transport http wayfinder-service-blueprint <url> --header "Authorization: Bearer <token>"
 ```
 
-The reference app (`Wayfinder.ReferenceApp`) doesn't require this, its endpoints are
-intentionally unauthenticated, same as its existing editor endpoints.
+The reference app (`Wayfinder.ReferenceApp`) opts out with `allowAnonymous: true`, as it does for
+its editor endpoints, because it is a local demo host that never ships.
 
 ## A note on tool selection
 
 If you're running Claude Code from within a checkout of this repo itself (or any
 repo that happens to contain the same seed/source files the connected app was built
-from), the agent has ordinary file tools available alongside these MCP tools, nothing
-stops it from finding and editing a seed JSON file directly instead of calling
-`save_service_blueprint`. Doing so has no effect on the running app (seed files are only read at
+from), the agent has ordinary file tools alongside these MCP tools. Nothing stops it from
+finding and editing a seed JSON file directly instead of calling `save_service_blueprint`. Doing so has no effect on the running app (seed files are only read at
 process startup) and skips validation entirely. The tool descriptions call this out
 explicitly, but if you want a clean test of tool selection, run Claude Code from a
-directory with no copy of the host app's source in it, MCP tools remain reachable over
-HTTP regardless of working directory; there's just nothing else to find.
+directory with no copy of the host app's source in it. The MCP tools stay reachable over HTTP
+from any working directory; there's just nothing else to find.

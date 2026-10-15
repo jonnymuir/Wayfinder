@@ -1,8 +1,10 @@
 # Wayfinder.Engine.Worklist
 
-A default, optional caseworker worklist surface, server-rendered GOV.UK markup for the
-filter/sort/search/paginated queue list (see docs/guides/queue-worklist-filtering.md), an item
-review page, advance, and per-cursor pickup/putback (see docs/guides/work-allocation.md). A host
+A default, optional caseworker worklist surface: server-rendered GOV.UK markup for the
+filterable, sortable, searchable, paginated queue list (see
+[queue worklist filtering](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/queue-worklist-filtering.md)),
+an item review page, advance, and per-cursor pickup/putback (see
+[work allocation](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/work-allocation.md)). A host
 wires it up once with `AddWorklist()`/`MapWorklist(prefix)` — or, for a host whose own routing
 model doesn't fit a mounted route group (an Umbraco Block Grid component, say), calls
 `WorklistRenderer`'s rendering functions directly and supplies its own routes.
@@ -36,16 +38,16 @@ If a host authenticates this surface with an ambient browser cookie, chain
 `.ValidateWayfinderAntiforgery()` (from `Wayfinder.Engine.Http`) onto the group and register
 `builder.Services.AddAntiforgery()` + `app.UseAntiforgery()`. The pickup/putback/advance forms
 this package renders then carry a hidden `__RequestVerificationToken` automatically. See
-[`Wayfinder.Engine.Http`](../Wayfinder.Engine.Http)'s README § CSRF. A bearer-token host needs
+[`Wayfinder.Engine.Http`](https://github.com/jonnymuir/Wayfinder/tree/main/Wayfinder.Engine.Http)'s README § CSRF. A bearer-token host needs
 none of this.
 
-`MapWorklist` maps five routes under `prefix`, all genuinely relative to it, every link, form
-action, and redirect inside the package is built from the `prefix` a host passes in, never
-hardcoded, so a host can mount this at any path it likes:
+`MapWorklist` maps five routes under `prefix`. Every link, form action and redirect inside the
+package is built from the `prefix` a host passes in, never hardcoded, so a host can mount this at
+any path it likes:
 
-- `GET  {prefix}`, the list: status/sort/search filters, a paginated table, and a Pick up/Put back
+- `GET  {prefix}`: the list: status/sort/search filters, a paginated table, and a Pick up/Put back
   control per row.
-- `GET  {prefix}/{blueprintKey}/{instanceId}`, the item review page.
+- `GET  {prefix}/{blueprintKey}/{instanceId}`: the item review page.
 - `POST {prefix}/{blueprintKey}/{instanceId}/advance`
 - `POST {prefix}/{blueprintKey}/{instanceId}/pickup?cursorId=...`
 - `POST {prefix}/{blueprintKey}/{instanceId}/putback?cursorId=...`
@@ -77,7 +79,7 @@ own worklist Block Grid component for a real, non-`MapWorklist` consumer.
 
 ## What's deliberately left out
 
-File-download and bulk-dataset REST routes stay hand-wired on the host, this package only builds
+File-download and bulk-dataset REST routes stay hand-wired on the host. This package only builds
 URLs pointing at them (via `Wayfinder.Rendering.GovUk`'s `WithFileDownloadUrls`/
 `WithBulkDatasetApiUrls`), assuming a host maps its own such routes under the same `prefix`. This
 package owns zero page chrome: `RenderPage` is the escape hatch every response is wrapped through.
@@ -85,6 +87,6 @@ package owns zero page chrome: `RenderPage` is the escape hatch every response i
 ## Why a separate package
 
 Sits above both `Wayfinder.Rendering.GovUk` (`GovUkStageJourney`'s journey rendering and posted-form
-coercion) and `Wayfinder.Engine.Http` (`StageFileUploads`), this package's own job is purely
+coercion) and `Wayfinder.Engine.Http` (`StageFileUploads`). This package's own job is purely
 wiring those together into real ASP.NET Core routes against `IProcessManager`, the same
 `Add.../Map...` shape `Wayfinder.Engine.Api` and `Wayfinder.Engine.Mcp` already use.

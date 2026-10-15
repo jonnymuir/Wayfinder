@@ -5,9 +5,9 @@ validate, simulate, and save your business app's service blueprints.
 
 Wayfinder doesn't build AI into itself. It ships a toolkit your business app hosts, the same
 way it ships the service blueprint editor for humans to host (see
-[Embedding the Service Blueprint Editor](./embedding-the-service-blueprint-editor.md)), you add one or two
-lines to your own pipeline, and the AI-facing surface runs inside your app's own process,
-subject to your own auth.
+[the editor's component API](../../Wayfinder.Editor.Client/src/service-blueprint-editor/README.md)).
+You add one or two lines to your own pipeline, and the AI-facing surface runs inside your app's
+own process, subject to your own auth.
 
 ---
 
@@ -40,7 +40,8 @@ public interface IServiceBlueprintSourceStore
 {
     Task<IReadOnlyList<ServiceBlueprintSourceSummary>> ListAsync(CancellationToken ct = default);
     Task<ServiceBlueprint?> LoadAsync(string definitionKey, CancellationToken ct = default);
-    Task<ServiceBlueprintSaveResult> SaveAsync(ServiceBlueprint service-blueprint, int expectedVersion, CancellationToken ct = default);
+    Task<ServiceBlueprintSaveResult> SaveAsync(ServiceBlueprint blueprint, int expectedVersion, CancellationToken ct = default);
+    Task<bool> DeleteAsync(string definitionKey, CancellationToken ct = default);
 }
 ```
 
@@ -64,7 +65,7 @@ in-process lock (correct for a single-process app only); a real database-backed 
 should use the `WHERE` clause itself as the atomic compare:
 
 ```sql
-UPDATE Service-Blueprints SET Definition = @json, Version = Version + 1
+UPDATE ServiceBlueprints SET Definition = @json, Version = Version + 1
 WHERE DefinitionKey = @key AND Version = @expectedVersion
 ```
 
@@ -111,11 +112,19 @@ If your endpoint requires auth, pass it at registration:
 claude mcp add --transport http wayfinder-service-blueprint <url> --header "Authorization: Bearer <token>"
 ```
 
-`Wayfinder.ReferenceApp` (in this repo, this toolkit's reference consumer) leaves its
-endpoint unauthenticated intentionally, to prove the toolkit's auth boundary is real
-without inheriting a policy. Add `.RequireAuthorization()` (or any other ASP.NET Core policy) to
-your own `Map...` calls per the "Wiring it up" section above if you want an authed example,
-that's a decision for your own host to make, not something this toolkit prescribes.
+`Wayfinder.ReferenceApp` (in this repo, this toolkit's reference consumer) opts out with
+`allowAnonymous: true`, because it is a local, never-shipped demo host. Your own `Map...` calls
+are deny-by-default without any extra code (see "Wiring it up" above). Which policy your authors
+must satisfy is your host's decision, not something this toolkit prescribes.
+
+To use the HTTPS URL instead of HTTP, point Claude Code's Node runtime at the ASP.NET Core dev
+certificate rather than turning certificate checks off:
+
+```bash
+dotnet dev-certs https --export-path ~/.aspnet/dev-cert.pem --format Pem --no-password
+rm ~/.aspnet/dev-cert.key        # the export also writes the private key; Node only needs the certificate
+export NODE_EXTRA_CA_CERTS=~/.aspnet/dev-cert.pem
+```
 
 ## Reference material for the agent
 
@@ -177,7 +186,7 @@ editing.
 
 ### A note on tool selection
 
-If Claude Code is running from a checkout of your app's own source (or Prism's), it has
+If Claude Code is running from a checkout of your app's own source (or another host's), it has
 ordinary file tools available alongside the MCP ones, nothing stops it from finding and
 editing a seed/source file directly instead of calling `save_service_blueprint`. Doing so has no
 effect on a running app (source files are typically only read at process startup) and
@@ -198,8 +207,8 @@ in it, the MCP tools stay reachable over HTTP regardless of working directory.
 
 ## Related Documentation
 
-- [Embedding the Service Blueprint Editor](./embedding-the-service-blueprint-editor.md), the equivalent recipe for the human-facing visual editor
-- [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md), the shape of `ServiceBlueprint`, gateway routing rules
+- [The editor's component API](../../Wayfinder.Editor.Client/src/service-blueprint-editor/README.md): the equivalent for the human-facing visual editor
+- [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md): the shape of `ServiceBlueprint` and the gateway routing rules
 
 ---
 
