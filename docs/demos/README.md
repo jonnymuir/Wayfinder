@@ -12,6 +12,9 @@ didn't actually do.
 
 ## Regenerating
 
+The `.webm` files are large, so they are not committed (`docs/demos/*.webm` is gitignored):
+record them locally with the commands below.
+
 ```
 cd Wayfinder.ReferenceApp.Tests && npm run demo:record:overview
 cd Wayfinder.ReferenceApp.Tests && npm run demo:record:bulk-data-review
