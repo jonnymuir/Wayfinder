@@ -277,9 +277,8 @@ Both now live in Wayfinder itself, run against the same golden fixture in CI
 true: the JS runtime was ported from an independent TypeScript implementation
 ([Umbraco.Prism](https://github.com/jonnymuir/Umbraco.Prism)'s own `calculation-engine.ts`,
 mirroring the same grammar in a separate repo with no shared source, only a shared fixture file
-to catch drift after the fact). Umbraco.Prism switching to consume Wayfinder's canonical version
-instead of its own copy is a known, not-yet-done follow-up, flagged here so it isn't
-rediscovered as a surprise later.
+to catch drift after the fact). Umbraco.Prism has since deleted its copy and consumes
+Wayfinder's through `Wayfinder.Umbraco`.
 
 Using the client-side runtime never changes the engine's trust model, it's a preview
 accelerator only. A host still only ever submits raw field inputs to `Advance`, which always
@@ -305,8 +304,7 @@ existed, `prism-live-form.ts`, again only in
 and `[data-wayfinder-stat-field]`/`[data-wayfinder-chart]` hooks `GovUkComponentRenderer` already
 emits for exactly this purpose. Ported into `Wayfinder.Rendering.GovUk`, adapted from Umbraco.
 Prism's own `fields[key]` form-naming convention to this package's `field:{key}` one
-(`GovUk.FieldName`). Umbraco.Prism switching to consume this instead of its own copy is the same
-kind of not-yet-done follow-up as the calculation engine above.
+(`GovUk.FieldName`). As with the calculation engine, Umbraco.Prism has since deleted its copy.
 
 `/premium`'s own "Recalculate" button, a plain, fully declarative self-loop gateway
 (`money-modeller.json`'s own documented pattern, see

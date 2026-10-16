@@ -52,7 +52,7 @@ Deriving from `InputComponent` (rather than `Component` directly) gets you `Fiel
 `Label`, `Hint`, `Required`, `ConditionalOn`, `VisibleWhen`, `Default`, `DefaultFrom`,
 `ChangeStateKey` for free, and participation in the calculation scope. Add your own
 properties as ordinary C# properties, `RatingComponent` deliberately adds none (see
-[a known limitation](#known-limitation-a-renderfield-override-only-sees-fieldrenderpayload)
+[a known limitation](#known-limitation-a-registerfield-override-only-sees-fieldrenderpayload)
 below for why that's a deliberate, not accidental, choice here).
 
 ### 2. Describe it

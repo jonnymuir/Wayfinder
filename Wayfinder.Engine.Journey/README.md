@@ -1,8 +1,8 @@
 # Wayfinder.Engine.Journey
 
-A default, optional single-actor journey surface, server-rendered GOV.UK markup for "get my
-current stage, advance it" against one blueprint. The applicant/citizen counterpart to
-[`Wayfinder.Engine.Worklist`](../Wayfinder.Engine.Worklist)'s multi-item caseworker queue: one
+A default, optional single-actor journey surface: server-rendered GOV.UK markup for "get my
+current stage, advance it" against one blueprint. It's the applicant/citizen counterpart to
+[`Wayfinder.Engine.Worklist`](https://github.com/jonnymuir/Wayfinder/tree/main/Wayfinder.Engine.Worklist)'s multi-item caseworker queue: one
 actor, one instance, one page, no list, no pickup/putback, no separate advance sub-route.
 
 ## Usage
@@ -29,29 +29,29 @@ If a host authenticates the journey with an ambient browser cookie, chain
 `.ValidateWayfinderAntiforgery()` (from `Wayfinder.Engine.Http`) onto the group and register
 `builder.Services.AddAntiforgery()` + `app.UseAntiforgery()`. The stage form this package renders
 then carries a hidden `__RequestVerificationToken` automatically, and the `POST {prefix}` handler
-rejects a submission without it. See [`Wayfinder.Engine.Http`](../Wayfinder.Engine.Http)'s
+rejects a submission without it. See [`Wayfinder.Engine.Http`](https://github.com/jonnymuir/Wayfinder/tree/main/Wayfinder.Engine.Http)'s
 README § CSRF. A bearer-token host needs none of this.
 
-`AddJourney` is called once, the tenant/actor/page-chrome resolution is normally the same across
-every journey a host maps. `MapJourney` is called once per blueprint a host wants a self-service
+`AddJourney` is called once, because the tenant, actor and page-chrome resolution is normally the
+same for every journey a host maps. `MapJourney` is called once per blueprint a host wants a self-service
 journey for, each with its own `prefix`, `blueprintKey`, and page title.
 
 `MapJourney` maps three routes under `prefix`:
 
-- `GET  {prefix}`, the current stage. Ambient `GetCurrent`, deliberately: an ordinary visit keeps
+- `GET  {prefix}`: the current stage. Ambient `GetCurrent`, deliberately: an ordinary visit keeps
   showing a just-reached terminal stage forever (a returning citizen sees "Thank you", not a
   silently-reset blank form). Automatically renders a "Start a new one" link (customize the label
   via `MapJourney`'s own optional `startNewLabel` parameter) whenever the current response is
-  genuinely terminal, no blueprint content authoring needed for it.
-- `POST {prefix}`, advances it (POST-redirect-GET back to the same URL, so a reload or a second
+  genuinely terminal, with no blueprint content needed for it.
+- `POST {prefix}`: advances it (POST-redirect-GET back to the same URL, so a reload or a second
   tab never resubmits a stale `stateVersion`).
-- `GET  {prefix}/new`, the distinct "start a new one" affordance the link above points at
+- `GET  {prefix}/new`: the distinct "start a new one" affordance the link above points at
   (`IProcessManager.GetCurrentOrStartFresh`): reinstates a still-in-progress instance rather than
   abandoning it, only actually starting fresh once the existing one is genuinely terminal.
 
 ## Why a separate package from `Wayfinder.Engine.Worklist`
 
 Same underlying building blocks (`GovUkStageJourney`'s rendering/form-coercion,
-`Wayfinder.Engine.Http`'s file-upload handling, `IProcessManager`), but a genuinely different shape,
-one instance per actor rather than a shared queue of many, so it gets its own package rather
-than an awkward "worklist, but sometimes there's no list" branch inside that one.
+`Wayfinder.Engine.Http`'s file-upload handling, `IProcessManager`), but a genuinely different
+shape: one instance per actor rather than a shared queue of many. So it gets its own package
+rather than an awkward "worklist, but sometimes there's no list" branch inside that one.

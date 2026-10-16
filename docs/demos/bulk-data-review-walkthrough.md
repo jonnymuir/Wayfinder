@@ -1,8 +1,8 @@
 # Bulk data review: a walkthrough
 
-A narrated companion to [`bulk-data-review.webm`](./bulk-data-review.webm), this document mirrors
-the recording beat for beat, so you can read it standalone or follow along while watching. It
-covers both sides of the feature: what **Priya Shah**, an NJF operations user, actually sees and
+A narrated companion to the `bulk-data-review.webm` recording (see [Demo recordings](./README.md)
+for how to produce it), this document mirrors the recording beat for beat, so you can read it
+standalone or follow along while watching. It covers both sides of the feature: what **Priya Shah**, an NJF operations user, actually sees and
 does (Acts 1–4), and, because understanding what a feature *means* usually means seeing how it's
 actually built, what the person who **designed** this service sees in the editor (Act 5): the
 canvas, and the properties panel where a bulk dataset's whole shape gets authored. If you're
@@ -14,7 +14,7 @@ implementer reference this walkthrough only samples from.
 
 The **National Juggling Federation (NJF)** arranges group public-liability insurance for its
 members, through a fictional insurer called **SafetyNet Underwriting**: the same insurer from
-the [overview demo](./wayfinder-overview.webm), now doing something quite different: instead of
+the overview demo (`wayfinder-overview.webm`), now doing something quite different: instead of
 one human underwriter making one decision on one case, it's applying automatic rules to every row
 of a monthly CSV of member contributions, and handing back the same file annotated with an error
 or warning on any row that needs attention.

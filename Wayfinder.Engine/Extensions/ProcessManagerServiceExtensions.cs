@@ -1,4 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
@@ -20,6 +23,9 @@ public static class ProcessManagerServiceExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(blueprintSeedPath);
 
+        // ProcessManagerEngine takes a non-generic ILogger, which no host registers by default.
+        services.TryAddSingleton<ILogger>(sp =>
+            sp.GetService<ILoggerFactory>()?.CreateLogger("Wayfinder.Engine") ?? NullLogger.Instance);
         services.AddSingleton<IServiceBlueprintStore>(
             _ => new FilesystemServiceBlueprintStore(blueprintSeedPath));
         services.AddSingleton<TEngine>();

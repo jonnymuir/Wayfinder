@@ -1,11 +1,11 @@
 # Wayfinder.Editor.Http
 
-The backend half of a contract [`Wayfinder.Editor`](../Wayfinder.Editor)'s packaged
-`service-blueprint-editor.html` demo page expects, not from the editor package itself, but from
-its bundled `MockBusinessAppServiceBlueprintSource` TS example (a documented "reference
-implementation, fork this into your own host" integration, not part of the editor's shipped
-bundle). A host that just wants the packaged demo page to work out of the box maps this instead of
-hand-copying that example's expected routes itself.
+The server half of the load/save contract that
+[`Wayfinder.Editor`](https://github.com/jonnymuir/Wayfinder/tree/main/Wayfinder.Editor)'s packaged
+`service-blueprint-editor.html` page expects. The contract comes from the page's bundled
+`MockBusinessAppServiceBlueprintSource` example, a reference integration to fork into your own
+host rather than part of the editor itself. A host that just wants the packaged page to work out
+of the box maps this instead of hand-writing those routes.
 
 ## Usage
 
@@ -15,9 +15,9 @@ app.MapMockBusinessAppServiceBlueprints(authorizationPolicy: "BlueprintsAdmin");
 
 Deny by default, like `Wayfinder.Engine.Api`'s/`Wayfinder.Engine.Mcp`'s own mapping calls: these
 routes can overwrite every blueprint, so they require an authenticated caller (or the policy you
-name) unless the host writes `allowAnonymous: true`. No
-`Add...()`, it needs nothing beyond `ServiceBlueprintAuthoringService`, already registered by the
-`AddServiceBlueprintAuthoring()` call any authoring surface (API/MCP/this) requires.
+name) unless the host writes `allowAnonymous: true`. There's no `Add...()` call: it needs only
+`ServiceBlueprintAuthoringService`, which the `AddServiceBlueprintAuthoring()` call every
+authoring surface (API, MCP, this) requires has already registered.
 
 The contract (matching `MockBusinessAppServiceBlueprintSource` exactly):
 
