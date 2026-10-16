@@ -11,6 +11,8 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-16
+
 ### Changed
 
 - A `source: "service"` calculation field the host doesn't supply is now read from the request's
