@@ -11,6 +11,8 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-10-16
+
 ### Bug fixes
 
 - `AddProcessManager` now registers the logger `ProcessManagerEngine` needs, so a host that calls
