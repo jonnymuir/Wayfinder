@@ -101,18 +101,9 @@ builder.Services.AddSingleton(sp => new ProcessManagerEngine(
     sp.GetRequiredService<ILogger<ProcessManagerEngine>>(),
     sp.GetRequiredService<IServiceBlueprintStore>(),
     sp.GetRequiredService<IServiceContentSanitizer>(),
-    // A "source: service" calculations field (see njf-contributions.json's own contributionsErrorCount
-    // — needed so its review stage's "Accept and finish" route's showWhen can see a value that's
-    // never a captured input, only an onEnter action's own output) is resolved via this callback,
-    // never automatically from FieldValues — CalculationScopeBuilder.Build only pulls genuine
-    // captured-input components in on its own. Generic: reads whatever's declared source:"service"
-    // straight off the instance's own already-populated FieldValues, since the "service" that
-    // supplied it here is Wayfinder's own engine (an action's resolution), not a true external
-    // lookup a host would need to actually go and fetch.
-    serviceInputsResolver: (instance, definition, _) =>
-        (definition.Calculations?.Fields ?? new Dictionary<string, Wayfinder.Models.ServiceDesign.Calculations.ServiceBlueprintCalculationField>())
-            .Where(field => string.Equals(field.Value.Source, "service", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(field => field.Key, field => instance.FieldValues.GetValueOrDefault(field.Key)),
+    // No serviceInputsResolver: the only "source: service" fields here (njf-contributions.json's
+    // contribution counts) are written by the engine's own bulk-dataset-ingest action, and the
+    // engine reads those from the request's stored values itself.
     supportSystemClients:
     [
         new SafetyNetUnderwritingClient(

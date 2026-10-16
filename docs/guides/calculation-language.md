@@ -365,9 +365,11 @@ application*, not computed:
 
 The host supplies it (e.g. a member record fetched from a system of record), either by
 passing a `serviceInputsResolver` to `ProcessManagerEngine`'s constructor or by overriding its
-`protected virtual ResolveServiceInputs(...)`. `Wayfinder.ReferenceApp/Program.cs` passes a
-resolver. A service field with
-no value supplied is a `CalculationException` when evaluated for real; the
+`protected virtual ResolveServiceInputs(...)`. A service field the host doesn't supply is read
+from the request's stored values, which is where the engine's own actions write theirs (a
+bulk-dataset ingest's counts, for example), so a host only supplies what it actually looks up.
+A service field with no value from either is `null`, so an expression that needs it is a
+`CalculationException` when evaluated for real; the
 `validate_service_blueprint`/`simulate_service_blueprint` MCP tools have specific, non-fatal handling
 for this case, see [AI-Ready Service Blueprint Authoring](./ai-service-blueprint-authoring.md).
 

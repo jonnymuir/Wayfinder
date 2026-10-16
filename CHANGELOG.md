@@ -11,6 +11,14 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Changed
+
+- A `source: "service"` calculation field the host doesn't supply is now read from the request's
+  stored values, where the engine's own actions (such as a bulk-dataset ingest's counts) write
+  theirs. A host's `serviceInputsResolver` or `ResolveServiceInputs` override only needs to supply
+  what it looks up, and a pass-through resolver that copied stored values can be deleted. A value
+  the host supplies still wins.
+
 ## [0.19.1] - 2026-10-16
 
 ### Bug fixes
