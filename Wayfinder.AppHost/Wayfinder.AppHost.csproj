@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost" />
+    <!-- Aspire 13.6.1 still pulls MessagePack 2.5.302 (GHSA-qhrr-8q5h-9q3h); drop once it doesn't. -->
+    <PackageReference Include="MessagePack" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
