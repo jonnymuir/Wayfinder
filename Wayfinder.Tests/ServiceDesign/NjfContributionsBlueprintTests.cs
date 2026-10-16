@@ -183,15 +183,9 @@ public class NjfContributionsBlueprintTests
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(LoadDefinition()),
             new PassthroughContentSanitizer(),
-            // Mirrors Wayfinder.ReferenceApp/Program.cs's own ProcessManagerEngine
-            // registration — contributionsErrorCount is "source: service" precisely so the
-            // review stage's "accept"/"accept-with-warnings" routes' showWhen can see it;
-            // without a resolver wired up, that's a CalculationException, not a
-            // silently-missing value.
-            serviceInputsResolver: (instance, definition, _) =>
-                (definition.Calculations?.Fields ?? new Dictionary<string, Wayfinder.Models.ServiceDesign.Calculations.ServiceBlueprintCalculationField>())
-                    .Where(field => string.Equals(field.Value.Source, "service", StringComparison.OrdinalIgnoreCase))
-                    .ToDictionary(field => field.Key, field => instance.FieldValues.GetValueOrDefault(field.Key)),
+            // No serviceInputsResolver: contributionsErrorCount is "source: service", written by the
+            // engine's own bulk-dataset-ingest action, and the engine reads it from the stored
+            // values for the review stage's routes without any host help.
             supportSystemClients: [client],
             bulkDatasetStore: bulkDatasetStore);
 

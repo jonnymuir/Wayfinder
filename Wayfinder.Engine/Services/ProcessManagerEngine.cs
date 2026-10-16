@@ -60,7 +60,7 @@ public partial class ProcessManagerEngine : IProcessManager
             auditLogStore ?? new InMemoryAuditLogStore(),
             _registry);
 
-        var calculations = new StageCalculations(logger, _instances, ResolveServiceInputs);
+        var calculations = new StageCalculations(logger, _instances, ServiceInputsWithStoredValues);
         var workItems = new WorkItemFinder(calculations);
         var renderer = new StageRenderer(sanitizer, calculations, logger);
         _outcomes = new SupportSystemOutcomes(_instances, clients, this, logger);
@@ -286,11 +286,52 @@ public partial class ProcessManagerEngine : IProcessManager
     /// A subclassing host overrides this method directly; a composed caller (e.g. the
     /// simulation runner) supplies the constructor's <c>serviceInputsResolver</c> delegate
     /// instead — this default implementation prefers that delegate when one was given.
+    /// A host only supplies what it looks up: any declared service field it leaves out is read
+    /// from the request's stored values (see <see cref="ServiceInputsWithStoredValues"/>).
     /// </summary>
     protected virtual IReadOnlyDictionary<string, object?>? ResolveServiceInputs(
         ServiceRequest instance,
         ServiceBlueprint definition,
         StageDefinition stage) => _serviceInputsResolver?.Invoke(instance, definition, stage);
+
+    /// <summary>
+    /// The host's service inputs, completed with the request's stored value (or null) for every
+    /// declared <c>source: "service"</c> field the host didn't supply. The engine's own actions
+    /// write some of those values (a bulk-dataset ingest's counts, a support system's outcome),
+    /// and an evaluation with a declared service field missing fails, so no host should have to
+    /// pass them through itself. The host's value wins where both exist.
+    /// </summary>
+    private IReadOnlyDictionary<string, object?>? ServiceInputsWithStoredValues(
+        ServiceRequest instance,
+        ServiceBlueprint definition,
+        StageDefinition stage)
+    {
+        var supplied = ResolveServiceInputs(instance, definition, stage);
+        if (definition.Calculations is null)
+        {
+            return supplied;
+        }
+
+        var declared = definition.Calculations.Fields
+            .Where(field => string.Equals(field.Value.Source, "service", StringComparison.OrdinalIgnoreCase))
+            .Select(field => field.Key)
+            .Where(key => supplied?.ContainsKey(key) != true)
+            .ToList();
+        if (declared.Count == 0)
+        {
+            return supplied;
+        }
+
+        var completed = supplied is null
+            ? new Dictionary<string, object?>(StringComparer.Ordinal)
+            : new Dictionary<string, object?>(supplied, StringComparer.Ordinal);
+        foreach (var key in declared)
+        {
+            completed[key] = instance.FieldValues.GetValueOrDefault(key);
+        }
+
+        return completed;
+    }
 
     /// <summary>
     /// The most recently computed <see cref="CalculationResult"/> for an instance, if its

@@ -228,9 +228,8 @@ gateway each, a stage's routes must always target a gateway, never another stage
 (logged as a warning, not surfaced as an error). A field populated by `errorCountField`/
 `warningCountField`/`acceptedCountField` lives in `ServiceRequest.FieldValues`, but referencing it
 in a `showWhen` expression still requires declaring it under the blueprint's own
-`calculations.fields` block with `source: "service"` (the same "service"-sourced pattern
-`errorCountField` needs, backed by a host resolver that reads the value straight back off
-`FieldValues`, see `Wayfinder.ReferenceApp/Program.cs`'s own `serviceInputsResolver`). Skip that
+`calculations.fields` block with `source: "service"`. The engine reads a declared service field
+the host doesn't supply from `FieldValues`, so no host code is needed. Skip that
 declaration and every route conditioned on the field **stays visible regardless of its actual
 value**, silently, since the failure is swallowed. `njf-contributions.json` declares both
 `contributionsErrorCount` and `contributionsWarningCount` for exactly this reason.
