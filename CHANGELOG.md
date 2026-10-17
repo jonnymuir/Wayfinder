@@ -11,6 +11,14 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Added
+
+- `ServiceRequest.HandedOverAt` records when a request first reached a queue other than its starting
+  stage's, such as a submitted contact message landing in a team's worklist. It is set once and
+  never cleared. A store that expires anonymous requests with the visitor's session must keep
+  handed-over ones, or a submission is lost before anyone picks it up. Wayfinder.Umbraco's store
+  uses it.
+
 ## [0.20.0] - 2026-10-16
 
 ### Changed

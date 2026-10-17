@@ -7,7 +7,10 @@ namespace Wayfinder.Engine.Abstractions;
 /// <see cref="IServiceBlueprintSourceStore"/>'s role for definitions. <see cref="Services.ProcessManagerEngine"/>
 /// ships a default in-memory implementation, but a host that needs instances to survive a
 /// process restart, or to expire on a schedule unrelated to the process lifetime (e.g. tied to a
-/// browser session), implements this against its own persistence instead.
+/// browser session), implements this against its own persistence instead. A store that expires
+/// anonymous instances must keep any with <see cref="ServiceRequest.HandedOverAt"/> set: that
+/// request has reached someone else's queue, and deleting it with the visitor's session loses work
+/// that person is responsible for.
 /// </summary>
 public interface IServiceRequestStore
 {
