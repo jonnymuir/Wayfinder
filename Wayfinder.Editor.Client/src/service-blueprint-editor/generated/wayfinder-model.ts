@@ -84,6 +84,20 @@ export interface CheckboxesComponent {
   changeStateKey?: string;
   showWhen?: string;
 }
+export interface ConversationComponent {
+  type: 'conversation';
+  maxLength?: number;
+  fieldKey: string;
+  label: string;
+  hint?: string;
+  required?: boolean;
+  conditionalOn?: string;
+  visibleWhen?: string;
+  default?: string;
+  defaultFrom?: string;
+  changeStateKey?: string;
+  showWhen?: string;
+}
 export interface DateInputComponent {
   type: 'date';
   defaultToToday?: boolean;
@@ -342,6 +356,7 @@ export type Component =
   | BulkDataReviewComponent
   | ChartComponent
   | CheckboxesComponent
+  | ConversationComponent
   | DateInputComponent
   | DecimalInputComponent
   | DetailsComponent

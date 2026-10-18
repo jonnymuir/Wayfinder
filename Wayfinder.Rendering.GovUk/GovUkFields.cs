@@ -262,7 +262,7 @@ public static class GovUkFields
             """;
     }
 
-    private static string RenderTextarea(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
+    internal static string RenderTextarea(FieldRenderPayload field, IReadOnlyDictionary<string, string> errors)
     {
         var (id, name, hint, describedBy, required, error) = Common(field, errors);
         var value = field.Value?.ToString() ?? "";

@@ -7,6 +7,7 @@ internal static class GovUkFieldRenderers
 {
     private static readonly Dictionary<string, Func<FieldRenderPayload, IReadOnlyDictionary<string, string>, string>> ByFieldType = new()
     {
+        ["conversation"] = GovUkConversationField.Render,
         ["file-upload"] = GovUkFileUploadField.Render,
         ["guidance-checklist"] = GovUkGuidanceChecklistField.Render,
         ["location-picker"] = GovUkLocationPickerField.Render,
