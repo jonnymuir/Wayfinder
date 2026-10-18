@@ -11,6 +11,11 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-18
+
+Also releases `Wayfinder.Rendering.GovUk` 0.10.0 (the conversation rendering) and `Wayfinder.Editor`
+0.9.0 (the conversation component in the editor).
+
 ### Added
 
 - A `conversation` component for a running conversation between the person a request belongs to and
