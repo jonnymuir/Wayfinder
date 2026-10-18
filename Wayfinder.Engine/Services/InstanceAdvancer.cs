@@ -153,6 +153,9 @@ internal sealed partial class InstanceAdvancer(
             return rejected;
         }
 
+        request = WithConversationMessagesAppended(request, visibleWorkItem.StageKey);
+        fieldValues = request.FieldValues;
+
         // Is the target a gateway rather than a plain stage?
         var nextGateway = FindGateway(definition, transition.ToState);
         if (nextGateway != null)
@@ -165,6 +168,18 @@ internal sealed partial class InstanceAdvancer(
         return instance.Cursors.Count > 0
             ? MoveCursorToStage(request, visibleWorkItem.StageKey, transition)
             : MoveToStage(request, visibleWorkItem.StageKey, transition);
+    }
+
+    /// <summary>An accepted submission: each conversation field's message joins the end of its thread rather than replacing it.</summary>
+    private static Request WithConversationMessagesAppended(Request request, string fromStageKey)
+    {
+        var fromStage = request.Definition.Stages.FirstOrDefault(s => s.StageKey == fromStageKey);
+        return fromStage is null
+            ? request
+            : request with
+            {
+                FieldValues = ConversationThreads.AppendSubmitted(fromStage, request.Instance.FieldValues, request.FieldValues, DateTimeOffset.UtcNow)
+            };
     }
 
     /// <summary>
@@ -184,7 +199,8 @@ internal sealed partial class InstanceAdvancer(
         }
 
         var currentCalc = calculations.EvaluateDefinitionCalculations(instance, definition, currentStage);
-        var currentComponents = renderer.BuildComponents(currentStage.Components, instance.FieldValues, currentCalc);
+        var currentComponents = ConversationPayloads.Prepare(
+            renderer.BuildComponents(currentStage.Components, instance.FieldValues, currentCalc), definition, currentStage);
         var authoritativeFields = currentComponents.SelectMany(c => c.Fields).ToArray();
         var hiddenFieldKeys = currentComponents
             .Where(c => c.Hidden)
@@ -198,8 +214,9 @@ internal sealed partial class InstanceAdvancer(
         // instance.FieldValues; anything else belongs to a different stage and must stay out, or the whitelist check
         // would reject it as an unknown field.
         var currentStageFieldKeys = authoritativeFields.Select(f => f.FieldKey).ToHashSet(StringComparer.Ordinal);
+        var conversationKeys = ConversationThreads.FieldKeys(currentStage);
         var existingForCurrentStage = instance.FieldValues
-            .Where(kvp => currentStageFieldKeys.Contains(kvp.Key))
+            .Where(kvp => currentStageFieldKeys.Contains(kvp.Key) && !conversationKeys.Contains(kvp.Key))
             .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal);
         var submittedStrings = Merge(existingForCurrentStage, fieldValues)
             .ToDictionary(kvp => kvp.Key, kvp => kvp.Value?.ToString() ?? string.Empty, StringComparer.Ordinal);
@@ -210,14 +227,14 @@ internal sealed partial class InstanceAdvancer(
             var problems = validation.Errors
                 .Select(e => new ServiceRequestProblem { FieldKey = e.Key, Message = e.Value, Code = "VALIDATION_ERROR" })
                 .ToArray();
-            return RenderWithProblems(request, problems);
+            return RenderWithProblems(request with { FieldValues = ConversationThreads.WithoutMessages(currentStage, fieldValues) }, problems);
         }
 
         // Declarative cross-field business rules, checked once field-level validation has passed, on the same merge of
         // persisted + just-submitted values — never on stale persisted data or anything the client claims was pre-checked.
         var stageValidationProblems = calculations.EvaluateStageValidations(instance, definition, currentStage, fieldValues, action);
         return stageValidationProblems.Count > 0
-            ? RenderWithProblems(request, stageValidationProblems)
+            ? RenderWithProblems(request with { FieldValues = ConversationThreads.WithoutMessages(currentStage, fieldValues) }, stageValidationProblems)
             : null;
     }
 

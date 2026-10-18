@@ -176,10 +176,8 @@ internal sealed partial class InstanceAdmin(InstanceRepository instances, Bluepr
                 continue;
             }
 
-            if (blueprintsAlreadyOwned.Contains(instance.BlueprintKey))
+            if (IsLeftBehind(instance, blueprintsAlreadyOwned))
             {
-                // The signed-in user already has their own instance of this blueprint — leave
-                // the anonymous one behind rather than silently discarding whichever loses.
                 continue;
             }
 
@@ -203,6 +201,15 @@ internal sealed partial class InstanceAdmin(InstanceRepository instances, Bluepr
 
         return claimed;
     }
+
+    /// <summary>
+    /// Whether an anonymous instance stays behind: the signed-in user already has their own instance of a
+    /// one-per-person blueprint, and claiming would silently discard whichever lost. An unknown or
+    /// <c>"single"</c> policy is one per person; <c>"multiple"</c> and <c>"prompt"</c> let a person have several.
+    /// </summary>
+    private bool IsLeftBehind(ServiceRequest instance, HashSet<string> blueprintsAlreadyOwned) =>
+        blueprintsAlreadyOwned.Contains(instance.BlueprintKey)
+        && (!registry.TryGet(instance.BlueprintKey, out var definition) || definition.RequestPolicy is not ("multiple" or "prompt"));
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Instance {Id} aborted by {AbortedBy}: {Reason}")]
     private static partial void Aborted(ILogger logger, string id, string abortedBy, string reason);

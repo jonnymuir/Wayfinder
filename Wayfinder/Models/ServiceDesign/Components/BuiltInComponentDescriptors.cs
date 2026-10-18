@@ -301,7 +301,7 @@ public static class BuiltInComponentDescriptors
             Properties = InputBaseProperties(),
         });
 
-        descriptors.AddRange([FileUploadDescriptor.Build(), LocationPickerDescriptor.Build()]);
+        descriptors.AddRange([FileUploadDescriptor.Build(), LocationPickerDescriptor.Build(), ConversationDescriptor.Build()]);
 
         descriptors.Add(new ComponentDescriptor
         {

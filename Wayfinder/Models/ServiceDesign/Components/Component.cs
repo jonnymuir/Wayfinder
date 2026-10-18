@@ -33,6 +33,7 @@ namespace Wayfinder.Models.ServiceDesign.Components;
 [JsonDerivedType(typeof(LocationPickerComponent), typeDiscriminator: "location-picker")]
 [JsonDerivedType(typeof(GuidanceChecklistComponent), typeDiscriminator: "guidance-checklist")]
 [JsonDerivedType(typeof(SliderComponent), typeDiscriminator: "slider")]
+[JsonDerivedType(typeof(ConversationComponent), typeDiscriminator: "conversation")]
 [JsonDerivedType(typeof(StatGroupComponent), typeDiscriminator: "stat-group")]
 [JsonDerivedType(typeof(ChartComponent), typeDiscriminator: "chart")]
 [JsonDerivedType(typeof(BulkDataReviewComponent), typeDiscriminator: "bulk-data-review")]

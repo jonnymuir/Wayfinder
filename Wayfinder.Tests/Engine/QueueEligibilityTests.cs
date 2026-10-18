@@ -150,7 +150,8 @@ public class QueueEligibilityTests
         var started = engine.GetCurrent("queue-eligibility-test", TenantId, UserId, ProfileWith("njf-review", "team-a"));
         var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, ProfileWith("njf-review", "team-a"));
         engine.Advance(started.InstanceId, TenantId, UserId, ProfileWith("njf-review", "team-a"), "continue", pickedUp.StateVersion, null);
-        var afterAnyOf = engine.GetCurrent("queue-eligibility-test", TenantId, UserId, ProfileWith("team-b"), started.InstanceId);
+        // Arriving in a different queue is a new unit of work there, so it is picked up again before acting.
+        var afterAnyOf = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, ProfileWith("team-b"));
         engine.Advance(afterAnyOf.InstanceId, TenantId, UserId, ProfileWith("team-b"), "continue", afterAnyOf.StateVersion, null);
 
         var view = engine.GetCurrent("queue-eligibility-test", TenantId, UserId, noCapabilitiesAtAll, started.InstanceId);

@@ -136,7 +136,8 @@ that row simply never appears for anyone but whoever holds it.
 | Transition | Pickup preserved? |
 |---|---|
 | Admin `"change:"` jump | Yes |
-| Plain stage→stage hop (no gateway) | Yes |
+| Plain stage→stage hop (no gateway) within the same queue | Yes |
+| Plain stage→stage hop (no gateway) into a different queue | **No**: cleared |
 | Split gateway crossing | **No**: cleared |
 | Join gateway crossing/release | **No**: cleared |
 
@@ -146,7 +147,10 @@ exists, no propagation code was written for this; its *absence* is the design: a
 crosses a gateway is, structurally, a new unit of work in a new queue, and inheriting the old
 cursor's pickup into that new context isn't the right default. The two paths that preserve a
 cursor in place (the admin jump, and a plain hop with no intervening gateway) both go through
-`MoveCursor`'s own `c with { ... }`, which genuinely carries every field forward.
+`MoveCursor`'s own `c with { ... }`, which carries every field forward, except that a plain hop into a
+different queue clears `AssignedTo`. Arriving in another queue is a new unit of work there, exactly as
+after a gateway: keeping the old assignee would leave the work assigned to someone in the queue it
+left, so nobody in the queue it arrived in (including a citizen it was sent back to) could see it.
 
 ### The zero-cursor edge case
 

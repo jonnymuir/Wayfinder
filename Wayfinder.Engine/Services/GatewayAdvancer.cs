@@ -380,7 +380,6 @@ internal sealed partial class GatewayAdvancer(
     {
         if (cursorId == null)
             return cursors;
-
         return cursors
             .Select(c => c.CursorId == cursorId
                 ? c with
@@ -388,7 +387,8 @@ internal sealed partial class GatewayAdvancer(
                     CurrentNodeKey = newNodeKey,
                     IsAtGateway = isAtGateway,
                     ArrivedViaAction = isAtGateway ? arrivedViaAction : null,
-                    QueueKey = newQueueKey ?? c.QueueKey
+                    QueueKey = newQueueKey ?? c.QueueKey,
+                    AssignedTo = newQueueKey is null || newQueueKey == c.QueueKey ? c.AssignedTo : null
                 }
                 : c)
             .ToArray();

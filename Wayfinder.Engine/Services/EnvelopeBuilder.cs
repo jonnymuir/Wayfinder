@@ -84,7 +84,7 @@ internal sealed class EnvelopeBuilder(
             renderData["live"] = StageCalculations.BuildLiveModel(definition, calc);
         }
 
-        var components = renderer.BuildComponents(stage.Components, instance.FieldValues, calc);
+        var components = ConversationPayloads.Prepare(renderer.BuildComponents(stage.Components, instance.FieldValues, calc), definition, stage);
         var effectiveStepType = stage.Components.InferStepType();
         var waitingComponent = stage.Components.OfType<WaitingComponent>().FirstOrDefault();
 

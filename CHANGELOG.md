@@ -11,6 +11,28 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Added
+
+- A `conversation` component for a running conversation between the person a request belongs to and
+  the team handling it. Each submitted message is added to the end of the thread with which queue
+  wrote it and when, instead of replacing the last one, so a "reply, ask for more, reply again" loop
+  keeps its whole history. Each side sees its own messages as "You". Messages are capped at
+  `maxLength` (5,000 characters by default).
+
+### Fixed
+
+- A plain stage-to-stage hop into a different queue now clears the pickup, as a gateway crossing
+  already did. Before, the work stayed assigned to whoever had picked it up in the queue it left, so
+  nobody in the new queue could see it: a request a team sent back to the citizen without a gateway
+  vanished from the citizen's view, and work handed to another team never reached its worklist. If
+  your blueprint relied on the same person acting again in the new queue, they now pick it up there.
+
+### Changed
+
+- `ClaimInstances` claims every anonymous request of a blueprint that lets a person have several
+  (`requestPolicy` `"multiple"` or `"prompt"`), even if the member already has some. Only a
+  one-per-person (`"single"`) blueprint still leaves the anonymous request behind.
+
 ## [0.21.0] - 2026-10-18
 
 ### Added

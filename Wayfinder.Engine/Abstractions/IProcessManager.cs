@@ -81,9 +81,11 @@ public interface IProcessManager
     /// <paramref name="toUserId"/> and marks each as authenticated — for a visitor who was
     /// browsing anonymously and has just signed in, so their in-progress instance survives
     /// as a resumable one instead of being orphaned under an identity nothing will ever
-    /// resolve to again. An instance is left alone (not claimed) if <paramref name="toUserId"/>
-    /// already owns an instance of that same blueprint — claiming would silently discard
-    /// whichever the caller didn't return here. Returns the claimed instance ids.
+    /// resolve to again. For a one-per-person blueprint (<c>requestPolicy</c> <c>"single"</c>), an
+    /// instance is left alone (not claimed) if <paramref name="toUserId"/> already owns one of that
+    /// blueprint, because claiming would silently discard whichever the caller didn't return here. A
+    /// blueprint that lets a person have several (<c>"multiple"</c>, <c>"prompt"</c>) has every one
+    /// claimed. Returns the claimed instance ids.
     /// </summary>
     IReadOnlyList<string> ClaimInstances(string tenantId, string fromUserId, string toUserId);
 

@@ -198,6 +198,7 @@ this table is a human-readable snapshot of the same data.
 | `bulk-data-review` | Data display | Paginated, only-what-needs-attention review UI over a bulk-dataset-ingest action's dataset. See docs/guides/bulk-data-review.md. |
 | `chart` | Data display | Declarative chart bound to a calculation series. |
 | `checkboxlist` | Input | Checkbox group with optional conditional child components. |
+| `conversation` | Input | A running conversation: every earlier message with who wrote it and when, and a box for the next one, added to the end on submit. |
 | `date` | Input | Day/month/year date capture. |
 | `decimal` | Input | Floating-point values. |
 | `details` | Content | Expandable/collapsible section. |
@@ -283,6 +284,19 @@ reliable preview (a phone's webview can draw it black), so the script makes its 
 and shown as a `data:` image, which a strict Content-Security-Policy (`img-src 'self' data:`) allows and which
 never holds a full-size photo on a phone. The input is untouched and still carries the file; a file the browser
 cannot decode gets an honest caption instead of a picture, and without the script nothing changes.
+
+`conversation` keeps a running conversation between the person a request belongs to and the team
+handling it. Put the same `fieldKey` on a stage in each queue that takes part (the visitor's "your
+message" stage and the team's "reply" stage, say) and they all write to one thread. The control is a
+textarea for the next message; on an accepted submission the engine adds it to the end of the stored
+thread, with the stage's queue and the time, instead of replacing what came before. An empty box leaves
+the thread as it was, so a team can close a request without writing; `required: true` makes a message
+compulsory on that stage. Each message is limited to `maxLength` characters, 5,000 when it is not set,
+because the thread only grows. Earlier messages render oldest first, the viewer's own side labelled
+"You" and the other side by its queue's `displayName`. The stored value is a list of `{ text,
+queueKey, at }` entries (`ConversationEntry`); a `summary-list` row that echoes the field shows the
+latest message. A rejected submission saves nothing and re-renders the thread; the unsent message
+comes back through the host's own resubmitted form values.
 
 `location-picker` captures one geographic point. Its value is the string `latitude,longitude`
 in WGS84 decimal degrees (for example `51.5074,-0.1278`), so it works unchanged in calculations,
