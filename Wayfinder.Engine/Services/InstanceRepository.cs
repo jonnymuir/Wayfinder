@@ -6,9 +6,10 @@ using static Wayfinder.Engine.Services.BlueprintLookup;
 namespace Wayfinder.Engine.Services;
 
 /// <summary>
-/// Every read and write of a stored <see cref="ServiceRequest"/> goes through here, so the one rule
-/// that must hold on every write — a queue's assignment is established the first time work lands in
-/// it — cannot be skipped by a new caller, and every audited write is recorded the same way.
+/// Every read and write of a stored <see cref="ServiceRequest"/> goes through here, so the rules
+/// that must hold on every write cannot be skipped by a new caller: a queue's assignment is
+/// established the first time work lands in it, and <see cref="ServiceRequest.HandedOverAt"/> is
+/// stamped the first time work leaves the starting queue. Every audited write is recorded the same way.
 /// </summary>
 internal sealed class InstanceRepository(IServiceRequestStore store, IAuditLogStore auditLog, BlueprintRegistry registry)
 {
@@ -36,7 +37,7 @@ internal sealed class InstanceRepository(IServiceRequestStore store, IAuditLogSt
     /// </summary>
     public ServiceRequest Save(ServiceRequest instance, string actingUserId, AuditEvent? auditEvent = null)
     {
-        var established = EstablishQueueAssignmentsIfNeeded(instance, actingUserId);
+        var established = StampHandoverIfNeeded(EstablishQueueAssignmentsIfNeeded(instance, actingUserId));
         store.Save(established);
         if (auditEvent is not null)
         {
@@ -56,7 +57,7 @@ internal sealed class InstanceRepository(IServiceRequestStore store, IAuditLogSt
     /// </summary>
     public ServiceRequest? TrySaveIfVersionMatches(ServiceRequest instance, string actingUserId, int expectedStateVersion, AuditEvent? auditEvent)
     {
-        var established = EstablishQueueAssignmentsIfNeeded(instance, actingUserId);
+        var established = StampHandoverIfNeeded(EstablishQueueAssignmentsIfNeeded(instance, actingUserId));
         if (!store.TrySaveIfVersionMatches(established, expectedStateVersion))
         {
             return null;
@@ -146,4 +147,40 @@ internal sealed class InstanceRepository(IServiceRequestStore store, IAuditLogSt
 
         return instance with { QueueAssignments = merged };
     }
+
+    /// <summary>
+    /// Stamps <see cref="ServiceRequest.HandedOverAt"/> the first time any current position (its
+    /// cursors or, pre-first-gateway, its own <see cref="ServiceRequest.CurrentStage"/>) sits in a
+    /// queue other than the initial stage's. Add-if-absent, like queue assignment: a request that
+    /// comes back to the person who started it keeps the stamp, so a store never starts expiring
+    /// work someone else has already taken on. A position whose node can't be resolved is ignored
+    /// rather than counted as a handover.
+    /// </summary>
+    private ServiceRequest StampHandoverIfNeeded(ServiceRequest instance)
+    {
+        if (instance.HandedOverAt is not null || !_registry.TryGet(instance.BlueprintKey, out var definition))
+        {
+            return instance;
+        }
+
+        var startingQueue = NodeQueue(definition, definition.InitialStage);
+        if (startingQueue is null)
+        {
+            return instance;
+        }
+
+        IEnumerable<string> positions = instance.Cursors.Count == 0
+            ? [instance.CurrentStage]
+            : instance.Cursors.Select(cursor => cursor.CurrentNodeKey);
+
+        var handedOver = positions
+            .Select(node => NodeQueue(definition, node))
+            .Any(queue => queue is not null && !string.Equals(queue, startingQueue, StringComparison.Ordinal));
+
+        return handedOver ? instance with { HandedOverAt = DateTimeOffset.UtcNow } : instance;
+    }
+
+    private static string? NodeQueue(ServiceBlueprint definition, string nodeKey) =>
+        GetQueueKey(definition.Stages.FirstOrDefault(s => string.Equals(s.StageKey, nodeKey, StringComparison.Ordinal)))
+        ?? FindGateway(definition, nodeKey)?.QueueKey;
 }

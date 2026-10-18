@@ -37,6 +37,16 @@ public record ServiceRequest
     public bool IsAuthenticated { get; init; }
 
     /// <summary>
+    /// When any part of this request first reached a queue other than its initial stage's: the
+    /// moment it left the hands of the person who started it (a submitted contact message landing in
+    /// a team's worklist, say). Set by the engine on that save and never cleared, even if the request
+    /// later comes back to them. <see langword="null"/> while it has only ever been in the starting
+    /// queue. A store must not expire a handed-over request with the visitor's session, as it may for
+    /// an anonymous one that never left them: someone else is now responsible for it.
+    /// </summary>
+    public DateTimeOffset? HandedOverAt { get; init; }
+
+    /// <summary>
     /// Primary cursor position. In single-queue blueprints this is the only position.
     /// In multi-cursor mode this reflects the first active stage cursor for backward-compatibility
     /// with API consumers that read only this field.
