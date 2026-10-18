@@ -11,6 +11,8 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-18
+
 ### Added
 
 - `ServiceRequest.HandedOverAt` records when a request first reached a queue other than its starting
