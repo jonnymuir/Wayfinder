@@ -72,11 +72,11 @@ public class MovedOnTests
         return started.InstanceId;
     }
 
-    private static ServiceRequestResponseEnvelope TeamActs(ProcessManagerEngine engine, string instanceId, string action)
+    private static ServiceRequestResponseEnvelope TeamActs(ProcessManagerEngine engine, string instanceId, string action, string fieldKey = "thread")
     {
         var item = engine.GetQueueWorkItems(TenantId, Caseworker, TeamProfile).Items.Single(i => i.InstanceId == instanceId);
         var pickedUp = engine.PickupWorkItem(instanceId, item.CursorId, TenantId, Caseworker, TeamProfile);
-        return engine.Advance(instanceId, TenantId, Caseworker, TeamProfile, action, pickedUp.StateVersion, new() { ["thread"] = "Hi" });
+        return engine.Advance(instanceId, TenantId, Caseworker, TeamProfile, action, pickedUp.StateVersion, new() { [fieldKey] = "Hi" });
     }
 
     [Fact]
@@ -114,6 +114,52 @@ public class MovedOnTests
 
         answer.ResponseState.Should().Be("complete");
         answer.Render!.StateDisplayName.Should().Be("Closed");
+    }
+
+    // The visitor waits at a join while the team replies: the reply completes the join and the
+    // conversation carries on in the visitor's lane only.
+    private const string JoinBlueprint = """
+        {
+          "definitionKey": "contact", "displayName": "Contact us", "version": 1, "initialStage": "message",
+          "queues": [
+            { "key": "visitor", "displayName": "Visitor", "actor": "citizen" },
+            { "key": "team", "displayName": "Team", "actor": "caseworker" }
+          ],
+          "stages": [
+            { "stageKey": "message", "displayName": "Message", "queueKey": "visitor",
+              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Your message", "required": true } ],
+              "routes": [ { "id": "message--send--to-team", "target": "to-team", "trigger": "send" } ] },
+            { "stageKey": "reply", "displayName": "Reply", "queueKey": "team",
+              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Your reply" } ],
+              "routes": [ { "id": "reply--reply--awaiting-reply", "target": "awaiting-reply", "trigger": "reply" } ] },
+            { "stageKey": "follow-up", "displayName": "Your conversation", "queueKey": "visitor",
+              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Reply to us" } ] }
+          ],
+          "gateways": [
+            { "key": "to-team", "displayName": "Send", "gatewayType": "Split", "queueKey": "visitor",
+              "routes": [ { "id": "to-team--send--reply", "target": "reply", "trigger": "send" },
+                          { "id": "to-team--send--awaiting-reply", "target": "awaiting-reply", "trigger": "send" } ] },
+            { "key": "awaiting-reply", "displayName": "Thank you", "gatewayType": "Join", "queueKey": "visitor",
+              "routes": [ { "id": "awaiting-reply--reply--follow-up", "target": "follow-up", "trigger": "reply" } ],
+              "requiredIncomingQueues": ["visitor", "team"] }
+          ]
+        }
+        """;
+
+    [Fact]
+    public void ATeamReplyThatCompletesTheVisitorsWait_IsAnsweredMovedOn()
+    {
+        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(JoinBlueprint, JsonOptions)!;
+        var engine = new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),
+            new PassthroughContentSanitizer(), instanceStore: new InMemoryServiceRequestStore());
+        var started = engine.GetCurrent("contact", TenantId, Visitor, VisitorProfile);
+        engine.Advance(started.InstanceId, TenantId, Visitor, VisitorProfile, "send", started.StateVersion, new() { ["conversation"] = "Hello" });
+
+        var answer = TeamActs(engine, started.InstanceId, "reply", fieldKey: "conversation");
+
+        answer.ResponseState.Should().Be("moved_on");
+        answer.Problems.Should().BeEmpty();
+        engine.GetCurrent("contact", TenantId, Visitor, VisitorProfile, started.InstanceId).Render!.StateDisplayName.Should().Be("Your conversation");
     }
 
     [Fact]
