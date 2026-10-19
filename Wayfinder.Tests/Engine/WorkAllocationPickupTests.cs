@@ -285,12 +285,12 @@ public class WorkAllocationPickupTests
         // The release moves the instance's primary visible position into the CASEWORKER queue's
         // "approved" stage — AutomationProfile (VisibleQueues: ["automation"] only) genuinely has
         // nothing left to see on this instance at all once that happens, so `released` itself
-        // (built with AutomationProfile) correctly reports ACCESS_DENIED; check the release landed
-        // via a caseworker-side view instead.
+        // (built with AutomationProfile) reports moved_on; check the release landed via a
+        // caseworker-side view instead.
         var released = engine.Advance(
             afterSplit.InstanceId, TenantId, "system", AutomationProfile, "approved", automationPickedUp.StateVersion, null);
-        released.ResponseState.Should().Be("error");
-        released.Problems.Should().Contain(p => p.Code == "ACCESS_DENIED");
+        released.ResponseState.Should().Be("moved_on");
+        released.Problems.Should().BeEmpty();
 
         var caseworkerView = engine.GetCurrent(DefinitionKey, TenantId, "bob", SharedQueueProfile, afterSplit.InstanceId);
         caseworkerView.Render!.StateDisplayName.Should().Be("Approved");

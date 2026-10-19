@@ -38,8 +38,16 @@ public class ConversationRenderingTests
         html.IndexOf("Are you open on Sunday?", StringComparison.Ordinal)
             .Should().BeLessThan(html.IndexOf("Yes, 10am to 4pm.", StringComparison.Ordinal));
         html.Should().Contain(">You</h3>").And.Contain(">The Exchange</h3>");
-        html.Should().Contain("datetime=\"2026-10-18T14:05:00.0000000+00:00\"").And.Contain("18 October 2026, 14:05 UTC");
+        html.Should().Contain("datetime=\"2026-10-18T14:05:00.0000000+00:00\"").And.Contain("18 October 2026, 14:05<");
         html.Should().Contain("<ol class=\"govuk-list wayfinder-conversation\"");
+    }
+
+    [Fact]
+    public void AMessagesTime_IsShownInTheTimeZoneItCarries()
+    {
+        var html = GovUkFields.Render(Field(Msg("You", "Hello", own: true, at: "2026-10-19T06:37:00+01:00")), NoErrors);
+
+        html.Should().Contain("datetime=\"2026-10-19T06:37:00.0000000+01:00\"").And.Contain("19 October 2026, 06:37<");
     }
 
     [Fact]

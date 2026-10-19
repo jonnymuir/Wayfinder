@@ -119,7 +119,7 @@ internal sealed partial class InstanceAdvancer(
         }
 
         ChangeLinkJumped(logger, instance.InstanceId, targetStageKey);
-        return envelopes.BuildEnvelope(saved, definition, accessProfile, userId);
+        return envelopes.BuildAfterMove(saved, definition, accessProfile, userId);
     }
 
     private ServiceRequestResponseEnvelope TakeRoute(Request request)
@@ -293,7 +293,7 @@ internal sealed partial class InstanceAdvancer(
         }
 
         MultiCursorAdvanced(logger, instance.InstanceId, sourceCursor?.CursorId ?? "(none)", transition.ToState);
-        return envelopes.BuildEnvelope(saved, definition, accessProfile, userId);
+        return envelopes.BuildAfterMove(saved, definition, accessProfile, userId);
     }
 
     /// <summary>A plain hop on an instance with no cursors yet.</summary>
@@ -319,7 +319,7 @@ internal sealed partial class InstanceAdvancer(
         }
 
         Advanced(logger, instance.InstanceId, fromStageKey, transition.ToState);
-        return envelopes.BuildEnvelope(saved, definition, accessProfile, userId);
+        return envelopes.BuildAfterMove(saved, definition, accessProfile, userId);
     }
 
     private static ServiceRequestResponseEnvelope ConcurrentUpdate(int expectedStateVersion) =>

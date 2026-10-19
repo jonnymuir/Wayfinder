@@ -11,6 +11,21 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Changed
+
+- An advance that is saved but takes the request out of everything the actor can see now answers
+  `responseState` `moved_on`, with no problems, instead of an `ACCESS_DENIED` error. A team's reply
+  that hands a conversation back to the person who wrote in is a success; reporting it as access
+  denied made hosts treat a saved reply as a failed one. **Upgrade:** a host that treated
+  `ACCESS_DENIED` after its own advance as "done" checks for `moved_on` instead. A refused advance
+  (someone else's request, say) is still an `ACCESS_DENIED` error.
+- A join's wait screen no longer appends "Waiting for: " and the internal keys of the queues it is
+  waiting on to the authored `waitingContent`. The `waiting` component carries them separately, by
+  display name, in `WaitingFor`, and `Wayfinder.Rendering.GovUk` shows them on their own line.
+- `Wayfinder.Rendering.GovUk` shows a conversation message's time in the offset it carries, without
+  converting it to UTC or adding "UTC", so a host shows times in its visitors' time zone by
+  converting them before rendering.
+
 ## [0.22.0] - 2026-10-18
 
 Also releases `Wayfinder.Rendering.GovUk` 0.10.0 (the conversation rendering) and `Wayfinder.Editor`

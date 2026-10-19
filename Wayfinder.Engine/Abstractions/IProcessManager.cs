@@ -65,6 +65,11 @@ public interface IProcessManager
         int expectedStateVersion,
         Dictionary<string, object?>? fieldValues);
 
+    /// <summary>
+    /// Submits the actor's stage with <paramref name="action"/>. The answer is what they see next; when the
+    /// move was saved and took the request somewhere they can't see (a team's reply handed back to the
+    /// person who wrote in), it is <c>moved_on</c> with no problems: their part is done, nothing went wrong.
+    /// </summary>
     ServiceRequestResponseEnvelope Advance(
         string instanceId,
         string tenantId,
