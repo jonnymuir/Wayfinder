@@ -11,6 +11,11 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-19
+
+Also releases `Wayfinder.Rendering.GovUk` 0.11.0 (wait screens name who they wait for; conversation
+times keep their offset).
+
 ### Changed
 
 - An advance that is saved but takes the request out of everything the actor can see now answers
