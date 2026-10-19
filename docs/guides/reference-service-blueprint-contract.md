@@ -173,8 +173,10 @@ returns per step) carries a `responseState`, what the client should do next:
 | Value | Meaning |
 |---|---|
 | `render` | Show the current stage, `Render` carries `StepContent` (components, available actions). |
-| `defer` | Wait and poll again, `PollAfterMs` says how long. Used at Join gateways waiting on other cursors. |
+| `defer` | Wait and poll again, `PollAfterMs` says how long. Used at Join gateways waiting on other cursors; the `waiting` component's `WaitingFor` names (by display name) the queues it is still waiting on. |
 | `complete` | The service request has finished. |
+| `moved_on` | An advance was saved and took the request out of everything this actor can see (a team's reply handed back to the person who wrote in). Their part is done: there is nothing to render and no problem. |
+| `instance_picker` | The person has a request in progress under the `prompt` policy: offer to continue it or start another. |
 | `error` | Something went wrong, check `Problems`. |
 
 ## Components

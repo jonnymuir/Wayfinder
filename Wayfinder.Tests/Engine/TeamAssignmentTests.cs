@@ -256,13 +256,13 @@ public class TeamAssignmentTests
         var engine = BuildEngine();
         var started = engine.GetCurrent(DefinitionKey, TenantId, "priya", OpsProfile);
         var atReview = ReachReview(engine, started.InstanceId, started.StateVersion, "submit");
-        // OpsProfile can't view review-team at all — priya's own render of her escalate call
-        // correctly comes back ACCESS_DENIED, the same "nothing left to see" shape
-        // WorkAllocationPickupTests' own join-release test already established; check the landing
-        // via a reviewers-team view instead.
+        // OpsProfile can't view review-team at all — priya's own answer to her escalate call
+        // is moved_on, the same "nothing left to see" shape WorkAllocationPickupTests' own
+        // join-release test already established; check the landing via a reviewers-team view
+        // instead.
         var escalated = engine.Advance(started.InstanceId, TenantId, "priya", OpsProfile, "escalate", atReview.StateVersion, null);
-        escalated.ResponseState.Should().Be("error");
-        escalated.Problems.Should().Contain(p => p.Code == "ACCESS_DENIED");
+        escalated.ResponseState.Should().Be("moved_on");
+        escalated.Problems.Should().BeEmpty();
 
         var chrisView = engine.GetQueueWorkItems(TenantId, "chris", ReviewersProfile).Items.Should()
             .ContainSingle(i => i.InstanceId == started.InstanceId).Subject;

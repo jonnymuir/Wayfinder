@@ -193,8 +193,8 @@ public class RequestHandoverTests
         var handedOverAt = Stored(store, started.InstanceId).HandedOverAt;
         handedOverAt.Should().NotBeNull();
 
-        // The team's own envelope comes back ACCESS_DENIED: the request is now in a queue it can't
-        // see (the same releasing-call shape TeamAssignmentTests relies on). The move itself landed.
+        // The team's own answer is moved_on: the request is now in a queue it can't see (the same
+        // releasing-call shape TeamAssignmentTests relies on). The move itself landed.
         TeamActs(engine, started.InstanceId, "ask-for-more");
 
         var stored = Stored(store, started.InstanceId);

@@ -148,10 +148,14 @@ public static class GovUkComponents
         var deferHtml = component.AllowDefer == true && !string.IsNullOrEmpty(component.DeferMessage)
             ? $"""<p class="govuk-body">{GovUk.Esc(component.DeferMessage)}</p>"""
             : "";
+        var waitingForHtml = component.WaitingFor is { Count: > 0 } waitingFor
+            ? $"""<p class="govuk-body">Waiting for: {GovUk.Esc(string.Join(", ", waitingFor))}</p>"""
+            : "";
         var pollAttr = component.PollIntervalMs is { } poll ? $" data-wayfinder-poll-interval-ms=\"{poll}\"" : "";
         return $"""
             <div class="govuk-inset-text" data-wayfinder-waiting{pollAttr}>
               <p class="govuk-body">{message}</p>
+              {waitingForHtml}
               {deferHtml}
             </div>
             """;

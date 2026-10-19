@@ -151,7 +151,7 @@ internal sealed partial class GatewayAdvancer(
             detail: $"split gateway fanned out to {newCursors.Count} cursors"));
         SplitFannedOut(logger, splitGateway.Key, instance.InstanceId, newCursors.Count);
 
-        return envelopes.BuildEnvelope(updated, definition, accessProfile, userId);
+        return envelopes.BuildAfterMove(updated, definition, accessProfile, userId);
     }
 
     public ServiceRequestResponseEnvelope HandleJoinGatewayAdvance(
@@ -367,7 +367,7 @@ internal sealed partial class GatewayAdvancer(
             instance.InstanceId, userId, cursorId: null,
             fromStageKey: gatewayKey, toStageKey: selectedOutgoing[0].ToState, action: selectedOutgoing[0].Action,
             detail: "join released"));
-        return envelopes.BuildEnvelope(releasedInstance, definition, accessProfile, userId);
+        return envelopes.BuildAfterMove(releasedInstance, definition, accessProfile, userId);
     }
 
     public static IReadOnlyList<RequestCursor> MoveCursor(

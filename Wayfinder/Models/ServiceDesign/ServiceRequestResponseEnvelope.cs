@@ -14,7 +14,7 @@ public record ServiceRequestResponseEnvelope
 
     /// <summary>
     /// Gets the response stage indicating what the client should do next.
-    /// Valid values: render, defer, complete, error.
+    /// Valid values: render, defer, complete, error, instance_picker, moved_on (a saved move left the actor nothing to see).
     /// </summary>
     public required string ResponseState { get; init; }
 
@@ -100,7 +100,7 @@ public record StepContent
 /// Runtime representation of a GDS component, with field values pre-populated from the service request.
 /// Sent from the engine to the Core controller, which passes it to the view.
 /// </summary>
-public record ComponentRenderPayload
+public partial record ComponentRenderPayload
 {
     /// <summary>The GDS component type (e.g. "fieldset", "summary-list", "panel", "body", "heading").</summary>
     public string Type { get; init; } = "fieldset";

@@ -30,11 +30,12 @@ internal static class GovUkConversationField
         var paragraphs = string.Concat(message.Text
             .Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries)
             .Select(paragraph => $"""<p class="govuk-body">{GovUk.Esc(paragraph).ReplaceLineEndings("<br>")}</p>"""));
-        var at = message.At.ToUniversalTime();
+        // Shown in whatever offset the time carries: a host converts to the time zone its visitors read.
+        var at = message.At;
         return $"""
             <li class="wayfinder-conversation__message{sideClass}">
               <h3 class="govuk-heading-s govuk-!-margin-bottom-1">{GovUk.Esc(message.AuthorLabel)}</h3>
-              <p class="govuk-body-s govuk-!-margin-bottom-2"><time datetime="{at.ToString("O", CultureInfo.InvariantCulture)}">{at.ToString("d MMMM yyyy, HH:mm", CultureInfo.InvariantCulture)} UTC</time></p>
+              <p class="govuk-body-s govuk-!-margin-bottom-2"><time datetime="{at.ToString("O", CultureInfo.InvariantCulture)}">{at.ToString("d MMMM yyyy, HH:mm", CultureInfo.InvariantCulture)}</time></p>
               {paragraphs}
             </li>
             """;

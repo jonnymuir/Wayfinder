@@ -22,6 +22,17 @@ internal sealed class EnvelopeBuilder(
     Func<ServiceRequest, ServiceBlueprint, ServiceBlueprintGatewayDefinition, bool> tryPollSupportSystems)
     : IEnvelopeSource
 {
+    public ServiceRequestResponseEnvelope BuildAfterMove(
+        ServiceRequest saved,
+        ServiceBlueprint definition,
+        ActorProfile accessProfile,
+        string userId)
+    {
+        return !saved.IsAborted && workItems.FindActorWorkItems(saved, definition, accessProfile, userId) is []
+            ? Envelopes.MovedOn(saved)
+            : BuildEnvelope(saved, definition, accessProfile, userId);
+    }
+
     public ServiceRequestResponseEnvelope BuildEnvelope(
         ServiceRequest instance,
         ServiceBlueprint definition,
