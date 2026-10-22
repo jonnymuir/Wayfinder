@@ -7,14 +7,6 @@ using Wayfinder.Engine.Services;
 
 namespace Wayfinder.Engine.Api;
 
-public sealed record AddDesignNoteRequest(DesignNoteAnchor Anchor, string Text);
-
-public sealed record DesignNoteTextRequest(string Text);
-
-public sealed record ResolveDesignNoteRequest(string Summary, int? Version = null);
-
-public sealed record ReopenDesignNoteRequest(string? Reason = null);
-
 /// <summary>
 /// The editor's design-note routes, over <see cref="DesignNoteService"/>. Mapped only inside
 /// <see cref="ServiceBlueprintAuthoringApiExtensions.MapServiceBlueprintAuthoringApi"/>'s group, so they carry
