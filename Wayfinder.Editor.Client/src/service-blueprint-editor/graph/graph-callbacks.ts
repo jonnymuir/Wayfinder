@@ -13,10 +13,19 @@ export type GraphProps = {
   selectedStageKey: string | null;
   selectedGatewayKey: string | null;
   selectedTransitionIndex: number | null;
-  simulationCurrentStageKey: string | null;
-  simulationPathStageKeys: string[];
-  simulationPathTransitionIndices: number[];
+  recentChanges: GraphRecentChanges | null;
 };
+
+/** What someone else changed in the version the canvas last moved to, for it to highlight. */
+export type GraphRecentChanges = {
+  addedNodeKeys: string[];
+  changedNodeKeys: string[];
+  /** Added or changed routes, by transition index. */
+  routeIndices: number[];
+};
+
+/** How a node changed in the version the canvas last moved to, if it did. */
+export type NodeChange = 'added' | 'changed' | null;
 
 export type GraphContextMenuTarget =
   | { kind: 'canvas' }

@@ -173,7 +173,7 @@ the cards.
 | `selectedStageKey` | `string \| null` | Inbound selection, host sets this to drive the graph's highlight. |
 | `selectedGatewayKey` | `string \| null` | Inbound selection. |
 | `selectedTransitionIndex` | `number \| null` | Inbound transition highlight. |
-| `simulationCurrentStageKey` / `simulationPathStageKeys` / `simulationPathTransitionIndices` | various | Path-highlighting overlay state. No current caller sets these (the Simulation tab that used to was removed), always default, so the highlighting they drive never actually shows. Left in place for a future path-highlighting feature to reuse rather than reinventing. |
+| `recentChanges` | `GraphRecentChanges \| null` | What someone else changed in the latest version: added and changed stages and gateways, and added or changed routes. The canvas outlines and badges them ("New", "Changed") until it is cleared. The editor sets it when it moves to a version an AI agent or another person saved. |
 
 **Events**
 

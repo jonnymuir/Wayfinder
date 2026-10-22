@@ -2,12 +2,13 @@ import type { NodeProps } from '@xyflow/react';
 import { useGraphCallbacks } from '../graph-callbacks.js';
 import type { GatewayFlowNode } from '../graph-model.js';
 import { iconForGateway } from '../node-icons.js';
+import { ChangeBadge, changeDescription } from './change-badge.js';
 import { HandleFan } from './handle-fan.js';
 import { NodeIcon } from './node-icon.js';
 
 export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
   const callbacks = useGraphCallbacks();
-  const { node, rowRank, sourceHandles, targetHandles, selected, routeCount, triggerLabel, conditionLabel, readOnly } = data;
+  const { node, rowRank, sourceHandles, targetHandles, selected, change, routeCount, triggerLabel, conditionLabel, readOnly } = data;
   const gateway = node.gateway;
   const isPill = node.pill;
   const shapeClass = isPill ? 'shape-pill' : 'shape-diamond';
@@ -52,7 +53,14 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
     );
   };
 
-  const className = ['gateway-node', node.surface, `kind-${gateway.gatewayType.toLowerCase()}`, shapeClass, selected ? 'selected' : '']
+  const className = [
+    'gateway-node',
+    node.surface,
+    `kind-${gateway.gatewayType.toLowerCase()}`,
+    shapeClass,
+    selected ? 'selected' : '',
+    change ? `recently-${change}` : '',
+  ]
     .filter(Boolean)
     .join(' ');
 
@@ -70,13 +78,14 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
         aria-pressed={selected}
         aria-label={
           isPill
-            ? `${gateway.displayName}, single-route gateway via “${triggerLabel}”, ${node.queueLabel} queue`
-            : `${gateway.displayName}, ${gateway.gatewayType} gateway, ${node.queueLabel} queue`
+            ? `${gateway.displayName}, single-route gateway via “${triggerLabel}”, ${node.queueLabel} queue${changeDescription(change)}`
+            : `${gateway.displayName}, ${gateway.gatewayType} gateway, ${node.queueLabel} queue${changeDescription(change)}`
         }
         data-wayfinder-gateway={gateway.key}
         data-wayfinder-gateway-kind={gateway.gatewayType}
         data-wayfinder-gateway-route-count={String(routeCount)}
         data-wayfinder-queue={node.queueKey}
+        data-wayfinder-gateway-change={change ?? undefined}
         onClick={() => callbacks.selectGateway(gateway.key)}
         onDoubleClick={() => callbacks.selectGateway(gateway.key, { openInspector: true })}
         onKeyDown={handleKeyDown}
@@ -99,6 +108,7 @@ export function GatewayNode({ data }: NodeProps<GatewayFlowNode>) {
                 <NodeIcon icon={iconForGateway(gateway)} />
               </span>
               <span className="node-meta">{gateway.gatewayType}</span>
+              <ChangeBadge change={change} />
             </span>
             <span className="node-label">{gateway.displayName}</span>
           </>

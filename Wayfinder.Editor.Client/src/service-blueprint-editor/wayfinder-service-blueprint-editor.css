@@ -1036,3 +1036,26 @@
   font-size: 0.9375rem;
   color: #505a5f;
 }
+
+/* ---- Changes someone else saved, followed in place ---- */
+
+.recent-changes-notice {
+  margin: 0.75rem 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 5px solid #1d70b8;
+  background: #f3f8fc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.recent-changes-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.recent-changes-summary,
+.recent-changes-removed {
+  margin: 0.25rem 0 0;
+}

@@ -3,11 +3,13 @@
  *
  * Useful for stories, tests, and any host that wants page-lifetime persistence
  * without hooking up a backend. Hold a clone on read and clone again on save
- * so callers cannot mutate stored state through their own references.
+ * so callers cannot mutate stored state through their own references. Versions
+ * behave as a real store's do: a save must be made at the stored version, and
+ * moves it on by one.
  */
 
 import type { ServiceBlueprint } from './types.js';
-import type { ServiceBlueprintSource, ServiceBlueprintSummary } from './service-blueprint-source.js';
+import { ServiceBlueprintSaveError, type ServiceBlueprintSource, type ServiceBlueprintSummary } from './service-blueprint-source.js';
 
 type SeedEntry = ServiceBlueprint | { blueprintKey: string; serviceBlueprint: ServiceBlueprint };
 
@@ -47,7 +49,20 @@ export class InMemoryServiceBlueprintSource implements ServiceBlueprintSource {
   }
 
   async save(key: string, serviceBlueprint: ServiceBlueprint): Promise<void> {
-    this.serviceBlueprints.set(key, deepClone(serviceBlueprint));
+    const stored = this.serviceBlueprints.get(key);
+    if (stored && stored.version !== serviceBlueprint.version) {
+      throw new ServiceBlueprintSaveError({
+        title: 'Changed elsewhere',
+        summary: `“${key}” was changed elsewhere since you loaded it (now at version ${stored.version}).`,
+        isConflict: true,
+        currentVersion: stored.version,
+      });
+    }
+    this.serviceBlueprints.set(key, deepClone({ ...serviceBlueprint, version: serviceBlueprint.version + 1 }));
+  }
+
+  async checkVersion(key: string): Promise<number | null> {
+    return this.serviceBlueprints.get(key)?.version ?? null;
   }
 
   /** Returns the underlying entries — handy for tests that want to assert state. */

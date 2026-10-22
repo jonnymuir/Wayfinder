@@ -70,8 +70,6 @@ export class CanvasBridgeController implements ReactiveController {
     this._lastSnapshot = {
       ...props,
       availableQueues: stableArray(props.availableQueues, previous?.availableQueues),
-      simulationPathStageKeys: stableArray(props.simulationPathStageKeys, previous?.simulationPathStageKeys),
-      simulationPathTransitionIndices: stableArray(props.simulationPathTransitionIndices, previous?.simulationPathTransitionIndices),
     };
     return this._lastSnapshot;
   }

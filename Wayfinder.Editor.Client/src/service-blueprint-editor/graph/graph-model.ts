@@ -1,6 +1,6 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
 import type { ServiceBlueprint, RouteView } from '../types.js';
-import type { GraphProps } from './graph-callbacks.js';
+import type { GraphProps, NodeChange } from './graph-callbacks.js';
 import { declutterChips, type ChipBox } from './chip-declutter.js';
 import {
   computeServiceBlueprintGraphLayout,
@@ -32,8 +32,7 @@ export type StageNodeData = {
   sourceHandles: HandleSlot[];
   targetHandles: HandleSlot[];
   selected: boolean;
-  simulationPath: boolean;
-  simulationCurrent: boolean;
+  change: NodeChange;
   readOnly: boolean;
   [key: string]: unknown;
 };
@@ -44,6 +43,7 @@ export type GatewayNodeData = {
   sourceHandles: HandleSlot[];
   targetHandles: HandleSlot[];
   selected: boolean;
+  change: NodeChange;
   readOnly: boolean;
   routeCount: number;
   triggerLabel: string;
@@ -58,7 +58,7 @@ export type TransitionChip = {
   fromKey: string;
   toKey: string;
   selected: boolean;
-  simulationPath: boolean;
+  recentlyChanged: boolean;
   branch: boolean;
   merge: boolean;
   /** Flow-space anchor, pre-resolved to avoid overlapping other chips or node bodies — see declutterChips. */
@@ -72,7 +72,7 @@ export type RouteEdgeData = {
   edge: GraphTopologyEdge;
   fromKey: string;
   toKey: string;
-  simulationPath: boolean;
+  recentlyChanged: boolean;
   chips: TransitionChip[];
   readOnly: boolean;
   /** Author-dragged bend point for this route, if any — see setRouteWaypoint. Undefined falls back to the auto-computed path. */
@@ -263,8 +263,9 @@ function assignHandleSlots(
 
 export function buildGraphModel(props: GraphProps): GraphModel {
   const { topology, layout } = computeServiceBlueprintGraphLayout(props.serviceBlueprint, props.availableQueues);
-  const simulationTransitionIndices = new Set(props.simulationPathTransitionIndices);
-  const simulationStageKeys = new Set(props.simulationPathStageKeys);
+  const changedRouteIndices = new Set(props.recentChanges?.routeIndices);
+  const changeOf = (key: string): NodeChange =>
+    props.recentChanges?.addedNodeKeys.includes(key) ? 'added' : props.recentChanges?.changedNodeKeys.includes(key) ? 'changed' : null;
 
   // Handle assignment + a natural anchor point per edge, computed once up
   // front so nodes (their rendered handles), edges, and chips (below) can
@@ -306,8 +307,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
           sourceHandles: handles.source,
           targetHandles: handles.target,
           selected: props.selectedStageKey === topologyNode.stage.stageKey,
-          simulationPath: simulationStageKeys.has(topologyNode.stage.stageKey),
-          simulationCurrent: props.simulationCurrentStageKey === topologyNode.stage.stageKey,
+          change: changeOf(topologyNode.stage.stageKey),
           readOnly: props.readOnly,
         },
       } satisfies StageFlowNode;
@@ -325,6 +325,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
         sourceHandles: handles.source,
         targetHandles: handles.target,
         selected: props.selectedGatewayKey === topologyNode.gateway.key,
+        change: changeOf(topologyNode.gateway.key),
         readOnly: props.readOnly,
         routeCount: routes.length,
         triggerLabel: pillRoute?.trigger ?? '',
@@ -360,11 +361,11 @@ export function buildGraphModel(props: GraphProps): GraphModel {
     const chip: TransitionChip = {
       index: binding.index,
       label: binding.transition.action,
-      ariaLabel: `Transition ${binding.transition.action}, ${transitionDescriptor(props.serviceBlueprint, binding.transition)}`,
+      ariaLabel: `Transition ${binding.transition.action}, ${transitionDescriptor(props.serviceBlueprint, binding.transition)}${changedRouteIndices.has(binding.index) ? ', changed in the latest version' : ''}`,
       fromKey: parseGraphNodeId(binding.visualFromId).key,
       toKey: parseGraphNodeId(binding.visualToId).key,
       selected: props.selectedTransitionIndex === binding.index,
-      simulationPath: simulationTransitionIndices.has(binding.index),
+      recentlyChanged: changedRouteIndices.has(binding.index),
       branch: binding.branch,
       merge: binding.merge,
       x: 0,
@@ -437,7 +438,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
   });
 
   const edges: RouteFlowEdge[] = topology.edges.map((topologyEdge) => {
-    const simulationPath = topologyEdge.transitionIndices.some((index) => simulationTransitionIndices.has(index));
+    const recentlyChanged = topologyEdge.transitionIndices.some((index) => changedRouteIndices.has(index));
     const { sourceHandle, targetHandle } = routingByEdgeKey.get(topologyEdge.key)!;
     return {
       id: topologyEdge.key,
@@ -448,13 +449,13 @@ export function buildGraphModel(props: GraphProps): GraphModel {
       type: 'route',
       focusable: false,
       selectable: false,
-      animated: simulationPath,
+      animated: recentlyChanged,
       markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_ARROW_COLOR },
       data: {
         edge: topologyEdge,
         fromKey: parseGraphNodeId(topologyEdge.fromId).key,
         toKey: parseGraphNodeId(topologyEdge.toId).key,
-        simulationPath,
+        recentlyChanged,
         chips: chipsByEdgeKey.get(topologyEdge.key) ?? [],
         readOnly: props.readOnly,
         manualWaypoint: props.serviceBlueprint?.layout?.routes?.[topologyEdge.key],

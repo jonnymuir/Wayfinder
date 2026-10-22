@@ -45,6 +45,11 @@ export class DefinitionController implements ReactiveController {
     this.cancelDebounce();
   }
 
+  /** Text the author typed that isn't in the blueprint yet: still debouncing, or not valid. */
+  get hasUnappliedText(): boolean {
+    return this.debounce !== null || this.text !== this.lastCanonical;
+  }
+
   get hasIssues(): boolean {
     return this.parseError !== null || this.schemaIssues.length > 0;
   }

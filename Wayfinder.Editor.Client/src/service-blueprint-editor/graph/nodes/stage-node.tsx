@@ -2,12 +2,13 @@ import type { NodeProps } from '@xyflow/react';
 import { useGraphCallbacks } from '../graph-callbacks.js';
 import type { StageFlowNode } from '../graph-model.js';
 import { iconForStage } from '../node-icons.js';
+import { ChangeBadge, changeDescription } from './change-badge.js';
 import { HandleFan } from './handle-fan.js';
 import { NodeIcon } from './node-icon.js';
 
 export function StageNode({ data }: NodeProps<StageFlowNode>) {
   const callbacks = useGraphCallbacks();
-  const { node, rowRank, sourceHandles, targetHandles, selected, simulationPath, simulationCurrent, readOnly } = data;
+  const { node, rowRank, sourceHandles, targetHandles, selected, change, readOnly } = data;
   const stage = node.stage;
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -50,15 +51,7 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
     );
   };
 
-  const className = [
-    'stage-node',
-    node.surface,
-    selected ? 'selected' : '',
-    simulationPath ? 'simulation-path' : '',
-    simulationCurrent ? 'simulation-current' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const className = ['stage-node', node.surface, selected ? 'selected' : '', change ? `recently-${change}` : ''].filter(Boolean).join(' ');
 
   return (
     <div className="stage-node-shell" data-wayfinder-stage-card={stage.stageKey} data-wayfinder-row-rank={String(rowRank)}>
@@ -67,11 +60,10 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
         type="button"
         className={className}
         aria-pressed={selected}
-        aria-label={`${stage.displayName}, ${node.queueLabel} queue`}
+        aria-label={`${stage.displayName}, ${node.queueLabel} queue${changeDescription(change)}`}
         data-wayfinder-stage={stage.stageKey}
         data-wayfinder-queue={node.queueKey}
-        data-wayfinder-stage-simulation-path={String(simulationPath)}
-        data-wayfinder-stage-simulation-current={String(simulationCurrent)}
+        data-wayfinder-stage-change={change ?? undefined}
         onClick={() => callbacks.selectStage(stage.stageKey)}
         onDoubleClick={() => callbacks.selectStage(stage.stageKey, { openInspector: true })}
         onKeyDown={handleKeyDown}
@@ -82,6 +74,7 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
             <NodeIcon icon={iconForStage(stage)} />
           </span>
           <span className="node-meta">{stage.stageType}</span>
+          <ChangeBadge change={change} />
         </span>
         <span className="node-label">{stage.displayName}</span>
       </button>
