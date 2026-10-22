@@ -11,6 +11,25 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Added
+
+- Design notes: feedback pinned to a stage, gateway, route, field or the whole blueprint, kept
+  beside the blueprint rather than in it. `Wayfinder.Engine` adds the `DesignNote` model, the
+  `IDesignNoteStore` contract with `InMemoryDesignNoteStore` as the default, and `DesignNoteService`,
+  registered by `AddServiceBlueprintAuthoring()`. A host keeps notes across restarts by registering
+  its own `IDesignNoteStore`.
+- `Wayfinder.Engine.Mcp`: `list_design_notes`, `add_design_note`, `resolve_design_note` and
+  `reply_to_design_note`, so an AI design partner can work through the designer's notes and pin its
+  own questions. The authoring guide resource teaches the cycle.
+- `Wayfinder.Engine.Api`: design-note routes under `/blueprints/{definitionKey}/notes`, inside the
+  authoring API's authorization requirement, with notes attributed to the signed-in user.
+- `Wayfinder.Editor`: a Notes tab listing every note, with reply, resolve, reopen and delete; an
+  **Add a note** form under the Properties panel for the selected stage, gateway or route; and a
+  marker with the open-note count on each stage and gateway. Notes refresh every 5 seconds. A
+  `ServiceBlueprintSource` offers notes through an optional `designNotes` (`DesignNoteSource`);
+  `HttpDesignNoteSource` talks to the routes above and `InMemoryDesignNoteSource` keeps them in the
+  page. `<wayfinder-service-blueprint-graph>` takes a `noteCounts` property.
+
 ### Changed
 
 - `Wayfinder.Editor`: when someone else saves the open blueprint, such as an AI design partner over
@@ -20,6 +39,7 @@ Releases up to and including v0.19.0 are listed on
   since the author last dismissed it. It checks every 3 seconds for ten minutes after an outside
   save, then every 15 again. With unsaved work, including Definition text not yet applied, the
   editor goes read-only as before.
+- `ServiceBlueprintAuthoringService.DeleteAsync` also deletes the blueprint's design notes.
 - `InMemoryServiceBlueprintSource` versions blueprints as a real store does: a save must be made at
   the stored version, or it fails with a conflict, and moves the version on by one. It also
   implements `checkVersion`.

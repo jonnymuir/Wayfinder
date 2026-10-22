@@ -8,6 +8,7 @@
  * moves it on by one.
  */
 
+import { InMemoryDesignNoteSource } from './in-memory-design-note-source.js';
 import type { ServiceBlueprint } from './types.js';
 import { ServiceBlueprintSaveError, type ServiceBlueprintSource, type ServiceBlueprintSummary } from './service-blueprint-source.js';
 
@@ -19,6 +20,7 @@ function deepClone<T>(value: T): T {
 
 export class InMemoryServiceBlueprintSource implements ServiceBlueprintSource {
   private readonly serviceBlueprints = new Map<string, ServiceBlueprint>();
+  readonly designNotes = new InMemoryDesignNoteSource((key) => this.serviceBlueprints.get(key)?.version ?? 0);
 
   constructor(seed: ReadonlyArray<SeedEntry> = []) {
     for (const entry of seed) {

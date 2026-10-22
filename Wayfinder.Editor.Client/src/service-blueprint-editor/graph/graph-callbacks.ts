@@ -14,6 +14,8 @@ export type GraphProps = {
   selectedGatewayKey: string | null;
   selectedTransitionIndex: number | null;
   recentChanges: GraphRecentChanges | null;
+  /** Open design notes per node id (`stage:<key>`, `gateway:<key>`), marked on each node. */
+  noteCounts: Record<string, number>;
 };
 
 /** What someone else changed in the version the canvas last moved to, for it to highlight. */

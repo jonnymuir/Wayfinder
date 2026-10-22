@@ -53,6 +53,21 @@ calls `engine.UpdateDefinition(...)` inside `SaveAsync`), note it's intentionall
 only, for a test/demo host; a real app would back this with a database, the way
 `Wayfinder.Umbraco`'s `UmbracoServiceBlueprintStore` does.
 
+### Design notes
+
+`AddServiceBlueprintAuthoring()` also registers `DesignNoteService`, which the design-note MCP
+tools and REST routes use. Notes are kept by an `IDesignNoteStore`, defaulting to
+`InMemoryDesignNoteStore`, which forgets them on restart. Register your own to keep them:
+
+```csharp
+builder.Services.AddSingleton<IDesignNoteStore, MyDesignNoteStore>();
+builder.Services.AddServiceBlueprintAuthoring();
+```
+
+Its `UpdateAsync(note, expectedRevision)` must compare and write atomically, the same way
+`SaveAsync` does below, so two replies made at once both land. `ServiceBlueprintAuthoringService`
+deletes a blueprint's notes when the blueprint is deleted.
+
 ### `SaveAsync` must be an atomic compare-and-swap
 
 A human in the editor and an AI agent can both be working against the same service blueprint at
@@ -178,6 +193,11 @@ using them through a chat interface or an agent driving them directly:
 6. **`save_service_blueprint`** with the `version` read in step 1. A concurrent edit
    (human or another agent) surfaces as a conflict, not a silent overwrite,
    reload and reapply.
+
+7. **Work through design notes**, if the designer has left any: `list_design_notes`, change and
+   save the blueprint, then `resolve_design_note` each one with what was done, or
+   `reply_to_design_note` to ask first. See
+   [the contract's design notes section](./reference-service-blueprint-contract.md#design-notes).
 
 This mirrors the proposal-first pattern the visual editor already follows for
 human+AI co-authoring (draft → validate → simulate/preview → apply), one shared

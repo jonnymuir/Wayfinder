@@ -416,6 +416,30 @@ and why. A production host's `IServiceBlueprintSourceStore` backs this with real
 persistence instead, `Wayfinder.Umbraco`'s implementation is a real example, database-backed
 with full uSync export/import portability, also covered in that guide.
 
+## Design notes
+
+A design note is feedback pinned to part of a blueprint: a stage, a gateway, a route, a field, or
+the whole blueprint. The designer adds them on the canvas, and you can add them too. Notes live
+beside the blueprint, never inside its JSON, so adding or resolving one never changes the
+blueprint's `version`.
+
+When the designer asks you to work through their notes:
+
+1. **`list_design_notes`** for the blueprint. Each entry has the note and its anchor resolved
+   against the current version: a `label`, the `path` in the blueprint JSON (the same shape as a
+   diagnostic's `path`, such as `stages.check.routes[0]`), and `removed: true` if the thing it
+   pointed at has since been deleted.
+2. **Change the blueprint** for each note you can act on, then validate and save it as usual.
+3. **`resolve_design_note`** each note you addressed, with one sentence on what you did and the
+   `version` the save returned. The designer sees the note move to Resolved, with your summary.
+4. **`reply_to_design_note`** when you need the designer's answer before you can act. The note
+   stays open, and the designer answers on the canvas.
+
+Use **`add_design_note`** to ask a design question where its context is, instead of in the chat,
+for example "Should an expired licence be refused here, or sent to a caseworker?" on the stage it
+is about. Only resolve a note you actually addressed. A note the designer reopens comes back with
+your earlier resolution kept in its replies.
+
 ## Worked examples
 
 This repo's own reference blueprint, `Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`,

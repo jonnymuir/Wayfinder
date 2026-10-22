@@ -1,3 +1,4 @@
+using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.Components;
@@ -20,6 +21,7 @@ var generated = new TypeScriptEmitter(ServiceBlueprintJson.WriteOptions).Emit(
     typeof(SupportSystemDescriptor),
     typeof(ServiceBlueprintValidationOutcome),
     typeof(ServiceBlueprintSaveOutcome),
+    typeof(DesignNote),
 ]);
 
 if (mode == "write")

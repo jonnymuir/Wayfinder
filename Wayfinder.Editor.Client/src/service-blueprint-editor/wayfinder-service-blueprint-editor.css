@@ -1059,3 +1059,189 @@
 .recent-changes-removed {
   margin: 0.25rem 0 0;
 }
+
+.design-notes {
+  padding: 1rem 1.25rem;
+  max-width: 60rem;
+  overflow-y: auto;
+}
+
+.design-notes-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+}
+
+.design-notes-hint {
+  margin: 0 0 1rem;
+  color: #505a5f;
+}
+
+.design-notes-filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.design-notes-filter {
+  padding: 0.3rem 0.75rem;
+  border: 2px solid #1d70b8;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1d70b8;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.design-notes-filter[aria-pressed="true"] {
+  background: #1d70b8;
+  color: #ffffff;
+}
+
+.design-note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.design-note {
+  padding: 0.75rem 1rem;
+  border: 1px solid #b1b4b6;
+  border-left: 5px solid #505a5f;
+  background: #ffffff;
+}
+
+.design-note[data-wayfinder-design-note-status="Resolved"] {
+  border-left-color: #00703c;
+}
+
+.design-note p {
+  margin: 0 0 0.5rem;
+}
+
+.design-note-anchor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #505a5f;
+}
+
+.design-note-anchor-removed {
+  color: #942514;
+}
+
+.design-note-text {
+  white-space: pre-wrap;
+}
+
+.design-note-author {
+  font-weight: 700;
+}
+
+.design-note-meta {
+  font-size: 0.875rem;
+}
+
+.design-note-replies,
+.selection-note-list {
+  margin: 0 0 0.5rem;
+  padding-left: 1rem;
+  border-left: 3px solid #f3f2f1;
+  list-style: none;
+}
+
+.design-note-replies li,
+.selection-note-list li {
+  white-space: pre-wrap;
+}
+
+.design-note-resolution {
+  padding: 0.5rem 0.75rem;
+  background: #e8f5ee;
+}
+
+.design-note-show {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d70b8;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.design-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.note-label {
+  display: block;
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 600;
+}
+
+.note-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.4rem;
+  border: 2px solid #0b0c0c;
+  font: inherit;
+  resize: vertical;
+}
+
+.note-textarea:focus-visible,
+.note-btn:focus-visible,
+.design-notes-filter:focus-visible,
+.design-note-show:focus-visible {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+}
+
+.note-btn {
+  padding: 0.35rem 0.75rem;
+  border: 2px solid #1d70b8;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1d70b8;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.note-btn-primary {
+  background: #00703c;
+  border-color: #00703c;
+  color: #ffffff;
+}
+
+.note-btn-warning {
+  border-color: #d4351c;
+  color: #d4351c;
+}
+
+.note-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.selection-notes {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid #b1b4b6;
+}
+
+.selection-notes-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.design-note-add .note-btn {
+  margin-top: 0.5rem;
+}

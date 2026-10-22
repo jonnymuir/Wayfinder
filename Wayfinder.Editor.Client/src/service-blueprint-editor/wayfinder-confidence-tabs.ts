@@ -1,7 +1,15 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-export type ConfidenceTab = 'canvas' | 'calculations' | 'validation' | 'definition';
+export type ConfidenceTab = 'canvas' | 'calculations' | 'validation' | 'notes' | 'definition';
+
+const LABELS: Record<ConfidenceTab, string> = {
+  canvas: 'Canvas',
+  calculations: 'Calculations',
+  validation: 'Validation',
+  notes: 'Notes',
+  definition: 'Definition',
+};
 
 /**
  * @internal Composition detail of <wayfinder-service-blueprint-editor>; not part of the public API surface.
@@ -17,7 +25,14 @@ export class WayfinderConfidenceTabs extends LitElement {
   @property({ type: Number, attribute: 'warning-count' })
   warningCount = 0;
 
-  private static readonly _tabs: ConfidenceTab[] = ['canvas', 'calculations', 'validation', 'definition'];
+  /** Open design notes, or -1 when the host keeps none and the Notes tab is left out. */
+  @property({ type: Number, attribute: 'notes-count' })
+  notesCount = -1;
+
+  private get _tabs(): ConfidenceTab[] {
+    const tabs: ConfidenceTab[] = ['canvas', 'calculations', 'validation', 'notes', 'definition'];
+    return this.notesCount < 0 ? tabs.filter((tab) => tab !== 'notes') : tabs;
+  }
 
   private _handleTabClick(tab: ConfidenceTab) {
     if (this.activeTab !== tab) {
@@ -32,7 +47,7 @@ export class WayfinderConfidenceTabs extends LitElement {
   }
 
   private _moveTabFocus(currentTab: ConfidenceTab, direction: -1 | 1) {
-    const tabs = WayfinderConfidenceTabs._tabs;
+    const tabs = this._tabs;
     const currentIndex = tabs.indexOf(currentTab);
     const nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
     const nextTab = tabs[nextIndex];
@@ -56,23 +71,24 @@ export class WayfinderConfidenceTabs extends LitElement {
         break;
       case 'Home':
         event.preventDefault();
-        this._handleTabClick('canvas');
-        this.shadowRoot?.querySelector<HTMLButtonElement>('#confidence-tab-canvas')?.focus();
+        this._moveTabFocus(this._tabs[1], -1);
         break;
       case 'End':
         event.preventDefault();
-        this._handleTabClick('definition');
-        this.shadowRoot?.querySelector<HTMLButtonElement>('#confidence-tab-definition')?.focus();
+        this._moveTabFocus(this._tabs[0], -1);
         break;
       default:
         break;
     }
   }
 
-  private _renderTabButton(tab: ConfidenceTab, label: string, badge?: number) {
+  private _renderTabButton(tab: ConfidenceTab) {
     const isActive = this.activeTab === tab;
+    const badge = tab === 'validation' ? this.errorCount + this.warningCount : tab === 'notes' ? this.notesCount : 0;
     const badgeHtml =
-      typeof badge === 'number' && badge > 0 ? html`<span class="tab-badge" data-wayfinder-tab-badge="${tab}">${badge}</span>` : nothing;
+      badge > 0
+        ? html`<span class=${`tab-badge ${tab === 'notes' ? 'tab-badge-info' : ''}`} data-wayfinder-tab-badge="${tab}">${badge}</span>`
+        : nothing;
 
     return html`
       <button
@@ -87,68 +103,32 @@ export class WayfinderConfidenceTabs extends LitElement {
         @click=${() => this._handleTabClick(tab)}
         @keydown=${(event: KeyboardEvent) => this._handleTabKeydown(event, tab)}
       >
-        <span class="tab-label">${label}</span>
+        <span class="tab-label">${LABELS[tab]}</span>
         ${badgeHtml}
       </button>
     `;
   }
 
   render() {
-    const validationBadge = this.errorCount + this.warningCount;
-
     return html`
       <div class="tabs-root" data-wayfinder-confidence-tabs>
-        <div class="tab-bar" role="tablist" aria-label="Editor tools">
-          ${this._renderTabButton('canvas', 'Canvas')}
-          ${this._renderTabButton('calculations', 'Calculations')}
-          ${this._renderTabButton('validation', 'Validation', validationBadge)}
-          ${this._renderTabButton('definition', 'Definition')}
-        </div>
+        <div class="tab-bar" role="tablist" aria-label="Editor tools">${this._tabs.map((tab) => this._renderTabButton(tab))}</div>
 
         <div class="tab-panel-container">
-          <div
-            id="confidence-panel-canvas"
-            class="tab-panel tab-panel-canvas ${this.activeTab === 'canvas' ? 'tab-panel-active' : ''}"
-            role="tabpanel"
-            aria-labelledby="confidence-tab-canvas"
-            data-wayfinder-confidence-panel="canvas"
-            ?hidden=${this.activeTab !== 'canvas'}
-          >
-            <slot name="canvas"></slot>
-          </div>
-
-          <div
-            id="confidence-panel-calculations"
-            class="tab-panel ${this.activeTab === 'calculations' ? 'tab-panel-active' : ''}"
-            role="tabpanel"
-            aria-labelledby="confidence-tab-calculations"
-            data-wayfinder-confidence-panel="calculations"
-            ?hidden=${this.activeTab !== 'calculations'}
-          >
-            <slot name="calculations"></slot>
-          </div>
-
-          <div
-            id="confidence-panel-validation"
-            class="tab-panel ${this.activeTab === 'validation' ? 'tab-panel-active' : ''}"
-            role="tabpanel"
-            aria-labelledby="confidence-tab-validation"
-            data-wayfinder-confidence-panel="validation"
-            ?hidden=${this.activeTab !== 'validation'}
-          >
-            <slot name="validation"></slot>
-          </div>
-
-          <div
-            id="confidence-panel-definition"
-            class="tab-panel tab-panel-definition ${this.activeTab === 'definition' ? 'tab-panel-active' : ''}"
-            role="tabpanel"
-            aria-labelledby="confidence-tab-definition"
-            data-wayfinder-confidence-panel="definition"
-            ?hidden=${this.activeTab !== 'definition'}
-          >
-            <slot name="definition"></slot>
-          </div>
+          ${this._tabs.map(
+            (tab) => html`
+              <div
+                id="confidence-panel-${tab}"
+                class="tab-panel tab-panel-${tab} ${this.activeTab === tab ? 'tab-panel-active' : ''}"
+                role="tabpanel"
+                aria-labelledby="confidence-tab-${tab}"
+                data-wayfinder-confidence-panel="${tab}"
+                ?hidden=${this.activeTab !== tab}
+              >
+                <slot name="${tab}"></slot>
+              </div>
+            `
+          )}
         </div>
       </div>
     `;
@@ -230,6 +210,10 @@ export class WayfinderConfidenceTabs extends LitElement {
       font-size: 0.75rem;
       font-weight: 700;
       line-height: 1;
+    }
+
+    .tab-badge-info {
+      background: #505a5f;
     }
 
     .tab-button-active .tab-badge {

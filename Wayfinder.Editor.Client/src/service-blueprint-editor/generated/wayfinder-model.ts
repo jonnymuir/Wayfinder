@@ -427,6 +427,52 @@ export type ComponentPropertyValueKind = (typeof componentPropertyValueKindValue
 export const containmentKindValues = ['None', 'ChildList', 'NamedSections', 'KeyedChildren'] as const;
 export type ContainmentKind = (typeof containmentKindValues)[number];
 
+export interface DesignNote {
+  id: string;
+  blueprintKey: string;
+  anchor: DesignNoteAnchor;
+  text: string;
+  author: DesignNoteAuthor;
+  status: DesignNoteStatus;
+  resolution?: DesignNoteResolution;
+  replies: DesignNoteReply[];
+  createdAt: string;
+  revision: number;
+}
+
+export interface DesignNoteAnchor {
+  kind: DesignNoteAnchorKind;
+  key?: string;
+  fieldKey?: string;
+}
+
+export const designNoteAnchorKindValues = ['Blueprint', 'Stage', 'Gateway', 'Route', 'Field'] as const;
+export type DesignNoteAnchorKind = (typeof designNoteAnchorKindValues)[number];
+
+export interface DesignNoteAuthor {
+  name: string;
+  kind: DesignNoteAuthorKind;
+}
+
+export const designNoteAuthorKindValues = ['Person', 'DesignPartner'] as const;
+export type DesignNoteAuthorKind = (typeof designNoteAuthorKindValues)[number];
+
+export interface DesignNoteReply {
+  author: DesignNoteAuthor;
+  text: string;
+  createdAt: string;
+}
+
+export interface DesignNoteResolution {
+  author: DesignNoteAuthor;
+  summary: string;
+  version: number;
+  resolvedAt: string;
+}
+
+export const designNoteStatusValues = ['Open', 'Resolved'] as const;
+export type DesignNoteStatus = (typeof designNoteStatusValues)[number];
+
 export const gatewayKindValues = ['Split', 'Join'] as const;
 export type GatewayKind = (typeof gatewayKindValues)[number];
 
