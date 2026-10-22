@@ -14,7 +14,7 @@ function chipClassName(chip: TransitionChip): string {
     chip.branch ? 'branch-path' : '',
     chip.merge ? 'merge-path' : '',
     chip.selected ? 'selected' : '',
-    chip.simulationPath ? 'simulation-path' : '',
+    chip.recentlyChanged ? 'recently-changed' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -44,7 +44,7 @@ export function RouteEdge({
   if (!data) {
     return null;
   }
-  const { edge, fromKey, toKey, simulationPath, chips, readOnly, manualWaypoint } = data;
+  const { edge, fromKey, toKey, recentlyChanged, chips, readOnly, manualWaypoint } = data;
   const source = { x: sourceX, y: sourceY };
   const target = { x: targetX, y: targetY };
 
@@ -131,7 +131,7 @@ export function RouteEdge({
     'edge-path',
     'route-rail',
     edge.backward ? 'loop-back' : '',
-    simulationPath ? 'simulation-path' : '',
+    recentlyChanged ? 'recently-changed' : '',
     manualWaypoint ? 'manually-routed' : '',
   ]
     .filter(Boolean)
@@ -192,7 +192,7 @@ export function RouteEdge({
         data-wayfinder-route-path={edge.key}
         data-wayfinder-route-from={fromKey}
         data-wayfinder-route-to={toKey}
-        data-wayfinder-route-simulation-path={String(simulationPath)}
+        data-wayfinder-route-recently-changed={String(recentlyChanged)}
       />
       {chips.map((chip) => (
         <path
@@ -205,14 +205,14 @@ export function RouteEdge({
             chip.branch ? 'branch-path' : '',
             chip.merge ? 'merge-path' : '',
             chip.selected ? 'selected' : '',
-            chip.simulationPath ? 'simulation-path' : '',
+            chip.recentlyChanged ? 'recently-changed' : '',
           ]
             .filter(Boolean)
             .join(' ')}
           data-wayfinder-transition-path={String(chip.index)}
           data-wayfinder-transition-from={chip.fromKey}
           data-wayfinder-transition-to={chip.toKey}
-          data-wayfinder-transition-simulation-path={String(chip.simulationPath)}
+          data-wayfinder-transition-recently-changed={String(chip.recentlyChanged)}
         />
       ))}
       <EdgeLabelRenderer>
@@ -237,7 +237,7 @@ export function RouteEdge({
               data-wayfinder-transition={String(chip.index)}
               data-wayfinder-transition-from={chip.fromKey}
               data-wayfinder-transition-to={chip.toKey}
-              data-wayfinder-transition-simulation-path={String(chip.simulationPath)}
+              data-wayfinder-transition-recently-changed={String(chip.recentlyChanged)}
               onPointerDown={(event) => handleChipPointerDown(event, chip)}
               onPointerMove={(event) => handleChipPointerMove(event, chip)}
               onPointerUp={(event) => handleChipPointerUp(event, chip)}

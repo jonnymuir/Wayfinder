@@ -86,7 +86,7 @@ const GRAPH_CANVAS_OVERRIDES = `
   }
 
   /* Per-transition overlay paths ride on top of the base rail; only their
-     selected/simulation/branch colouring should be visible interaction-wise. */
+     selected/recently-changed/branch colouring should be visible interaction-wise. */
   .edge-path.transition-overlay {
     pointer-events: none;
   }

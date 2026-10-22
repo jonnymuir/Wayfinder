@@ -11,6 +11,19 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Changed
+
+- `Wayfinder.Editor`: when someone else saves the open blueprint, such as an AI design partner over
+  MCP, and the author has nothing unsaved, the editor moves to the new version in place instead of
+  going read-only. It keeps the zoom, position and selection, marks new and changed stages and
+  gateways on the canvas, draws changed routes in green, and shows a notice summarising what changed
+  since the author last dismissed it. It checks every 3 seconds for ten minutes after an outside
+  save, then every 15 again. With unsaved work, including Definition text not yet applied, the
+  editor goes read-only as before.
+- `InMemoryServiceBlueprintSource` versions blueprints as a real store does: a save must be made at
+  the stored version, or it fails with a conflict, and moves the version on by one. It also
+  implements `checkVersion`.
+
 ## [0.23.0] - 2026-10-19
 
 Also releases `Wayfinder.Rendering.GovUk` 0.11.0 (wait screens name who they wait for; conversation

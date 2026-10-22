@@ -116,11 +116,12 @@ export class SelectionController implements ReactiveController {
   }
 
   /** Selects `selection` if it still exists in `blueprint`; otherwise clears the selection. Drops any highlighted route. */
-  apply(selection: EditorSelection, blueprint: ServiceBlueprint | null = this._context.blueprint()): void {
+  /** `reveal: false` keeps the properties panel as the author left it, for a change they didn't make. */
+  apply(selection: EditorSelection, blueprint: ServiceBlueprint | null = this._context.blueprint(), reveal = true): void {
     const valid = blueprint && exists(selection, blueprint);
     this._selection = valid ? cloneSelection(selection) : null;
     this._transitionIndex = null;
-    if (this._selection) {
+    if (this._selection && reveal) {
       this._context.revealInspector();
     }
     this._host.requestUpdate();

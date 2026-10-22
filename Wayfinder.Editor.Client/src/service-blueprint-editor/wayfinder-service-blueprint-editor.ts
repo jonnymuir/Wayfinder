@@ -1,7 +1,7 @@
 import { LitElement, html, nothing, unsafeCSS } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import type { ServiceBlueprint } from './types.js';
-import { BlueprintClipboard, type ClipboardContext } from './blueprint-clipboard.js';
+import { ClipboardController } from './clipboard-controller.js';
 import { DefinitionController } from './definition-controller.js';
 import { cloneServiceBlueprint, serviceBlueprintsEqual } from './blueprint-snapshot.js';
 import { EditorKeyboard } from './editor-keyboard.js';
@@ -11,6 +11,7 @@ import { ShortcutGuideController } from './shortcut-guide-controller.js';
 import { SaveController } from './save-controller.js';
 import { ToastController } from './toast-controller.js';
 import { StalenessController } from './staleness-controller.js';
+import { RecentChangesController } from './recent-changes-controller.js';
 import { ValidationController } from './validation-controller.js';
 import { EditorCatalogsController } from './editor-catalogs-controller.js';
 import {
@@ -133,7 +134,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
 
   private readonly _toast = new ToastController(this);
   private readonly _history = new EditHistory<ServiceBlueprintHistoryEntry>();
-  private readonly _clipboard = new BlueprintClipboard();
   private readonly _layout = new PanelLayoutController(this);
   private readonly _help = new ShortcutGuideController(this);
   private readonly _selection = new SelectionController(this, {
@@ -157,6 +157,30 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     blueprintKey: () => this.blueprintKey,
     loadedVersion: () => this._serviceBlueprint?.version ?? null,
     reload: () => this._handleReloadAfterConflict(),
+    hasUnsavedChanges: () => this._save.isDirty || this._definition.hasUnappliedText,
+    isSaving: () => this._save.isSaving,
+    follow: () => this._recentChanges.follow(),
+  });
+  private readonly _recentChanges = new RecentChangesController(this, {
+    source: () => this.serviceBlueprintSource,
+    blueprintKey: () => this.blueprintKey,
+    current: () => this._serviceBlueprint,
+    adopt: (latest) => this._initialiseEditorState(latest, true),
+  });
+  private readonly _clipboard = new ClipboardController(this, {
+    context: () => ({
+      blueprint: this._serviceBlueprint,
+      selectedStageKey: this._selection.stageKey,
+      multiSelection: this._graphMultiSelection,
+      selectedAction: this._selection.currentAction(),
+      actionCatalog: this._catalogs.actions,
+      availableQueues: this.availableQueues,
+    }),
+    selection: () => this._selection.current,
+    commit: (next, selection) => this._commitServiceBlueprintUpdate(next, selection),
+    chooseStageAction: (index) => this._selection.chooseAction({ target: 'stage', index }),
+    toast: (message) => this._toast.show(message),
+    revealInspector: () => this._handleInspectorRequested(),
   });
   private readonly _validation = new ValidationController(this, () => ({
     blueprint: this._serviceBlueprint,
@@ -198,8 +222,8 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     save: () => void this._save.save(),
     undo: () => this._undo(),
     redo: () => this._redo(),
-    copy: () => this._copySelection(),
-    paste: () => this._pasteClipboard(),
+    copy: () => this._clipboard.copy(),
+    paste: () => this._clipboard.paste(),
     canUndo: () => this._history.canUndo,
     canRedo: () => this._history.canRedo,
     openHelp: () => this._help.open(this.shadowRoot?.activeElement as HTMLElement | null),
@@ -286,15 +310,19 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  private _initialiseEditorState(serviceBlueprint: ServiceBlueprint) {
+  /** `following`: a version someone else saved, shown in place of this one with the author's selection kept. */
+  private _initialiseEditorState(serviceBlueprint: ServiceBlueprint, following = false) {
     this._serviceBlueprint = cloneServiceBlueprint(serviceBlueprint);
     this._reflectServiceBlueprintLoadedState();
     this._history.clear();
     this._selection.clearAction();
     this._save.loaded(this._serviceBlueprint);
     this._definition.reset();
-    this._selection.apply(null, this._serviceBlueprint);
-    this._announceHistory('Service blueprint loaded. Undo history is ready for your next edit.');
+    this._selection.apply(following ? this._selection.current : null, this._serviceBlueprint, !following);
+    if (!following) {
+      this._recentChanges.dismiss();
+      this._announceHistory('Service blueprint loaded. Undo history is ready for your next edit.');
+    }
     this._staleness.reset();
   }
 
@@ -469,54 +497,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Copy and paste
-  // ---------------------------------------------------------------------------
-
-  private get _clipboardContext(): ClipboardContext {
-    return {
-      blueprint: this._serviceBlueprint,
-      selectedStageKey: this._selection.stageKey,
-      multiSelection: this._graphMultiSelection,
-      selectedAction: this._selection.currentAction(),
-      actionCatalog: this._catalogs.actions,
-      availableQueues: this.availableQueues,
-    };
-  }
-
-  private _copySelection() {
-    const message = this._clipboard.copy(this._clipboardContext);
-    if (!message) {
-      return false;
-    }
-    this._toast.show(message);
-    this.requestUpdate();
-    return true;
-  }
-
-  private _pasteClipboard() {
-    const outcome = this._clipboard.paste(this._clipboardContext);
-    if (!outcome.ok) {
-      if (outcome.message) {
-        this._toast.show(outcome.message);
-      }
-      return false;
-    }
-
-    const selection: EditorSelection = outcome.selectStageKey
-      ? { kind: 'stage', stageKey: outcome.selectStageKey }
-      : this._selection.current;
-    this._commitServiceBlueprintUpdate(outcome.blueprint, selection);
-    if (outcome.selectActionIndex !== undefined) {
-      this._selection.chooseAction({ target: 'stage', index: outcome.selectActionIndex });
-    }
-    this._toast.show(outcome.message);
-    if (outcome.revealInspector) {
-      this._handleInspectorRequested();
-    }
-    return true;
-  }
-
   private get _canSaveByContext(): boolean {
     return this.authorContext?.canSave !== false;
   }
@@ -541,11 +521,11 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         this._activeConfidenceTab === 'canvas'
           ? {
               clipboard: {
-                canCopy: this._clipboard.canCopy(this._clipboardContext),
-                canPaste: this._clipboard.canPaste(this._clipboardContext),
+                canCopy: this._clipboard.canCopy,
+                canPaste: this._clipboard.canPaste,
                 pasteTitle: this._clipboard.summary,
-                onCopy: () => this._copySelection(),
-                onPaste: () => this._pasteClipboard(),
+                onCopy: () => this._clipboard.copy(),
+                onPaste: () => this._clipboard.paste(),
               },
               onHelp: (trigger) => this._help.open(trigger),
               graph: {
@@ -614,6 +594,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           .selectedStageKey=${this._selection.stageKey}
           .selectedGatewayKey=${this._selection.gatewayKey}
           .selectedTransitionIndex=${this._selection.transitionIndex}
+          .recentChanges=${this._recentChanges.highlight}
           .hideOwnToolbar=${true}
           @stage-selected="${this._handleStageSelected}"
           @gateway-selected="${this._handleGatewaySelected}"
@@ -697,6 +678,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
         ${this._error ? html`<div class="error-banner" role="alert">${this._error}</div>` : nothing}
         ${this._save.renderError()}
         ${this._staleness.renderBanner()}
+        ${this._recentChanges.renderNotice()}
         ${renderEditorToolbar(this._toolbarModel())}
 
         <div class="editor-content-wrapper">

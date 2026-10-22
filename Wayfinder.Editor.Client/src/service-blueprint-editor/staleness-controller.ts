@@ -9,21 +9,32 @@ export interface StalenessInputs {
   loadedVersion: () => number | null;
   /** Replace the view with the latest saved version. */
   reload: () => Promise<void>;
+  /** Whether the author has work that moving to a newer version would throw away. */
+  hasUnsavedChanges: () => boolean;
+  /** The author's own save is under way: the newer version a poll sees may be theirs. */
+  isSaving: () => boolean;
+  /** Move to the newer version in place, showing what changed. */
+  follow: () => Promise<void>;
 }
 
 const POLL_INTERVAL_MS = 15_000;
+/** Poll faster for a while after someone else saves, since an AI agent usually saves again soon. */
+const ACTIVE_POLL_INTERVAL_MS = 3_000;
+const ACTIVE_FOR_MS = 10 * 60_000;
 
 /**
  * Knows whether someone else (a person, or an AI agent) has saved a newer version than the one being edited. It finds
- * out proactively by polling, or reactively when a save is refused with a conflict. Once stale the editor is
- * read-only until reload: any further edit would only head toward another guaranteed conflict, so there is no honest
- * "keep working" option. Hosts whose source cannot `checkVersion` simply get no polling.
+ * out proactively by polling, or reactively when a save is refused with a conflict. With no unsaved work, a newer
+ * version is simply followed: the editor moves to it and shows what changed. With unsaved work it is stale, and the
+ * editor is read-only until reload: any further edit would only head toward another guaranteed conflict, so there is
+ * no honest "keep working" option. Hosts whose source cannot `checkVersion` simply get no polling.
  */
 export class StalenessController implements ReactiveController {
   stale = false;
   currentVersion: number | null = null;
   private bannerDismissed = false;
   private timer: number | null = null;
+  private lastOutsideSaveAt = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly host: ReactiveControllerHost,
@@ -53,14 +64,15 @@ export class StalenessController implements ReactiveController {
     this.host.requestUpdate();
   }
 
-  /** Poll again in 15s. A cheap scalar check; Server-Sent Events is the upgrade path if that stops being true. */
+  /** Poll again soon. A cheap scalar check; Server-Sent Events is the upgrade path if that stops being true. */
   schedule(): void {
     this.stopPolling();
     // No point polling once we already know it's stale: nothing more to learn until reload.
     if (typeof window === 'undefined' || !this.inputs.source()?.checkVersion || this.inputs.loadedVersion() === null || this.stale) {
       return;
     }
-    this.timer = window.setTimeout(() => void this.poll(), POLL_INTERVAL_MS);
+    const active = Date.now() - this.lastOutsideSaveAt < ACTIVE_FOR_MS;
+    this.timer = window.setTimeout(() => void this.poll(), active ? ACTIVE_POLL_INTERVAL_MS : POLL_INTERVAL_MS);
   }
 
   private stopPolling(): void {
@@ -80,17 +92,37 @@ export class StalenessController implements ReactiveController {
     const key = this.inputs.blueprintKey();
     try {
       const currentVersion = await source.checkVersion(key);
-      // The author may have switched blueprint, or reloaded, while this was in flight.
-      if (key !== this.inputs.blueprintKey() || this.inputs.loadedVersion() === null) {
-        return;
-      }
-      if (currentVersion !== null && currentVersion !== loadedVersion && !this.stale) {
-        this.markStale(currentVersion);
+      if (this.stillLookingAt(key, loadedVersion) && this.isOutsideSave(currentVersion, loadedVersion)) {
+        await this.respondToOutsideSave(currentVersion);
       }
     } catch {
       // Best-effort: a transient poll failure shouldn't disrupt editing.
     } finally {
       this.schedule();
+    }
+  }
+
+  /** The author may have switched blueprint, reloaded or saved while the check was in flight. */
+  private stillLookingAt(key: string, loadedVersion: number): boolean {
+    if (key !== this.inputs.blueprintKey() || this.inputs.loadedVersion() !== loadedVersion) {
+      return false;
+    }
+    return !this.inputs.isSaving();
+  }
+
+  private isOutsideSave(currentVersion: number | null, loadedVersion: number): currentVersion is number {
+    if (currentVersion === null || this.stale) {
+      return false;
+    }
+    return currentVersion !== loadedVersion;
+  }
+
+  private async respondToOutsideSave(currentVersion: number): Promise<void> {
+    this.lastOutsideSaveAt = Date.now();
+    if (this.inputs.hasUnsavedChanges()) {
+      this.markStale(currentVersion);
+    } else {
+      await this.inputs.follow();
     }
   }
 

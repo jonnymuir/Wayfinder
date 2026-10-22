@@ -274,7 +274,7 @@
   opacity: 1;
 }
 
-.edge-path.simulation-path {
+.edge-path.recently-changed {
   stroke: #00703c;
   stroke-width: 3.5;
   opacity: 1;
@@ -319,7 +319,7 @@
   color: #1d4ed8;
 }
 
-.edge-chip.simulation-path {
+.edge-chip.recently-changed {
   border-color: #00703c;
   background: #e8f5e9;
   color: #005a30;
@@ -472,16 +472,37 @@
   box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.35);
 }
 
-.stage-node.simulation-path {
+.stage-node.recently-added,
+.gateway-node.recently-added {
   border-color: #00703c;
-  box-shadow: 0 0 0 2px rgba(0, 112, 60, 0.3);
+  box-shadow: 0 0 0 3px rgba(0, 112, 60, 0.35);
 }
 
-.stage-node.simulation-current {
+.stage-node.recently-changed,
+.gateway-node.recently-changed {
   border-color: #0b0c0c;
   box-shadow:
     0 0 0 3px rgba(255, 221, 0, 0.9),
     0 0 0 5px rgba(11, 12, 12, 0.18);
+}
+
+.change-badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.change-badge.change-added {
+  background: #00703c;
+  color: #ffffff;
+}
+
+.change-badge.change-changed {
+  background: #ffdd00;
+  color: #0b0c0c;
 }
 
 .stage-node.drag-target {

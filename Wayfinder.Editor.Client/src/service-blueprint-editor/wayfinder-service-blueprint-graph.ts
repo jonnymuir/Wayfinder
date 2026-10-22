@@ -11,7 +11,7 @@ import {
 } from './stage-assignment.js';
 import { gatewayQueueKey } from './gateway-representation.js';
 import { deleteRoute, flattenRoutes } from './route-model.js';
-import type { GraphCallbacks, GraphNodeMove, GraphProps } from './graph/graph-callbacks.js';
+import type { GraphCallbacks, GraphNodeMove, GraphProps, GraphRecentChanges } from './graph/graph-callbacks.js';
 import { gatewayNodeId, parseGraphNodeId, stageNodeId } from './graph/service-blueprint-graph-layout.js';
 import { applyAutoArrange, setRouteWaypoint } from './graph/service-blueprint-graph-layout-block.js';
 import { applyNodeMoves, connectNodes, describeNodeMoves } from './graph/graph-canvas-edits.js';
@@ -82,20 +82,9 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   @property({ attribute: false })
   selectedGatewayKey: string | null = null;
 
-  // Simulation highlighting plumbing — no caller currently drives these (the Simulation tab that
-  // used to was removed; see wayfinder-service-blueprint-editor.ts). Left in place rather than
-  // torn out through graph-app.tsx/graph-bridge.ts/graph-callbacks.ts/graph-model.ts too: with no
-  // caller, these three always default, so the .simulation-path/.simulation-current CSS below
-  // never actually applies — inert, not broken. A future path-highlighting feature (recorded
-  // history playback, a real simulation rebuild) could reuse this rather than reinventing it.
+  /** What someone else changed in the latest version, outlined and badged on the canvas until cleared. */
   @property({ attribute: false })
-  simulationCurrentStageKey: string | null = null;
-
-  @property({ attribute: false })
-  simulationPathStageKeys: string[] = [];
-
-  @property({ attribute: false })
-  simulationPathTransitionIndices: number[] = [];
+  recentChanges: GraphRecentChanges | null = null;
 
   @state()
   private _zoom = 1;
@@ -179,9 +168,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       selectedStageKey: this._selection.stageKey,
       selectedGatewayKey: this._selection.gatewayKey,
       selectedTransitionIndex: this._selection.transitionIndex,
-      simulationCurrentStageKey: this.simulationCurrentStageKey,
-      simulationPathStageKeys: this.simulationPathStageKeys,
-      simulationPathTransitionIndices: this.simulationPathTransitionIndices,
+      recentChanges: this.recentChanges,
     };
   }
 

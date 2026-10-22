@@ -67,6 +67,21 @@ pictured in this doc's own screenshots, see
 `defaultFrom` specifically, since it reads from the same calculation field list that tab
 authors.)
 
+### Changes saved elsewhere
+
+When an AI design partner, or another person, saves the blueprint while you have it open, the
+canvas moves to their version within a few seconds, as long as you have nothing unsaved. Your zoom,
+position and selection stay where they were. A notice above the toolbar says which versions it moved
+between and what changed, and the canvas marks each stage and gateway that is **New** or
+**Changed**, and draws changed routes in green. Several saves in a row add up into one summary until
+you choose **Dismiss**.
+
+![The canvas after an outside save, with a new and a changed stage marked](screenshots/changes-saved-elsewhere.png)
+
+If you do have unsaved changes, the editor keeps them and goes read-only instead, with a banner
+explaining that the blueprint changed elsewhere. Copy anything you want to keep, then reload the
+latest version.
+
 ## For agents
 
 - The graph custom element: `<wayfinder-service-blueprint-graph>`, ready once it carries
@@ -96,19 +111,26 @@ authors.)
   input rendered at id `support-system-call-<index>-<inputKey>` (e.g.
   `#support-system-call-0-File`), `[data-wayfinder-action-errors="<index>"]` for its own
   validation messages.
+- Changes saved elsewhere: `[data-wayfinder-recent-changes]` is the notice, with
+  `[data-wayfinder-dismiss-recent-changes]` to clear it, and `[data-wayfinder-recent-changes-status]`
+  the live region that announces each update. A highlighted node carries
+  `data-wayfinder-stage-change` or `data-wayfinder-gateway-change` (`"added"` or `"changed"`); a
+  highlighted route carries `data-wayfinder-route-recently-changed="true"`. With unsaved work the
+  editor shows `[data-wayfinder-stale-service-blueprint-overlay]` instead.
 - The toolbar (Save/Undo/Redo) lives inside this tab's own slotted content, hidden while
   any other tab is active. Every other tab's own doc in this series notes this same thing;
   it's this tab you have to be on to actually click Save.
 
 ## Keeping this current
 
-Every screenshot above is written by one of four existing Storybook-driven specs in
+Every screenshot above is written by one of five Storybook-driven specs in
 `Wayfinder.Editor.Client/tests/service-blueprint-editor/`:
 `service-blueprint-graph-visual.spec.ts` (graph overview, gateway shape),
 `service-blueprint-editor-gateways.spec.ts` (gateway inspector),
-`stage-action-editor.spec.ts` (stage action editor), and
-`support-system-action-editor.spec.ts` (support-system-call action editor). Regenerate with:
+`stage-action-editor.spec.ts` (stage action editor),
+`support-system-action-editor.spec.ts` (support-system-call action editor), and
+`service-blueprint-editor-follow-changes.spec.ts` (changes saved elsewhere). Regenerate with:
 
 ```
-cd Wayfinder.Editor.Client && CAPTURE_DOC_SCREENSHOTS=1 npx playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts support-system-action-editor.spec.ts
+cd Wayfinder.Editor.Client && CAPTURE_DOC_SCREENSHOTS=1 npx playwright test service-blueprint-graph-visual.spec.ts service-blueprint-editor-gateways.spec.ts stage-action-editor.spec.ts support-system-action-editor.spec.ts service-blueprint-editor-follow-changes.spec.ts
 ```

@@ -347,9 +347,7 @@ export function run(fixtures: LayoutTestFixtures): number {
       selectedStageKey: null,
       selectedGatewayKey: null,
       selectedTransitionIndex: null,
-      simulationCurrentStageKey: null,
-      simulationPathStageKeys: [],
-      simulationPathTransitionIndices: [],
+      recentChanges: null,
     };
     const model = buildGraphModel(props);
     const modelEdges = model.edges.filter(
