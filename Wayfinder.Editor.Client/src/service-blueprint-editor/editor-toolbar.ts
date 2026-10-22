@@ -15,6 +15,23 @@ export interface ToolbarModel {
   canvas: CanvasToolsModel | null;
 }
 
+/** The canvas toolbar's add and zoom buttons, acting on the graph element when there is one. */
+export function graphToolbarActions(
+  graph: () => HTMLElementTagNameMap['wayfinder-service-blueprint-graph'] | undefined,
+  zoom: number
+): CanvasToolsModel['graph'] {
+  return {
+    addStage: (trigger) => graph()?.addStage(trigger),
+    addGateway: (trigger) => graph()?.addGateway(trigger),
+    tidyLayout: () => graph()?.tidyLayout(),
+    zoomOut: () => graph()?.zoomOut(),
+    zoomIn: () => graph()?.zoomIn(),
+    fitToScreen: () => graph()?.fitToScreen(),
+    fitWidth: () => graph()?.fitToWidth(),
+    zoomPercent: Math.round(zoom * 100),
+  };
+}
+
 export interface CanvasToolsModel {
   clipboard: { canCopy: boolean; canPaste: boolean; pasteTitle: string; onCopy(): void; onPaste(): void };
   onHelp(trigger: HTMLElement): void;

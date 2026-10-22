@@ -1132,3 +1132,26 @@ section[aria-label] {
     scroll-behavior: auto;
   }
 }
+
+.note-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #505a5f;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.change-badge + .note-marker {
+  margin-left: 4px;
+}
+
+.change-badge:not(:empty) ~ .note-marker,
+.node-header > .note-marker:first-of-type {
+  margin-left: auto;
+}

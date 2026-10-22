@@ -41,6 +41,19 @@ export {
   sanitiseServiceBlueprintSaveErrorText,
 } from './service-blueprint-editor/service-blueprint-source.js';
 
+export type { DesignNoteSource, HttpDesignNoteSourceOptions } from './service-blueprint-editor/design-note-source.js';
+export { HttpDesignNoteSource } from './service-blueprint-editor/design-note-source.js';
+export { InMemoryDesignNoteSource } from './service-blueprint-editor/in-memory-design-note-source.js';
+export type {
+  DesignNote,
+  DesignNoteAnchor,
+  DesignNoteAnchorKind,
+  DesignNoteAuthor,
+  DesignNoteReply,
+  DesignNoteResolution,
+  DesignNoteStatus,
+} from './service-blueprint-editor/types.js';
+
 export type { ServiceBlueprintActionCatalog } from './service-blueprint-editor/action-catalog.js';
 export { BuiltInServiceBlueprintActionCatalog } from './service-blueprint-editor/action-catalog.js';
 

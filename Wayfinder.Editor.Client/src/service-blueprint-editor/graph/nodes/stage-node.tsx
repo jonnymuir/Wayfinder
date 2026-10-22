@@ -2,13 +2,13 @@ import type { NodeProps } from '@xyflow/react';
 import { useGraphCallbacks } from '../graph-callbacks.js';
 import type { StageFlowNode } from '../graph-model.js';
 import { iconForStage } from '../node-icons.js';
-import { ChangeBadge, changeDescription } from './change-badge.js';
+import { ChangeBadge, changeDescription, NoteMarker, notesDescription } from './change-badge.js';
 import { HandleFan } from './handle-fan.js';
 import { NodeIcon } from './node-icon.js';
 
 export function StageNode({ data }: NodeProps<StageFlowNode>) {
   const callbacks = useGraphCallbacks();
-  const { node, rowRank, sourceHandles, targetHandles, selected, change, readOnly } = data;
+  const { node, rowRank, sourceHandles, targetHandles, selected, change, openNotes, readOnly } = data;
   const stage = node.stage;
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -60,10 +60,11 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
         type="button"
         className={className}
         aria-pressed={selected}
-        aria-label={`${stage.displayName}, ${node.queueLabel} queue${changeDescription(change)}`}
+        aria-label={`${stage.displayName}, ${node.queueLabel} queue${changeDescription(change)}${notesDescription(openNotes)}`}
         data-wayfinder-stage={stage.stageKey}
         data-wayfinder-queue={node.queueKey}
         data-wayfinder-stage-change={change ?? undefined}
+        data-wayfinder-stage-notes={openNotes || undefined}
         onClick={() => callbacks.selectStage(stage.stageKey)}
         onDoubleClick={() => callbacks.selectStage(stage.stageKey, { openInspector: true })}
         onKeyDown={handleKeyDown}
@@ -75,6 +76,7 @@ export function StageNode({ data }: NodeProps<StageFlowNode>) {
           </span>
           <span className="node-meta">{stage.stageType}</span>
           <ChangeBadge change={change} />
+          <NoteMarker count={openNotes} />
         </span>
         <span className="node-label">{stage.displayName}</span>
       </button>

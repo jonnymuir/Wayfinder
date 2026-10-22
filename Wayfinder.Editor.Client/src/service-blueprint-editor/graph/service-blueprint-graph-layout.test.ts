@@ -348,6 +348,7 @@ export function run(fixtures: LayoutTestFixtures): number {
       selectedGatewayKey: null,
       selectedTransitionIndex: null,
       recentChanges: null,
+      noteCounts: {},
     };
     const model = buildGraphModel(props);
     const modelEdges = model.edges.filter(

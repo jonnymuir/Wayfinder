@@ -35,14 +35,18 @@ public static class ProcessManagerServiceExtensions
     }
 
     /// <summary>
-    /// Registers <see cref="ServiceBlueprintAuthoringService"/>. The host must already have an
-    /// <see cref="Abstractions.IServiceBlueprintSourceStore"/> registered — this does not provide one.
+    /// Registers <see cref="ServiceBlueprintAuthoringService"/> and <see cref="DesignNoteService"/>. The host
+    /// must already have an <see cref="Abstractions.IServiceBlueprintSourceStore"/> registered — this does not
+    /// provide one. Design notes default to <see cref="InMemoryDesignNoteStore"/>, which forgets them on
+    /// restart; register an <see cref="IDesignNoteStore"/> of your own to keep them.
     /// </summary>
     public static IServiceCollection AddServiceBlueprintAuthoring(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<ServiceBlueprintAuthoringService>();
+        services.TryAddSingleton<IDesignNoteStore, InMemoryDesignNoteStore>();
+        services.AddSingleton<DesignNoteService>();
 
         return services;
     }

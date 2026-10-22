@@ -82,6 +82,27 @@ If you do have unsaved changes, the editor keeps them and goes read-only instead
 explaining that the blueprint changed elsewhere. Copy anything you want to keep, then reload the
 latest version.
 
+### Design notes
+
+A design note is feedback pinned to part of the blueprint, for an AI design partner to work
+through, or a question the partner pins back for you. Select a stage, a gateway or a route and
+write in **Add a note** at the bottom of the Properties panel; with nothing selected, the note is
+about the whole blueprint. A stage or gateway with open notes shows a note marker with the count.
+
+![A stage marked with one open note, and the note under the Properties panel](screenshots/design-notes-canvas.png)
+
+The **Notes** tab lists every note, open or resolved, with what it is pinned to and a link to show
+it on the canvas. Reply to a note, or resolve it by saying what was done. A design partner
+connected to the authoring tools can read the open notes, change the blueprint, and resolve each
+one with what it changed and the version it changed it in; the notes update within a few seconds,
+without a reload. Reopen a resolved note if the change didn't do it, and its resolution stays in
+the replies.
+
+![The Notes tab with a note from you and a question from the design partner](screenshots/design-notes-tab.png)
+
+Notes are not part of the blueprint: adding or resolving one never needs a save. If a stage with
+notes is deleted, its notes stay, at the level of the whole blueprint.
+
 ## For agents
 
 - The graph custom element: `<wayfinder-service-blueprint-graph>`, ready once it carries
@@ -117,6 +138,12 @@ latest version.
   `data-wayfinder-stage-change` or `data-wayfinder-gateway-change` (`"added"` or `"changed"`); a
   highlighted route carries `data-wayfinder-route-recently-changed="true"`. With unsaved work the
   editor shows `[data-wayfinder-stale-service-blueprint-overlay]` instead.
+- Design notes: `[data-wayfinder-add-design-note]` is the add-a-note form under the Properties
+  panel, and `[data-wayfinder-selection-notes]` the section around it. A node with open notes
+  carries `data-wayfinder-stage-notes` or `data-wayfinder-gateway-notes` (the count). In the Notes
+  tab (`[data-wayfinder-confidence-tab="notes"]`, badge `[data-wayfinder-tab-badge="notes"]`),
+  each note is `[data-wayfinder-design-note="<id>"]` with `data-wayfinder-design-note-status`
+  (`"Open"` or `"Resolved"`), and a resolution is `[data-wayfinder-design-note-resolution]`.
 - The toolbar (Save/Undo/Redo) lives inside this tab's own slotted content, hidden while
   any other tab is active. Every other tab's own doc in this series notes this same thing;
   it's this tab you have to be on to actually click Save.

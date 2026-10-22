@@ -75,6 +75,14 @@ typed `ServiceBlueprint` values. A reference implementation that talks to the
 MockBusinessApp's `/mockapp/serviceBlueprints/*` endpoints lives at
 [`integrations/mockapp-service-blueprint-source.ts`](./integrations/mockapp-service-blueprint-source.ts).
 
+**Design notes.** A source that also has a `designNotes` (a `DesignNoteSource`: `list`, `add`,
+`reply`, `resolve`, `reopen`, `remove`) turns on the Notes tab, the **Add a note** form under the
+Properties panel, and the note markers on the canvas. `HttpDesignNoteSource` implements it against
+`Wayfinder.Engine.Api`'s `/blueprints/{key}/notes` routes, or the same routes under another base
+URL (`blueprintsUrl`, with optional `headers` for a bearer token). `InMemoryDesignNoteSource` keeps
+notes in the page, and `InMemoryServiceBlueprintSource` comes with one. Without a `designNotes`,
+the editor shows no notes at all.
+
 **Definition tab, JSON twin-pane**
 
 Alongside Canvas / Calculations / Validation, the editor exposes a **Definition**
@@ -173,6 +181,7 @@ the cards.
 | `selectedStageKey` | `string \| null` | Inbound selection, host sets this to drive the graph's highlight. |
 | `selectedGatewayKey` | `string \| null` | Inbound selection. |
 | `selectedTransitionIndex` | `number \| null` | Inbound transition highlight. |
+| `noteCounts` | `Record<string, number>` | Open design notes per node id (`stage:<key>`, `gateway:<key>`). Each node with a count shows a note marker and adds the count to its accessible name. |
 | `recentChanges` | `GraphRecentChanges \| null` | What someone else changed in the latest version: added and changed stages and gateways, and added or changed routes. The canvas outlines and badges them ("New", "Changed") until it is cleared. The editor sets it when it moves to a version an AI agent or another person saved. |
 
 **Events**

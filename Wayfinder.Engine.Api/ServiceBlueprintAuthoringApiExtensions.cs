@@ -63,24 +63,7 @@ public static class ServiceBlueprintAuthoringApiExtensions
         string? authorizationPolicy = null,
         bool allowAnonymous = false)
     {
-        if (allowAnonymous && authorizationPolicy is not null)
-        {
-            throw new ArgumentException("authorizationPolicy and allowAnonymous: true contradict each other.", nameof(authorizationPolicy));
-        }
-
-        var group = endpoints.MapGroup(prefix);
-        if (allowAnonymous)
-        {
-            group.AllowAnonymous();
-        }
-        else if (authorizationPolicy is null)
-        {
-            group.RequireAuthorization();
-        }
-        else
-        {
-            group.RequireAuthorization(authorizationPolicy);
-        }
+        var group = MapAuthorizedGroup(endpoints, prefix, authorizationPolicy, allowAnonymous);
 
         group.MapGet("/blueprints", async (ServiceBlueprintAuthoringService service, CancellationToken ct) =>
             Results.Ok(await service.ListAsync(ct)));
@@ -160,6 +143,32 @@ public static class ServiceBlueprintAuthoringApiExtensions
             return blueprint is null ? Results.NotFound() : Results.Ok(new { version = blueprint.Version });
         });
 
+        group.MapDesignNotes();
+
+        return group;
+    }
+
+    private static RouteGroupBuilder MapAuthorizedGroup(
+        IEndpointRouteBuilder endpoints, string prefix, string? authorizationPolicy, bool allowAnonymous)
+    {
+        if (allowAnonymous && authorizationPolicy is not null)
+        {
+            throw new ArgumentException("authorizationPolicy and allowAnonymous: true contradict each other.", nameof(authorizationPolicy));
+        }
+
+        var group = endpoints.MapGroup(prefix);
+        if (allowAnonymous)
+        {
+            group.AllowAnonymous();
+        }
+        else if (authorizationPolicy is null)
+        {
+            group.RequireAuthorization();
+        }
+        else
+        {
+            group.RequireAuthorization(authorizationPolicy);
+        }
         return group;
     }
 }

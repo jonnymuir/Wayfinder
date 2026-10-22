@@ -12,6 +12,7 @@
  * Integrator examples: `MockBusinessApp/wwwroot/dist/service-blueprint-editor-bootstrap.js`.
  */
 
+import type { DesignNoteSource } from './design-note-source.js';
 import type { ServiceBlueprint, ServiceBlueprintValidationOutcome } from './types.js';
 
 export type { ServiceBlueprintValidationOutcome };
@@ -210,4 +211,7 @@ export interface ServiceBlueprintSource {
    * best-effort checks.
    */
   validate?(key: string, serviceBlueprint: ServiceBlueprint): Promise<ServiceBlueprintValidationOutcome>;
+
+  /** Optional: the host's design notes. Without it the editor shows no notes. See `DesignNoteSource`. */
+  readonly designNotes?: DesignNoteSource;
 }

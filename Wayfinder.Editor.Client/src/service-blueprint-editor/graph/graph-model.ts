@@ -33,6 +33,7 @@ export type StageNodeData = {
   targetHandles: HandleSlot[];
   selected: boolean;
   change: NodeChange;
+  openNotes: number;
   readOnly: boolean;
   [key: string]: unknown;
 };
@@ -44,6 +45,7 @@ export type GatewayNodeData = {
   targetHandles: HandleSlot[];
   selected: boolean;
   change: NodeChange;
+  openNotes: number;
   readOnly: boolean;
   routeCount: number;
   triggerLabel: string;
@@ -308,6 +310,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
           targetHandles: handles.target,
           selected: props.selectedStageKey === topologyNode.stage.stageKey,
           change: changeOf(topologyNode.stage.stageKey),
+          openNotes: props.noteCounts[topologyNode.id] ?? 0,
           readOnly: props.readOnly,
         },
       } satisfies StageFlowNode;
@@ -326,6 +329,7 @@ export function buildGraphModel(props: GraphProps): GraphModel {
         targetHandles: handles.target,
         selected: props.selectedGatewayKey === topologyNode.gateway.key,
         change: changeOf(topologyNode.gateway.key),
+        openNotes: props.noteCounts[topologyNode.id] ?? 0,
         readOnly: props.readOnly,
         routeCount: routes.length,
         triggerLabel: pillRoute?.trigger ?? '',

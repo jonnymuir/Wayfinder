@@ -23,8 +23,10 @@ import {
   selectionsEqual,
 } from './editor-selection.js';
 import { ValidationNavigator } from './validation-navigation.js';
-import { renderEditorToolbar, type ToolbarModel } from './editor-toolbar.js';
+import { graphToolbarActions, renderEditorToolbar, type ToolbarModel } from './editor-toolbar.js';
 import { renderCanvasHealthHint, renderPanelHeader } from './editor-panels.js';
+import { DesignNotesController } from './design-notes-controller.js';
+import { renderNotesPanel, renderSelectionNotes } from './design-notes-view.js';
 import type { ServiceBlueprintSource } from './service-blueprint-source.js';
 import type { ServiceBlueprintActionCatalog } from './action-catalog.js';
 import type { ServiceBlueprintComponentCatalog } from './component-catalog.js';
@@ -166,6 +168,19 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     blueprintKey: () => this.blueprintKey,
     current: () => this._serviceBlueprint,
     adopt: (latest) => this._initialiseEditorState(latest, true),
+  });
+  private readonly _notes = new DesignNotesController(this, {
+    source: () => this.serviceBlueprintSource?.designNotes,
+    blueprintKey: () => this.blueprintKey || this._serviceBlueprint?.definitionKey || '',
+    blueprint: () => this._serviceBlueprint,
+    selection: () => this._selection.current,
+    transitionIndex: () => this._selection.transitionIndex,
+    show: ({ selection, transitionIndex }) => {
+      this._activeConfidenceTab = 'canvas';
+      this._select(selection);
+      if (transitionIndex !== null) this._selection.highlightTransition(transitionIndex);
+    },
+    toast: (message) => this._toast.show(message),
   });
   private readonly _clipboard = new ClipboardController(this, {
     context: () => ({
@@ -324,6 +339,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
       this._announceHistory('Service blueprint loaded. Undo history is ready for your next edit.');
     }
     this._staleness.reset();
+    void this._notes.refresh();
   }
 
   private _reflectServiceBlueprintLoadedState() {
@@ -506,7 +522,6 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
   // ---------------------------------------------------------------------------
 
   private _toolbarModel(): ToolbarModel {
-    const graph = () => this._graphElement;
     return {
       title: this._serviceBlueprint?.displayName ?? 'Service Blueprint Editor',
       save: {
@@ -528,16 +543,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
                 onPaste: () => this._clipboard.paste(),
               },
               onHelp: (trigger) => this._help.open(trigger),
-              graph: {
-                addStage: (trigger) => graph()?.addStage(trigger),
-                addGateway: (trigger) => graph()?.addGateway(trigger),
-                tidyLayout: () => graph()?.tidyLayout(),
-                zoomOut: () => graph()?.zoomOut(),
-                zoomIn: () => graph()?.zoomIn(),
-                fitToScreen: () => graph()?.fitToScreen(),
-                fitWidth: () => graph()?.fitToWidth(),
-                zoomPercent: Math.round(this._graphZoom * 100),
-              },
+              graph: graphToolbarActions(() => this._graphElement, this._graphZoom),
             }
           : null,
     };
@@ -595,6 +601,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           .selectedGatewayKey=${this._selection.gatewayKey}
           .selectedTransitionIndex=${this._selection.transitionIndex}
           .recentChanges=${this._recentChanges.highlight}
+          .noteCounts=${this._notes.openCounts}
           .hideOwnToolbar=${true}
           @stage-selected="${this._handleStageSelected}"
           @gateway-selected="${this._handleGatewaySelected}"
@@ -616,24 +623,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
     const collapsed = this._layout.inspectorCollapsed;
     return html`
       <section class=${`editor-right ${collapsed ? 'panel-collapsed' : ''}`}>
-        ${
-          collapsed
-            ? nothing
-            : html`
-              <div
-                class="panel-resize-handle"
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize properties panel"
-                aria-valuenow=${this._layout.inspectorWidth}
-                aria-valuemin="280"
-                aria-valuemax="720"
-                tabindex="0"
-                @pointerdown=${this._layout.startResize}
-                @keydown=${this._layout.resizeWithKeyboard}
-              ></div>
-            `
-        }
+        ${this._layout.renderResizeHandle()}
         ${renderPanelHeader({
           title: 'Properties',
           subtitle: 'Selected stage, gateway, or route details',
@@ -661,6 +651,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             @service-blueprint-updated=${this._handleServiceBlueprintUpdated}
             @action-selected=${this._handleActionSelected}
           ></wayfinder-step-inspector>
+          ${renderSelectionNotes(this._notes, this._serviceBlueprint, this._selection.current, () => (this._activeConfidenceTab = 'notes'))}
         </div>
       </section>
     `;
@@ -688,6 +679,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           active-tab="${this._activeConfidenceTab}"
           error-count="${this._validation.blocking.length}"
           warning-count="${this._validation.warnings.length}"
+          notes-count=${this._notes.available ? this._notes.openCount : -1}
           @tab-changed=${this._handleConfidenceTabChanged}
         >
           <div slot="canvas" class="canvas-workspace">
@@ -706,6 +698,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
             ></wayfinder-calculations-editor>
           </div>
           <div slot="validation">${this._validation.renderPanel({ saveStatus: this._save.statusSummary, onJump: (issue) => this._navigator.jump(issue) })}</div>
+          <div slot="notes">${renderNotesPanel(this._notes)}</div>
           <div slot="definition">${this._definition.renderPanel()}</div>
         </wayfinder-confidence-tabs>
         </div>

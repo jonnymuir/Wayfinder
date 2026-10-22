@@ -40,6 +40,20 @@ which bundles the simulate inputs.
 | `PUT` | `/blueprints/{definitionKey}` | `ServiceBlueprint` | `200` `ServiceBlueprintSaveOutcome` if saved; `400` (same shape) if invalid or `definitionKey` doesn't match the route; `409` if `version` is stale |
 | `POST` | `/blueprints/simulate` | `SimulateServiceBlueprintRequest` (`{ blueprint, steps, mockServiceInputs? }`) | `200` `ServiceBlueprintSimulationResult` (`{ trace, calculations }`), `trace` is the state trace; `calculations` is the raw calculated field/series values per step (parallel array, `null` for steps with no calculations block). `mockServiceInputs` supplies any `source: "service"` calculation field, without it, those fields (and anything calculated from them) are simply unresolved, not an error. |
 
+Design notes, for the editor. Each note written here is attributed to the signed-in user
+(`ClaimsPrincipal.Identity.Name`). Changes return `200` with the `DesignNote`, `400` with
+`{ status, error }` when the request is invalid (an anchor that isn't in the blueprint, empty
+text), or `404` when the blueprint or note doesn't exist.
+
+| Method | Route | Body | Response |
+|---|---|---|---|
+| `GET` | `/blueprints/{definitionKey}/notes` |  | `200` `DesignNote[]`, oldest first, or `404` |
+| `POST` | `/blueprints/{definitionKey}/notes` | `{ anchor: { kind, key?, fieldKey? }, text }` | The new note |
+| `POST` | `/blueprints/{definitionKey}/notes/{noteId}/replies` | `{ text }` | The note |
+| `POST` | `/blueprints/{definitionKey}/notes/{noteId}/resolve` | `{ summary, version? }` | The note |
+| `POST` | `/blueprints/{definitionKey}/notes/{noteId}/reopen` | `{ reason? }` | The note |
+| `DELETE` | `/blueprints/{definitionKey}/notes/{noteId}` |  | `204`, or `404` |
+
 `validate`/`save`/`simulate` never throw for an invalid blueprint; they report it in the
 response body.
 

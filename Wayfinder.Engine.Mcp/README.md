@@ -29,6 +29,10 @@ for the full picture.
 | `list_component_types` | List every registered `Component` "type" discriminator (built-in and any toolkit extension's own), display name, category, property schema, and containment shape. The live source of truth behind every "type" string used in a stage's `components` array. |
 | `validate_service_blueprint` | Check gateway routing, any `calculations` block, every component's own properties against its registered type, and (when the host declares queue render capabilities) that every component is supported by its state's queue, without saving. |
 | `save_service_blueprint` | Validate and save. Invalid definitions are rejected, not saved. Visible to the live app immediately. |
+| `list_design_notes` | The design notes on a blueprint (open by default), each with its anchor resolved to a label and the path it points at in the current version, or marked removed. |
+| `add_design_note` | Pin a question or a flag to a stage, gateway, route, field or the whole blueprint, attributed to the design partner. |
+| `resolve_design_note` | Mark a note resolved, with a sentence on what was done and the blueprint version it was done in. |
+| `reply_to_design_note` | Reply to a note without resolving it, to ask the designer before acting. |
 | `simulate_service_blueprint` | Dry-run a scripted sequence of actions with zero persistence. Returns `{ trace, calculations }`, the resulting state trace, plus the raw calculated field/series values per step (not just what's baked into rendered UI text). Accepts optional `mockServiceInputsJson` to resolve any `source: "service"` calculation field. |
 
 ## Resources

@@ -86,6 +86,10 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   @property({ attribute: false })
   recentChanges: GraphRecentChanges | null = null;
 
+  /** Open design notes per node id (`stage:<key>`, `gateway:<key>`), each shown as a marker with its count. */
+  @property({ attribute: false })
+  noteCounts: Record<string, number> = {};
+
   @state()
   private _zoom = 1;
 
@@ -169,6 +173,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
       selectedGatewayKey: this._selection.gatewayKey,
       selectedTransitionIndex: this._selection.transitionIndex,
       recentChanges: this.recentChanges,
+      noteCounts: this.noteCounts,
     };
   }
 

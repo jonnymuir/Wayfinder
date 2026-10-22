@@ -3,6 +3,7 @@
 // `/mockapp/service-blueprints/*` endpoints into the editor's `ServiceBlueprintSource` contract.
 // Real downstream apps fork/copy this file into their own bundle.
 
+import { HttpDesignNoteSource } from '../design-note-source.js';
 import {
   ServiceBlueprintSaveError,
   sanitiseServiceBlueprintSaveErrorLines,
@@ -165,9 +166,11 @@ export interface MockBusinessAppServiceBlueprintSourceOptions {
 
 export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSource {
   private readonly base: string;
+  readonly designNotes: HttpDesignNoteSource;
 
   constructor(options: MockBusinessAppServiceBlueprintSourceOptions = {}) {
     this.base = (options.baseUrl ?? '').replace(/\/$/, '');
+    this.designNotes = new HttpDesignNoteSource({ blueprintsUrl: `${this.base}/wayfinder/service-blueprint-authoring/blueprints` });
   }
 
   async list(): Promise<ServiceBlueprintSummary[]> {

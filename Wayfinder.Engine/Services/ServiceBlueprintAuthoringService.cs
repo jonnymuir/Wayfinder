@@ -12,7 +12,8 @@ namespace Wayfinder.Engine.Services;
 public sealed class ServiceBlueprintAuthoringService(
     IServiceBlueprintSourceStore store,
     IEnumerable<IServiceBlueprintStructuralValidator>? structuralValidators = null,
-    IQueueCapabilitiesProvider? queueCapabilities = null)
+    IQueueCapabilitiesProvider? queueCapabilities = null,
+    IDesignNoteStore? designNotes = null)
 {
     private readonly ServiceBlueprintValidator _validator = new(structuralValidators?.ToArray() ?? [], queueCapabilities);
 
@@ -22,8 +23,16 @@ public sealed class ServiceBlueprintAuthoringService(
     public Task<ServiceBlueprint?> ReadAsync(string definitionKey, CancellationToken ct = default) =>
         store.LoadAsync(definitionKey, ct);
 
-    public Task<bool> DeleteAsync(string definitionKey, CancellationToken ct = default) =>
-        store.DeleteAsync(definitionKey, ct);
+    /// <summary>Removes the blueprint and its design notes, so a new blueprint with the same key starts with none.</summary>
+    public async Task<bool> DeleteAsync(string definitionKey, CancellationToken ct = default)
+    {
+        var deleted = await store.DeleteAsync(definitionKey, ct);
+        if (deleted && designNotes is not null)
+        {
+            await designNotes.DeleteAllAsync(definitionKey, ct);
+        }
+        return deleted;
+    }
 
     /// <summary>
     /// Every queue this host has declared render capabilities for, per

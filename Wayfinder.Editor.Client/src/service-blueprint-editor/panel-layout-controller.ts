@@ -1,4 +1,4 @@
-import type { ReactiveController, ReactiveControllerHost } from 'lit';
+import { html, nothing, type ReactiveController, type ReactiveControllerHost, type TemplateResult } from 'lit';
 
 const MIN_INSPECTOR_WIDTH = 280;
 const MAX_INSPECTOR_WIDTH = 720;
@@ -25,6 +25,26 @@ export class PanelLayoutController implements ReactiveController {
 
   hostDisconnected(): void {
     this.stopDragListeners();
+  }
+
+  /** The drag handle on the Properties panel's edge, also resizable from the keyboard. */
+  renderResizeHandle(): TemplateResult | typeof nothing {
+    return this.inspectorCollapsed
+      ? nothing
+      : html`
+          <div
+            class="panel-resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize properties panel"
+            aria-valuenow=${this.inspectorWidth}
+            aria-valuemin=${MIN_INSPECTOR_WIDTH}
+            aria-valuemax=${MAX_INSPECTOR_WIDTH}
+            tabindex="0"
+            @pointerdown=${this.startResize}
+            @keydown=${this.resizeWithKeyboard}
+          ></div>
+        `;
   }
 
   /** The CSS custom properties the editor shell lays itself out with. */
