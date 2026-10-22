@@ -11,6 +11,10 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-22
+
+Also releases `Wayfinder.Editor` 0.10.0 (design notes, and following changes saved elsewhere).
+
 ### Added
 
 - Design notes: feedback pinned to a stage, gateway, route, field or the whole blueprint, kept
