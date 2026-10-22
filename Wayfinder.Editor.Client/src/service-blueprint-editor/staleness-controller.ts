@@ -92,22 +92,37 @@ export class StalenessController implements ReactiveController {
     const key = this.inputs.blueprintKey();
     try {
       const currentVersion = await source.checkVersion(key);
-      // The author may have switched blueprint, reloaded or saved while this was in flight.
-      if (key !== this.inputs.blueprintKey() || this.inputs.loadedVersion() !== loadedVersion || this.inputs.isSaving()) {
-        return;
-      }
-      if (currentVersion !== null && currentVersion !== loadedVersion && !this.stale) {
-        this.lastOutsideSaveAt = Date.now();
-        if (this.inputs.hasUnsavedChanges()) {
-          this.markStale(currentVersion);
-        } else {
-          await this.inputs.follow();
-        }
+      if (this.stillLookingAt(key, loadedVersion) && this.isOutsideSave(currentVersion, loadedVersion)) {
+        await this.respondToOutsideSave(currentVersion);
       }
     } catch {
       // Best-effort: a transient poll failure shouldn't disrupt editing.
     } finally {
       this.schedule();
+    }
+  }
+
+  /** The author may have switched blueprint, reloaded or saved while the check was in flight. */
+  private stillLookingAt(key: string, loadedVersion: number): boolean {
+    if (key !== this.inputs.blueprintKey() || this.inputs.loadedVersion() !== loadedVersion) {
+      return false;
+    }
+    return !this.inputs.isSaving();
+  }
+
+  private isOutsideSave(currentVersion: number | null, loadedVersion: number): currentVersion is number {
+    if (currentVersion === null || this.stale) {
+      return false;
+    }
+    return currentVersion !== loadedVersion;
+  }
+
+  private async respondToOutsideSave(currentVersion: number): Promise<void> {
+    this.lastOutsideSaveAt = Date.now();
+    if (this.inputs.hasUnsavedChanges()) {
+      this.markStale(currentVersion);
+    } else {
+      await this.inputs.follow();
     }
   }
 

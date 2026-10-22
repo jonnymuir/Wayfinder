@@ -41,8 +41,7 @@ export class RecentChangesController {
       return;
     }
     const latest = await source.load(key);
-    // The author may have switched blueprint while this was loading, or it may not be newer after all.
-    if (key !== this.inputs.blueprintKey() || this.inputs.current() !== before || latest.version <= before.version) {
+    if (!this.stillNewer(key, before, latest)) {
       return;
     }
     if (this.since?.definitionKey !== before.definitionKey) {
@@ -58,6 +57,14 @@ export class RecentChangesController {
     };
     this.announcement = `Updated to version ${latest.version}: ${summariseChanges(changes)}.`;
     this.host.requestUpdate();
+  }
+
+  /** The author may have switched blueprint while this was loading, or it may not be newer after all. */
+  private stillNewer(key: string, before: ServiceBlueprint, latest: ServiceBlueprint): boolean {
+    if (key !== this.inputs.blueprintKey() || this.inputs.current() !== before) {
+      return false;
+    }
+    return latest.version > before.version;
   }
 
   /** The author has seen the changes. The next outside save starts a new summary. */
