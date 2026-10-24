@@ -47,6 +47,16 @@ async function addNoteTo(page: Page, stageKey: string, text: string) {
 }
 
 test.describe('ServiceBlueprint editor design notes', () => {
+  test('the way to add a note stays on screen below a stage with a long inspector', async ({ page }) => {
+    await openEditor(page);
+
+    await page.locator('[data-wayfinder-stage="application-form"]').click();
+
+    const form = page.locator('[data-wayfinder-add-design-note]');
+    await expect(form.getByRole('textbox')).toBeInViewport();
+    await expect(form.getByRole('button', { name: 'Add note' })).toBeInViewport();
+  });
+
   test('a note added to a selected stage is marked on the canvas and listed in Notes', async ({ page }) => {
     await openEditor(page);
 
