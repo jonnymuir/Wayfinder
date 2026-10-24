@@ -146,28 +146,15 @@ function keyOrderInCalculationsIsKept(): void {
 function stageValidationsRoundTrip(): void {
   // ── Stage validations round-trip ──────────────────────────────────────────
   {
+    const authored = { code: 'evidence-required', when: 'hasIssue', rule: 'hasEvidence', field: 'notes', message: 'Add detail.' };
     const blueprint = minimalBlueprint({
-      stages: [
-        {
-          stageKey: 'only',
-          displayName: 'Only',
-          queueKey: 'citizen',
-          components: [],
-          validations: [{ code: 'evidence-required', when: 'hasIssue', rule: 'hasEvidence', field: 'notes', message: 'Add detail.' }],
-        },
-      ],
+      stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', components: [], validations: [authored] }],
     });
 
-    const yaml = serializeAuthoredServiceBlueprint(blueprint);
-    const parsed = fromYaml(yaml);
-    const rule = parsed.stages[0].validations?.[0];
+    const rule = fromYaml(serializeAuthoredServiceBlueprint(blueprint)).stages[0].validations?.[0];
     check(
       'a stage validation rule serializes with its when/rule/field/message intact',
-      rule?.code === 'evidence-required' &&
-        rule?.when === 'hasIssue' &&
-        rule?.rule === 'hasEvidence' &&
-        rule?.field === 'notes' &&
-        rule?.message === 'Add detail.',
+      JSON.stringify(rule) === JSON.stringify(authored),
       JSON.stringify(rule)
     );
   }
