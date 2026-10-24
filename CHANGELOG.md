@@ -11,6 +11,10 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-10-24
+
+Releases `Wayfinder.Editor` 0.10.1. The four lockstep packages have no changes.
+
 ### Fixed
 
 - `Wayfinder.Editor`: the way to add a note to the selected stage, gateway or route is pinned under
