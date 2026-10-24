@@ -18,7 +18,7 @@ export interface ContextMenuCommands {
   addStage(afterStageKey: string | null): void;
   fitToScreen(): void;
   openInspector(target: NodeTarget): void;
-  copyJson(target: NodeTarget): void | Promise<void>;
+  copyYaml(target: NodeTarget): void | Promise<void>;
   remove(target: NodeTarget): void;
 }
 
@@ -122,7 +122,7 @@ export class ContextMenuController implements ReactiveController {
     return html`
       ${addStage}
       ${this._item(`Open ${menu.kind} inspector`, (c) => c.openInspector(target))}
-      ${this._item(`Copy ${menu.kind} JSON`, (c) => c.copyJson(target))}
+      ${this._item(`Copy ${menu.kind} YAML`, (c) => c.copyYaml(target))}
       ${this._item(`Delete ${menu.kind}`, (c) => c.remove(target), true)}
     `;
   }

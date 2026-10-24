@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { DEMO_USERS, loginAs, resetApp } from './fixtures';
+import { readBlueprint, saveBlueprint } from './support/blueprint-api';
 
 // Proves the component-catalog extensibility work end to end: Wayfinder.ReferenceApp defines
 // and registers a genuinely new component type ("rating") that Wayfinder itself has never heard
@@ -15,9 +16,7 @@ test.describe('Toolkit extension: a genuinely new component type', () => {
     page,
     request,
   }) => {
-    const getResponse = await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence');
-    expect(getResponse.ok()).toBeTruthy();
-    const original = await getResponse.json();
+    const original = await readBlueprint(request, 'juggling-licence');
 
     const modified = structuredClone(original);
     const eventDetailsStage = modified.stages.find((s: { stageKey: string }) => s.stageKey === 'event-details');
@@ -40,9 +39,7 @@ test.describe('Toolkit extension: a genuinely new component type', () => {
     // The real authoring API — validate_service_blueprint's descriptor-driven property checks
     // and queue-capability check (Phase 2) run here, against a type only ever registered at
     // this host's own startup, not built into Wayfinder.
-    const putResponse = await request.put('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence', {
-      data: modified,
-    });
+    const putResponse = await saveBlueprint(request, 'juggling-licence', modified);
     expect(putResponse.ok()).toBeTruthy();
     const saveOutcome = await putResponse.json();
     expect(saveOutcome.status, JSON.stringify(saveOutcome)).toBe('Saved');
@@ -84,9 +81,7 @@ test.describe('Toolkit extension: a genuinely new component type', () => {
       // ProcessManagerEngine.ResetAll (called by resetApp's beforeEach) only clears instances,
       // not definitions updated via the authoring API — restore the original so later specs in
       // this shared, single-worker process see the unmodified seed.
-      const restoreResponse = await request.put('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence', {
-        data: restorePayload,
-      });
+      const restoreResponse = await saveBlueprint(request, 'juggling-licence', restorePayload);
       expect(restoreResponse.ok()).toBeTruthy();
     }
   });

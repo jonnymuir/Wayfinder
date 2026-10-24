@@ -16,6 +16,8 @@ public sealed class TypeScriptEmitter
     private readonly SortedDictionary<string, string> _declarations = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Type> _namedTypes = new(StringComparer.Ordinal);
     private readonly Queue<(Type Type, WireContract Contract)> _pending = new();
+    private readonly SortedDictionary<string, string> _keyOrders = new(StringComparer.Ordinal);
+    private readonly SortedDictionary<string, string> _discriminators = new(StringComparer.Ordinal);
 
     public TypeScriptEmitter Add(WireContract contract, params Type[] roots)
     {
@@ -40,6 +42,17 @@ public sealed class TypeScriptEmitter
         output.Append("//   dotnet run --project Wayfinder.TypeGen -- write <this file>\n");
         output.Append("// </auto-generated>\n\n");
         output.Append(string.Join("\n", _declarations.Values));
+        if (_keyOrders.Count > 0)
+        {
+            output.Append("\n/** The order each type's keys are written in, and the named type of each nested value or map entry. */\n");
+            output.Append("export const yamlShapes: Record<string, YamlShape> = {\n");
+            output.Append(string.Concat(_keyOrders.Values));
+            output.Append("};\n\n/** For each polymorphic type, the key that names the concrete type and the type each value names. */\n");
+            output.Append("export const yamlDiscriminators: Record<string, { property: string; types: Record<string, string> }> = {\n");
+            output.Append(string.Concat(_discriminators.Values));
+            output.Append("};\n\nexport interface YamlShape {\n  keys: readonly string[];\n  nested: Record<string, string>;\n  maps: Record<string, string>;\n}\n");
+        }
+
         return output.ToString();
     }
 
@@ -140,6 +153,12 @@ public sealed class TypeScriptEmitter
         }
 
         declarations.Append(CultureInfo.InvariantCulture, $"export type {baseType.Name} =\n  | {string.Join("\n  | ", members)};\n");
+        if (contract.OrdersKeys)
+        {
+            var types = string.Join(", ", polymorphism.DerivedTypes.Select(derived => $"{Key(derived.Discriminator)}: '{derived.Type.Name}'"));
+            _discriminators[baseType.Name] = $"  {baseType.Name}: {{ property: '{polymorphism.DiscriminatorProperty}', types: {{ {types} }} }},\n";
+        }
+
         return declarations.ToString();
     }
 
@@ -158,7 +177,51 @@ public sealed class TypeScriptEmitter
             body.Append(CultureInfo.InvariantCulture, $"  {Key(member.Name)}{(member.Optional ? "?" : "")}: {tsType};\n");
         }
 
+        if (contract.OrdersKeys)
+        {
+            RecordKeyOrder(name, members, contract, discriminator?.Property);
+        }
+
         return $"export interface {name} {{\n{body}}}\n";
+    }
+
+    private void RecordKeyOrder(string name, IReadOnlyList<WireMember> members, WireContract contract, string? discriminator)
+    {
+        var keys = (discriminator is null ? [] : new[] { discriminator }).Concat(members.Select(member => member.Name));
+        var nested = new List<string>();
+        var maps = new List<string>();
+        foreach (var member in members)
+        {
+            if (NamedElement(member.Type, contract, out var isMap) is { } element)
+            {
+                (isMap ? maps : nested).Add($"{Key(member.Name)}: '{element}'");
+            }
+        }
+
+        _keyOrders[name] = $"  {name}: {{ keys: [{string.Join(", ", keys.Select(key => $"'{key}'"))}], " +
+            $"nested: {Literal(nested)}, maps: {Literal(maps)} }},\n";
+    }
+
+    private static string Literal(List<string> entries) => entries.Count == 0 ? "{}" : $"{{ {string.Join(", ", entries)} }}";
+
+    /// <summary>The named type a value holds, looking through lists and (setting <paramref name="isMap"/>) maps; null for plain values.</summary>
+    private static string? NamedElement(Type type, WireContract contract, out bool isMap)
+    {
+        isMap = false;
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        while (Primitive(type) is null && !type.IsEnum)
+        {
+            var (kind, element) = contract.Classify(type);
+            if (kind == WireKind.Structure)
+            {
+                return type.Name;
+            }
+
+            isMap |= kind == WireKind.Map;
+            type = Nullable.GetUnderlyingType(element!) ?? element!;
+        }
+
+        return null;
     }
 
     private static string Key(string name) =>

@@ -17,7 +17,7 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { bracketMatching, defaultHighlightStyle, syntaxHighlighting, indentOnInput } from '@codemirror/language';
-import { json } from '@codemirror/lang-json';
+import { yaml } from '@codemirror/lang-yaml';
 import { setDiagnostics, type Diagnostic, lintGutter } from '@codemirror/lint';
 
 export const setDiagnosticsEffect = StateEffect.define<Diagnostic[]>();
@@ -71,7 +71,7 @@ export function createDefinitionView({ parent, doc, readOnly, onChange }: Create
       indentOnInput(),
       bracketMatching(),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-      json(),
+      yaml(),
       lintGutter(),
       diagnosticsField,
       search({ top: true }),
@@ -79,7 +79,7 @@ export function createDefinitionView({ parent, doc, readOnly, onChange }: Create
       history(),
       readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
       EditorView.contentAttributes.of({
-        'aria-label': 'Service blueprint definition JSON editor',
+        'aria-label': 'Service blueprint definition YAML editor',
         'data-wayfinder-definition-editor-input': 'true',
         spellcheck: 'false',
       }),

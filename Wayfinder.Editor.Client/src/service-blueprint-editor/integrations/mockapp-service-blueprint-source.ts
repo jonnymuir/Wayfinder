@@ -1,6 +1,7 @@
 // Host integration EXAMPLE — not part of the editor's own public bundle
 // surface. The reference MockBusinessApp uses this implementation to wire its
 // `/mockapp/service-blueprints/*` endpoints into the editor's `ServiceBlueprintSource` contract.
+// A blueprint travels as YAML both ways; lists and outcomes are JSON.
 // Real downstream apps fork/copy this file into their own bundle.
 
 import { HttpDesignNoteSource } from '../design-note-source.js';
@@ -14,8 +15,7 @@ import {
   type ServiceBlueprintValidationOutcome,
 } from '../service-blueprint-source.js';
 import type { ServiceBlueprint, ServiceBlueprintDiagnostic, ServiceBlueprintSaveOutcome } from '../types.js';
-import { hydrateServiceBlueprintDefinition } from '../blueprint-hydration.js';
-import { serializeAuthoredServiceBlueprint } from '../service-blueprint-canonical-json.js';
+import { parseServiceBlueprintYaml, serializeAuthoredServiceBlueprint } from '../service-blueprint-yaml.js';
 
 type ProblemDetailsPayload = {
   title?: unknown;
@@ -198,14 +198,13 @@ export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSo
 
   async load(blueprintKey: string): Promise<ServiceBlueprint> {
     const response = await fetch(`${this.base}/mockapp/service-blueprints/${encodeURIComponent(blueprintKey)}`, {
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/yaml' },
       credentials: 'same-origin',
     });
     if (!response.ok) {
       throw new Error(`Failed to load service blueprint '${blueprintKey}' (${response.status} ${response.statusText}).`);
     }
-    const payload = (await response.json()) as Record<string, unknown>;
-    return hydrateServiceBlueprintDefinition(payload as unknown as ServiceBlueprint);
+    return parseServiceBlueprintYaml(await response.text());
   }
 
   async save(blueprintKey: string, serviceBlueprint: ServiceBlueprint): Promise<void> {
@@ -213,7 +212,7 @@ export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSo
     const response = await fetch(`${this.base}/mockapp/service-blueprints/${encodeURIComponent(blueprintKey)}`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/yaml',
         Accept: 'application/json',
       },
       credentials: 'same-origin',
@@ -232,7 +231,7 @@ export class MockBusinessAppServiceBlueprintSource implements ServiceBlueprintSo
   async validate(_blueprintKey: string, serviceBlueprint: ServiceBlueprint): Promise<ServiceBlueprintValidationOutcome> {
     const response = await fetch(`${this.base}/mockapp/service-blueprints/validate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: { 'Content-Type': 'application/yaml', Accept: 'application/json' },
       credentials: 'same-origin',
       body: serializeAuthoredServiceBlueprint(serviceBlueprint),
     });

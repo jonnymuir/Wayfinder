@@ -13,7 +13,7 @@ For whoever writes blueprints, by hand, in the visual editor, or with an AI agen
   model, the Double Diamond, the GOV.UK Service Standard and Lou Downe's principles of good
   services, each mapped to a concrete authoring decision. Read this before drafting.
 - **[Reference service blueprint contract](./reference-service-blueprint-contract.md)**: the
-  full `ServiceBlueprint` JSON shape: queues, stages, gateways, routes, components and response
+  full `ServiceBlueprint` YAML shape: queues, stages, gateways, routes, components and response
   states.
 - **[The calculation language](./calculation-language.md)**: the grammar and functions for the
   `calculations` block and `showWhen`, with a worked example.

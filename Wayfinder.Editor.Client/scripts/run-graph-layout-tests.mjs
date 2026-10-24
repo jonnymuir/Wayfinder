@@ -6,10 +6,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createServer } from 'vite';
+import { parse } from 'yaml';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const seedDir = join(here, '..', 'src', 'service-blueprint-editor', 'fixtures');
-const seed = (name) => JSON.parse(readFileSync(join(seedDir, name), 'utf8'));
+const seed = (name) => parse(readFileSync(join(seedDir, name), 'utf8'));
 
 const server = await createServer({
   configFile: false,

@@ -12,6 +12,9 @@ public abstract class WireContract
     /// <summary>For an abstract base written as one of several discriminated types; null otherwise.</summary>
     public abstract WirePolymorphism? Polymorphism(Type type);
 
+    /// <summary>Whether the key order is part of the contract, so the editor writes keys in the same order.</summary>
+    public virtual bool OrdersKeys => false;
+
     /// <summary>The text an enum value is written as.</summary>
     public abstract string EnumValue(Type enumType, object value);
 }

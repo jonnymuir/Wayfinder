@@ -7,8 +7,8 @@ using YamlDotNet.Serialization;
 namespace Wayfinder.TypeGen;
 
 /// <summary>
-/// The shape <see cref="ServiceBlueprintYaml"/> writes a blueprint in: public properties, most
-/// derived first, named camelCase or by <see cref="YamlMemberAttribute.Alias"/>; enums by name or
+/// The shape <see cref="ServiceBlueprintYaml"/> writes a blueprint in: the properties and order of
+/// <see cref="ServiceBlueprintYaml.WrittenProperties"/>; enums by name or
 /// <see cref="EnumMemberAttribute.Value"/>; a component as one of the
 /// <see cref="ComponentTypeRegistry"/>'s types, discriminated by <c>type</c>. Nulls are omitted, so
 /// a nullable property is optional, as is one that omits its default or empty value.
@@ -27,26 +27,15 @@ public sealed class YamlWireContract : WireContract
         return GenericArguments(type, typeof(IEnumerable<>)) is [var element] ? (WireKind.List, element) : (WireKind.Structure, null);
     }
 
-    public override IReadOnlyList<WireMember> Members(Type type)
-    {
-        var members = new List<WireMember>();
-        for (var level = type; level is not null && level != typeof(object); level = level.BaseType)
-        {
-            foreach (var property in level.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
-            {
-                if (property.GetIndexParameters().Length == 0 && property.GetCustomAttribute<YamlIgnoreAttribute>() is null)
-                {
-                    var member = property.GetCustomAttribute<YamlMemberAttribute>();
-                    members.Add(new WireMember(
-                        member?.Alias ?? char.ToLowerInvariant(property.Name[0]) + property.Name[1..],
-                        property.PropertyType,
-                        Optional: IsNullable(property) || OmitsDefault(member)));
-                }
-            }
-        }
+    public override bool OrdersKeys => true;
 
-        return members;
-    }
+    public override IReadOnlyList<WireMember> Members(Type type) =>
+        ServiceBlueprintYaml.WrittenProperties(type)
+            .Select(written => new WireMember(
+                written.Name,
+                written.Property.PropertyType,
+                Optional: IsNullable(written.Property) || OmitsDefault(written.Property.GetCustomAttribute<YamlMemberAttribute>())))
+            .ToArray();
 
     public override WirePolymorphism? Polymorphism(Type type) =>
         type == typeof(Component)

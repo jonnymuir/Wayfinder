@@ -16,6 +16,7 @@
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "axe-core": "^4.13.0",
-    "wayfinder-demo-recording-kit": "github:jonnymuir/wayfinder-demo-recording-kit#v1.0.0"
+    "wayfinder-demo-recording-kit": "github:jonnymuir/wayfinder-demo-recording-kit#v1.0.0",
+    "yaml": "^2.9.1"
   }
 }

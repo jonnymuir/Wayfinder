@@ -1,6 +1,6 @@
 ---
 name: calculations-editor
-description: How to use the service blueprint editor's Calculations tab, authoring fields, tables, and series visually instead of hand-typing calculations JSON, with live preview, automatic field ordering, and full validation.
+description: How to use the service blueprint editor's Calculations tab, authoring fields, tables, and series visually instead of hand-typing calculations YAML, with live preview, automatic field ordering, and full validation.
 ---
 
 # The Calculations tab
@@ -11,9 +11,9 @@ The Calculations tab is the visual authoring surface for a service blueprint's
 `calculations` block (`fields`/`tables`/`series`, the declarative expression language
 documented in full at
 [`docs/guides/calculation-language.md`](../../guides/calculation-language.md)). It writes
-the exact same JSON shape an MCP-driven agent would produce by calling
+the exact same YAML shape an MCP-driven agent would produce by calling
 `validate_service_blueprint`/`simulate_service_blueprint` directly, there is no separate
-model. Before this tab existed, `calculations` could only be hand-edited as raw JSON in
+model. Before this tab existed, `calculations` could only be hand-edited as raw YAML in
 the Definition tab.
 
 ## Walkthrough
@@ -106,7 +106,7 @@ tab-specific control in this shell, not just Calculations), switch to Canvas to 
   expression incrementally, type the identifier that triggers the reorder **last**, or the
   DOM move can reset the editor's cursor and scramble whatever you type afterward.
 - Like every other authoring surface, this tab writes/reads the exact
-  `ServiceBlueprintCalculationsBlock` JSON shape, see
+  `ServiceBlueprintCalculationsBlock` YAML shape, see
   [`docs/guides/calculation-language.md`](../../guides/calculation-language.md) for the
   full grammar and [`docs/guides/reference-service-blueprint-contract.md`](../../guides/reference-service-blueprint-contract.md)
   for where it sits in the blueprint. To validate or simulate a blueprint's calculations

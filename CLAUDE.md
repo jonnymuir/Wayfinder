@@ -214,6 +214,12 @@ disabling protection.
 ### Code style
 
 - No speculative abstractions. Solve the problem at hand.
+- **A blueprint is YAML.** `ServiceBlueprintYaml` is the only blueprint (de)serializer, and every
+  surface that stores or carries a whole blueprint (seed files, stores, REST, MCP, the editor's
+  host routes, the Definition tab) uses YAML. The model has no `System.Text.Json` attributes; name
+  a property differently with `[YamlMember(Alias = ...)]`. The editor writes keys in the generated
+  `yamlShapes` order, so it reads like the server's YAML. JSON is for everything that is not a
+  blueprint: catalogs, outcomes, runtime data and the browser's live model.
 - **No back-compat shims (YAGNI).** There is one blueprint shape, the C# `ServiceBlueprint`'s.
   No aliases, fallback reads, compat getters, `legacy`/`metadata` containers or "also accept the
   old name" branches, in the model, the engine or the editor. Hosts reseed; if a shape changes,

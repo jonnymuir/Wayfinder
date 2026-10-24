@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { acceptCompletion, captureDocScreenshot, DEMO_USERS, loginAs, resetApp } from './fixtures';
+import { readBlueprint, saveBlueprint } from './support/blueprint-api';
 
 const DOCS_DIR = 'docs/skills/calculations-editor/screenshots';
 
@@ -102,7 +103,7 @@ test.describe('Validations section (Calculations tab)', () => {
   });
 
   test('a new validation rule can be authored and reaches the saved blueprint', async ({ page, request }) => {
-    const original = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+    const original = await readBlueprint(request, 'juggling-licence');
 
     try {
       const calcTab = await openCalculationsTabOnJugglingLicence(page);
@@ -140,7 +141,7 @@ test.describe('Validations section (Calculations tab)', () => {
       await page.locator('[data-wayfinder-save]').click();
       await expect(page.locator('[data-wayfinder-toast]')).toContainText(/saved/i, { timeout: 5_000 });
 
-      const saved = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+      const saved = await readBlueprint(request, 'juggling-licence');
       const eventDetailsSaved = saved.stages.find((s: { stageKey: string }) => s.stageKey === 'event-details');
       const savedRule = eventDetailsSaved.validations.find((r: { code: string }) => r.code === 'at-least-one-juggler');
 
@@ -153,10 +154,8 @@ test.describe('Validations section (Calculations tab)', () => {
       expect(riskAssessmentSaved.validations).toHaveLength(1);
       expect(riskAssessmentSaved.validations[0].code).toBe('risk-mitigation-evidence-required');
     } finally {
-      const current = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
-      await request.put('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence', {
-        data: { ...original, version: current.version },
-      });
+      const current = await readBlueprint(request, 'juggling-licence');
+      await saveBlueprint(request, 'juggling-licence', { ...original, version: current.version });
     }
   });
 });

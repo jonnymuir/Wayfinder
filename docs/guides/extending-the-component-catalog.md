@@ -114,7 +114,7 @@ built-in type.
 
 | Field | Meaning |
 |---|---|
-| `Discriminator` | The `"type"` JSON value, e.g. `"rating"`. Must be unique across the whole process, a duplicate throws at registration time. |
+| `Discriminator` | The `type` value written in the blueprint, e.g. `rating`. Must be unique across the whole process, a duplicate throws at registration time. |
 | `DisplayName` | Human-readable name, e.g. "Confidence rating", for editor UI and docs. |
 | `Category` | `Input` \| `Content` \| `Container` \| `DataDisplay` \| `FlowControl`, see [the contract doc](./reference-service-blueprint-contract.md#components) for what each means. |
 | `Description` | Longer help text, editor tooltip / AI-agent-readable prose. |
@@ -186,14 +186,10 @@ Call every `Register<T>()` at host startup, before anything else touches a
 `WebApplication.CreateBuilder` even runs, precisely to avoid any ordering risk from
 DI singletons resolving in an order you don't fully control.
 
-If you're using the REST authoring API (`Wayfinder.Engine.Api`), also call
-`services.AddServiceBlueprintAuthoringApi()` alongside `AddServiceBlueprintAuthoring()`
-at startup, ASP.NET Core's own minimal-API `[FromBody]` binding uses a *separate*
-`JsonSerializerOptions` to `ServiceBlueprintJson`'s by default, and won't otherwise pick
-up your registered type at all (a built-in type still works either way, since those are
-also seeded onto `Component` via `[JsonDerivedType]` as a fallback, only a
-custom-registered type is affected). The MCP tools don't need this; they already
-deserialize with `ServiceBlueprintJson.ReadOptions` directly.
+Nothing else needs wiring. Every surface that reads or writes a blueprint (the stores, the REST
+authoring API, the MCP tools, the editor's host routes) goes through `ServiceBlueprintYaml`, which
+looks a component's `type` up in the registry, so a registered type reads and writes exactly like a
+built-in one everywhere.
 
 ## Validation comes for free
 
@@ -254,6 +250,6 @@ treat this as a real, current boundary, not an oversight to design around.
 ## Related documentation
 
 - [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md), the
-  full `ServiceBlueprint` JSON shape, including the built-in component catalog table.
+  full `ServiceBlueprint` YAML shape, including the built-in component catalog table.
 - [AI-Ready Blueprint Authoring, Integrator Guide](./ai-service-blueprint-authoring.md),
   wiring the MCP/REST authoring surface into a host's own pipeline.

@@ -45,7 +45,7 @@ public interface IServiceBlueprintSourceStore
 }
 ```
 
-`Wayfinder.Engine.Stores` already ships `FilesystemServiceBlueprintSourceStore` (one JSON
+`Wayfinder.Engine.Stores` already ships `FilesystemServiceBlueprintSourceStore` (one YAML
 file per service blueprint). `Wayfinder.ReferenceApp`'s own
 [`InMemoryRuntimeServiceBlueprintSourceStore`](../../Wayfinder.ReferenceApp/Services/InMemoryRuntimeServiceBlueprintSourceStore.cs)
 is the pattern to copy if you want a save to update your live runtime engine immediately (it
@@ -80,7 +80,7 @@ in-process lock (correct for a single-process app only); a real database-backed 
 should use the `WHERE` clause itself as the atomic compare:
 
 ```sql
-UPDATE ServiceBlueprints SET Definition = @json, Version = Version + 1
+UPDATE ServiceBlueprints SET Definition = @yaml, Version = Version + 1
 WHERE DefinitionKey = @key AND Version = @expectedVersion
 ```
 

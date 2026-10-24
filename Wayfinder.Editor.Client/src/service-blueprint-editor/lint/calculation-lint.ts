@@ -2,7 +2,7 @@ import type { Component, ComponentDescriptor } from '../types.js';
 import { collectStageInputFields } from '../component-property-references.js';
 import { inScopeInputFieldKeys } from '../calculation-runtime.js';
 import { type CalculationDiagnostic, computeCalculationDiagnostics } from '../calculation-diagnostics.js';
-import { type DefinitionLint, type JsonObject, isJsonObject, lineOfString } from './lint-support.js';
+import { type DefinitionLint, type Mapping, isMapping, lineOfString } from './lint-support.js';
 
 type SeriesPart = 'from' | 'to' | 'values';
 type SeriesPathPart = SeriesPart | 'over';
@@ -12,20 +12,20 @@ type NormalisedSeries = Record<string, { over?: string; from?: string; to?: stri
 const asString = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
 
 /** The object's entries as objects, ignoring anything that is not one. */
-function objectMap(value: unknown): Record<string, JsonObject> {
-  return isJsonObject(value) ? (value as Record<string, JsonObject>) : {};
+function objectMap(value: unknown): Record<string, Mapping> {
+  return isMapping(value) ? (value as Record<string, Mapping>) : {};
 }
 
-function normaliseFields(fields: Record<string, JsonObject>): NormalisedFields {
+function normaliseFields(fields: Record<string, Mapping>): NormalisedFields {
   return Object.fromEntries(
     Object.entries(fields).map(([name, field]) => [name, { expr: asString(field.expr), source: asString(field.source) }])
   );
 }
 
-function normaliseSeries(series: Record<string, JsonObject>): NormalisedSeries {
+function normaliseSeries(series: Record<string, Mapping>): NormalisedSeries {
   return Object.fromEntries(
     Object.entries(series).map(([name, definition]) => {
-      const values = Object.entries(isJsonObject(definition.values) ? definition.values : {}).filter(
+      const values = Object.entries(isMapping(definition.values) ? definition.values : {}).filter(
         (entry): entry is [string, string] => typeof entry[1] === 'string'
       );
       return [
@@ -41,23 +41,21 @@ function normaliseSeries(series: Record<string, JsonObject>): NormalisedSeries {
   );
 }
 
-function stageInputFields(root: JsonObject, catalog: ComponentDescriptor[]) {
+function stageInputFields(root: Mapping, catalog: ComponentDescriptor[]) {
   const stages = Array.isArray(root.stages) ? root.stages : [];
-  return stages.flatMap((stage) =>
-    isJsonObject(stage) ? collectStageInputFields(stage.components as Component[] | undefined, catalog) : []
-  );
+  return stages.flatMap((stage) => (isMapping(stage) ? collectStageInputFields(stage.components as Component[] | undefined, catalog) : []));
 }
 
 /**
  * Mirrors the checks the Calculations tab and the Validation tab enforce, for anyone hand-editing
- * `calculations` as raw JSON in the Definition tab instead. Its only job is coercing raw,
- * possibly-malformed JSON into calculation-diagnostics.ts's structured input shape and turning its
+ * `calculations` as raw YAML in the Definition tab instead. Its only job is coercing raw,
+ * possibly-malformed YAML into calculation-diagnostics.ts's structured input shape and turning its
  * result back into DefinitionLint messages with a source line — the actual checks live in
  * computeCalculationDiagnostics, shared with the Calculations tab and the Validation tab so none of
  * the three re-derives its own subset of the same rules.
  */
-export function lintCalculations(root: JsonObject, source: string, catalog: ComponentDescriptor[], issues: DefinitionLint[]): void {
-  if (!isJsonObject(root.calculations)) {
+export function lintCalculations(root: Mapping, source: string, catalog: ComponentDescriptor[], issues: DefinitionLint[]): void {
+  if (!isMapping(root.calculations)) {
     return;
   }
   const calculations = root.calculations;

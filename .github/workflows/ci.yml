@@ -127,7 +127,7 @@ jobs:
       - name: Canonical JSON round-trip, property references and calculation tests
         working-directory: Wayfinder.Editor.Client
         run: >-
-          npm run test:canonical-json &&
+          npm run test:service-blueprint-yaml &&
           npm run test:property-references &&
           npm run test:calculation-runtime &&
           npm run test:calculation-ordering &&

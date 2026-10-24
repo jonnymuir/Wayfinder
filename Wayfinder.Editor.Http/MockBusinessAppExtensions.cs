@@ -50,6 +50,13 @@ public static class MockBusinessAppExtensions
         group.MapGet("", async (ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
             Results.Json(await authoring.ListAsync(ct)));
 
+        MapBlueprintDocuments(group);
+        return group;
+    }
+
+    /// <summary>The routes that carry a whole blueprint, as YAML.</summary>
+    private static void MapBlueprintDocuments(RouteGroupBuilder group)
+    {
         group.MapGet("/{key}", async (string key, ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
         {
             var blueprint = await authoring.ReadAsync(key, ct);
@@ -81,8 +88,6 @@ public static class MockBusinessAppExtensions
                 _ => Results.BadRequest(outcome)
             };
         });
-
-        return group;
     }
 
     private const string YamlContentType = "application/yaml";

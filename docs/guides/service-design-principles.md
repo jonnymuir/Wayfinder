@@ -4,7 +4,7 @@ Wayfinder's business is good service design: the general discipline, not any one
 industry's rulebook. This document grounds whoever is authoring a service blueprint (human or
 AI agent) in the service blueprint model itself and three widely-recognised, public design
 frameworks before they draft a single `ServiceBlueprint`, so the result is judged against
-"is this a good service?" and not just "is this valid JSON?"
+"is this a good service?" and not just "is this valid YAML?"
 
 It is deliberately industry-agnostic. It does not cover sector regulation or
 domain best practice: FCA Consumer Duty, PASA pensions administration standards,
@@ -63,7 +63,7 @@ phase. It's a loop, not a line. Nothing is ever permanently "finished"; contexts
 change and services need to change with them.
 
 **In Wayfinder terms:** Discover and Define happen before you touch the editor or
-`save_service_blueprint` at all. They're conversations and research, not JSON. Develop is
+`save_service_blueprint` at all. They're conversations and research, not YAML. Develop is
 where you sketch competing shapes for the queues/stages/gateways, ideally more than
 one. Deliver is `validate_service_blueprint` and `simulate_service_blueprint`'s job: dry-run a
 candidate through the real engine before anything reaches a live user.
@@ -109,7 +109,7 @@ gets authored:
     is what Wayfinder's component catalog *is*. Reach for an existing generic
     component (`stat-group`, `summary-list`, `chart`, `showWhen`) before inventing
     a bespoke one. See the
-    [money-modeller worked example](./calculation-language.md#worked-example-money-modellerjson).
+    [money-modeller worked example](./calculation-language.md#worked-example-money-modelleryaml).
 14. **Operate a reliable service**: `validate_service_blueprint` and `simulate_service_blueprint`
     exist to catch a broken journey before it ever reaches a real user.
 

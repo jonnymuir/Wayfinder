@@ -28,16 +28,17 @@ export interface ChartBand {
 
 export interface AccordionComponent {
   type: 'accordion';
-  sections: AccordionSection[];
   showWhen?: string;
+  sections: AccordionSection[];
 }
 export interface BodyComponent {
   type: 'body';
-  content: string;
   showWhen?: string;
+  content: string;
 }
 export interface BooleanComponent {
   type: 'boolean';
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -47,32 +48,30 @@ export interface BooleanComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
 }
 export interface BulkDataReviewComponent {
   type: 'bulk-data-review';
+  showWhen?: string;
   title?: string;
   datasetIdField: string;
   pageSize: number;
   syncedLabel?: string;
   pendingLabel?: string;
   sinceLabel?: string;
-  showWhen?: string;
 }
 export interface ChartComponent {
   type: 'chart';
+  showWhen?: string;
   title?: string;
   kind: string;
   series: string;
   x: string;
-  bands: ChartBand[];
   xLabelEvery: number;
-  showWhen?: string;
+  bands: ChartBand[];
 }
 export interface CheckboxesComponent {
   type: 'checkboxlist';
-  options: string[];
-  conditionalChildren?: Record<string, Component[]>;
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -82,11 +81,12 @@ export interface CheckboxesComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  options: string[];
+  conditionalChildren?: Record<string, Component[]>;
 }
 export interface ConversationComponent {
   type: 'conversation';
-  maxLength?: number;
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -96,11 +96,11 @@ export interface ConversationComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  maxLength?: number;
 }
 export interface DateInputComponent {
   type: 'date';
-  defaultToToday?: boolean;
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -110,13 +110,11 @@ export interface DateInputComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  defaultToToday?: boolean;
 }
 export interface DecimalInputComponent {
   type: 'decimal';
-  min?: number;
-  max?: number;
-  prefix?: string;
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -126,17 +124,19 @@ export interface DecimalInputComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  min?: number;
+  max?: number;
+  prefix?: string;
 }
 export interface DetailsComponent {
   type: 'details';
+  showWhen?: string;
   heading: string;
   content: string;
-  showWhen?: string;
 }
 export interface EmailComponent {
   type: 'email';
-  pattern?: string;
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -146,20 +146,18 @@ export interface EmailComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  pattern?: string;
 }
 export interface FieldsetComponent {
   type: 'fieldset';
-  children: Component[];
+  showWhen?: string;
   legend?: string;
   legendSize?: string;
-  showWhen?: string;
+  children: Component[];
 }
 export interface FileUploadComponent {
   type: 'file-upload';
-  acceptedFileTypes?: string[];
-  maxSizeBytes?: number;
-  captureMode?: string;
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -169,11 +167,13 @@ export interface FileUploadComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  maxSizeBytes?: number;
+  captureMode?: string;
+  acceptedFileTypes?: string[];
 }
 export interface GuidanceChecklistComponent {
   type: 'guidance-checklist';
-  items: GuidanceChecklistItem[];
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -183,21 +183,22 @@ export interface GuidanceChecklistComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  items: GuidanceChecklistItem[];
 }
 export interface HeadingComponent {
   type: 'heading';
+  showWhen?: string;
   level: number;
   content: string;
-  showWhen?: string;
 }
 export interface InsetTextComponent {
   type: 'inset-text';
-  content: string;
   showWhen?: string;
+  content: string;
 }
 export interface LocationPickerComponent {
   type: 'location-picker';
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -207,40 +208,38 @@ export interface LocationPickerComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
 }
 export interface NotificationBannerComponent {
   type: 'notification-banner';
+  showWhen?: string;
   bannerType: string;
   heading: string;
   content: string;
-  showWhen?: string;
 }
 export interface NumberInputComponent {
   type: 'number';
+  showWhen?: string;
+  fieldKey: string;
+  label: string;
+  hint?: string;
+  required?: boolean;
+  conditionalOn?: string;
+  visibleWhen?: string;
+  default?: string;
+  defaultFrom?: string;
+  changeStateKey?: string;
   min?: number;
   max?: number;
   prefix?: string;
-  fieldKey: string;
-  label: string;
-  hint?: string;
-  required?: boolean;
-  conditionalOn?: string;
-  visibleWhen?: string;
-  default?: string;
-  defaultFrom?: string;
-  changeStateKey?: string;
-  showWhen?: string;
 }
 export interface PanelComponent {
   type: 'panel';
-  heading: string;
   showWhen?: string;
+  heading: string;
 }
 export interface RadiosComponent {
   type: 'radio';
-  options: string[];
-  conditionalChildren?: Record<string, Component[]>;
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -250,11 +249,12 @@ export interface RadiosComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  options: string[];
+  conditionalChildren?: Record<string, Component[]>;
 }
 export interface SelectComponent {
   type: 'select';
-  options: string[];
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -264,15 +264,47 @@ export interface SelectComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  options: string[];
 }
 export interface SliderComponent {
   type: 'slider';
+  showWhen?: string;
+  fieldKey: string;
+  label: string;
+  hint?: string;
+  required?: boolean;
+  conditionalOn?: string;
+  visibleWhen?: string;
+  default?: string;
+  defaultFrom?: string;
+  changeStateKey?: string;
   min?: number;
   max?: number;
   step?: number;
   prefix?: string;
   suffix?: string;
+}
+export interface StatGroupComponent {
+  type: 'stat-group';
+  showWhen?: string;
+  title?: string;
+  items: StatItemDefinition[];
+}
+export interface SummaryListComponent {
+  type: 'summary-list';
+  showWhen?: string;
+  changeStateKey?: string;
+  title?: string;
+  children: Component[];
+}
+export interface TaskListComponent {
+  type: 'task-list';
+  showWhen?: string;
+  sections?: TaskSection[];
+}
+export interface TextInputComponent {
+  type: 'text';
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -282,48 +314,15 @@ export interface SliderComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
-}
-export interface StatGroupComponent {
-  type: 'stat-group';
-  title?: string;
-  items: StatItemDefinition[];
-  showWhen?: string;
-}
-export interface SummaryListComponent {
-  type: 'summary-list';
-  children: Component[];
-  changeStateKey?: string;
-  title?: string;
-  showWhen?: string;
-}
-export interface TaskListComponent {
-  type: 'task-list';
-  sections?: TaskSection[];
-  showWhen?: string;
-}
-export interface TextInputComponent {
-  type: 'text';
   minLength?: number;
   maxLength?: number;
   pattern?: string;
   prefix?: string;
   defaultToCurrentTime?: boolean;
-  fieldKey: string;
-  label: string;
-  hint?: string;
-  required?: boolean;
-  conditionalOn?: string;
-  visibleWhen?: string;
-  default?: string;
-  defaultFrom?: string;
-  changeStateKey?: string;
-  showWhen?: string;
 }
 export interface TextareaComponent {
   type: 'textarea';
-  minLength?: number;
-  maxLength?: number;
+  showWhen?: string;
   fieldKey: string;
   label: string;
   hint?: string;
@@ -333,21 +332,22 @@ export interface TextareaComponent {
   default?: string;
   defaultFrom?: string;
   changeStateKey?: string;
-  showWhen?: string;
+  minLength?: number;
+  maxLength?: number;
 }
 export interface WaitingComponent {
   type: 'waiting';
+  showWhen?: string;
   content: string;
   expectedWaitSeconds: number;
   pollIntervalMs: number;
   allowDefer: boolean;
   deferMessage?: string;
-  showWhen?: string;
 }
 export interface WarningTextComponent {
   type: 'warning-text';
-  content: string;
   showWhen?: string;
+  content: string;
 }
 export type Component =
   | AccordionComponent
@@ -500,9 +500,9 @@ export interface QueueDefinition {
   displayName: string;
   description?: string;
   actor?: string;
-  roleGates?: string[];
   assignmentPolicy?: string;
   owningTeamId?: string;
+  roleGates?: string[];
   tags?: Record<string, string>;
 }
 
@@ -516,8 +516,8 @@ export interface ServiceBlueprint {
   initialStage: string;
   requestPolicy: string;
   allowManualRestart?: boolean;
-  stages: StageDefinition[];
   queues?: QueueDefinition[];
+  stages: StageDefinition[];
   gateways?: ServiceBlueprintGatewayDefinition[];
   calculations?: ServiceBlueprintCalculationSet;
   handoffs?: HandoffDefinition[];
@@ -575,15 +575,15 @@ export interface ServiceBlueprintGatewayDefinition {
   gatewayType: GatewayKind;
   queueKey: string;
   actor?: string;
-  roleGates?: string[];
-  routes?: ServiceBlueprintRouteDefinition[];
   waitingContent?: string;
   waitingExpectedSeconds?: number;
   waitingPollIntervalMs?: number;
   waitingAllowDefer?: boolean;
   waitingDeferMessage?: string;
-  requiredIncomingQueues?: string[];
   icon?: string;
+  roleGates?: string[];
+  routes?: ServiceBlueprintRouteDefinition[];
+  requiredIncomingQueues?: string[];
 }
 
 export interface ServiceBlueprintLayoutDefinition {
@@ -615,10 +615,10 @@ export type ServiceBlueprintSaveStatus = (typeof serviceBlueprintSaveStatusValue
 
 export interface ServiceBlueprintStageValidationRule {
   code: string;
-  rule: string;
-  message: string;
   when?: string;
+  rule: string;
   field?: string;
+  message: string;
   actions?: string[];
 }
 
@@ -634,12 +634,12 @@ export interface StageDefinition {
   stageType?: StageKind;
   actor?: string;
   queueKey: string;
+  icon?: string;
   roleGates?: string[];
   actions?: ActionDefinition[];
   components: Component[];
   routes?: ServiceBlueprintRouteDefinition[];
   validations?: ServiceBlueprintStageValidationRule[];
-  icon?: string;
 }
 
 export const stageKindValues = ['Question', 'CheckAnswers', 'Confirmation', 'TaskList'] as const;
@@ -688,4 +688,70 @@ export interface TaskItem {
 export interface TaskSection {
   heading: string;
   tasks: TaskItem[];
+}
+
+/** The order each type's keys are written in, and the named type of each nested value or map entry. */
+export const yamlShapes: Record<string, YamlShape> = {
+  AccordionComponent: { keys: ['type', 'showWhen', 'sections'], nested: { sections: 'AccordionSection' }, maps: {} },
+  AccordionSection: { keys: ['heading', 'summary', 'children'], nested: { children: 'Component' }, maps: {} },
+  ActionDefinition: { keys: ['type', 'timing', 'parameterSchemaKey', 'summary', 'params'], nested: {}, maps: {} },
+  BodyComponent: { keys: ['type', 'showWhen', 'content'], nested: {}, maps: {} },
+  BooleanComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey'], nested: {}, maps: {} },
+  BulkDataReviewComponent: { keys: ['type', 'showWhen', 'title', 'datasetIdField', 'pageSize', 'syncedLabel', 'pendingLabel', 'sinceLabel'], nested: {}, maps: {} },
+  ChartBand: { keys: ['key', 'label', 'color'], nested: {}, maps: {} },
+  ChartComponent: { keys: ['type', 'showWhen', 'title', 'kind', 'series', 'x', 'xLabelEvery', 'bands'], nested: { bands: 'ChartBand' }, maps: {} },
+  CheckboxesComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'options', 'conditionalChildren'], nested: {}, maps: { conditionalChildren: 'Component' } },
+  ConversationComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'maxLength'], nested: {}, maps: {} },
+  DateInputComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'defaultToToday'], nested: {}, maps: {} },
+  DecimalInputComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'min', 'max', 'prefix'], nested: {}, maps: {} },
+  DetailsComponent: { keys: ['type', 'showWhen', 'heading', 'content'], nested: {}, maps: {} },
+  EmailComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'pattern'], nested: {}, maps: {} },
+  FieldsetComponent: { keys: ['type', 'showWhen', 'legend', 'legendSize', 'children'], nested: { children: 'Component' }, maps: {} },
+  FileUploadComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'maxSizeBytes', 'captureMode', 'acceptedFileTypes'], nested: {}, maps: {} },
+  GuidanceChecklistComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'items'], nested: { items: 'GuidanceChecklistItem' }, maps: {} },
+  GuidanceChecklistItem: { keys: ['key', 'label', 'href'], nested: {}, maps: {} },
+  HandoffDefinition: { keys: ['id', 'fromState', 'toState', 'label', 'actorChange'], nested: {}, maps: {} },
+  HeadingComponent: { keys: ['type', 'showWhen', 'level', 'content'], nested: {}, maps: {} },
+  InsetTextComponent: { keys: ['type', 'showWhen', 'content'], nested: {}, maps: {} },
+  LocationPickerComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey'], nested: {}, maps: {} },
+  NodePosition: { keys: ['x', 'y'], nested: {}, maps: {} },
+  NotificationBannerComponent: { keys: ['type', 'showWhen', 'bannerType', 'heading', 'content'], nested: {}, maps: {} },
+  NumberInputComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'min', 'max', 'prefix'], nested: {}, maps: {} },
+  PanelComponent: { keys: ['type', 'showWhen', 'heading'], nested: {}, maps: {} },
+  QueueDefinition: { keys: ['key', 'displayName', 'description', 'actor', 'assignmentPolicy', 'owningTeamId', 'roleGates', 'tags'], nested: {}, maps: {} },
+  RadiosComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'options', 'conditionalChildren'], nested: {}, maps: { conditionalChildren: 'Component' } },
+  SelectComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'options'], nested: {}, maps: {} },
+  ServiceBlueprint: { keys: ['definitionKey', 'displayName', 'version', 'description', 'schemaVersion', 'authoredServiceBlueprintId', 'initialStage', 'requestPolicy', 'allowManualRestart', 'queues', 'stages', 'gateways', 'calculations', 'handoffs', 'tags', 'layout'], nested: { queues: 'QueueDefinition', stages: 'StageDefinition', gateways: 'ServiceBlueprintGatewayDefinition', calculations: 'ServiceBlueprintCalculationSet', handoffs: 'HandoffDefinition', layout: 'ServiceBlueprintLayoutDefinition' }, maps: {} },
+  ServiceBlueprintCalculationField: { keys: ['expr', 'source', 'format', 'valueKind', 'default', 'shape'], nested: {}, maps: { shape: 'ServiceBlueprintCalculationFieldShape' } },
+  ServiceBlueprintCalculationFieldShape: { keys: ['valueKind', 'default', 'shape'], nested: {}, maps: { shape: 'ServiceBlueprintCalculationFieldShape' } },
+  ServiceBlueprintCalculationSeries: { keys: ['over', 'from', 'to', 'values'], nested: {}, maps: {} },
+  ServiceBlueprintCalculationSet: { keys: ['tables', 'fields', 'series'], nested: {}, maps: { tables: 'ServiceBlueprintCalculationTable', fields: 'ServiceBlueprintCalculationField', series: 'ServiceBlueprintCalculationSeries' } },
+  ServiceBlueprintCalculationTable: { keys: ['interpolate', 'values'], nested: {}, maps: {} },
+  ServiceBlueprintGatewayDefinition: { keys: ['key', 'displayName', 'description', 'gatewayType', 'queueKey', 'actor', 'waitingContent', 'waitingExpectedSeconds', 'waitingPollIntervalMs', 'waitingAllowDefer', 'waitingDeferMessage', 'icon', 'roleGates', 'routes', 'requiredIncomingQueues'], nested: { routes: 'ServiceBlueprintRouteDefinition' }, maps: {} },
+  ServiceBlueprintLayoutDefinition: { keys: ['nodes', 'routes'], nested: {}, maps: { nodes: 'NodePosition', routes: 'NodePosition' } },
+  ServiceBlueprintRouteDefinition: { keys: ['id', 'target', 'trigger', 'label', 'style', 'requiresRole', 'showWhen', 'actions'], nested: { actions: 'ActionDefinition' }, maps: {} },
+  ServiceBlueprintStageValidationRule: { keys: ['code', 'when', 'rule', 'field', 'message', 'actions'], nested: {}, maps: {} },
+  SliderComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'min', 'max', 'step', 'prefix', 'suffix'], nested: {}, maps: {} },
+  StageDefinition: { keys: ['stageKey', 'displayName', 'description', 'stageType', 'actor', 'queueKey', 'icon', 'roleGates', 'actions', 'components', 'routes', 'validations'], nested: { actions: 'ActionDefinition', components: 'Component', routes: 'ServiceBlueprintRouteDefinition', validations: 'ServiceBlueprintStageValidationRule' }, maps: {} },
+  StatGroupComponent: { keys: ['type', 'showWhen', 'title', 'items'], nested: { items: 'StatItemDefinition' }, maps: {} },
+  StatItemDefinition: { keys: ['label', 'fieldKey', 'qualifier', 'emphasis', 'display', 'width'], nested: {}, maps: {} },
+  SummaryListComponent: { keys: ['type', 'showWhen', 'changeStateKey', 'title', 'children'], nested: { children: 'Component' }, maps: {} },
+  TaskItem: { keys: ['label', 'stageKey', 'href'], nested: {}, maps: {} },
+  TaskListComponent: { keys: ['type', 'showWhen', 'sections'], nested: { sections: 'TaskSection' }, maps: {} },
+  TaskSection: { keys: ['heading', 'tasks'], nested: { tasks: 'TaskItem' }, maps: {} },
+  TextInputComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'minLength', 'maxLength', 'pattern', 'prefix', 'defaultToCurrentTime'], nested: {}, maps: {} },
+  TextareaComponent: { keys: ['type', 'showWhen', 'fieldKey', 'label', 'hint', 'required', 'conditionalOn', 'visibleWhen', 'default', 'defaultFrom', 'changeStateKey', 'minLength', 'maxLength'], nested: {}, maps: {} },
+  WaitingComponent: { keys: ['type', 'showWhen', 'content', 'expectedWaitSeconds', 'pollIntervalMs', 'allowDefer', 'deferMessage'], nested: {}, maps: {} },
+  WarningTextComponent: { keys: ['type', 'showWhen', 'content'], nested: {}, maps: {} },
+};
+
+/** For each polymorphic type, the key that names the concrete type and the type each value names. */
+export const yamlDiscriminators: Record<string, { property: string; types: Record<string, string> }> = {
+  Component: { property: 'type', types: { accordion: 'AccordionComponent', body: 'BodyComponent', boolean: 'BooleanComponent', 'bulk-data-review': 'BulkDataReviewComponent', chart: 'ChartComponent', checkboxlist: 'CheckboxesComponent', conversation: 'ConversationComponent', date: 'DateInputComponent', decimal: 'DecimalInputComponent', details: 'DetailsComponent', email: 'EmailComponent', fieldset: 'FieldsetComponent', 'file-upload': 'FileUploadComponent', 'guidance-checklist': 'GuidanceChecklistComponent', heading: 'HeadingComponent', 'inset-text': 'InsetTextComponent', 'location-picker': 'LocationPickerComponent', 'notification-banner': 'NotificationBannerComponent', number: 'NumberInputComponent', panel: 'PanelComponent', radio: 'RadiosComponent', select: 'SelectComponent', slider: 'SliderComponent', 'stat-group': 'StatGroupComponent', 'summary-list': 'SummaryListComponent', 'task-list': 'TaskListComponent', text: 'TextInputComponent', textarea: 'TextareaComponent', waiting: 'WaitingComponent', 'warning-text': 'WarningTextComponent' } },
+};
+
+export interface YamlShape {
+  keys: readonly string[];
+  nested: Record<string, string>;
+  maps: Record<string, string>;
 }

@@ -4,7 +4,7 @@ How Wayfinder models real work-allocation scenarios beyond a static "can this ac
 queue" check: which team is eligible to work a queue, who currently owns one specific item within
 it, an atomic "pick up next available" primitive for automated/scaled-out workers, and a full audit
 trail of who did what. For whoever is *building* a Wayfinder host, a blueprint author only needs
-to know about `RoleGates` (declaring eligibility); nothing else here is authored in blueprint JSON.
+to know about `RoleGates` (declaring eligibility); nothing else here is authored in blueprint YAML.
 
 This document is also exposed as an MCP resource (`service-blueprint-docs://work-allocation`) so
 an agent can fetch it directly without repo access.

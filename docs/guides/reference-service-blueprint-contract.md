@@ -1,6 +1,6 @@
 # Reference Service Blueprint Contract
 
-The technical specification for `ServiceBlueprint`, the JSON contract every
+The technical specification for `ServiceBlueprint`, the YAML contract every
 Wayfinder service blueprint is authored in, whether by a human in the visual editor or an AI
 agent through the [MCP/REST authoring toolkit](./ai-service-blueprint-authoring.md). This is
 the shape you read from `read_service_blueprint`, write for `save_service_blueprint`, and check
@@ -16,22 +16,21 @@ For the embedded expression language used in `calculations` and `showWhen`, see
 
 ## Top-level shape
 
-```jsonc
-{
-  "definitionKey": "money-modeller",   // stable identifier; used to read/save/route to this service-blueprint
-  "displayName": "Money Modeller",
-  "version": 1,                        // optimistic-concurrency version — see "Saving and conflicts" below
-  "description": "...",                // optional
-  "initialStage": "choose-start", // must match a stages[].stageKey
-  "requestPolicy": "single",           // "single" (resume the one active instance), "multiple" (always new), or "prompt" (instance_picker when one is active)
-  "queues": [ /* QueueDefinition[] — see Queues */ ],
-  "stages": [ /* StageDefinition[] — see Stages and routes */ ],
-  "gateways": [ /* ServiceBlueprintGatewayDefinition[] — see Gateways and routing */ ],
-  "calculations": { /* ServiceBlueprintCalculationSet — see calculation-language.md */ },
-  "handoffs": [ /* optional, actor-change annotations */ ],
-  "tags": { "key": "value" },          // optional, free-form
-  "layout": { /* editor-owned canvas positions — the runtime never reads this */ }
-}
+```yaml
+definitionKey: money-modeller   # stable identifier; used to read/save/route to this service blueprint
+displayName: Money Modeller
+version: 1                      # optimistic-concurrency version, see "Saving and conflicts" below
+description: ...                # optional
+initialStage: choose-start      # must match a stages[].stageKey
+requestPolicy: single           # single (resume the one active instance), multiple (always new), or prompt (instance_picker when one is active)
+queues: []                      # QueueDefinition list, see Queues
+stages: []                      # StageDefinition list, see Stages and routes
+gateways: []                    # ServiceBlueprintGatewayDefinition list, see Gateways and routing
+calculations: {}                # ServiceBlueprintCalculationSet, see calculation-language.md
+handoffs: []                    # optional, actor-change annotations
+tags:                           # optional, free-form
+  key: value
+layout: {}                      # editor-owned canvas positions; the runtime never reads this
 ```
 
 ## Queues
@@ -40,8 +39,13 @@ Host apps decide what queues exist and who can access them, the shared runtime
 does **not** enforce queue-level access control, that's always the host's
 responsibility. A queue is:
 
-```json
-{ "key": "web-user", "displayName": "Member", "description": "...", "actor": "member", "roleGates": ["..."] }
+```yaml
+key: web-user
+displayName: Member
+description: ...
+actor: member
+roleGates:
+  - ...
 ```
 
 Every stage and gateway declares which queue it belongs to via `queueKey`.
@@ -53,22 +57,27 @@ formal quote request), two independent perspectives on the same service request.
 
 A stage (`StageDefinition`) is one stage of the service blueprint:
 
-```json
-{
-  "stageKey": "model",
-  "displayName": "Your money, modelled",
-  "stageType": "Question",
-  "actor": "member",
-  "queueKey": "web-user",
-  "roleGates": ["..."],
-  "components": [ /* Component[] — see Components */ ],
-  "routes": [
-    { "id": "model--recalculate--recalculate-loop", "target": "recalculate-loop", "trigger": "recalculate", "label": "Recalculate", "style": "secondary" }
-  ],
-  "validations": [
-    { "code": "...", "when": "...", "rule": "...", "field": "...", "message": "..." }
-  ]
-}
+```yaml
+stageKey: model
+displayName: Your money, modelled
+stageType: Question
+actor: member
+queueKey: web-user
+roleGates:
+  - ...
+components: []   # Component list, see Components
+routes:
+  - id: model--recalculate--recalculate-loop
+    target: recalculate-loop
+    trigger: recalculate
+    label: Recalculate
+    style: secondary
+validations:
+  - code: ...
+    when: ...
+    rule: ...
+    field: ...
+    message: ...
 ```
 
 - **`components`** are what renders on this stage, see [Components](#components).
@@ -98,17 +107,18 @@ points at it.
 
 A gateway (`ServiceBlueprintGatewayDefinition`) is a routing node, not a rendered stage:
 
-```json
-{
-  "key": "fan-out-quote-request",
-  "displayName": "Send quote request",
-  "gatewayType": "Split",
-  "queueKey": "web-user",
-  "routes": [
-    { "id": "...", "target": "quote-requested", "trigger": "continue" },
-    { "id": "...", "target": "review-quote-request", "trigger": "continue" }
-  ]
-}
+```yaml
+key: fan-out-quote-request
+displayName: Send quote request
+gatewayType: Split
+queueKey: web-user
+routes:
+  - id: ...
+    target: quote-requested
+    trigger: continue
+  - id: ...
+    target: review-quote-request
+    trigger: continue
 ```
 
 - **`gatewayType`** is `"Split"` (fan out, one incoming path, one or more outgoing;
@@ -264,7 +274,7 @@ decision has actually been recorded (a discretionary call, an approval, anything
 the point where a route already fired based on those values), a summary-list showing
 that same data is a historical record, not a form to revisit, leave `changeStateKey`
 unset so it renders read-only. Nothing validates this distinction (it's about *when*
-in the flow the page sits, not the JSON shape), so get it right at authoring time:
+in the flow the page sits, not the YAML shape), so get it right at authoring time:
 before drafting a "review" or "outcome" stage, check whether it comes before or after
 the service blueprint's actual decision point.
 
@@ -410,7 +420,7 @@ on.
 
 **Note:** in this repo's own reference host (`Wayfinder.ReferenceApp`), service blueprint
 saves against the seed-file-backed store are memory-only, a save reaches the live engine
-immediately, but a process restart reloads from the JSON seed files on disk. This is
+immediately, but a process restart reloads from the YAML seed files on disk. This is
 intentional, not a bug, see [the reference app guide](./reference-app.md) for exactly how
 and why. A production host's `IServiceBlueprintSourceStore` backs this with real
 persistence instead, `Wayfinder.Umbraco`'s implementation is a real example, database-backed
@@ -420,13 +430,13 @@ with full uSync export/import portability, also covered in that guide.
 
 A design note is feedback pinned to part of a blueprint: a stage, a gateway, a route, a field, or
 the whole blueprint. The designer adds them on the canvas, and you can add them too. Notes live
-beside the blueprint, never inside its JSON, so adding or resolving one never changes the
+beside the blueprint, never inside its YAML, so adding or resolving one never changes the
 blueprint's `version`.
 
 When the designer asks you to work through their notes:
 
 1. **`list_design_notes`** for the blueprint. Each entry has the note and its anchor resolved
-   against the current version: a `label`, the `path` in the blueprint JSON (the same shape as a
+   against the current version: a `label`, the `path` in the blueprint YAML (the same shape as a
    diagnostic's `path`, such as `stages.check.routes[0]`), and `removed: true` if the thing it
    pointed at has since been deleted.
 2. **Change the blueprint** for each note you can act on, then validate and save it as usual.
@@ -457,7 +467,7 @@ as reference, in roughly increasing order of complexity. Each one passes validat
 - **`money-modeller.yaml`**, the fullest example: two-queue fan-out, a complete
   declarative `calculations` block, live components (sliders, `stat-group`, `chart`,
   extensive `showWhen` use), and a `recalculate` self-loop. See the
-  [worked walkthrough](./calculation-language.md#worked-example-money-modellerjson)
+  [worked walkthrough](./calculation-language.md#worked-example-money-modelleryaml)
   in the calculation language guide.
 
 ## Related documentation

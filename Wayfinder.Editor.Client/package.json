@@ -2,7 +2,7 @@
   "name": "@wayfinder/editor-client",
   "private": true,
   "version": "0.1.0",
-  "description": "Wayfinder's service blueprint visual editor as host-agnostic Lit custom elements (graph canvas, definition JSON editor, validation) with no assumptions about hosting or persistence. Not published to a registry — consumed by other Wayfinder projects as a pre-built ES module bundle shipped inside the Wayfinder.Editor NuGet package's static web assets, the same way any Umbraco backoffice extension bundle is loaded by URL at runtime.",
+  "description": "Wayfinder's service blueprint visual editor as host-agnostic Lit custom elements (graph canvas, definition YAML editor, validation) with no assumptions about hosting or persistence. Not published to a registry — consumed by other Wayfinder projects as a pre-built ES module bundle shipped inside the Wayfinder.Editor NuGet package's static web assets, the same way any Umbraco backoffice extension bundle is loaded by URL at runtime.",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -22,7 +22,7 @@
     "test:calculation-diagnostics": "node scripts/run-calculation-diagnostics-tests.mjs",
     "test:service-blueprint-validation": "node scripts/run-service-blueprint-validation-tests.mjs",
     "test:server-diagnostic-location": "node scripts/run-server-diagnostic-location-tests.mjs",
-    "test:canonical-json": "node scripts/run-canonical-json-tests.mjs",
+    "test:service-blueprint-yaml": "node scripts/run-service-blueprint-yaml-tests.mjs",
     "test:units": "node scripts/run-unit-tests.mjs",
     "test:no-legacy-shapes": "node scripts/check-no-legacy-shapes.mjs",
     "test:no-unsafe-html-sinks": "node scripts/check-no-unsafe-html-sinks.mjs",
@@ -34,7 +34,7 @@
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.11.1",
-    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-yaml": "^6.1.3",
     "@codemirror/language": "^6.12.3",
     "@codemirror/lint": "^6.9.6",
     "@codemirror/search": "^6.7.2",
@@ -43,7 +43,8 @@
     "@xyflow/react": "^12.12.0",
     "lit": "^3.3.1",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

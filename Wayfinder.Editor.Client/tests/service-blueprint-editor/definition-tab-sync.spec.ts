@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import { parse, stringify } from 'yaml';
 
 /**
- * Bidirectional sync between the Definition (JSON) tab and the Canvas, exercised
+ * Bidirectional sync between the Definition (YAML) tab and the Canvas, exercised
  * through the *real* CodeMirror input path (not synthetic `definition-input`
  * events). The earlier `service-blueprint-editor-definition-tab.spec.ts` covers the
  * synthetic path; this file is the truth test for what authors actually do.
@@ -69,15 +70,15 @@ async function readInternalServiceBlueprintDisplayName(page: Page): Promise<stri
   });
 }
 
-test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirror path', () => {
-  test('a) Edit stage name in JSON → switch to Canvas → canvas shows new name', async ({ page }) => {
+test.describe('Definition (YAML) ↔ Canvas bidirectional sync — real CodeMirror path', () => {
+  test('a) Edit stage name in YAML → switch to Canvas → canvas shows new name', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);
 
     const original = await readDefinitionText(page);
     expect(original).toContain('Application Form');
 
-    const renamed = original.replace(/"displayName": "Application Form"/, '"displayName": "Real-Typed Form"');
+    const renamed = original.replace('displayName: Application Form\n', 'displayName: Real-Typed Form\n');
     await replaceDefinitionViaCm(page, renamed);
 
     await clickCanvasTab(page);
@@ -86,31 +87,29 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toContainText('Real-Typed Form', { timeout: 2_000 });
   });
 
-  test('b) Add a route in JSON → switch to Canvas → canvas shows the new route', async ({ page }) => {
+  test('b) Add a route in YAML → switch to Canvas → canvas shows the new route', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);
 
     const original = await readDefinitionText(page);
-    expect(original).toContain('"gateways"');
+    expect(original).toContain('gateways:');
 
     // Add a new gateway-owned route to an existing split gateway.
-    const updated = await page.evaluate((text) => {
-      const doc = JSON.parse(text);
-      const gateway = (doc.gateways as Array<Record<string, unknown>>).find((candidate) => candidate.key === 'route-check-answers');
-      if (!gateway) {
-        throw new Error('route-check-answers gateway missing');
-      }
-      (gateway.routes as Array<Record<string, unknown>>).push({
-        id: 'route-check-answers--fast-track--submitted',
-        target: 'submitted',
-        trigger: 'fast-track',
-      });
-      return JSON.stringify(doc, null, 2);
-    }, original);
+    const doc = parse(original);
+    const gateway = (doc.gateways as Array<Record<string, unknown>>).find((candidate) => candidate.key === 'route-check-answers');
+    if (!gateway) {
+      throw new Error('route-check-answers gateway missing');
+    }
+    (gateway.routes as Array<Record<string, unknown>>).push({
+      id: 'route-check-answers--fast-track--submitted',
+      target: 'submitted',
+      trigger: 'fast-track',
+    });
+    const updated = stringify(doc);
 
     await replaceDefinitionViaCm(page, updated);
 
-    // Internal model should now have the extra route. JSON edits apply after a debounce, so poll
+    // Internal model should now have the extra route. Definition edits apply after a debounce, so poll
     // rather than sleep a fixed time (a fixed wait lost the race under parallel load).
     const routeTriggers = () =>
       page.evaluate(() => {
@@ -141,7 +140,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
       .toBe(true);
   });
 
-  test('c) Invalid JSON → inline error appears AND canvas keeps last good state', async ({ page }) => {
+  test('c) Invalid YAML → inline error appears AND canvas keeps last good state', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);
 
@@ -149,7 +148,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     expect(original).toContain('Application Form');
 
     // First commit a clean rename so we have a known-good last state.
-    const renamed = original.replace(/"displayName": "Application Form"/, '"displayName": "Pre-Invalid Form"');
+    const renamed = original.replace('displayName: Application Form\n', 'displayName: Pre-Invalid Form\n');
     await replaceDefinitionViaCm(page, renamed);
     await expect
       .poll(() =>
@@ -162,8 +161,8 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
       )
       .toBe('Pre-Invalid Form');
 
-    // Now break the JSON by stripping the trailing brace.
-    await replaceDefinitionViaCm(page, renamed.slice(0, -3));
+    // Now break the YAML with an unclosed list.
+    await replaceDefinitionViaCm(page, `${renamed}routes: [unclosed\n`);
 
     const editor = page.locator('wayfinder-service-blueprint-editor');
     await expect(editor.locator('[data-wayfinder-definition-banner]')).toBeVisible();
@@ -174,7 +173,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toContainText('Pre-Invalid Form', { timeout: 2_000 });
   });
 
-  test('d) Round-trip: canvas change shows in JSON, JSON edit on top shows on canvas', async ({ page }) => {
+  test('d) Round-trip: canvas change shows in YAML, YAML edit on top shows on canvas', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     const editor = page.locator('wayfinder-service-blueprint-editor');
     await expect(editor).toHaveAttribute('data-wayfinder-service-blueprint-loaded', /.+/, { timeout: 30_000 });
@@ -200,13 +199,13 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await openDefinitionTab(page);
     await expect.poll(async () => readDefinitionText(page), { timeout: 5_000 }).toContain('Canvas-Edited Display');
 
-    // JSON-side edit on top: change displayName again.
+    // Definition-side edit on top: change displayName again.
     const current = await readDefinitionText(page);
-    const next = current.replace('"Canvas-Edited Display"', '"JSON-Then-Canvas"');
+    const next = current.replace('Canvas-Edited Display', 'YAML-Then-Canvas');
     await replaceDefinitionViaCm(page, next);
 
     // Confirm internal service blueprint updated and canvas reflects it.
-    await expect.poll(() => readInternalServiceBlueprintDisplayName(page), { timeout: 2_000 }).toBe('JSON-Then-Canvas');
+    await expect.poll(() => readInternalServiceBlueprintDisplayName(page), { timeout: 2_000 }).toBe('YAML-Then-Canvas');
   });
 
   test('e) Switching back to Canvas before debounce flushes still propagates the edit', async ({ page }) => {
@@ -214,7 +213,7 @@ test.describe('Definition (JSON) ↔ Canvas bidirectional sync — real CodeMirr
     await openDefinitionTab(page);
 
     const original = await readDefinitionText(page);
-    const renamed = original.replace(/"displayName": "Application Form"/, '"displayName": "Flushed-On-Switch"');
+    const renamed = original.replace('displayName: Application Form\n', 'displayName: Flushed-On-Switch\n');
     await replaceDefinitionViaCm(page, renamed);
 
     // Switch immediately, BEFORE the 250ms debounce would naturally fire.

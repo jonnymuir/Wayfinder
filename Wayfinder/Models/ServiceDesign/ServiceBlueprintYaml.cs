@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Wayfinder.Models.ServiceDesign.Components;
 using Wayfinder.Serialization;
 using YamlDotNet.Core;
@@ -84,4 +85,42 @@ public static class ServiceBlueprintYaml
 
     /// <summary>Writes a blueprint, or any part of one, as its runtime type (so a <see cref="Component"/> keeps its <c>type</c>).</summary>
     public static string Serialize<T>(T value) where T : notnull => Serializer.Serialize(value);
+
+    /// <summary>
+    /// The properties a type is written with, by name, in the order they are written: simple values
+    /// before nested lists and mappings, and a base type's properties before a derived type's, so a
+    /// stage opens with its key and name and a component with its <c>fieldKey</c> and <c>label</c>.
+    /// A component's <c>type</c> is not included; it is always written first. The editor's generated
+    /// model carries the same order, so the Definition tab reads like the server's YAML.
+    /// </summary>
+    public static IReadOnlyList<(string Name, PropertyInfo Property)> WrittenProperties(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        var hierarchy = new List<Type>();
+        for (var level = type; level is not null && level != typeof(object); level = level.BaseType)
+        {
+            hierarchy.Insert(0, level);
+        }
+
+        return hierarchy
+            .SelectMany((level, depth) => level
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Where(property => property.GetIndexParameters().Length == 0 && property.GetCustomAttribute<YamlIgnoreAttribute>() is null)
+                .Select((property, index) => (Property: property, Depth: depth, Index: index)))
+            .OrderBy(entry => IsNested(entry.Property.PropertyType))
+            .ThenBy(entry => entry.Depth)
+            .ThenBy(entry => entry.Index)
+            .Select(entry => (WrittenName(entry.Property), entry.Property))
+            .ToArray();
+    }
+
+    private static string WrittenName(PropertyInfo property) =>
+        property.GetCustomAttribute<YamlMemberAttribute>()?.Alias
+            ?? char.ToLowerInvariant(property.Name[0]) + property.Name[1..];
+
+    private static bool IsNested(Type type)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        return !(type.IsPrimitive || type.IsEnum || type == typeof(string) || type == typeof(decimal) || type == typeof(Guid));
+    }
 }

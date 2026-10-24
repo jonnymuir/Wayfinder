@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { DEMO_USERS, loginAs, resetApp } from './fixtures';
+import { readBlueprint, saveBlueprint } from './support/blueprint-api';
+import { parse } from 'yaml';
 
 // Proves the reference app's own integration wiring — not the editor component itself, which
 // Wayfinder.Editor.Client already covers with its own Playwright/Storybook suite. What's novel
@@ -35,7 +37,7 @@ test.describe('Service blueprint editor', () => {
 
     const mockAppResponse = await request.get('/mockapp/service-blueprints/juggling-licence');
     expect(mockAppResponse.ok()).toBeTruthy();
-    const blueprint = await mockAppResponse.json();
+    const blueprint = parse(await mockAppResponse.text());
     expect(blueprint.definitionKey).toBe('juggling-licence');
     expect(blueprint.stages.map((s: { stageKey: string }) => s.stageKey)).toEqual([
       'your-details',
@@ -88,7 +90,7 @@ test.describe('Service blueprint editor', () => {
     // definitions saved through the authoring API — restore the original afterwards so later
     // specs in this shared, single-worker process see the unmodified seed (same pattern as
     // custom-component.spec.ts).
-    const original = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+    const original = await readBlueprint(request, 'juggling-licence');
 
     try {
       await loginAs(page, DEMO_USERS.caseworker);
@@ -137,17 +139,15 @@ test.describe('Service blueprint editor', () => {
       await page.locator('[data-wayfinder-save]').click();
       await expect(page.locator('[data-wayfinder-toast]')).toContainText(/saved/i, { timeout: 5_000 });
 
-      const saved = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+      const saved = await readBlueprint(request, 'juggling-licence');
       const yourDetails = saved.stages.find((s: { stageKey: string }) => s.stageKey === 'your-details');
       const email = yourDetails.components[0].children.find((c: { type: string }) => c.type === 'email');
       expect(email.label).toBe('Email address (edited)');
       // The edit must have landed on the real "label" property, not created a stray "Label" one.
       expect(email.Label).toBeUndefined();
     } finally {
-      const current = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
-      await request.put(`/wayfinder/service-blueprint-authoring/blueprints/juggling-licence`, {
-        data: { ...original, version: current.version },
-      });
+      const current = await readBlueprint(request, 'juggling-licence');
+      await saveBlueprint(request, 'juggling-licence', { ...original, version: current.version });
     }
   });
 
@@ -157,7 +157,7 @@ test.describe('Service blueprint editor', () => {
   }) => {
     // Same restore-afterwards pattern as the test above — this shares the same seeded
     // definition/process across a single-worker run.
-    const original = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+    const original = await readBlueprint(request, 'juggling-licence');
 
     try {
       await loginAs(page, DEMO_USERS.caseworker);
@@ -200,7 +200,7 @@ test.describe('Service blueprint editor', () => {
       await page.locator('[data-wayfinder-save]').click();
       await expect(page.locator('[data-wayfinder-toast]')).toContainText(/saved/i, { timeout: 5_000 });
 
-      const saved = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
+      const saved = await readBlueprint(request, 'juggling-licence');
       const yourDetails = saved.stages.find((s: { stageKey: string }) => s.stageKey === 'your-details');
       const children = yourDetails.components[0].children;
       const email = children.find((c: { type: string }) => c.type === 'email');
@@ -209,10 +209,8 @@ test.describe('Service blueprint editor', () => {
       expect(email.conditionalOn).toBe('applicantName');
       expect(fullName.pattern).toBe('^[A-Za-z]+$');
     } finally {
-      const current = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-licence')).json();
-      await request.put(`/wayfinder/service-blueprint-authoring/blueprints/juggling-licence`, {
-        data: { ...original, version: current.version },
-      });
+      const current = await readBlueprint(request, 'juggling-licence');
+      await saveBlueprint(request, 'juggling-licence', { ...original, version: current.version });
     }
   });
 

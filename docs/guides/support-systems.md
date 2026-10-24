@@ -101,13 +101,17 @@ and if it keeps happening, contact us."). Pressing Continue again is the retry.
 
 Both of these are opt-in, set in the action's `params`:
 
-```json
-"params": {
-  "supportSystemKey": "…", "capabilityKey": "…", "inputs": { … },
-  "retries": 2,
-  "retryDelaySeconds": 2,
-  "onFailure": { "outcome": "unclear", "outputs": { "habitatNotes": "No suggestion was available." } }
-}
+```yaml
+params:
+  supportSystemKey: …
+  capabilityKey: …
+  inputs: {}   # …
+  retries: 2
+  retryDelaySeconds: 2
+  onFailure:
+    outcome: unclear
+    outputs:
+      habitatNotes: No suggestion was available.
 ```
 
 - `retries` (0–5, default 0) re-sends the call before giving up, waiting `retryDelaySeconds`
@@ -335,16 +339,14 @@ so a second delivery for an already-resolved invocation is a safe no-op, not a d
 An action of type `support-system-call` on a stage or route is how a blueprint calls out to a
 registered capability:
 
-```json
-{
-  "type": "support-system-call",
-  "timing": "onEnter",
-  "params": {
-    "supportSystemKey": "safetynet-underwriting",
-    "capabilityKey": "validate-risk-assessment",
-    "inputs": { "file": "riskAssessment" }
-  }
-}
+```yaml
+type: support-system-call
+timing: onEnter
+params:
+  supportSystemKey: safetynet-underwriting
+  capabilityKey: validate-risk-assessment
+  inputs:
+    file: riskAssessment
 ```
 
 The stage carrying this action then sits waiting, using the same `waitingContent`/
@@ -369,21 +371,17 @@ routes decide which single action is even *offered*, using
 [route visibility](./calculation-language.md#route-visibility-showwhen-on-a-route)
 (`ServiceBlueprintRouteDefinition.ShowWhen`):
 
-```json
-{
-  "id": "under-review--send-to-insurer--to-insurer-check",
-  "target": "to-insurer-check",
-  "trigger": "send-to-insurer",
-  "label": "Send risk assessment to insurer",
-  "showWhen": "riskAssessment <> ''"
-},
-{
-  "id": "under-review--continue--to-caseworker-decision",
-  "target": "to-caseworker-decision",
-  "trigger": "continue",
-  "label": "Continue to decision",
-  "showWhen": "riskAssessment = ''"
-}
+```yaml
+- id: under-review--send-to-insurer--to-insurer-check
+  target: to-insurer-check
+  trigger: send-to-insurer
+  label: Send risk assessment to insurer
+  showWhen: riskAssessment <> ''
+- id: under-review--continue--to-caseworker-decision
+  target: to-caseworker-decision
+  trigger: continue
+  label: Continue to decision
+  showWhen: riskAssessment = ''
 ```
 
 A caseworker reviewing an application with a risk assessment attached sees exactly one button,
@@ -474,7 +472,7 @@ SafetyNet Underwriting serves the bytes it received from its own `GET /submissio
 ## Related documentation
 
 - [Reference Service Blueprint Contract](./reference-service-blueprint-contract.md), the full
-  `ServiceBlueprint` JSON shape.
+  `ServiceBlueprint` YAML shape.
 - [Extending the component catalog](./extending-the-component-catalog.md), the same
   descriptor-driven registration pattern this feature mirrors, including the full
   `ComponentPropertyDescriptor` reference and reference-aware `Format` tags.

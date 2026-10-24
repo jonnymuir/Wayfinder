@@ -35,26 +35,38 @@ needing filesystem access to this repo, see
 
 **Authoring this visually:** the service blueprint editor's own **Calculations** tab
 (`Wayfinder.Editor.Client/src/service-blueprint-editor/wayfinder-calculations-editor.ts`) is a
-schema-driven, human-facing alternative to hand-typing this JSON, live syntax highlighting and
+schema-driven, human-facing alternative to hand-typing this YAML, live syntax highlighting and
 inline error positions (reusing this exact grammar's own tokenizer/parser, not a second
 implementation), inline autocomplete for every input/field/table name (type a fragment of either
 its identifier or its own label, or press Ctrl+Space to browse) instead of having to remember
 exact spelling, and fully automatic field declaration ordering (see
 [Where it lives in a service blueprint](#where-it-lives-in-a-service-blueprint) below on why
 declaration order matters), a field is never asked to be manually reordered, and a genuine
-circular dependency is caught and named immediately. It writes the exact same JSON described in
+circular dependency is caught and named immediately. It writes the exact same YAML described in
 this document; nothing below is specific to either authoring surface.
 
 ## Where it lives in a service blueprint
 
 A `ServiceBlueprint` may carry a top-level `calculations` block:
 
-```json
-"calculations": {
-  "tables": { "<tableName>": { "interpolate": "linear", "values": { "<key>": <number>, ... } } },
-  "fields":  { "<fieldName>": { "expr": "<expression>" } },
-  "series":  { "<seriesName>": { "over": "<loopVar>", "from": "<expr>", "to": "<expr>", "values": { "<column>": "<expression>" } } }
-}
+```yaml
+calculations:
+  tables:
+    <tableName>:
+      interpolate: linear
+      values:
+        <key>: <number>
+        # ...
+  fields:
+    <fieldName>:
+      expr: <expression>
+  series:
+    <seriesName>:
+      over: <loopVar>
+      from: <expr>
+      to: <expr>
+      values:
+        <column>: <expression>
 ```
 
 - **`fields`** are evaluated once, in declaration order, into a shared scope. Each
@@ -151,13 +163,14 @@ is a `CalculationException`, see [Errors](#errors).
 
 ## Tables and `lookup()`
 
-```json
-"tables": {
-  "pensionAgeFactor": {
-    "interpolate": "linear",
-    "values": { "55": 0.56, "66": 1.0, "75": 1.27 }
-  }
-}
+```yaml
+tables:
+  pensionAgeFactor:
+    interpolate: linear
+    values:
+      "55": 0.56
+      "66": 1
+      "75": 1.27
 ```
 
 - `values` keys are decimal strings (parsed as the lookup key), values are numbers.
@@ -174,18 +187,15 @@ is a `CalculationException`, see [Errors](#errors).
 
 ## Series
 
-```json
-"series": {
-  "incomeByAge": {
-    "over": "age",
-    "from": "retireAgeEff",
-    "to": "90",
-    "values": {
-      "db": "round(pensionOut)",
-      "sp": "if(age >= statePensionAge, round(statePension), 0)"
-    }
-  }
-}
+```yaml
+series:
+  incomeByAge:
+    over: age
+    from: retireAgeEff
+    to: "90"
+    values:
+      db: round(pensionOut)
+      sp: if(age >= statePensionAge, round(statePension), 0)
 ```
 
 Produces one row per integer step from `from` to `to` inclusive, with the loop
@@ -207,9 +217,14 @@ same scope as `calculations` (inputs, service inputs, calculated fields). A few 
 examples from [`money-modeller.yaml`](../examples/money-modeller.yaml)
 (the worked example below):
 
-```json
-{ "type": "warning-text", "showWhen": "not quoteMode and retireAge < npa", "content": "..." }
-{ "type": "slider", "showWhen": "not quoteMode and hasDc", "fieldKey": "invReturn", ... }
+```yaml
+- type: warning-text
+  showWhen: not quoteMode and retireAge < npa
+  content: ...
+- type: slider
+  showWhen: not quoteMode and hasDc
+  fieldKey: invReturn
+  # ...
 ```
 
 When it evaluates to `false`, the component renders hidden; the client-side
@@ -227,13 +242,18 @@ the stage's available actions entirely, not rendered as a disabled button, not
 offered at all, and submitting its trigger anyway is rejected exactly like
 submitting an action that was never declared:
 
-```json
-"routes": [
-  { "id": "review--send-to-insurer", "target": "to-insurer-check", "trigger": "send-to-insurer",
-    "label": "Send risk assessment to insurer", "showWhen": "riskAssessment <> ''" },
-  { "id": "review--continue", "target": "to-decision", "trigger": "continue",
-    "label": "Continue to decision", "showWhen": "riskAssessment = ''" }
-]
+```yaml
+routes:
+  - id: review--send-to-insurer
+    target: to-insurer-check
+    trigger: send-to-insurer
+    label: Send risk assessment to insurer
+    showWhen: riskAssessment <> ''
+  - id: review--continue
+    target: to-decision
+    trigger: continue
+    label: Continue to decision
+    showWhen: riskAssessment = ''
 ```
 
 Only one of these two buttons is ever rendered, depending on whether a risk
@@ -270,24 +290,18 @@ rather than let it silently do nothing.
 A `StageDefinition` may carry a `validations` list, declarative, cross-field business rules
 checked before that stage is allowed to advance. This is the engine-native alternative to a host
 overriding `ProcessManagerEngine.ValidateAdvance` with bespoke C#: the rule lives in the blueprint
-itself, visible to the editor, to `validate_service_blueprint`, and to anyone reading the JSON,
+itself, visible to the editor, to `validate_service_blueprint`, and to anyone reading the YAML,
 instead of only existing as compiled code in a host repository.
 
-```json
-"stages": [
-  {
-    "stageKey": "risk-assessment",
-    "validations": [
-      {
-        "code": "risk-mitigation-evidence-required",
-        "when": "hasDangerousProps",
-        "rule": "riskAssessment <> '' or mitigationHasEvidence",
-        "field": "riskMitigationNotes",
-        "message": "Attach a risk assessment above, or describe your mitigation with a measurable detail — a safety distance in metres, or a recognised body (HSE, IOSH, NOABA)."
-      }
-    ]
-  }
-]
+```yaml
+stages:
+  - stageKey: risk-assessment
+    validations:
+      - code: risk-mitigation-evidence-required
+        when: hasDangerousProps
+        rule: riskAssessment <> '' or mitigationHasEvidence
+        field: riskMitigationNotes
+        message: Attach a risk assessment above, or describe your mitigation with a measurable detail — a safety distance in metres, or a recognised body (HSE, IOSH, NOABA).
 ```
 
 - **`code`**, machine-readable identifier, surfaced on the resulting problem's `code` (e.g. so a
@@ -322,14 +336,11 @@ instance has reached, not just the one the rule is declared on. In the example a
 (`risk-assessment`), no extra wiring is needed for a rule to reference a field captured earlier
 in the journey. `mitigationHasEvidence` is an ordinary calculated field using `matches()`:
 
-```json
-"calculations": {
-  "fields": {
-    "mitigationHasEvidence": {
-      "expr": "matches(riskMitigationNotes, '\\b\\d+\\s?(m|metres|meters)\\b') or matches(riskMitigationNotes, '\\b(HSE|IOSH|NOABA)\\b')"
-    }
-  }
-}
+```yaml
+calculations:
+  fields:
+    mitigationHasEvidence:
+      expr: matches(riskMitigationNotes, '\b\d+\s?(m|metres|meters)\b') or matches(riskMitigationNotes, '\b(HSE|IOSH|NOABA)\b')
 ```
 
 See the real, worked version of this in
@@ -359,8 +370,10 @@ nothing here asks an author to remember exact field spelling or hand-write the g
 A field with no `expr` and `"source": "service"` instead is supplied by the *host
 application*, not computed:
 
-```json
-"fields": { "member": { "source": "service" } }
+```yaml
+fields:
+  member:
+    source: service
 ```
 
 The host supplies it (e.g. a member record fetched from a system of record), either by
@@ -380,8 +393,11 @@ Static validation has no real value for a service field, so it can't check any
 field as `CALC_SERVICE_FIELD_UNVERIFIED` (a **Warning**, never blocking). Two
 optional properties let you close that gap for a scalar value:
 
-```json
-"contributionsErrorCount": { "source": "service", "valueKind": "number", "default": "0" }
+```yaml
+contributionsErrorCount:
+  source: service
+  valueKind: number
+  default: "0"
 ```
 
 - **`valueKind`** — `"number"`, `"string"` or `"boolean"`. With a kind declared,
@@ -409,17 +425,19 @@ member record, say. `shape` declares those properties instead, each one either a
 scalar leaf (its own `valueKind`/`default`, exactly like a top-level field) or a
 further nested `shape` for a property that is itself an object:
 
-```json
-"member": {
-  "source": "service",
-  "shape": {
-    "tier": { "valueKind": "string" },
-    "age": { "valueKind": "number", "default": "0" },
-    "address": {
-      "shape": { "postcode": { "valueKind": "string" } }
-    }
-  }
-}
+```yaml
+member:
+  source: service
+  shape:
+    tier:
+      valueKind: string
+    age:
+      valueKind: number
+      default: "0"
+    address:
+      shape:
+        postcode:
+          valueKind: string
 ```
 
 With this declared, static validation builds a real placeholder object at
@@ -442,19 +460,25 @@ An input component's `defaultFrom` names a calculation-scope value to use as its
 when nothing has been saved for it yet. It can name a calculated field, a scalar
 `source: "service"` field, or a dotted path into an object-valued service field:
 
-```json
-"calculations": {
-  "fields": {
-    "user": {
-      "source": "service",
-      "shape": { "name": { "valueKind": "string" }, "email": { "valueKind": "string" } }
-    }
-  }
-},
-"components": [
-  { "type": "text",  "fieldKey": "applicantName",  "label": "Full name",     "defaultFrom": "user.name" },
-  { "type": "email", "fieldKey": "applicantEmail", "label": "Email address", "defaultFrom": "user.email" }
-]
+```yaml
+calculations:
+  fields:
+    user:
+      source: service
+      shape:
+        name:
+          valueKind: string
+        email:
+          valueKind: string
+components:
+  - type: text
+    fieldKey: applicantName
+    label: Full name
+    defaultFrom: user.name
+  - type: email
+    fieldKey: applicantEmail
+    label: Email address
+    defaultFrom: user.email
 ```
 
 Nothing in the blueprint is code: the host supplies the service value, and the blueprint decides

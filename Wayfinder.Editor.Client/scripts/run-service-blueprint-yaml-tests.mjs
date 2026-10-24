@@ -1,4 +1,4 @@
-// Runs service-blueprint-canonical-json.test.ts — pure checks against small hand-built
+// Runs service-blueprint-yaml.test.ts — pure checks against small hand-built
 // blueprints, no fixtures needed. Uses Vite in SSR mode so the editor's .js-specifier TS imports
 // resolve without a bundling step, same as run-component-schema-tests.mjs.
 import { dirname, join } from 'node:path';
@@ -16,7 +16,7 @@ const server = await createServer({
 });
 
 try {
-  const mod = await server.ssrLoadModule('/src/service-blueprint-editor/service-blueprint-canonical-json.test.ts');
+  const mod = await server.ssrLoadModule('/src/service-blueprint-editor/service-blueprint-yaml.test.ts');
   const failures = mod.run();
   process.exitCode = failures > 0 ? 1 : 0;
 } finally {

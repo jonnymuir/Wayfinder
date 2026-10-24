@@ -44,7 +44,7 @@ checkout.
 | Resource URI | Content |
 |---|---|
 | `service-blueprint-docs://calculation-language` | [The Wayfinder Calculation Language](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/calculation-language.md), grammar, functions, tables/series, `showWhen`. |
-| `service-blueprint-docs://authoring-guide` | [Reference Service Blueprint Contract](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/reference-service-blueprint-contract.md), the full `ServiceBlueprint` JSON shape. |
+| `service-blueprint-docs://authoring-guide` | [Reference Service Blueprint Contract](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/reference-service-blueprint-contract.md), the full `ServiceBlueprint` YAML shape. |
 | `service-blueprint-docs://service-design-principles` | [Service Design Principles](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/service-design-principles.md), Double Diamond, the GOV.UK Service Standard, and Lou Downe's 15 principles of good services, industry-agnostic. |
 | `service-blueprint-docs://ai-service-blueprint-authoring` | [AI-Ready Service Blueprint Authoring, Integrator Guide](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/ai-service-blueprint-authoring.md), how a host app wires this MCP surface into its own pipeline. |
 | `service-blueprint-docs://extending-the-component-catalog` | [Extending the Component Catalog](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/extending-the-component-catalog.md), how to register a genuinely new `Component` type. |
@@ -90,7 +90,7 @@ its editor endpoints, because it is a local demo host that never ships.
 If you're running Claude Code from within a checkout of this repo itself (or any
 repo that happens to contain the same seed/source files the connected app was built
 from), the agent has ordinary file tools alongside these MCP tools. Nothing stops it from
-finding and editing a seed JSON file directly instead of calling `save_service_blueprint`. Doing so has no effect on the running app (seed files are only read at
+finding and editing a seed YAML file directly instead of calling `save_service_blueprint`. Doing so has no effect on the running app (seed files are only read at
 process startup) and skips validation entirely. The tool descriptions call this out
 explicitly, but if you want a clean test of tool selection, run Claude Code from a
 directory with no copy of the host app's source in it. The MCP tools stay reachable over HTTP
