@@ -1243,14 +1243,24 @@
   flex: 0 0 auto;
   max-height: 45%;
   overflow-y: auto;
-  padding: 0.75rem 1rem 1rem;
+  padding: 0.75rem 1rem;
   border-top: 1px solid #b1b4b6;
   background: #ffffff;
 }
 
 .selection-notes-title {
-  margin: 0 0 0.5rem;
   font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.selection-notes[open] .selection-notes-title {
+  margin-bottom: 0.5rem;
+}
+
+.selection-notes-title:focus-visible {
+  outline: 3px solid #ffdd00;
+  outline-offset: 2px;
 }
 
 .design-note-add .note-btn {
