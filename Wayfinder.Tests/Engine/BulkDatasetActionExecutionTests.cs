@@ -40,105 +40,121 @@ public class BulkDatasetActionExecutionTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "bulk-dataset-test",
-          "displayName": "Bulk Dataset Test",
-          "version": 1,
-          "initialStage": "upload",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "operations", "displayName": "Operations", "actor": "caseworker" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "upload",
-              "displayName": "Upload",
-              "queueKey": "operations",
-              "components": [ { "type": "file-upload", "fieldKey": "contributionsFile", "label": "File", "required": true } ],
-              "routes": [ { "id": "upload--submit--split", "target": "to-support-system", "trigger": "submit" } ]
-            },
-            {
-              "stageKey": "automation",
-              "displayName": "Automation",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "Processing" } ],
-              "actions": [
-                {
-                  "type": "bulk-dataset-materialize",
-                  "timing": "onEnter",
-                  "params": { "datasetIdField": "contributionsDatasetId", "targetFileField": "contributionsFile" }
-                },
-                {
-                  "type": "support-system-call",
-                  "timing": "onEnter",
-                  "params": {
-                    "supportSystemKey": "safetynet-underwriting",
-                    "capabilityKey": "validate-contributions-file",
-                    "inputs": { "file": "contributionsFile" }
-                  }
-                }
-              ],
-              "routes": [ { "id": "automation--processed--join", "target": "check-complete", "trigger": "processed" } ]
-            },
-            {
-              "stageKey": "review",
-              "displayName": "Review",
-              "queueKey": "operations",
-              "components": [ { "type": "text", "fieldKey": "reviewNotes", "label": "Notes", "required": false } ],
-              "actions": [
-                {
-                  "type": "bulk-dataset-ingest",
-                  "timing": "onEnter",
-                  "params": {
-                    "sourceFileField": "contributionsResponseFile",
-                    "datasetIdField": "contributionsDatasetId",
-                    "errorCountField": "contributionsErrorCount",
-                    "warningCountField": "contributionsWarningCount",
-                    "acceptedCountField": "contributionsAcceptedCount",
-                    "columns": [
-                      { "key": "memberRef", "title": "Ref", "valueKind": "String", "role": "RowKey" },
-                      { "key": "memberName", "title": "Name", "valueKind": "String", "role": "Data", "editable": true },
-                      { "key": "errorText", "title": "Errors", "valueKind": "String", "role": "ResponseError" }
-                    ]
-                  }
-                }
-              ],
-              "routes": [ { "id": "review--resubmit--split", "target": "to-support-system", "trigger": "resubmit" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-support-system",
-              "displayName": "Send to support system",
-              "gatewayType": "Split",
-              "queueKey": "operations",
-              "routes": [
-                { "id": "to-support-system--submit--join", "target": "check-complete", "trigger": "submit" },
-                { "id": "to-support-system--submit--automation", "target": "automation", "trigger": "submit" },
-                { "id": "to-support-system--resubmit--join", "target": "check-complete", "trigger": "resubmit" },
-                { "id": "to-support-system--resubmit--automation", "target": "automation", "trigger": "resubmit" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "operations",
-              "waitingContent": "Processing your file.",
-              "waitingPollIntervalMs": 2000,
-              "routes": [ { "id": "check-complete--processed--review", "target": "review", "trigger": "processed" } ],
-              "requiredIncomingQueues": ["operations", "automation"]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: bulk-dataset-test
+        displayName: Bulk Dataset Test
+        version: 1
+        initialStage: upload
+        requestPolicy: single
+        queues:
+          - key: operations
+            displayName: Operations
+            actor: caseworker
+          - key: automation
+            displayName: Automation
+            actor: system
+        stages:
+          - stageKey: upload
+            displayName: Upload
+            queueKey: operations
+            components:
+              - type: file-upload
+                fieldKey: contributionsFile
+                label: File
+                required: true
+            routes:
+              - id: upload--submit--split
+                target: to-support-system
+                trigger: submit
+          - stageKey: automation
+            displayName: Automation
+            queueKey: automation
+            actions:
+              - type: bulk-dataset-materialize
+                timing: onEnter
+                params:
+                  datasetIdField: contributionsDatasetId
+                  targetFileField: contributionsFile
+              - type: support-system-call
+                timing: onEnter
+                params:
+                  supportSystemKey: safetynet-underwriting
+                  capabilityKey: validate-contributions-file
+                  inputs:
+                    file: contributionsFile
+            components:
+              - type: panel
+                heading: Processing
+            routes:
+              - id: automation--processed--join
+                target: check-complete
+                trigger: processed
+          - stageKey: review
+            displayName: Review
+            queueKey: operations
+            actions:
+              - type: bulk-dataset-ingest
+                timing: onEnter
+                params:
+                  sourceFileField: contributionsResponseFile
+                  datasetIdField: contributionsDatasetId
+                  errorCountField: contributionsErrorCount
+                  warningCountField: contributionsWarningCount
+                  acceptedCountField: contributionsAcceptedCount
+                  columns:
+                    - key: memberRef
+                      title: Ref
+                      valueKind: String
+                      role: RowKey
+                    - key: memberName
+                      title: Name
+                      valueKind: String
+                      role: Data
+                      editable: true
+                    - key: errorText
+                      title: Errors
+                      valueKind: String
+                      role: ResponseError
+            components:
+              - type: text
+                fieldKey: reviewNotes
+                label: Notes
+            routes:
+              - id: review--resubmit--split
+                target: to-support-system
+                trigger: resubmit
+        gateways:
+          - key: to-support-system
+            displayName: Send to support system
+            gatewayType: Split
+            queueKey: operations
+            routes:
+              - id: to-support-system--submit--join
+                target: check-complete
+                trigger: submit
+              - id: to-support-system--submit--automation
+                target: automation
+                trigger: submit
+              - id: to-support-system--resubmit--join
+                target: check-complete
+                trigger: resubmit
+              - id: to-support-system--resubmit--automation
+                target: automation
+                trigger: resubmit
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: operations
+            waitingContent: Processing your file.
+            waitingPollIntervalMs: 2000
+            routes:
+              - id: check-complete--processed--review
+                target: review
+                trigger: processed
+            requiredIncomingQueues:
+              - operations
+              - automation
         """;
 
     /// <summary>
@@ -242,7 +258,7 @@ public class BulkDatasetActionExecutionTests
                 NextResponseCsv = string.Join('\n', Columns, "NJF-001,Alice,", "NJF-002,Bob,Missing DOB"),
             };
 
-            var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+            var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
             var engine = new ProcessManagerEngine(
                 NullLogger.Instance,
                 new SingleDefinitionServiceBlueprintStore(definition),

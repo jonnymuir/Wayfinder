@@ -21,7 +21,7 @@ reference app already models two of the five NN/g layers as queues: a citizen-fa
 an external, API-driven actor a caseworker's own stage calls out to, and potentially waits on,
 before finishing their own decision.
 
-The worked example in this repo (`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`):
+The worked example in this repo (`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml`):
 a caseworker reviewing a juggling-event licence application sends the applicant's uploaded risk
 assessment to **SafetyNet Underwriting**, a fictional insurer, and waits for its approve/reject
 decision before finishing their own review.
@@ -415,7 +415,7 @@ what that UI should have been from the start: authored with the same
 
 ## The worked example, verified end to end
 
-`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `under-review` stage (now
+`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml`'s `under-review` stage (now
 "Review application") offers exactly one of two routes, gated by `ShowWhen` as shown above:
 `send-to-insurer`, targeting a `to-insurer-check` Split gateway that forks the caseworker's own
 cursor (straight to `insurer-check-complete`, a Join) from a new `automation`-queue cursor

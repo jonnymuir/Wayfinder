@@ -1,5 +1,5 @@
 // Runs the pure service-blueprint-graph layout checks against vendored copies of the
-// MockBusinessApp seed service blueprints (payment-demo.json, money-modeller.json — the two
+// MockBusinessApp seed service blueprints (payment-demo.yaml, money-modeller.yaml — the two
 // with real Split/Join gateway topology worth checking). Uses Vite in SSR mode so the
 // editor's .js-specifier TS imports resolve without a bundling step.
 import { readFileSync } from 'node:fs';
@@ -22,8 +22,8 @@ const server = await createServer({
 try {
   const mod = await server.ssrLoadModule('/src/service-blueprint-editor/graph/service-blueprint-graph-layout.test.ts');
   const failures = mod.run({
-    paymentDemo: seed('payment-demo.json'),
-    moneyModeller: seed('money-modeller.json'),
+    paymentDemo: seed('payment-demo.yaml'),
+    moneyModeller: seed('money-modeller.yaml'),
   });
   process.exitCode = failures > 0 ? 1 : 0;
 } finally {

@@ -39,88 +39,97 @@ public class WorkAllocationPickupTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "pickup-test",
-          "displayName": "Pickup Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "multiple",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [
-                { "id": "start--continue--middle", "target": "middle", "trigger": "continue" },
-                { "id": "start--go-wait--split", "target": "to-automation", "trigger": "go-wait" }
-              ]
-            },
-            {
-              "stageKey": "middle",
-              "displayName": "Middle",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes2", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "middle--finish--done", "target": "done", "trigger": "finish" } ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            },
-            {
-              "stageKey": "in-review",
-              "displayName": "In review",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "In review" } ],
-              "routes": [ { "id": "in-review--approved--join", "target": "check-complete", "trigger": "approved" } ]
-            },
-            {
-              "stageKey": "approved",
-              "displayName": "Approved",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Approved" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-automation",
-              "displayName": "Send to automation",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [
-                { "id": "to-automation--go-wait--join", "target": "check-complete", "trigger": "go-wait" },
-                { "id": "to-automation--go-wait--review", "target": "in-review", "trigger": "go-wait" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "caseworker",
-              "waitingContent": "Waiting.",
-              "routes": [ { "id": "check-complete--approved--approved", "target": "approved", "trigger": "approved" } ],
-              "requiredIncomingQueues": ["caseworker", "automation"]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: pickup-test
+        displayName: Pickup Test
+        version: 1
+        initialStage: start
+        requestPolicy: multiple
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+          - key: automation
+            displayName: Automation
+            actor: system
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--continue--middle
+                target: middle
+                trigger: continue
+              - id: start--go-wait--split
+                target: to-automation
+                trigger: go-wait
+          - stageKey: middle
+            displayName: Middle
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes2
+                label: Notes
+            routes:
+              - id: middle--finish--done
+                target: done
+                trigger: finish
+          - stageKey: done
+            displayName: Done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Done
+          - stageKey: in-review
+            displayName: In review
+            queueKey: automation
+            components:
+              - type: panel
+                heading: In review
+            routes:
+              - id: in-review--approved--join
+                target: check-complete
+                trigger: approved
+          - stageKey: approved
+            displayName: Approved
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Approved
+        gateways:
+          - key: to-automation
+            displayName: Send to automation
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-automation--go-wait--join
+                target: check-complete
+                trigger: go-wait
+              - id: to-automation--go-wait--review
+                target: in-review
+                trigger: go-wait
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: caseworker
+            waitingContent: Waiting.
+            routes:
+              - id: check-complete--approved--approved
+                target: approved
+                trigger: approved
+            requiredIncomingQueues:
+              - caseworker
+              - automation
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

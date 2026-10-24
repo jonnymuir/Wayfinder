@@ -22,6 +22,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
     <None Include="../assets/icon-wayfinder.png" Pack="true" PackagePath="assets/" />
     <None Include="../LICENSE" Pack="true" PackagePath="/" />

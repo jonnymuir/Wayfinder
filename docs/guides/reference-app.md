@@ -107,7 +107,7 @@ builder.Services.AddSingleton<IServiceBlueprintStore>(
 ```
 
 That's the entire seed mechanism, no custom code, just the store `Wayfinder.Engine` already
-ships. `service-blueprints/juggling-licence.json` is real output from this app's own authoring
+ships. `service-blueprints/juggling-licence.yaml` is real output from this app's own authoring
 API (`GET /wayfinder/service-blueprint-authoring/blueprints/juggling-licence`), captured once
 and committed, not hand-written.
 
@@ -120,7 +120,7 @@ Proven, not just asserted, this is exactly reproducible against a running instan
 
 ```bash
 # 1. Note the seed file's checksum
-md5 Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json
+md5 Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml
 
 # 2. Change something and save it through the real authoring API
 curl -X PUT http://localhost:<port>/wayfinder/service-blueprint-authoring/blueprints/juggling-licence \
@@ -128,7 +128,7 @@ curl -X PUT http://localhost:<port>/wayfinder/service-blueprint-authoring/bluepr
 # -> {"status":"Saved","newVersion":2,...}
 
 # 3. The file on disk is byte-identical — unchanged
-md5 Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json
+md5 Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml
 
 # 4. But the running app now serves the change immediately
 curl http://localhost:<port>/wayfinder/service-blueprint-authoring/blueprints/juggling-licence
@@ -168,8 +168,8 @@ node would be. `Wayfinder` itself has no opinion about this at all, it's a capab
 
 - `Wayfinder.AppHost/Program.cs`, the Aspire orchestrator (one resource, no containers)
 - `Wayfinder.ReferenceApp/Program.cs`, all the wiring described above, plus the routes
-- `Wayfinder.ReferenceApp/service-blueprints/`, the seeds (`juggling-licence.json`, and
-  `juggling-insurance-modeller.json` for the slider/stat-group/chart-driven premium modeller demo
+- `Wayfinder.ReferenceApp/service-blueprints/`, the seeds (`juggling-licence.yaml`, and
+  `juggling-insurance-modeller.yaml` for the slider/stat-group/chart-driven premium modeller demo
   at `/premium`, see [Package Architecture](#package-architecture) for what renders that)
 - `Wayfinder.ReferenceApp/Services/`, every custom implementation in the table above
 - `Wayfinder.ReferenceApp/Services/SupportSystems/`, `SafetyNetUnderwritingClient`
@@ -307,9 +307,9 @@ Prism's own `fields[key]` form-naming convention to this package's `field:{key}`
 (`GovUk.FieldName`). As with the calculation engine, Umbraco.Prism has since deleted its copy.
 
 `/premium`'s own "Recalculate" button, a plain, fully declarative self-loop gateway
-(`money-modeller.json`'s own documented pattern, see
+(`money-modeller.yaml`'s own documented pattern, see
 [calculation-language.md](./calculation-language.md)) that any blueprint can still declare
-without any client-side runtime at all, is gone from `juggling-insurance-modeller.json` now
+without any client-side runtime at all, is gone from `juggling-insurance-modeller.yaml` now
 that `wayfinder-live-form.js` makes it redundant for this specific demo: every input change
 recalculates instantly, client-side, with zero network requests (see
 `insurance-modeller.spec.ts`'s own "genuinely local" test, which asserts exactly that).

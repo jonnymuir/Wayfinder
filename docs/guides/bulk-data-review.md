@@ -14,7 +14,7 @@ so an agent can fetch it directly without repo access.
 
 ## The scenario this solves
 
-The worked example (`Wayfinder.ReferenceApp/service-blueprints/njf-contributions.json`): the
+The worked example (`Wayfinder.ReferenceApp/service-blueprints/njf-contributions.yaml`): the
 National Juggling Federation (NJF) arranges a group public-liability policy with SafetyNet
 Underwriting (the same fictional insurer from [Support systems](./support-systems.md)) and must
 periodically submit a CSV contributions file listing its members, tiers, and premiums. SafetyNet's
@@ -231,7 +231,7 @@ in a `showWhen` expression still requires declaring it under the blueprint's own
 `calculations.fields` block with `source: "service"`. The engine reads a declared service field
 the host doesn't supply from `FieldValues`, so no host code is needed. Skip that
 declaration and every route conditioned on the field **stays visible regardless of its actual
-value**, silently, since the failure is swallowed. `njf-contributions.json` declares both
+value**, silently, since the failure is swallowed. `njf-contributions.yaml` declares both
 `contributionsErrorCount` and `contributionsWarningCount` for exactly this reason.
 
 ## Corrections autosave
@@ -287,7 +287,7 @@ file, a different service might revalidate some other way entirely, where that w
 wrong. `BulkDataReviewComponent` exposes three optional properties rather than baking in fixed
 copy:
 
-| Property | Default | `njf-contributions.json` sets it to |
+| Property | Default | `njf-contributions.yaml` sets it to |
 |---|---|---|
 | `syncedLabel` | `"Synced"` | *(left at the default)* |
 | `pendingLabel` | `"Needs resubmission"` | `"Pending resubmission"` |

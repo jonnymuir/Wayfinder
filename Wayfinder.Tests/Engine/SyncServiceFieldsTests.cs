@@ -33,55 +33,52 @@ public class SyncServiceFieldsTests
 
     private static readonly ActorProfile OwnerRestrictedProfile = Profile with { RestrictToInstanceOwner = true };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     // "notes" is an ordinary captured input — the negative case (rejecting a write to it) proves
     // the authorization boundary is genuinely enforced, not just documented. "syncedFlag" is the
     // one field declared source: "service", and gates "finish" via showWhen exactly the way
     // contributionsErrorCount/contributionsDirtyCount will in the real bulk-data-review feature.
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "sync-fields-test",
-          "displayName": "Sync Fields Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "multiple",
-          "calculations": {
-            "fields": {
-              "syncedFlag": { "source": "service" }
-            }
-          },
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [
-                { "id": "start--finish--done", "target": "done", "trigger": "finish", "showWhen": "syncedFlag = 1" },
-                { "id": "start--hold--start", "target": "start", "trigger": "hold" }
-              ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: sync-fields-test
+        displayName: Sync Fields Test
+        version: 1
+        initialStage: start
+        requestPolicy: multiple
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--finish--done
+                target: done
+                trigger: finish
+                showWhen: syncedFlag = 1
+              - id: start--hold--start
+                target: start
+                trigger: hold
+          - stageKey: done
+            displayName: Done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Done
+        calculations:
+          fields:
+            syncedFlag:
+              source: service
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

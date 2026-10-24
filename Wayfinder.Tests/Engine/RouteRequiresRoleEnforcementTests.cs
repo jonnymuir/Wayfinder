@@ -22,44 +22,44 @@ public class RouteRequiresRoleEnforcementTests
     private const string UserId = "user";
     private const string DefinitionKey = "requires-role-test";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "requires-role-test",
-          "displayName": "Requires Role Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "multiple",
-          "queues": [ { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" } ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [
-                { "id": "start--approve--done", "target": "done", "trigger": "approve", "requiresRole": "senior-caseworker" },
-                { "id": "start--continue--done", "target": "done", "trigger": "continue" }
-              ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: requires-role-test
+        displayName: Requires Role Test
+        version: 1
+        initialStage: start
+        requestPolicy: multiple
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--approve--done
+                target: done
+                trigger: approve
+                requiresRole: senior-caseworker
+              - id: start--continue--done
+                target: done
+                trigger: continue
+          - stageKey: done
+            displayName: Done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Done
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

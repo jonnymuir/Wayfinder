@@ -5,7 +5,7 @@ const DOCS_DIR = 'docs/skills/calculations-editor/screenshots';
 
 // StageDefinition.Validations — declarative cross-field business rules checked before a stage can
 // advance, the engine-native alternative to a host writing custom C# validation code (see
-// docs/guides/calculation-language.md's "Stage validations" section). juggling-licence.json (the
+// docs/guides/calculation-language.md's "Stage validations" section). juggling-licence.yaml (the
 // reference app's default-loaded blueprint) carries a real one on its "risk-assessment" stage —
 // exercised here rather than a synthetic fixture, so this is the same worked example the docs and
 // the Wayfinder engine tests use.

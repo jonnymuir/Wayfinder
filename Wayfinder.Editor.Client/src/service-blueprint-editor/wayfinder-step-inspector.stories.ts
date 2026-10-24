@@ -533,7 +533,7 @@ export const ComponentRecursiveChildEditing: Story = {
 
 // A small fixture proving a support-system-call action's own dedicated editor — see
 // docs/guides/support-systems.md and Wayfinder.ReferenceApp/service-blueprints/
-// juggling-licence.json's real "insurer-validation" stage, which this mirrors in shape (fictional
+// juggling-licence.yaml's real "insurer-validation" stage, which this mirrors in shape (fictional
 // "SafetyNet Underwriting" support system, "validate-risk-assessment" capability). Two stages: one
 // with real captured input fields a capability input can bind to (a support-system-call action's
 // inputs are typically bound to a field captured earlier, not on the action's own stage — see

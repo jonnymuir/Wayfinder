@@ -126,7 +126,7 @@ test.describe('Service blueprint editor', () => {
       const fieldKeyInput = emailChild.locator('input').first();
       const labelInput = emailChild.locator('input').nth(1);
 
-      // The seed's real values (service-blueprints/juggling-licence.json) — not blank, and not
+      // The seed's real values (service-blueprints/juggling-licence.yaml) — not blank, and not
       // literally "FieldKey"/"Label" (the un-converted CLR property names the bug would have read).
       await expect(fieldKeyInput).toHaveValue('applicantEmail');
       await expect(labelInput).toHaveValue('Email address');
@@ -248,7 +248,7 @@ test.describe('Service blueprint editor', () => {
     await expect(page.locator('[data-wayfinder-save]')).toBeEnabled();
   });
 
-  // Regression: njf-contributions.json's review and confirm-warnings stages both render a
+  // Regression: njf-contributions.yaml's review and confirm-warnings stages both render a
   // stat-group Summary, but the njf-team queue's capability declaration
   // (ReferenceActors.NjfTeamComponentTypes) once omitted "stat-group" — so opening this seed in
   // the editor reported two blocking queue-capability errors and blocked Save, even though the

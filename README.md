@@ -52,39 +52,49 @@ Each arrow points from a project to the one it builds on.
 dotnet add package Wayfinder.Engine
 ```
 
-Seed a blueprint (a JSON file; see the
+Seed a blueprint (a YAML file; see the
 [reference contract](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/reference-service-blueprint-contract.md)
 for the full schema):
 
-```json
-// blueprints/apply-for-a-licence.json
-{
-  "definitionKey": "apply-for-a-licence",
-  "displayName": "Apply for a licence",
-  "version": 1,
-  "initialStage": "start",
-  "requestPolicy": "single",
-  "queues": [ { "key": "citizen", "displayName": "Citizen", "actor": "citizen" } ],
-  "stages": [
-    {
-      "stageKey": "start",
-      "displayName": "Your details",
-      "queueKey": "citizen",
-      "components": [ { "type": "text", "fieldKey": "fullName", "label": "Full name", "required": true } ],
-      "routes": [ { "id": "start--submit--to-done", "target": "to-done", "trigger": "submit" } ]
-    },
-    { "stageKey": "done", "displayName": "Application submitted", "queueKey": "citizen", "components": [ { "type": "panel", "heading": "Application complete" } ] }
-  ],
-  "gateways": [
-    {
-      "key": "to-done",
-      "displayName": "Submit the application",
-      "gatewayType": "Split",
-      "queueKey": "citizen",
-      "routes": [ { "id": "to-done--continue--done", "target": "done", "trigger": "continue" } ]
-    }
-  ]
-}
+```yaml
+# blueprints/apply-for-a-licence.yaml
+definitionKey: apply-for-a-licence
+displayName: Apply for a licence
+version: 1
+initialStage: start
+requestPolicy: single
+queues:
+  - key: citizen
+    displayName: Citizen
+    actor: citizen
+stages:
+  - stageKey: start
+    displayName: Your details
+    queueKey: citizen
+    components:
+      - type: text
+        fieldKey: fullName
+        label: Full name
+        required: true
+    routes:
+      - id: start--submit--to-done
+        target: to-done
+        trigger: submit
+  - stageKey: done
+    displayName: Application submitted
+    queueKey: citizen
+    components:
+      - type: panel
+        heading: Application complete
+gateways:
+  - key: to-done
+    displayName: Submit the application
+    gatewayType: Split
+    queueKey: citizen
+    routes:
+      - id: to-done--continue--done
+        target: done
+        trigger: continue
 ```
 
 A stage's routes always target a gateway, never another stage directly, so even a one-step
@@ -98,7 +108,7 @@ blueprint:
 using Wayfinder.Engine.Extensions;
 using Wayfinder.Services.Sanitization;
 
-builder.Services.AddProcessManager("blueprints"); // folder containing the JSON above
+builder.Services.AddProcessManager("blueprints"); // folder containing the YAML above
 // Passthrough is only safe for developer-authored seed files like this one. A host rendering
 // content written by real authors registers an HTML allowlist sanitizer instead.
 builder.Services.AddSingleton<IServiceContentSanitizer, PassthroughContentSanitizer>();
@@ -141,7 +151,7 @@ see what a working Wayfinder host actually looks like, and exactly how little wi
 host (like `Wayfinder.Umbraco`) collapses into. Run it with
 `dotnet run --project Wayfinder.AppHost`, or the "C#: Aspire (Full Stack)" launch config in
 VS Code. See [the reference app guide](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/reference-app.md) for what it
-implements, how the demo blueprint is seeded from JSON and only saved in memory, and what a
+implements, how the demo blueprint is seeded from YAML and only saved in memory, and what a
 real host does differently.
 
 ## Packages

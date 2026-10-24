@@ -44,8 +44,8 @@ public partial record ServiceBlueprint
                     continue;
                 }
 
-                var supportSystemKey = action.Parameters["supportSystemKey"]?.GetValue<string>();
-                var capabilityKey = action.Parameters["capabilityKey"]?.GetValue<string>();
+                var supportSystemKey = action.Parameters.GetString("supportSystemKey");
+                var capabilityKey = action.Parameters.GetString("capabilityKey");
                 if (string.IsNullOrWhiteSpace(supportSystemKey) || string.IsNullOrWhiteSpace(capabilityKey))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
@@ -77,7 +77,7 @@ public partial record ServiceBlueprint
                     continue;
                 }
 
-                var inputMapping = action.Parameters["inputs"]?.AsObject();
+                var inputMapping = action.Parameters.GetMap("inputs");
                 var mappedInputKeys = inputMapping?.Select(kvp => kvp.Key).ToHashSet(StringComparer.Ordinal) ?? [];
                 var declaredInputKeys = capability.Inputs.Select(i => i.Key).ToHashSet(StringComparer.Ordinal);
 
@@ -105,7 +105,7 @@ public partial record ServiceBlueprint
                         continue;
                     }
 
-                    var boundFieldKey = inputMapping?[mappedKey]?.GetValue<string>();
+                    var boundFieldKey = inputMapping?.GetString(mappedKey);
                     if (string.IsNullOrWhiteSpace(boundFieldKey) || !inputFieldKeys.Contains(boundFieldKey))
                     {
                         diagnostics.Add(new ServiceBlueprintDiagnostic(

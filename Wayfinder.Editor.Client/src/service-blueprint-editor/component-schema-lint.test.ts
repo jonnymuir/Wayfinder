@@ -730,7 +730,7 @@ export function run(): number {
     };
     const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
     check(
-      "lint: a series' own loop variable is valid inside its values columns (real juggling-insurance-modeller.json shape)",
+      "lint: a series' own loop variable is valid inside its values columns (real juggling-insurance-modeller.yaml shape)",
       issues.length === 0,
       JSON.stringify(issues)
     );

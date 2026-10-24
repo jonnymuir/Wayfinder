@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using FluentAssertions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.Components;
@@ -10,43 +8,18 @@ namespace Wayfinder.Tests.ServiceDesign.Components;
 public class ComponentTypeRegistryTests
 {
     /// <summary>
-    /// The safety net this whole exercise exists to add: if someone adds a
-    /// <c>[JsonDerivedType]</c> entry to <see cref="Component"/> without a matching
-    /// <see cref="BuiltInComponentDescriptors"/> entry (or vice versa), this fails immediately
-    /// instead of drifting silently — the exact failure mode that let
-    /// <c>SummaryListComponent.Children</c> and the old <c>TelComponent</c> go unnoticed.
+    /// The registry is the only list of component types, so a concrete <see cref="Component"/>
+    /// without a built-in descriptor could never be read or written: fail here instead.
     /// </summary>
     [Fact]
-    public void BuiltInDescriptors_ExactlyMatchComponentJsonDerivedTypeAttributes()
+    public void EveryConcreteComponentType_HasABuiltInDescriptor()
     {
-        var attributeDiscriminators = typeof(Component)
-            .GetCustomAttributes(typeof(JsonDerivedTypeAttribute), inherit: false)
-            .Cast<JsonDerivedTypeAttribute>()
-            .Select(a => (string)a.TypeDiscriminator!)
-            .OrderBy(d => d, StringComparer.Ordinal)
-            .ToArray();
+        var componentTypes = typeof(Component).Assembly.GetTypes()
+            .Where(type => type.IsSubclassOf(typeof(Component)) && !type.IsAbstract)
+            .OrderBy(type => type.Name, StringComparer.Ordinal);
 
-        var descriptorDiscriminators = BuiltInComponentDescriptors.All
-            .Select(d => d.Discriminator)
-            .OrderBy(d => d, StringComparer.Ordinal)
-            .ToArray();
-
-        descriptorDiscriminators.Should().Equal(attributeDiscriminators);
-    }
-
-    [Fact]
-    public void AllBuiltInDescriptors_ClrTypeMatchesItsOwnDiscriminatorAttribute()
-    {
-        foreach (var descriptor in BuiltInComponentDescriptors.All)
-        {
-            var attribute = typeof(Component)
-                .GetCustomAttributes(typeof(JsonDerivedTypeAttribute), inherit: false)
-                .Cast<JsonDerivedTypeAttribute>()
-                .SingleOrDefault(a => (string)a.TypeDiscriminator! == descriptor.Discriminator);
-
-            attribute.Should().NotBeNull(because: $"'{descriptor.Discriminator}' should have a matching [JsonDerivedType] entry");
-            attribute!.DerivedType.Should().Be(descriptor.ClrType);
-        }
+        BuiltInComponentDescriptors.All.Select(d => d.ClrType).OrderBy(type => type.Name, StringComparer.Ordinal)
+            .Should().Equal(componentTypes);
     }
 
     [Theory]
@@ -123,8 +96,7 @@ public class ComponentTypeRegistryTests
     {
         foreach (var descriptor in ComponentTypeRegistry.All)
         {
-            var json = $$"""{ "type": "{{descriptor.Discriminator}}" }""";
-            var component = JsonSerializer.Deserialize<Component>(json, ServiceBlueprintJson.ReadOptions);
+            var component = ServiceBlueprintYaml.Deserialize<Component>($"type: {descriptor.Discriminator}");
 
             component.Should().NotBeNull(because: $"'{descriptor.Discriminator}' should deserialize");
             component!.GetType().Should().Be(descriptor.ClrType, because: $"'{descriptor.Discriminator}' should map back to {descriptor.ClrType.Name}");
@@ -139,7 +111,7 @@ public class ComponentTypeRegistryTests
     }
 
     [Fact]
-    public void CustomComponentType_RegistersAndRoundTripsThroughJson()
+    public void CustomComponentType_RegistersAndRoundTripsThroughYaml()
     {
         ComponentTypeRegistry.ResetForTests();
         try
@@ -153,22 +125,12 @@ public class ComponentTypeRegistryTests
                 Properties = [],
             });
 
-            // Not ServiceBlueprintJson.ReadOptions/WriteOptions — those are static singletons
-            // that may already have been used (and therefore cached their JsonTypeInfo<Component>)
-            // by another test earlier in this same process. A fresh options instance, with its
-            // own fresh resolver, is what actually proves registering a new type after the
-            // registry already had built-ins in it works.
-            var options = new JsonSerializerOptions
-            {
-                TypeInfoResolver = ComponentTypeRegistry.CreateJsonTypeInfoResolver(),
-            };
-
             var original = new FixtureWidgetComponent { Message = "hello from a toolkit extension" };
-            var json = JsonSerializer.Serialize<Component>(original, options);
+            var yaml = ServiceBlueprintYaml.Serialize<Component>(original);
 
-            json.Should().Contain("\"fixture-widget\"");
+            yaml.Should().StartWith("type: fixture-widget\n");
 
-            var roundTripped = JsonSerializer.Deserialize<Component>(json, options);
+            var roundTripped = ServiceBlueprintYaml.Deserialize<Component>(yaml);
 
             roundTripped.Should().BeOfType<FixtureWidgetComponent>();
             ((FixtureWidgetComponent)roundTripped!).Message.Should().Be("hello from a toolkit extension");

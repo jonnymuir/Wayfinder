@@ -150,7 +150,7 @@ app.MapPost("/queue/{id}/decide", async (
 });
 
 // ── Contributions file validation (see docs/guides/bulk-data-review.md and
-// Wayfinder.ReferenceApp/service-blueprints/njf-contributions.json) — a genuinely different
+// Wayfinder.ReferenceApp/service-blueprints/njf-contributions.yaml) — a genuinely different
 // interaction shape from the risk-assessment queue above: no staff member decides anything here,
 // ContributionsValidation.cs applies deterministic rules automatically. Kept as its own
 // submissions map/endpoints rather than reusing the one above — the two capabilities' request/

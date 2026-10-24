@@ -192,7 +192,7 @@ export function run(): number {
   }
 
   // ── A series' own loop variable is valid inside its `values` columns, not `from`/`to` ──
-  // (real bug caught live against juggling-insurance-modeller.json's premiumByFrequency series,
+  // (real bug caught live against juggling-insurance-modeller.yaml's premiumByFrequency series,
   // whose "frequency" column is `round(performances * 1.25)` where "performances" is `over`
   // itself — CalculationEvaluator.cs's EvaluateSeries adds `over` to the per-row scope only for
   // the values columns, evaluating from/to against the outer scope beforehand.)

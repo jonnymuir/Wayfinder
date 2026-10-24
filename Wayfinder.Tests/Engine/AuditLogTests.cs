@@ -38,92 +38,94 @@ public class AuditLogTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "audit-log-test",
-          "displayName": "Audit Log Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "multiple",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [
-                { "id": "start--continue--middle", "target": "middle", "trigger": "continue" },
-                { "id": "start--go-wait--split", "target": "to-automation", "trigger": "go-wait" }
-              ]
-            },
-            {
-              "stageKey": "middle",
-              "displayName": "Middle",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Middle" } ]
-            },
-            {
-              "stageKey": "in-review",
-              "displayName": "In review",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "In review" } ],
-              "actions": [
-                {
-                  "type": "support-system-call",
-                  "timing": "onEnter",
-                  "params": {
-                    "supportSystemKey": "audit-log-test-support-system",
-                    "capabilityKey": "check",
-                    "inputs": { "notes": "notes" }
-                  }
-                }
-              ],
-              "routes": [ { "id": "in-review--approved--join", "target": "check-complete", "trigger": "approved" } ]
-            },
-            {
-              "stageKey": "approved",
-              "displayName": "Approved",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Approved" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-automation",
-              "displayName": "Send to automation",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [
-                { "id": "to-automation--go-wait--join", "target": "check-complete", "trigger": "go-wait" },
-                { "id": "to-automation--go-wait--review", "target": "in-review", "trigger": "go-wait" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "caseworker",
-              "waitingContent": "Waiting.",
-              "routes": [ { "id": "check-complete--approved--approved", "target": "approved", "trigger": "approved" } ],
-              "requiredIncomingQueues": ["caseworker", "automation"]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: audit-log-test
+        displayName: Audit Log Test
+        version: 1
+        initialStage: start
+        requestPolicy: multiple
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+          - key: automation
+            displayName: Automation
+            actor: system
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--continue--middle
+                target: middle
+                trigger: continue
+              - id: start--go-wait--split
+                target: to-automation
+                trigger: go-wait
+          - stageKey: middle
+            displayName: Middle
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Middle
+          - stageKey: in-review
+            displayName: In review
+            queueKey: automation
+            actions:
+              - type: support-system-call
+                timing: onEnter
+                params:
+                  supportSystemKey: audit-log-test-support-system
+                  capabilityKey: check
+                  inputs:
+                    notes: notes
+            components:
+              - type: panel
+                heading: In review
+            routes:
+              - id: in-review--approved--join
+                target: check-complete
+                trigger: approved
+          - stageKey: approved
+            displayName: Approved
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Approved
+        gateways:
+          - key: to-automation
+            displayName: Send to automation
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-automation--go-wait--join
+                target: check-complete
+                trigger: go-wait
+              - id: to-automation--go-wait--review
+                target: in-review
+                trigger: go-wait
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: caseworker
+            waitingContent: Waiting.
+            routes:
+              - id: check-complete--approved--approved
+                target: approved
+                trigger: approved
+            requiredIncomingQueues:
+              - caseworker
+              - automation
         """;
 
     private static (ProcessManagerEngine Engine, InMemoryAuditLogStore AuditLog) BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         var auditLog = new InMemoryAuditLogStore();
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
@@ -221,7 +223,7 @@ public class AuditLogTests
 
         try
         {
-            var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+            var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
             var auditLog = new InMemoryAuditLogStore();
             var client = new ScriptedSupportSystemClient();
             var engine = new ProcessManagerEngine(

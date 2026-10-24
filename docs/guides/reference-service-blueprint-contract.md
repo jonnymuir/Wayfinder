@@ -45,7 +45,7 @@ responsibility. A queue is:
 ```
 
 Every stage and gateway declares which queue it belongs to via `queueKey`.
-`money-modeller.json`, for example, has a `web-user` queue (the member modelling
+`money-modeller.yaml`, for example, has a `web-user` queue (the member modelling
 their own benefits) and a `business-user` queue (scheme administrators reviewing a
 formal quote request), two independent perspectives on the same service request.
 
@@ -89,7 +89,7 @@ enforced by `ServiceBlueprint.ValidateGatewayRouting()`, called by
 `validate_service_blueprint`/`save_service_blueprint`, and is not optional: a route from a stage
 straight to another stage is always a validation error. Even the simplest
 one-route stage needs a trivial pass-through gateway between it and its
-destination (see `to-model-from-record` in `money-modeller.json`, a `Split`
+destination (see `to-model-from-record` in `money-modeller.yaml`, a `Split`
 gateway with a single `continue` route). This uniform shape is what lets a single
 gateway later grow branching or join logic without restructuring every stage that
 points at it.
@@ -442,7 +442,7 @@ your earlier resolution kept in its replies.
 
 ## Worked examples
 
-This repo's own reference blueprint, `Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`,
+This repo's own reference blueprint, `Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml`,
 a single-queue-pair applicant/caseworker flow with Split gateways only, is the simplest
 starting point; see [the reference app guide](./reference-app.md).
 
@@ -450,11 +450,11 @@ For richer examples, [`docs/examples/`](../examples/) has five service blueprint
 as reference, in roughly increasing order of complexity. Each one passes validation in CI
 (`DocumentedExampleBlueprintTests`):
 
-- **`planning-notification.json`**, a planning application flow.
-- **`community-enquiry.json`**, two-queue applicant/reviewer flow with an approval loop.
-- **`information-request.json`**, two-queue, SLA-driven review flow.
-- **`payment-demo.json`**, two-queue, Split **and** Join gateways, a payment flow.
-- **`money-modeller.json`**, the fullest example: two-queue fan-out, a complete
+- **`planning-notification.yaml`**, a planning application flow.
+- **`community-enquiry.yaml`**, two-queue applicant/reviewer flow with an approval loop.
+- **`information-request.yaml`**, two-queue, SLA-driven review flow.
+- **`payment-demo.yaml`**, two-queue, Split **and** Join gateways, a payment flow.
+- **`money-modeller.yaml`**, the fullest example: two-queue fan-out, a complete
   declarative `calculations` block, live components (sliders, `stat-group`, `chart`,
   extensive `showWhen` use), and a `recalculate` self-loop. See the
   [worked walkthrough](./calculation-language.md#worked-example-money-modellerjson)

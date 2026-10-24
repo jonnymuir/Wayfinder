@@ -14,7 +14,7 @@ namespace Wayfinder.Tests.Engine;
 /// <summary>
 /// <c>ProcessManagerEngine.SyncBulkDatasetSyncState</c> — the bulk-dataset-specific glue over
 /// <see cref="ProcessManagerEngine.SyncServiceFields"/> (see docs/guides/bulk-data-review.md's
-/// sync-state section). Proves the full round trip a real blueprint like njf-contributions.json
+/// sync-state section). Proves the full round trip a real blueprint like njf-contributions.yaml
 /// relies on: a fresh ingest resets <c>dirtyCountField</c> to 0, a correction made afterwards is
 /// invisible until this method is called, and a route <c>showWhen</c>-gated on it reacts
 /// immediately once it is — with no separate recalculation step, matching
@@ -36,86 +36,91 @@ public class SyncBulkDatasetSyncStateTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "sync-bulk-dataset-test",
-          "displayName": "Sync Bulk Dataset Test",
-          "version": 1,
-          "initialStage": "upload",
-          "requestPolicy": "single",
-          "calculations": {
-            "fields": {
-              "contributionsDirtyCount": { "source": "service" }
-            }
-          },
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "upload",
-              "displayName": "Upload",
-              "queueKey": "caseworker",
-              "components": [ { "type": "file-upload", "fieldKey": "contributionsFile", "label": "File", "required": true } ],
-              "routes": [ { "id": "upload--submit--split", "target": "to-review", "trigger": "submit" } ]
-            },
-            {
-              "stageKey": "review",
-              "displayName": "Review",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "reviewNotes", "label": "Notes", "required": false } ],
-              "actions": [
-                {
-                  "type": "bulk-dataset-ingest",
-                  "timing": "onEnter",
-                  "params": {
-                    "sourceFileField": "contributionsFile",
-                    "datasetIdField": "contributionsDatasetId",
-                    "dirtyCountField": "contributionsDirtyCount",
-                    "columns": [
-                      { "key": "memberRef", "title": "Ref", "valueKind": "String", "role": "RowKey" },
-                      { "key": "memberName", "title": "Name", "valueKind": "String", "role": "Data", "editable": true }
-                    ]
-                  }
-                }
-              ],
-              "routes": [ { "id": "review--accept--split", "target": "to-done", "trigger": "accept", "showWhen": "contributionsDirtyCount = 0" } ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-review",
-              "displayName": "To review",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "to-review--submit--review", "target": "review", "trigger": "submit" } ]
-            },
-            {
-              "key": "to-done",
-              "displayName": "To done",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "to-done--accept--done", "target": "done", "trigger": "accept" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: sync-bulk-dataset-test
+        displayName: Sync Bulk Dataset Test
+        version: 1
+        initialStage: upload
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: upload
+            displayName: Upload
+            queueKey: caseworker
+            components:
+              - type: file-upload
+                fieldKey: contributionsFile
+                label: File
+                required: true
+            routes:
+              - id: upload--submit--split
+                target: to-review
+                trigger: submit
+          - stageKey: review
+            displayName: Review
+            queueKey: caseworker
+            actions:
+              - type: bulk-dataset-ingest
+                timing: onEnter
+                params:
+                  sourceFileField: contributionsFile
+                  datasetIdField: contributionsDatasetId
+                  dirtyCountField: contributionsDirtyCount
+                  columns:
+                    - key: memberRef
+                      title: Ref
+                      valueKind: String
+                      role: RowKey
+                    - key: memberName
+                      title: Name
+                      valueKind: String
+                      role: Data
+                      editable: true
+            components:
+              - type: text
+                fieldKey: reviewNotes
+                label: Notes
+            routes:
+              - id: review--accept--split
+                target: to-done
+                trigger: accept
+                showWhen: contributionsDirtyCount = 0
+          - stageKey: done
+            displayName: Done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Done
+        gateways:
+          - key: to-review
+            displayName: To review
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-review--submit--review
+                target: review
+                trigger: submit
+          - key: to-done
+            displayName: To done
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-done--accept--done
+                target: done
+                trigger: accept
+        calculations:
+          fields:
+            contributionsDirtyCount:
+              source: service
         """;
 
     private static (ProcessManagerEngine Engine, InMemoryServiceRequestFileStorage FileStorage, InMemoryBulkDatasetStore BulkDatasetStore) BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         var fileStorage = new InMemoryServiceRequestFileStorage();
         var bulkDatasetStore = new InMemoryBulkDatasetStore(fileStorage);
         var engine = new ProcessManagerEngine(

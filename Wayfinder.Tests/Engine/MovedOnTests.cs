@@ -19,7 +19,6 @@ public class MovedOnTests
     private const string Visitor = "visitor-1";
     private const string Caseworker = "caseworker-1";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static readonly ActorProfile VisitorProfile = new()
     {
@@ -32,34 +31,56 @@ public class MovedOnTests
     };
 
     private const string Blueprint = """
-        {
-          "definitionKey": "contact", "displayName": "Contact us", "version": 1, "initialStage": "write",
-          "queues": [
-            { "key": "visitor", "displayName": "Visitor", "actor": "citizen" },
-            { "key": "team", "displayName": "Team", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "write", "displayName": "Your message", "queueKey": "visitor",
-              "components": [ { "type": "conversation", "fieldKey": "thread", "label": "Your message", "required": true } ],
-              "routes": [ { "id": "write--send--respond", "target": "respond", "trigger": "send" } ]
-            },
-            {
-              "stageKey": "respond", "displayName": "Reply", "queueKey": "team",
-              "components": [ { "type": "conversation", "fieldKey": "thread", "label": "Reply" } ],
-              "routes": [
-                { "id": "respond--reply--write", "target": "write", "trigger": "reply" },
-                { "id": "respond--close--closed", "target": "closed", "trigger": "close" }
-              ]
-            },
-            { "stageKey": "closed", "displayName": "Closed", "queueKey": "team", "components": [ { "type": "panel", "heading": "Closed" } ] }
-          ]
-        }
+        definitionKey: contact
+        displayName: Contact us
+        version: 1
+        initialStage: write
+        requestPolicy: single
+        queues:
+          - key: visitor
+            displayName: Visitor
+            actor: citizen
+          - key: team
+            displayName: Team
+            actor: caseworker
+        stages:
+          - stageKey: write
+            displayName: Your message
+            queueKey: visitor
+            components:
+              - type: conversation
+                fieldKey: thread
+                label: Your message
+                required: true
+            routes:
+              - id: write--send--respond
+                target: respond
+                trigger: send
+          - stageKey: respond
+            displayName: Reply
+            queueKey: team
+            components:
+              - type: conversation
+                fieldKey: thread
+                label: Reply
+            routes:
+              - id: respond--reply--write
+                target: write
+                trigger: reply
+              - id: respond--close--closed
+                target: closed
+                trigger: close
+          - stageKey: closed
+            displayName: Closed
+            queueKey: team
+            components:
+              - type: panel
+                heading: Closed
         """;
 
     private static (ProcessManagerEngine Engine, InMemoryServiceRequestStore Store) Build()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(Blueprint, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(Blueprint);
         var store = new InMemoryServiceRequestStore();
         return (new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),
             new PassthroughContentSanitizer(), instanceStore: store), store);
@@ -119,37 +140,78 @@ public class MovedOnTests
     // The visitor waits at a join while the team replies: the reply completes the join and the
     // conversation carries on in the visitor's lane only.
     private const string JoinBlueprint = """
-        {
-          "definitionKey": "contact", "displayName": "Contact us", "version": 1, "initialStage": "message",
-          "queues": [
-            { "key": "visitor", "displayName": "Visitor", "actor": "citizen" },
-            { "key": "team", "displayName": "Team", "actor": "caseworker" }
-          ],
-          "stages": [
-            { "stageKey": "message", "displayName": "Message", "queueKey": "visitor",
-              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Your message", "required": true } ],
-              "routes": [ { "id": "message--send--to-team", "target": "to-team", "trigger": "send" } ] },
-            { "stageKey": "reply", "displayName": "Reply", "queueKey": "team",
-              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Your reply" } ],
-              "routes": [ { "id": "reply--reply--awaiting-reply", "target": "awaiting-reply", "trigger": "reply" } ] },
-            { "stageKey": "follow-up", "displayName": "Your conversation", "queueKey": "visitor",
-              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Reply to us" } ] }
-          ],
-          "gateways": [
-            { "key": "to-team", "displayName": "Send", "gatewayType": "Split", "queueKey": "visitor",
-              "routes": [ { "id": "to-team--send--reply", "target": "reply", "trigger": "send" },
-                          { "id": "to-team--send--awaiting-reply", "target": "awaiting-reply", "trigger": "send" } ] },
-            { "key": "awaiting-reply", "displayName": "Thank you", "gatewayType": "Join", "queueKey": "visitor",
-              "routes": [ { "id": "awaiting-reply--reply--follow-up", "target": "follow-up", "trigger": "reply" } ],
-              "requiredIncomingQueues": ["visitor", "team"] }
-          ]
-        }
+        definitionKey: contact
+        displayName: Contact us
+        version: 1
+        initialStage: message
+        requestPolicy: single
+        queues:
+          - key: visitor
+            displayName: Visitor
+            actor: citizen
+          - key: team
+            displayName: Team
+            actor: caseworker
+        stages:
+          - stageKey: message
+            displayName: Message
+            queueKey: visitor
+            components:
+              - type: conversation
+                fieldKey: conversation
+                label: Your message
+                required: true
+            routes:
+              - id: message--send--to-team
+                target: to-team
+                trigger: send
+          - stageKey: reply
+            displayName: Reply
+            queueKey: team
+            components:
+              - type: conversation
+                fieldKey: conversation
+                label: Your reply
+            routes:
+              - id: reply--reply--awaiting-reply
+                target: awaiting-reply
+                trigger: reply
+          - stageKey: follow-up
+            displayName: Your conversation
+            queueKey: visitor
+            components:
+              - type: conversation
+                fieldKey: conversation
+                label: Reply to us
+        gateways:
+          - key: to-team
+            displayName: Send
+            gatewayType: Split
+            queueKey: visitor
+            routes:
+              - id: to-team--send--reply
+                target: reply
+                trigger: send
+              - id: to-team--send--awaiting-reply
+                target: awaiting-reply
+                trigger: send
+          - key: awaiting-reply
+            displayName: Thank you
+            gatewayType: Join
+            queueKey: visitor
+            routes:
+              - id: awaiting-reply--reply--follow-up
+                target: follow-up
+                trigger: reply
+            requiredIncomingQueues:
+              - visitor
+              - team
         """;
 
     [Fact]
     public void ATeamReplyThatCompletesTheVisitorsWait_IsAnsweredMovedOn()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(JoinBlueprint, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(JoinBlueprint);
         var engine = new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),
             new PassthroughContentSanitizer(), instanceStore: new InMemoryServiceRequestStore());
         var started = engine.GetCurrent("contact", TenantId, Visitor, VisitorProfile);

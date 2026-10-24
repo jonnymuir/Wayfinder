@@ -15,7 +15,7 @@ using Wayfinder.Services.Sanitization;
 namespace Wayfinder.Tests.ServiceDesign;
 
 /// <summary>
-/// Proves the real Wayfinder.ReferenceApp/service-blueprints/njf-contributions.json blueprint —
+/// Proves the real Wayfinder.ReferenceApp/service-blueprints/njf-contributions.yaml blueprint —
 /// the worked example for docs/guides/bulk-data-review.md — both statically validates and
 /// behaves correctly end to end: the review stage's "Accept and finish" route is only offered
 /// once SafetyNet Underwriting's response has zero errors, and resubmitting genuinely feeds the
@@ -38,14 +38,14 @@ public class NjfContributionsBlueprintTests
     // exercises the wait/poll experience instead of exposing the machine-only automation stage.
     private static readonly ActorProfile CaseworkerProfile = new()
     {
-        // The real njf-contributions.json's own queue is "njf-team", not "caseworker" (see
-        // docs/guides/team-assignment.md — it used to share that key with juggling-licence.json,
+        // The real njf-contributions.yaml's own queue is "njf-team", not "caseworker" (see
+        // docs/guides/team-assignment.md — it used to share that key with juggling-licence.yaml,
         // disambiguated only by RoleGates, but now gets its own distinct, team-scoped identity).
         VisibleQueues = ["njf-team"],
         StartableQueues = ["njf-team"],
         ActionableQueues = ["njf-team"],
         RestrictToInstanceOwner = false,
-        // The real njf-contributions.json now gates its "njf-team" queue with
+        // The real njf-contributions.yaml now gates its "njf-team" queue with
         // roleGates: ["njf-contributions-review"] (see docs/guides/work-allocation.md) — matches
         // Wayfinder.ReferenceApp/Services/ReferenceActors.NjfOperationsProfile's own capability.
         Capabilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-review" },
@@ -55,11 +55,6 @@ public class NjfContributionsBlueprintTests
         TeamIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-team" }
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     private sealed class UnusedStore : IServiceBlueprintSourceStore
     {
@@ -70,10 +65,10 @@ public class NjfContributionsBlueprintTests
     }
 
     private static string SeedPath([CallerFilePath] string testFilePath = "") =>
-        Path.Combine(Path.GetDirectoryName(testFilePath)!, "..", "..", "Wayfinder.ReferenceApp", "service-blueprints", "njf-contributions.json");
+        Path.Combine(Path.GetDirectoryName(testFilePath)!, "..", "..", "Wayfinder.ReferenceApp", "service-blueprints", "njf-contributions.yaml");
 
     private static ServiceBlueprint LoadDefinition() =>
-        JsonSerializer.Deserialize<ServiceBlueprint>(File.ReadAllText(SeedPath()), JsonOptions)!;
+        ServiceBlueprintYaml.Deserialize(File.ReadAllText(SeedPath()));
 
     // Mirrors Wayfinder.ReferenceApp/Services/SupportSystems/SafetyNetUnderwritingClient.cs's own
     // registration for this capability — this test project doesn't reference the reference app,

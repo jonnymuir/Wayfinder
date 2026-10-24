@@ -20,8 +20,8 @@ public static class ReferenceActors
     public const string CaseworkerQueue = "caseworker";
 
     /// <summary>
-    /// njf-contributions.json's own queue key — deliberately not "caseworker" (see
-    /// docs/guides/team-assignment.md): it used to share that key with juggling-licence.json's
+    /// njf-contributions.yaml's own queue key — deliberately not "caseworker" (see
+    /// docs/guides/team-assignment.md): it used to share that key with juggling-licence.yaml's
     /// queue, disambiguated only by RoleGates, but its assignment policy (assign-to-initiator, one
     /// team) is different enough from juggling-licence's (team-tray) that it now gets a genuinely
     /// distinct queue identity instead of leaning on RoleGates as a same-key workaround.
@@ -67,7 +67,7 @@ public static class ReferenceActors
         ];
 
     // The NJF contributions queue renders everything the read-only caseworker review page does,
-    // plus a stat-group: njf-contributions.json's "review" and "confirm-warnings" stages both
+    // plus a stat-group: njf-contributions.yaml's "review" and "confirm-warnings" stages both
     // show a Summary tile group (rows with errors/warnings/accepted). Without this the seeded
     // blueprint fails queue-capability validation the moment it's opened in the editor ("queue
     // 'njf-team''s host does not declare support for stat-group"), blocking Save — even though
@@ -101,7 +101,7 @@ public static class ReferenceActors
     /// separate from NJF operations' — before this existed, both blueprints' "caseworker" queue
     /// keys collided (both literally "caseworker"), so Casey and Priya could each already see the
     /// *other's* rows purely because of the naming coincidence, regardless of which blueprint they
-    /// actually work on. <c>juggling-licence.json</c>'s own "caseworker" queue now declares
+    /// actually work on. <c>juggling-licence.yaml</c>'s own "caseworker" queue now declares
     /// <c>roleGates: ["juggling-licence-review"]</c> — see docs/guides/work-allocation.md.
     ///
     /// <see cref="ActorProfile.TeamIds"/> is required now too, not optional polish — that same
@@ -121,7 +121,7 @@ public static class ReferenceActors
     /// <summary>
     /// A distinct backstage worklist from <see cref="CaseworkerProfile"/>, not a shared one —
     /// NjfOperations is a distinct persona under the same CaseworkerRole, not a separate access
-    /// boundary (see DemoUsers.cs's own remarks), but njf-contributions.json's own queue
+    /// boundary (see DemoUsers.cs's own remarks), but njf-contributions.yaml's own queue
     /// (<see cref="NjfTeamQueue"/>) is a genuinely different queue from juggling-licence's
     /// (see <see cref="NjfTeamQueue"/>'s own remarks) — so <see cref="ActorProfile.VisibleQueues"/>/
     /// <see cref="ActorProfile.ActionableQueues"/> point at it explicitly rather than inheriting
@@ -135,7 +135,7 @@ public static class ReferenceActors
     ///
     /// <see cref="ActorProfile.Capabilities"/> is explicitly its own set here, not
     /// <see cref="CaseworkerProfile"/>'s — Priya's team is eligible for
-    /// <c>njf-contributions.json</c>'s own <see cref="NjfTeamQueue"/> (<c>roleGates: ["njf-contributions-review"]</c>),
+    /// <c>njf-contributions.yaml</c>'s own <see cref="NjfTeamQueue"/> (<c>roleGates: ["njf-contributions-review"]</c>),
     /// not Casey's juggling-licence one, even though both are still the same "caseworker" role at
     /// the auth layer (see DemoUsers.cs).
     /// </summary>

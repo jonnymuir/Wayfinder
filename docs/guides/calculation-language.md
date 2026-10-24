@@ -204,7 +204,7 @@ to the series name, and its `x`/band keys to columns declared in `values`.
 Any component (not just inputs, headings, warning banners, whole fieldsets) may
 carry a `showWhen` string in this same expression language, evaluated against the
 same scope as `calculations` (inputs, service inputs, calculated fields). A few real
-examples from [`money-modeller.json`](../examples/money-modeller.json)
+examples from [`money-modeller.yaml`](../examples/money-modeller.yaml)
 (the worked example below):
 
 ```json
@@ -238,7 +238,7 @@ submitting an action that was never declared:
 
 Only one of these two buttons is ever rendered, depending on whether a risk
 assessment was actually attached, the real shape used by
-`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `under-review`
+`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml`'s `under-review`
 stage (see [Support systems](./support-systems.md)).
 
 **Route `showWhen` vs. a scoped stage validation rule**, the two look similar but
@@ -333,7 +333,7 @@ in the journey. `mitigationHasEvidence` is an ordinary calculated field using `m
 ```
 
 See the real, worked version of this in
-[`juggling-licence.json`](https://github.com/jonnymuir/Wayfinder/blob/main/Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json)
+[`juggling-licence.yaml`](https://github.com/jonnymuir/Wayfinder/blob/main/Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml)
 (the `risk-assessment` stage), Wayfinder's own reference app, not an external example this time.
 
 **Evaluation is server-side only, and biased toward blocking.** `ProcessManagerEngine.Advance`
@@ -510,11 +510,11 @@ instead. None ever stops the rest of the validation pass: a genuine mistake in
 another expression in the same service blueprint is still reported in the same
 run.
 
-## Worked example: `money-modeller.json`
+## Worked example: `money-modeller.yaml`
 
 The reference app in this repo (see [Reference App](./reference-app.md)) is deliberately
 kept simple. The fullest worked example of this language is
-[`docs/examples/money-modeller.json`](../examples/money-modeller.json), a pension modeller.
+[`docs/examples/money-modeller.yaml`](../examples/money-modeller.yaml), a pension modeller.
 Every blueprint in `docs/examples/` is validated by `DocumentedExampleBlueprintTests`, so it
 stays loadable as the model changes. Its field chain is worth reading top-to-bottom as a model for
 how to structure a non-trivial calculation set: each field builds on the last, so

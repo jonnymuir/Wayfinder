@@ -26,85 +26,85 @@ public class ProcessManagerEngineRouteShowWhenTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "route-show-when-test",
-          "displayName": "Route ShowWhen Test",
-          "version": 1,
-          "initialStage": "capture",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "capture",
-              "displayName": "Capture",
-              "queueKey": "caseworker",
-              "components": [
-                { "type": "boolean", "fieldKey": "hasFile", "label": "Has file", "default": "false" }
-              ],
-              "routes": [
-                { "id": "capture--continue", "target": "to-review", "trigger": "continue" }
-              ]
-            },
-            {
-              "stageKey": "review",
-              "displayName": "Review",
-              "queueKey": "caseworker",
-              "routes": [
-                { "id": "review--with-file", "target": "to-with-file", "trigger": "with-file", "showWhen": "hasFile" },
-                { "id": "review--without-file", "target": "to-without-file", "trigger": "without-file", "showWhen": "not hasFile" }
-              ]
-            },
-            {
-              "stageKey": "withFileDone",
-              "displayName": "With file done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "With file done" } ]
-            },
-            {
-              "stageKey": "withoutFileDone",
-              "displayName": "Without file done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Without file done" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-review",
-              "displayName": "To review",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "to-review--continue", "target": "review", "trigger": "continue" } ]
-            },
-            {
-              "key": "to-with-file",
-              "displayName": "To with-file done",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "to-with-file--with-file", "target": "withFileDone", "trigger": "with-file" } ]
-            },
-            {
-              "key": "to-without-file",
-              "displayName": "To without-file done",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "to-without-file--without-file", "target": "withoutFileDone", "trigger": "without-file" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: route-show-when-test
+        displayName: Route ShowWhen Test
+        version: 1
+        initialStage: capture
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: capture
+            displayName: Capture
+            queueKey: caseworker
+            components:
+              - type: boolean
+                fieldKey: hasFile
+                label: Has file
+                default: "false"
+            routes:
+              - id: capture--continue
+                target: to-review
+                trigger: continue
+          - stageKey: review
+            displayName: Review
+            queueKey: caseworker
+            components: []
+            routes:
+              - id: review--with-file
+                target: to-with-file
+                trigger: with-file
+                showWhen: hasFile
+              - id: review--without-file
+                target: to-without-file
+                trigger: without-file
+                showWhen: not hasFile
+          - stageKey: withFileDone
+            displayName: With file done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: With file done
+          - stageKey: withoutFileDone
+            displayName: Without file done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Without file done
+        gateways:
+          - key: to-review
+            displayName: To review
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-review--continue
+                target: review
+                trigger: continue
+          - key: to-with-file
+            displayName: To with-file done
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-with-file--with-file
+                target: withFileDone
+                trigger: with-file
+          - key: to-without-file
+            displayName: To without-file done
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-without-file--without-file
+                target: withoutFileDone
+                trigger: without-file
         """;
 
     private static ProcessManagerEngine BuildEngine(string? blueprintJson = null)
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(blueprintJson ?? BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(blueprintJson ?? BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
@@ -180,9 +180,8 @@ public class ProcessManagerEngineRouteShowWhenTests
         // Same fail-open bias as Component.ShowWhen: a blueprint that would never have reached
         // this state through the editor (ServiceBlueprintAuthoringService.Validate blocks a
         // malformed ShowWhen at save time) must still degrade safely if it somehow does.
-        var brokenJson = BlueprintJson.Replace(
-            "\"showWhen\": \"hasFile\"", "\"showWhen\": \"not a valid expression (((\"");
-        var engine = BuildEngine(brokenJson);
+        var broken = BlueprintYaml.Replace("showWhen: hasFile\n", "showWhen: not a valid expression (((\n");
+        var engine = BuildEngine(broken);
         var started = engine.GetCurrent(DefinitionKey, TenantId, UserId);
 
         var atReview = engine.Advance(

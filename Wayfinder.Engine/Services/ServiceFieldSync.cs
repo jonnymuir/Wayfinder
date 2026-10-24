@@ -89,7 +89,7 @@ internal sealed class ServiceFieldSync(
         }
 
         var dirtyCountField = BulkDatasetActions.FindDeclaringIngestAction(definition, instance.FieldValues, datasetId)
-            ?.Parameters["dirtyCountField"]?.GetValue<string>();
+            ?.Parameters.GetString("dirtyCountField");
 
         if (bulkDatasetStore is null || string.IsNullOrWhiteSpace(dirtyCountField))
         {

@@ -23,28 +23,25 @@ public class RequestConcurrencyPolicyExecutionTests
     private const string GovernedKey = "governed";
     private const string UngovernedKey = "ungoverned";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private static string BlueprintJson(string definitionKey) => $$"""
-        {
-          "definitionKey": "{{definitionKey}}",
-          "displayName": "Concurrency Policy Test",
-          "version": 1,
-          "initialStage": "start",
-          "queues": [ { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" } ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ]
-            }
-          ]
-        }
+    private static string BlueprintYaml(string definitionKey) => $$"""
+        definitionKey: {{definitionKey}}
+        displayName: Concurrency Policy Test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
         """;
 
     private sealed class MultiDefinitionStore(params ServiceBlueprint[] definitions) : IServiceBlueprintStore
@@ -69,8 +66,8 @@ public class RequestConcurrencyPolicyExecutionTests
 
     private static ProcessManagerEngine BuildEngine(IRequestConcurrencyPolicy policy)
     {
-        var governed = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson(GovernedKey), JsonOptions)!;
-        var ungoverned = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson(UngovernedKey), JsonOptions)!;
+        var governed = ServiceBlueprintYaml.Deserialize(BlueprintYaml(GovernedKey));
+        var ungoverned = ServiceBlueprintYaml.Deserialize(BlueprintYaml(UngovernedKey));
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new MultiDefinitionStore(governed, ungoverned),

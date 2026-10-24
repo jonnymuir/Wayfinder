@@ -20,94 +20,82 @@ public class ProcessManagerEngineStageValidationTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "stage-validation-test",
-          "displayName": "Stage Validation Test",
-          "version": 1,
-          "initialStage": "details",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "citizen", "displayName": "Applicant", "actor": "citizen" }
-          ],
-          "calculations": {
-            "fields": {
-              "hasEvidence": { "expr": "matches(notes, '\\d')" }
-            }
-          },
-          "stages": [
-            {
-              "stageKey": "details",
-              "displayName": "Details",
-              "queueKey": "citizen",
-              "components": [
-                { "type": "boolean", "fieldKey": "hasIssue", "label": "Reporting an issue", "default": "false" }
-              ],
-              "routes": [
-                { "id": "details--continue", "target": "to-notes", "trigger": "continue", "label": "Continue" }
-              ]
-            },
-            {
-              "stageKey": "notes",
-              "displayName": "Notes",
-              "queueKey": "citizen",
-              "components": [
-                { "type": "text", "fieldKey": "notes", "label": "Notes", "default": "" }
-              ],
-              "validations": [
-                {
-                  "code": "evidence-required",
-                  "when": "hasIssue",
-                  "rule": "hasEvidence",
-                  "field": "notes",
-                  "message": "Include a concrete detail (e.g. a reference number) in your notes."
-                }
-              ],
-              "routes": [
-                { "id": "notes--continue", "target": "to-done", "trigger": "continue", "label": "Continue" }
-              ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "citizen",
-              "components": [
-                { "type": "panel", "heading": "Done" }
-              ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-notes",
-              "displayName": "Continue to notes",
-              "gatewayType": "Split",
-              "queueKey": "citizen",
-              "routes": [
-                { "id": "to-notes--continue", "target": "notes", "trigger": "continue" }
-              ]
-            },
-            {
-              "key": "to-done",
-              "displayName": "Continue to done",
-              "gatewayType": "Split",
-              "queueKey": "citizen",
-              "routes": [
-                { "id": "to-done--continue", "target": "done", "trigger": "continue" }
-              ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: stage-validation-test
+        displayName: Stage Validation Test
+        version: 1
+        initialStage: details
+        requestPolicy: single
+        queues:
+          - key: citizen
+            displayName: Applicant
+            actor: citizen
+        stages:
+          - stageKey: details
+            displayName: Details
+            queueKey: citizen
+            components:
+              - type: boolean
+                fieldKey: hasIssue
+                label: Reporting an issue
+                default: "false"
+            routes:
+              - id: details--continue
+                target: to-notes
+                trigger: continue
+                label: Continue
+          - stageKey: notes
+            displayName: Notes
+            queueKey: citizen
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+                default: ""
+            routes:
+              - id: notes--continue
+                target: to-done
+                trigger: continue
+                label: Continue
+            validations:
+              - code: evidence-required
+                when: hasIssue
+                rule: hasEvidence
+                field: notes
+                message: Include a concrete detail (e.g. a reference number) in your notes.
+          - stageKey: done
+            displayName: Done
+            queueKey: citizen
+            components:
+              - type: panel
+                heading: Done
+        gateways:
+          - key: to-notes
+            displayName: Continue to notes
+            gatewayType: Split
+            queueKey: citizen
+            routes:
+              - id: to-notes--continue
+                target: notes
+                trigger: continue
+          - key: to-done
+            displayName: Continue to done
+            gatewayType: Split
+            queueKey: citizen
+            routes:
+              - id: to-done--continue
+                target: done
+                trigger: continue
+        calculations:
+          fields:
+            hasEvidence:
+              expr: matches(notes, '\d')
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
@@ -188,78 +176,75 @@ public class ProcessManagerEngineStageValidationActionScopeTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "stage-validation-action-scope-test",
-          "displayName": "Stage Validation Action Scope Test",
-          "version": 1,
-          "initialStage": "review",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "review",
-              "displayName": "Review",
-              "queueKey": "caseworker",
-              "components": [
-                { "type": "boolean", "fieldKey": "checklistComplete", "label": "Checklist complete", "default": "false" }
-              ],
-              "validations": [
-                {
-                  "code": "checklist-required-to-approve",
-                  "rule": "checklistComplete",
-                  "actions": ["approve"],
-                  "message": "Complete the checklist before approving."
-                }
-              ],
-              "routes": [
-                { "id": "review--approve", "target": "to-approved", "trigger": "approve", "label": "Approve" },
-                { "id": "review--reject", "target": "to-rejected", "trigger": "reject", "label": "Reject" }
-              ]
-            },
-            {
-              "stageKey": "approved",
-              "displayName": "Approved",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Approved" } ]
-            },
-            {
-              "stageKey": "rejected",
-              "displayName": "Rejected",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Rejected" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-approved",
-              "displayName": "Continue to approved",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "to-approved--approve", "target": "approved", "trigger": "approve" } ]
-            },
-            {
-              "key": "to-rejected",
-              "displayName": "Continue to rejected",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "to-rejected--reject", "target": "rejected", "trigger": "reject" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: stage-validation-action-scope-test
+        displayName: Stage Validation Action Scope Test
+        version: 1
+        initialStage: review
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: review
+            displayName: Review
+            queueKey: caseworker
+            components:
+              - type: boolean
+                fieldKey: checklistComplete
+                label: Checklist complete
+                default: "false"
+            routes:
+              - id: review--approve
+                target: to-approved
+                trigger: approve
+                label: Approve
+              - id: review--reject
+                target: to-rejected
+                trigger: reject
+                label: Reject
+            validations:
+              - code: checklist-required-to-approve
+                rule: checklistComplete
+                message: Complete the checklist before approving.
+                actions:
+                  - approve
+          - stageKey: approved
+            displayName: Approved
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Approved
+          - stageKey: rejected
+            displayName: Rejected
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Rejected
+        gateways:
+          - key: to-approved
+            displayName: Continue to approved
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-approved--approve
+                target: approved
+                trigger: approve
+          - key: to-rejected
+            displayName: Continue to rejected
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-rejected--reject
+                target: rejected
+                trigger: reject
         """;
 
     private static (ProcessManagerEngine Engine, string InstanceId, int StateVersion) BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

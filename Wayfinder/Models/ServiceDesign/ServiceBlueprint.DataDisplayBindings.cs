@@ -38,7 +38,7 @@ public partial record ServiceBlueprint
         // of declaring one — see docs/guides/bulk-data-review.md, a showWhen expression can't
         // otherwise see it), and is never "shadowing" *user input* the way it would be if a real
         // captured field used that name — conflating the two produced a real false positive here,
-        // caught by njf-contributions.json's own contributionsErrorCount field.
+        // caught by njf-contributions.yaml's own contributionsErrorCount field.
         var inputFieldKeys = new HashSet<string>(capturedInputFieldKeys, StringComparer.Ordinal);
         inputFieldKeys.UnionWith(GetSupportSystemOutputFieldKeys());
         inputFieldKeys.UnionWith(GetBulkDatasetIngestOutputFieldKeys());
@@ -387,8 +387,8 @@ public partial record ServiceBlueprint
                     continue;
                 }
 
-                var supportSystemKey = action.Parameters["supportSystemKey"]?.GetValue<string>();
-                var capabilityKey = action.Parameters["capabilityKey"]?.GetValue<string>();
+                var supportSystemKey = action.Parameters.GetString("supportSystemKey");
+                var capabilityKey = action.Parameters.GetString("capabilityKey");
                 if (supportSystemKey is null || capabilityKey is null)
                 {
                     continue;

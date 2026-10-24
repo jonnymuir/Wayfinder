@@ -42,7 +42,7 @@ export function run(): number {
       // an empty string is a legitimate default, not "no default". A plain truthy check on
       // field.default (`field.default` alone) would wrongly treat this as absent, producing a
       // false "unknown reference" for a correctly-defaulted textarea/text input — exactly the
-      // false positive real juggling-licence.json's riskMitigationNotes field (default: "") hit
+      // false positive real juggling-licence.yaml's riskMitigationNotes field (default: "") hit
       // live.
       { fieldKey: 'withEmptyStringDefault', label: 'With empty default', type: 'textarea', default: '' },
       // A string/boolean field with no declared default still resolves — CalculationScopeBuilder.Build

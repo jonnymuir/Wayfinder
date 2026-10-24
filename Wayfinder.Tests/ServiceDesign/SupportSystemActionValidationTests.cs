@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using FluentAssertions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.Components;
@@ -11,7 +10,7 @@ namespace Wayfinder.Tests.ServiceDesign;
 /// <see cref="ServiceBlueprint.ValidateDataDisplayBindings"/> extension that recognises a
 /// capability's declared <see cref="SupportSystemCapabilityDescriptor.Outputs"/> as legitimate
 /// summary-list/stat-group field bindings — the gap found authoring the real
-/// juggling-licence.json "send to insurer" flow (a summary-list bound to a field only ever
+/// juggling-licence.yaml "send to insurer" flow (a summary-list bound to a field only ever
 /// populated by a support-system-call action's resolution had nowhere to declare that
 /// provenance).
 /// </summary>
@@ -45,15 +44,15 @@ public class SupportSystemActionValidationTests
         ],
     };
 
-    private static ActionDefinition MakeAction(JsonObject? parameters = null) => new()
+    private static ActionDefinition MakeAction(Dictionary<string, object?>? parameters = null) => new()
     {
         Type = SupportSystemActionTypes.SupportSystemCall,
         Timing = ActionTiming.OnEnter,
-        Parameters = parameters ?? new JsonObject
+        Parameters = parameters ?? new Dictionary<string, object?>
         {
             ["supportSystemKey"] = SupportSystemKey,
             ["capabilityKey"] = CapabilityKey,
-            ["inputs"] = new JsonObject { ["file"] = "riskAssessment" },
+            ["inputs"] = new Dictionary<string, object?> { ["file"] = "riskAssessment" },
         },
     };
 
@@ -125,7 +124,7 @@ public class SupportSystemActionValidationTests
         try
         {
             SupportSystemRegistry.Register(FixtureDescriptor());
-            var blueprint = MakeBlueprint(MakeAction(new JsonObject { ["inputs"] = new JsonObject() }));
+            var blueprint = MakeBlueprint(MakeAction(new Dictionary<string, object?> { ["inputs"] = new Dictionary<string, object?>() }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_MISSING_KEYS");
         }
@@ -158,11 +157,11 @@ public class SupportSystemActionValidationTests
         try
         {
             SupportSystemRegistry.Register(FixtureDescriptor());
-            var blueprint = MakeBlueprint(MakeAction(new JsonObject
+            var blueprint = MakeBlueprint(MakeAction(new Dictionary<string, object?>
             {
                 ["supportSystemKey"] = SupportSystemKey,
                 ["capabilityKey"] = "not-a-real-capability",
-                ["inputs"] = new JsonObject { ["file"] = "riskAssessment" },
+                ["inputs"] = new Dictionary<string, object?> { ["file"] = "riskAssessment" },
             }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_UNKNOWN_CAPABILITY");
@@ -180,11 +179,11 @@ public class SupportSystemActionValidationTests
         try
         {
             SupportSystemRegistry.Register(FixtureDescriptor());
-            var blueprint = MakeBlueprint(MakeAction(new JsonObject
+            var blueprint = MakeBlueprint(MakeAction(new Dictionary<string, object?>
             {
                 ["supportSystemKey"] = SupportSystemKey,
                 ["capabilityKey"] = CapabilityKey,
-                ["inputs"] = new JsonObject(), // "file" is required but unbound
+                ["inputs"] = new Dictionary<string, object?>(), // "file" is required but unbound
             }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_MISSING_REQUIRED_INPUT");
@@ -202,11 +201,11 @@ public class SupportSystemActionValidationTests
         try
         {
             SupportSystemRegistry.Register(FixtureDescriptor());
-            var blueprint = MakeBlueprint(MakeAction(new JsonObject
+            var blueprint = MakeBlueprint(MakeAction(new Dictionary<string, object?>
             {
                 ["supportSystemKey"] = SupportSystemKey,
                 ["capabilityKey"] = CapabilityKey,
-                ["inputs"] = new JsonObject { ["file"] = "riskAssessment", ["notARealInput"] = "riskAssessment" },
+                ["inputs"] = new Dictionary<string, object?> { ["file"] = "riskAssessment", ["notARealInput"] = "riskAssessment" },
             }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_UNKNOWN_INPUT");
@@ -224,11 +223,11 @@ public class SupportSystemActionValidationTests
         try
         {
             SupportSystemRegistry.Register(FixtureDescriptor());
-            var blueprint = MakeBlueprint(MakeAction(new JsonObject
+            var blueprint = MakeBlueprint(MakeAction(new Dictionary<string, object?>
             {
                 ["supportSystemKey"] = SupportSystemKey,
                 ["capabilityKey"] = CapabilityKey,
-                ["inputs"] = new JsonObject { ["file"] = "notARealField" },
+                ["inputs"] = new Dictionary<string, object?> { ["file"] = "notARealField" },
             }));
 
             blueprint.ValidateSupportSystemActions().Should().ContainSingle(d => d.Code == "SUPPORT_SYSTEM_ACTION_INPUT_UNKNOWN_FIELD");

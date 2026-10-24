@@ -1,3 +1,4 @@
+using YamlDotNet.Serialization;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -16,7 +17,6 @@ public record ServiceBlueprintGatewayDefinition
 
     public string DisplayName { get; init; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; init; }
 
     public required GatewayKind GatewayType { get; init; }
@@ -27,34 +27,27 @@ public record ServiceBlueprintGatewayDefinition
         init => _queueKey = value;
     }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Actor { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? RoleGates { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ServiceBlueprintRouteDefinition>? Routes { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? WaitingContent { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public int WaitingExpectedSeconds { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public int WaitingPollIntervalMs { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool WaitingAllowDefer { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? WaitingDeferMessage { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? RequiredIncomingQueues { get; init; }
 
     /// <summary>Curated icon-set key (see the client's graph/node-icons.ts). Falls back to a Split/Join default when unset.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Icon { get; init; }
 }

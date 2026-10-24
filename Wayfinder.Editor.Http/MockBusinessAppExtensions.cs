@@ -12,7 +12,8 @@ namespace Wayfinder.Editor.Http;
 /// package's own README. Ported verbatim from Wayfinder.ReferenceApp/Program.cs, where it was
 /// hand-copied against the same live <see cref="ServiceBlueprintAuthoringService"/> every other
 /// authoring surface (REST/MCP) already uses, so the packaged editor works out of the box without
-/// forking Wayfinder.Editor.Client's build.
+/// forking Wayfinder.Editor.Client's build. A blueprint travels as YAML (<c>application/yaml</c>)
+/// both ways; the list and the validation and save outcomes are JSON.
 /// </summary>
 public static class MockBusinessAppExtensions
 {
@@ -52,21 +53,22 @@ public static class MockBusinessAppExtensions
         group.MapGet("/{key}", async (string key, ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
         {
             var blueprint = await authoring.ReadAsync(key, ct);
-            return blueprint is null ? Results.NotFound() : Results.Json(blueprint);
+            return blueprint is null ? Results.NotFound() : Results.Text(ServiceBlueprintYaml.Serialize(blueprint), YamlContentType);
         });
 
         group.MapPost("/validate", async (HttpContext ctx, ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
-        {
-            var blueprint = await ctx.Request.ReadFromJsonAsync<ServiceBlueprint>(ct);
-            return blueprint is null
-                ? Results.BadRequest()
-                : Results.Json(authoring.Validate(blueprint));
-        });
+            ServiceBlueprintYaml.TryDeserialize(await ReadBodyAsync(ctx.Request, ct), out var blueprint, out var diagnostic)
+                ? Results.Json(authoring.Validate(blueprint))
+                : Results.Json(new ServiceBlueprintValidationOutcome(false, [diagnostic])));
 
         group.MapPut("/{key}", async (string key, HttpContext ctx, ServiceBlueprintAuthoringService authoring, CancellationToken ct) =>
         {
-            var blueprint = await ctx.Request.ReadFromJsonAsync<ServiceBlueprint>(ct);
-            if (blueprint is null || !string.Equals(blueprint.DefinitionKey, key, StringComparison.Ordinal))
+            if (!ServiceBlueprintYaml.TryDeserialize(await ReadBodyAsync(ctx.Request, ct), out var blueprint, out var diagnostic))
+            {
+                return Results.BadRequest(ServiceBlueprintSaveOutcome.Invalid([diagnostic]));
+            }
+
+            if (!string.Equals(blueprint.DefinitionKey, key, StringComparison.Ordinal))
             {
                 return Results.BadRequest();
             }
@@ -81,5 +83,13 @@ public static class MockBusinessAppExtensions
         });
 
         return group;
+    }
+
+    private const string YamlContentType = "application/yaml";
+
+    private static async Task<string> ReadBodyAsync(HttpRequest request, CancellationToken ct)
+    {
+        using var reader = new StreamReader(request.Body);
+        return await reader.ReadToEndAsync(ct);
     }
 }

@@ -21,7 +21,6 @@ public class ClaimInstancesTests
     private const string Anonymous = "anonymous-1";
     private const string Member = "member-1";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static readonly ActorProfile VisitorProfile = new()
     {
@@ -29,18 +28,28 @@ public class ClaimInstancesTests
     };
 
     private static string Blueprint(string requestPolicy) => $$"""
-        {
-          "definitionKey": "contact", "displayName": "Contact us", "version": 1,
-          "initialStage": "write", "requestPolicy": "{{requestPolicy}}",
-          "queues": [ { "key": "visitor", "displayName": "Visitor", "actor": "citizen" } ],
-          "stages": [ { "stageKey": "write", "displayName": "Write", "queueKey": "visitor",
-            "components": [ { "type": "text", "fieldKey": "message", "label": "Message" } ] } ]
-        }
+        definitionKey: contact
+        displayName: Contact us
+        version: 1
+        initialStage: write
+        requestPolicy: {{requestPolicy}}
+        queues:
+          - key: visitor
+            displayName: Visitor
+            actor: citizen
+        stages:
+          - stageKey: write
+            displayName: Write
+            queueKey: visitor
+            components:
+              - type: text
+                fieldKey: message
+                label: Message
         """;
 
     private static (ProcessManagerEngine Engine, InMemoryServiceRequestStore Store) Build(string requestPolicy)
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(Blueprint(requestPolicy), JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(Blueprint(requestPolicy));
         var store = new InMemoryServiceRequestStore();
         return (new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),
             new PassthroughContentSanitizer(), instanceStore: store), store);

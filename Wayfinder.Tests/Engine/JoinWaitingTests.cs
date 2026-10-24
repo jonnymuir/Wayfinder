@@ -17,7 +17,6 @@ public class JoinWaitingTests
     private const string TenantId = "tenant";
     private const string Visitor = "visitor-1";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static readonly ActorProfile VisitorProfile = new()
     {
@@ -26,49 +25,78 @@ public class JoinWaitingTests
 
     // The visitor's message goes to the team, and the visitor waits at the join for the reply.
     private const string Blueprint = """
-        {
-          "definitionKey": "contact", "displayName": "Contact us", "version": 1, "initialStage": "message",
-          "queues": [
-            { "key": "visitor", "displayName": "Visitor", "actor": "citizen" },
-            { "key": "team-internal-key", "displayName": "The Exchange", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "message", "displayName": "Send us a message", "queueKey": "visitor",
-              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Your message", "required": true } ],
-              "routes": [ { "id": "message--send--to-team", "target": "to-team", "trigger": "send" } ]
-            },
-            {
-              "stageKey": "reply", "displayName": "Reply", "queueKey": "team-internal-key",
-              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Your reply" } ],
-              "routes": [ { "id": "reply--reply--awaiting-reply", "target": "awaiting-reply", "trigger": "reply" } ]
-            },
-            {
-              "stageKey": "follow-up", "displayName": "Your conversation", "queueKey": "visitor",
-              "components": [ { "type": "conversation", "fieldKey": "conversation", "label": "Reply to us" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-team", "displayName": "Send", "gatewayType": "Split", "queueKey": "visitor",
-              "routes": [
-                { "id": "to-team--send--reply", "target": "reply", "trigger": "send" },
-                { "id": "to-team--send--awaiting-reply", "target": "awaiting-reply", "trigger": "send" }
-              ]
-            },
-            {
-              "key": "awaiting-reply", "displayName": "Thank you", "gatewayType": "Join", "queueKey": "visitor",
-              "routes": [ { "id": "awaiting-reply--reply--follow-up", "target": "follow-up", "trigger": "reply" } ],
-              "waitingContent": "We'll email you when we reply.",
-              "requiredIncomingQueues": ["visitor", "team-internal-key"]
-            }
-          ]
-        }
+        definitionKey: contact
+        displayName: Contact us
+        version: 1
+        initialStage: message
+        requestPolicy: single
+        queues:
+          - key: visitor
+            displayName: Visitor
+            actor: citizen
+          - key: team-internal-key
+            displayName: The Exchange
+            actor: caseworker
+        stages:
+          - stageKey: message
+            displayName: Send us a message
+            queueKey: visitor
+            components:
+              - type: conversation
+                fieldKey: conversation
+                label: Your message
+                required: true
+            routes:
+              - id: message--send--to-team
+                target: to-team
+                trigger: send
+          - stageKey: reply
+            displayName: Reply
+            queueKey: team-internal-key
+            components:
+              - type: conversation
+                fieldKey: conversation
+                label: Your reply
+            routes:
+              - id: reply--reply--awaiting-reply
+                target: awaiting-reply
+                trigger: reply
+          - stageKey: follow-up
+            displayName: Your conversation
+            queueKey: visitor
+            components:
+              - type: conversation
+                fieldKey: conversation
+                label: Reply to us
+        gateways:
+          - key: to-team
+            displayName: Send
+            gatewayType: Split
+            queueKey: visitor
+            routes:
+              - id: to-team--send--reply
+                target: reply
+                trigger: send
+              - id: to-team--send--awaiting-reply
+                target: awaiting-reply
+                trigger: send
+          - key: awaiting-reply
+            displayName: Thank you
+            gatewayType: Join
+            queueKey: visitor
+            waitingContent: We'll email you when we reply.
+            routes:
+              - id: awaiting-reply--reply--follow-up
+                target: follow-up
+                trigger: reply
+            requiredIncomingQueues:
+              - visitor
+              - team-internal-key
         """;
 
     private static ComponentRenderPayload WaitingAfterSending()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(Blueprint, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(Blueprint);
         var engine = new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),
             new PassthroughContentSanitizer(), instanceStore: new InMemoryServiceRequestStore());
         var started = engine.GetCurrent("contact", TenantId, Visitor, VisitorProfile);

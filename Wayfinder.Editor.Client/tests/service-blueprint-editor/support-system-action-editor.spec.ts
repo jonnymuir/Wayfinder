@@ -11,7 +11,7 @@ function storyUrl(storyId: string): string {
 // pickers, then one field per the chosen capability's declared inputs (reusing the same
 // field-ref-aware rendering a component's own properties use). See docs/guides/support-systems.md
 // and the real "insurer-validation" stage in Wayfinder.ReferenceApp/service-blueprints/
-// juggling-licence.json, which the story fixture mirrors in shape.
+// juggling-licence.yaml, which the story fixture mirrors in shape.
 test.describe('Support-system-call action editor', () => {
   test('cascading support-system/capability pickers render capability inputs bound to real fields, and the outcomes hint names the declared outcomes', async ({
     page,

@@ -22,92 +22,79 @@ public class ProcessManagerEngineFileUploadRetentionTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "file-upload-retention-test",
-          "displayName": "File Upload Retention Test",
-          "version": 1,
-          "initialStage": "upload",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "citizen", "displayName": "Applicant", "actor": "citizen" }
-          ],
-          "stages": [
-            {
-              "stageKey": "upload",
-              "displayName": "Upload your evidence",
-              "queueKey": "citizen",
-              "components": [
-                {
-                  "type": "fieldset",
-                  "legend": "Evidence",
-                  "children": [
-                    { "type": "file-upload", "fieldKey": "evidence", "label": "Evidence", "required": true }
-                  ]
-                }
-              ],
-              "routes": [
-                { "id": "upload--continue", "target": "to-check-answers", "trigger": "continue", "label": "Continue" }
-              ]
-            },
-            {
-              "stageKey": "check-answers",
-              "displayName": "Check your answers",
-              "queueKey": "citizen",
-              "components": [
-                {
-                  "type": "summary-list",
-                  "children": [
-                    { "type": "file-upload", "fieldKey": "evidence", "label": "Evidence", "required": true, "changeStateKey": "upload" }
-                  ]
-                }
-              ],
-              "routes": [
-                { "id": "check-answers--submit", "target": "to-done", "trigger": "submit", "label": "Submit" }
-              ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "citizen",
-              "components": [
-                { "type": "panel", "heading": "Done" }
-              ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-check-answers",
-              "displayName": "To check answers",
-              "gatewayType": "Split",
-              "queueKey": "citizen",
-              "routes": [
-                { "id": "to-check-answers--continue", "target": "check-answers", "trigger": "continue" }
-              ]
-            },
-            {
-              "key": "to-done",
-              "displayName": "To done",
-              "gatewayType": "Split",
-              "queueKey": "citizen",
-              "routes": [
-                { "id": "to-done--submit", "target": "done", "trigger": "submit" }
-              ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: file-upload-retention-test
+        displayName: File Upload Retention Test
+        version: 1
+        initialStage: upload
+        requestPolicy: single
+        queues:
+          - key: citizen
+            displayName: Applicant
+            actor: citizen
+        stages:
+          - stageKey: upload
+            displayName: Upload your evidence
+            queueKey: citizen
+            components:
+              - type: fieldset
+                legend: Evidence
+                children:
+                  - type: file-upload
+                    fieldKey: evidence
+                    label: Evidence
+                    required: true
+            routes:
+              - id: upload--continue
+                target: to-check-answers
+                trigger: continue
+                label: Continue
+          - stageKey: check-answers
+            displayName: Check your answers
+            queueKey: citizen
+            components:
+              - type: summary-list
+                children:
+                  - type: file-upload
+                    fieldKey: evidence
+                    label: Evidence
+                    required: true
+                    changeStateKey: upload
+            routes:
+              - id: check-answers--submit
+                target: to-done
+                trigger: submit
+                label: Submit
+          - stageKey: done
+            displayName: Done
+            queueKey: citizen
+            components:
+              - type: panel
+                heading: Done
+        gateways:
+          - key: to-check-answers
+            displayName: To check answers
+            gatewayType: Split
+            queueKey: citizen
+            routes:
+              - id: to-check-answers--continue
+                target: check-answers
+                trigger: continue
+          - key: to-done
+            displayName: To done
+            gatewayType: Split
+            queueKey: citizen
+            routes:
+              - id: to-done--submit
+                target: done
+                trigger: submit
         """;
 
     [Fact]
     public void Advance_RevisitingUploadStageWithoutReselectingFile_RetainsThePersistedReference()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

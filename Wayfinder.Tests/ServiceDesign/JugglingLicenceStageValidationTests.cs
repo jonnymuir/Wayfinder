@@ -14,7 +14,7 @@ namespace Wayfinder.Tests.ServiceDesign;
 
 /// <summary>
 /// Proves the worked "risk-mitigation-evidence-required" example added to
-/// Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json — a real, cross-stage
+/// Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml — a real, cross-stage
 /// StageDefinition.Validations rule (the gate field, hasDangerousProps, is captured on
 /// "event-details"; the rule itself lives on "risk-assessment") — both statically validates
 /// clean and behaves correctly end to end through ProcessManagerEngine.Advance.
@@ -24,7 +24,7 @@ public class JugglingLicenceStageValidationTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    // The real juggling-licence.json now declares its "caseworker" queue team-tray (see
+    // The real juggling-licence.yaml now declares its "caseworker" queue team-tray (see
     // docs/guides/team-assignment.md) — a caseworker must be a team member AND have picked the
     // row up before anything is offered/actionable, unlike the citizen-side ArriveAt* helpers
     // above, which stay on ActorProfile.UnrestrictedOwner since citizen queues are unaffected.
@@ -37,11 +37,6 @@ public class JugglingLicenceStageValidationTests
         TeamIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "juggling-licence-reviewers" }
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     private sealed class UnusedStore : IServiceBlueprintSourceStore
     {
@@ -58,10 +53,10 @@ public class JugglingLicenceStageValidationTests
     private static string JugglingLicenceSeedPath([CallerFilePath] string testFilePath = "") =>
         Path.Combine(
             Path.GetDirectoryName(testFilePath)!, "..", "..",
-            "Wayfinder.ReferenceApp", "service-blueprints", "juggling-licence.json");
+            "Wayfinder.ReferenceApp", "service-blueprints", "juggling-licence.yaml");
 
     private static ServiceBlueprint LoadDefinition() =>
-        JsonSerializer.Deserialize<ServiceBlueprint>(File.ReadAllText(JugglingLicenceSeedPath()), JsonOptions)!;
+        ServiceBlueprintYaml.Deserialize(File.ReadAllText(JugglingLicenceSeedPath()));
 
     [Fact]
     public void RealBlueprint_ValidatesCleanlyIncludingTheStageValidationRule()

@@ -22,7 +22,6 @@ public class RequestHandoverTests
     private const string Visitor = "anonymous-visitor-1";
     private const string Caseworker = "caseworker-1";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static readonly ActorProfile VisitorProfile = new()
     {
@@ -42,100 +41,139 @@ public class RequestHandoverTests
 
     // A contact form: the visitor sends a message, the team replies, asks for more, or closes it.
     private const string ContactBlueprint = """
-        {
-          "definitionKey": "contact",
-          "displayName": "Contact us",
-          "version": 1,
-          "initialStage": "message",
-          "queues": [
-            { "key": "visitor", "displayName": "Visitor", "actor": "citizen" },
-            { "key": "team", "displayName": "Team", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "message", "displayName": "Your message", "queueKey": "visitor",
-              "components": [ { "type": "textarea", "fieldKey": "message", "label": "Message", "required": false } ],
-              "routes": [ { "id": "message--submit--reply", "target": "reply", "trigger": "submit" } ]
-            },
-            {
-              "stageKey": "reply", "displayName": "Reply", "queueKey": "team",
-              "components": [ { "type": "textarea", "fieldKey": "answer", "label": "Answer", "required": false } ],
-              "routes": [
-                { "id": "reply--ask--message", "target": "message", "trigger": "ask-for-more" },
-                { "id": "reply--close--closed", "target": "closed", "trigger": "close" }
-              ]
-            },
-            {
-              "stageKey": "closed", "displayName": "Closed", "queueKey": "team",
-              "components": [ { "type": "panel", "heading": "Closed" } ]
-            }
-          ]
-        }
+        definitionKey: contact
+        displayName: Contact us
+        version: 1
+        initialStage: message
+        requestPolicy: single
+        queues:
+          - key: visitor
+            displayName: Visitor
+            actor: citizen
+          - key: team
+            displayName: Team
+            actor: caseworker
+        stages:
+          - stageKey: message
+            displayName: Your message
+            queueKey: visitor
+            components:
+              - type: textarea
+                fieldKey: message
+                label: Message
+            routes:
+              - id: message--submit--reply
+                target: reply
+                trigger: submit
+          - stageKey: reply
+            displayName: Reply
+            queueKey: team
+            components:
+              - type: textarea
+                fieldKey: answer
+                label: Answer
+            routes:
+              - id: reply--ask--message
+                target: message
+                trigger: ask-for-more
+              - id: reply--close--closed
+                target: closed
+                trigger: close
+          - stageKey: closed
+            displayName: Closed
+            queueKey: team
+            components:
+              - type: panel
+                heading: Closed
         """;
 
     // A journey the visitor completes on their own: nothing ever leaves their queue.
     private const string SelfServiceBlueprint = """
-        {
-          "definitionKey": "self-service",
-          "displayName": "Check your eligibility",
-          "version": 1,
-          "initialStage": "answers",
-          "queues": [ { "key": "visitor", "displayName": "Visitor", "actor": "citizen" } ],
-          "stages": [
-            {
-              "stageKey": "answers", "displayName": "Your answers", "queueKey": "visitor",
-              "components": [ { "type": "text", "fieldKey": "postcode", "label": "Postcode", "required": false } ],
-              "routes": [ { "id": "answers--submit--result", "target": "result", "trigger": "submit" } ]
-            },
-            {
-              "stageKey": "result", "displayName": "Result", "queueKey": "visitor",
-              "components": [ { "type": "panel", "heading": "You are eligible" } ]
-            }
-          ]
-        }
+        definitionKey: self-service
+        displayName: Check your eligibility
+        version: 1
+        initialStage: answers
+        requestPolicy: single
+        queues:
+          - key: visitor
+            displayName: Visitor
+            actor: citizen
+        stages:
+          - stageKey: answers
+            displayName: Your answers
+            queueKey: visitor
+            components:
+              - type: text
+                fieldKey: postcode
+                label: Postcode
+            routes:
+              - id: answers--submit--result
+                target: result
+                trigger: submit
+          - stageKey: result
+            displayName: Result
+            queueKey: visitor
+            components:
+              - type: panel
+                heading: You are eligible
         """;
 
     // The visitor's submission splits: they see an acknowledgement while the team gets a copy.
     private const string SplitBlueprint = """
-        {
-          "definitionKey": "split-contact",
-          "displayName": "Contact us (split)",
-          "version": 1,
-          "initialStage": "message",
-          "queues": [
-            { "key": "visitor", "displayName": "Visitor", "actor": "citizen" },
-            { "key": "team", "displayName": "Team", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "message", "displayName": "Your message", "queueKey": "visitor",
-              "components": [ { "type": "textarea", "fieldKey": "message", "label": "Message", "required": false } ],
-              "routes": [ { "id": "message--submit--split", "target": "to-team", "trigger": "submit" } ]
-            },
-            {
-              "stageKey": "acknowledged", "displayName": "Thank you", "queueKey": "visitor",
-              "components": [ { "type": "panel", "heading": "Thank you" } ]
-            },
-            {
-              "stageKey": "reply", "displayName": "Reply", "queueKey": "team",
-              "components": [ { "type": "textarea", "fieldKey": "answer", "label": "Answer", "required": false } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-team", "displayName": "Send to the team", "gatewayType": "Split", "queueKey": "visitor",
-              "routes": [
-                { "id": "to-team--submit--acknowledged", "target": "acknowledged", "trigger": "submit" },
-                { "id": "to-team--submit--reply", "target": "reply", "trigger": "submit" }
-              ]
-            }
-          ]
-        }
+        definitionKey: split-contact
+        displayName: Contact us (split)
+        version: 1
+        initialStage: message
+        requestPolicy: single
+        queues:
+          - key: visitor
+            displayName: Visitor
+            actor: citizen
+          - key: team
+            displayName: Team
+            actor: caseworker
+        stages:
+          - stageKey: message
+            displayName: Your message
+            queueKey: visitor
+            components:
+              - type: textarea
+                fieldKey: message
+                label: Message
+            routes:
+              - id: message--submit--split
+                target: to-team
+                trigger: submit
+          - stageKey: acknowledged
+            displayName: Thank you
+            queueKey: visitor
+            components:
+              - type: panel
+                heading: Thank you
+          - stageKey: reply
+            displayName: Reply
+            queueKey: team
+            components:
+              - type: textarea
+                fieldKey: answer
+                label: Answer
+        gateways:
+          - key: to-team
+            displayName: Send to the team
+            gatewayType: Split
+            queueKey: visitor
+            routes:
+              - id: to-team--submit--acknowledged
+                target: acknowledged
+                trigger: submit
+              - id: to-team--submit--reply
+                target: reply
+                trigger: submit
         """;
 
     private static (ProcessManagerEngine Engine, InMemoryServiceRequestStore Store) Build(string blueprintJson)
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(blueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(blueprintJson);
         var store = new InMemoryServiceRequestStore();
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,

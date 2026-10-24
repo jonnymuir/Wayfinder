@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Models;
@@ -56,11 +58,11 @@ internal sealed partial class SupportSystemActions(IReadOnlyDictionary<string, I
         ActionDefinition action,
         IReadOnlyDictionary<string, object?> fieldValues)
     {
-        var inputFieldRefs = action.Parameters["inputs"]?.AsObject();
+        var inputFieldRefs = action.Parameters.GetMap("inputs");
         var inputs = new Dictionary<string, SupportSystemInputValue>(StringComparer.Ordinal);
         foreach (var input in capability.Inputs)
         {
-            var fieldKey = inputFieldRefs?[input.Key]?.GetValue<string>();
+            var fieldKey = inputFieldRefs?.GetString(input.Key);
             var raw = fieldKey is not null ? fieldValues.GetValueOrDefault(fieldKey) : null;
             inputs[input.Key] = SupportSystemInputValue.Resolve(raw);
         }
@@ -78,8 +80,8 @@ internal sealed partial class SupportSystemActions(IReadOnlyDictionary<string, I
         RequestCursor cursor,
         ActionDefinition action)
     {
-        var supportSystemKey = action.Parameters["supportSystemKey"]?.GetValue<string>();
-        var capabilityKey = action.Parameters["capabilityKey"]?.GetValue<string>();
+        var supportSystemKey = action.Parameters.GetString("supportSystemKey");
+        var capabilityKey = action.Parameters.GetString("capabilityKey");
         if (string.IsNullOrWhiteSpace(supportSystemKey) || string.IsNullOrWhiteSpace(capabilityKey))
         {
             MissingKeys(logger, cursor.CurrentNodeKey);
@@ -125,9 +127,13 @@ internal sealed partial class SupportSystemActions(IReadOnlyDictionary<string, I
         }
 
         return policy.FallbackOutcome is { } outcome
-            ? (invocation with { FailureOutcomeKey = outcome, FailurePayload = policy.FallbackOutputs }, false)
+            ? (invocation with { FailureOutcomeKey = outcome, FailurePayload = ToPayload(policy.FallbackOutputs) }, false)
             : (null, true);
     }
+
+    // The fallback outputs resolve the call exactly as a real result payload would, so they take its JSON form.
+    private static JsonObject? ToPayload(IReadOnlyDictionary<string, object?>? outputs) =>
+        outputs is null ? null : JsonSerializer.SerializeToNode(outputs)?.AsObject();
 
     /// <summary>
     /// Sends the call, retrying with a doubling delay up to the policy's <c>retries</c> (none by

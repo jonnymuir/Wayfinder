@@ -1,24 +1,17 @@
-using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
-
 namespace Wayfinder.Models.ServiceDesign.Components;
 
 /// <summary>
 /// The single source of truth for which component "type" discriminator strings exist, what
-/// each one is (<see cref="ComponentDescriptor"/>), and how to make <see cref="Component"/>'s
-/// JSON polymorphism recognise it — replacing the old, compile-time-fixed
-/// <c>[JsonDerivedType]</c> attribute list as the *only* way a discriminator gets registered.
+/// each one is (<see cref="ComponentDescriptor"/>). <see cref="ServiceBlueprintYaml"/> reads a
+/// component's <c>type</c> through it, so registering is the only way a discriminator exists.
 /// Built-ins (<see cref="BuiltInComponentDescriptors"/>) register at static-init time; a host
 /// or toolkit extension registers its own the same way, via <see cref="Register{TComponent}"/>,
 /// at startup. See docs/guides/extending-the-component-catalog.md for the full guide.
 ///
 /// The registry is a startup-time, one-shot thing: it freezes the first time anything actually
 /// reads it (<see cref="All"/>, <see cref="Find"/>, <see cref="DescriptorFor"/>, or the first
-/// real (de)serialization via <see cref="JsonTypeInfoResolver"/>) and <see cref="Register{TComponent}"/>
-/// throws after that — the alternative (silently allowing late registration) risks an
-/// already-cached <see cref="System.Text.Json.Serialization.Metadata.JsonTypeInfo"/> for
-/// <see cref="Component"/> that doesn't include a type registered too late, which would be a far
-/// more confusing failure than a clear startup-time exception.
+/// blueprint read or written) and <see cref="Register{TComponent}"/> throws after that, so a type
+/// registered too late fails clearly at startup rather than half-working.
 /// </summary>
 /// <remarks>
 /// Process-wide, not per-tenant, by design — mirrors <see cref="SupportSystems.SupportSystemRegistry"/>'s
@@ -175,44 +168,13 @@ public static class ComponentTypeRegistry
         }
     }
 
-    /// <summary>
-    /// An <see cref="IJsonTypeInfoResolver"/> that makes <see cref="Component"/>'s polymorphic
-    /// (de)serialization recognise every currently-registered discriminator — built-ins and any
-    /// custom types registered before first use. Wire into
-    /// <c>JsonSerializerOptions.TypeInfoResolver</c> wherever a <see cref="ServiceBlueprint"/> is
-    /// read or written (see <see cref="ServiceBlueprintJson"/>, the one shared place this
-    /// already happens). Uses System.Text.Json's own contract-customisation API
-    /// (<c>DefaultJsonTypeInfoResolver</c> + a <c>Modifiers</c> delegate) rather than a
-    /// hand-rolled <c>JsonConverter&lt;Component&gt;</c> — it reuses STJ's own battle-tested
-    /// polymorphic engine (nested discriminators, unknown-type error messages, etc.) instead of
-    /// reimplementing it for 27+ types. Deliberately does NOT remove the static
-    /// <c>[JsonDerivedType]</c> list already on <see cref="Component"/> — the built-ins keep
-    /// working exactly as before; this is additive, listing every *registered* type (built-in
-    /// and custom) on top.
-    /// </summary>
-    public static IJsonTypeInfoResolver CreateJsonTypeInfoResolver()
+    /// <summary>The descriptor registered for a component CLR type, or null. Freezes the registry.</summary>
+    public static ComponentDescriptor? FindByClrType(Type clrType)
     {
-        var resolver = new DefaultJsonTypeInfoResolver();
-        resolver.Modifiers.Add(typeInfo =>
+        lock (Lock)
         {
-            if (typeInfo.Type != typeof(Component))
-            {
-                return;
-            }
-
-            typeInfo.PolymorphismOptions = new JsonPolymorphismOptions
-            {
-                TypeDiscriminatorPropertyName = "type",
-                UnknownDerivedTypeHandling = JsonUnknownDerivedTypeHandling.FailSerialization,
-            };
-
-            foreach (var descriptor in All)
-            {
-                typeInfo.PolymorphismOptions.DerivedTypes.Add(
-                    new JsonDerivedType(descriptor.ClrType, descriptor.Discriminator));
-            }
-        });
-
-        return resolver;
+            _frozen = true;
+            return ByClrType.GetValueOrDefault(clrType);
+        }
     }
 }

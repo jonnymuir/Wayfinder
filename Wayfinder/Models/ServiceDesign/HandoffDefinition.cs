@@ -18,6 +18,5 @@ public record HandoffDefinition
 
     public string Label { get; init; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ActorChange { get; init; }
 }

@@ -125,14 +125,19 @@ public class LocationPickerTests
     }
 
     [Fact]
-    public void ABlueprintComponentOfThisTypeRoundTripsThroughJson()
+    public void ABlueprintComponentOfThisTypeRoundTripsThroughYaml()
     {
-        const string json = """{"type":"location-picker","fieldKey":"location","label":"Where?","required":true}""";
+        const string yaml = """
+            type: location-picker
+            fieldKey: location
+            label: Where?
+            required: true
+            """;
 
-        var component = JsonSerializer.Deserialize<Component>(json, ServiceBlueprintJson.ReadOptions);
+        var component = ServiceBlueprintYaml.Deserialize<Component>(yaml);
 
         component.Should().BeOfType<LocationPickerComponent>()
             .Which.Should().Match<LocationPickerComponent>(c => c.FieldKey == "location" && c.Required);
-        JsonSerializer.Serialize(component, ServiceBlueprintJson.WriteOptions).Should().Contain("\"type\": \"location-picker\"");
+        ServiceBlueprintYaml.Serialize(component).Should().StartWith("type: location-picker\n");
     }
 }

@@ -16,13 +16,10 @@ public record ServiceBlueprintRouteDefinition
 
     public string Trigger { get; init; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Label { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Style { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? RequiresRole { get; init; }
 
     /// <summary>
@@ -43,9 +40,7 @@ public record ServiceBlueprintRouteDefinition
     /// *blocked with an explanation* until some condition holds — the two are different UX, not
     /// interchangeable spellings of the same thing.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ShowWhen { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ActionDefinition>? Actions { get; init; }
 }

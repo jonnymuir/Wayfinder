@@ -44,7 +44,7 @@ public class ServiceBlueprintAuthoringServiceStageValidationTests
                 DisplayName = "only",
                 QueueKey = "citizen",
                 Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes", Default = "" }],
-                Validations = [new ServiceBlueprintStageValidationRule("evidence-required", rule, "Message", When: when)],
+                Validations = [new ServiceBlueprintStageValidationRule { Code = "evidence-required", Rule = rule, Message = "Message", When = when }],
             },
         ],
     };
@@ -115,7 +115,7 @@ public class ServiceBlueprintAuthoringServiceStageValidationTests
                         new TextInputComponent { FieldKey = "notes", Label = "Notes", Default = "" },
                         new NumberInputComponent { FieldKey = "jugglerCount", Label = "Jugglers" },
                     ],
-                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "jugglerCount > 0", "Message")],
+                    Validations = [new ServiceBlueprintStageValidationRule { Code = "evidence-required", Rule = "jugglerCount > 0", Message = "Message" }],
                 },
             ],
         };

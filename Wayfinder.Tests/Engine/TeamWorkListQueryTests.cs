@@ -38,43 +38,42 @@ public class TeamWorkListQueryTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "team-worklist-test",
-          "displayName": "Team Worklist Test",
-          "version": 1,
-          "initialStage": "triage",
-          "requestPolicy": "multiple",
-          "queues": [
-            { "key": "review-team", "displayName": "Review Team", "actor": "caseworker", "assignmentPolicy": "team-tray", "owningTeamId": "reviewers" }
-          ],
-          "stages": [
-            {
-              "stageKey": "triage",
-              "displayName": "Triage",
-              "queueKey": "review-team",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "triage--resolve--resolved", "target": "resolved", "trigger": "resolve" } ]
-            },
-            {
-              "stageKey": "resolved",
-              "displayName": "Resolved",
-              "queueKey": "review-team",
-              "components": [ { "type": "panel", "heading": "Resolved" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: team-worklist-test
+        displayName: Team Worklist Test
+        version: 1
+        initialStage: triage
+        requestPolicy: multiple
+        queues:
+          - key: review-team
+            displayName: Review Team
+            actor: caseworker
+            assignmentPolicy: team-tray
+            owningTeamId: reviewers
+        stages:
+          - stageKey: triage
+            displayName: Triage
+            queueKey: review-team
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: triage--resolve--resolved
+                target: resolved
+                trigger: resolve
+          - stageKey: resolved
+            displayName: Resolved
+            queueKey: review-team
+            components:
+              - type: panel
+                heading: Resolved
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

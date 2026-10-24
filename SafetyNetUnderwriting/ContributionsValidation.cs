@@ -9,7 +9,7 @@ namespace SafetyNetUnderwriting;
 /// <summary>
 /// SafetyNet Underwriting's own synthetic underwriting rules for the National Juggling
 /// Federation's monthly contributions file (see docs/guides/bulk-data-review.md and
-/// Wayfinder.ReferenceApp/service-blueprints/njf-contributions.json) — believable, deterministic
+/// Wayfinder.ReferenceApp/service-blueprints/njf-contributions.yaml) — believable, deterministic
 /// rules for a demo, not real underwriting logic. Deliberately stateless (no submission history):
 /// a matched member id is derived from the member reference itself rather than looked up, so this
 /// app doesn't need its own persistent member database for the demo to feel real.
@@ -37,7 +37,7 @@ public static class ContributionsValidation
     /// Parses <paramref name="csvBytes"/> against the NJF contributions schema and returns the
     /// same columns plus SafetyNet's own three appended ones, one row per input row — the file
     /// shape a real bordereau exchange follows, and exactly the shape
-    /// <c>bulk-dataset-ingest</c>'s column schema in njf-contributions.json expects back.
+    /// <c>bulk-dataset-ingest</c>'s column schema in njf-contributions.yaml expects back.
     /// </summary>
     public static byte[] Validate(byte[] csvBytes)
     {

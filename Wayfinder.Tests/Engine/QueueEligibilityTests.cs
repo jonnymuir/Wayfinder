@@ -21,55 +21,65 @@ public class QueueEligibilityTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     // Two caseworker-ish queues sharing the same actor type, one gated to a single capability, one
     // gated to two (any-of), one left ungated entirely (regression: existing blueprints with no
     // RoleGates at all must stay fully unrestricted).
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "queue-eligibility-test",
-          "displayName": "Queue Eligibility Test",
-          "version": 1,
-          "initialStage": "gated-start",
-          "requestPolicy": "multiple",
-          "queues": [
-            { "key": "gated-single", "displayName": "Gated (single capability)", "actor": "caseworker", "roleGates": ["njf-review"] },
-            { "key": "gated-any-of", "displayName": "Gated (any of two)", "actor": "caseworker", "roleGates": ["team-a", "team-b"] },
-            { "key": "ungated", "displayName": "Ungated", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "gated-start",
-              "displayName": "Gated start",
-              "queueKey": "gated-single",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "gated-start--continue--any-of", "target": "any-of-stage", "trigger": "continue" } ]
-            },
-            {
-              "stageKey": "any-of-stage",
-              "displayName": "Any-of stage",
-              "queueKey": "gated-any-of",
-              "components": [ { "type": "text", "fieldKey": "notes2", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "any-of--continue--ungated", "target": "ungated-stage", "trigger": "continue" } ]
-            },
-            {
-              "stageKey": "ungated-stage",
-              "displayName": "Ungated stage",
-              "queueKey": "ungated",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: queue-eligibility-test
+        displayName: Queue Eligibility Test
+        version: 1
+        initialStage: gated-start
+        requestPolicy: multiple
+        queues:
+          - key: gated-single
+            displayName: Gated (single capability)
+            actor: caseworker
+            roleGates:
+              - njf-review
+          - key: gated-any-of
+            displayName: Gated (any of two)
+            actor: caseworker
+            roleGates:
+              - team-a
+              - team-b
+          - key: ungated
+            displayName: Ungated
+            actor: caseworker
+        stages:
+          - stageKey: gated-start
+            displayName: Gated start
+            queueKey: gated-single
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: gated-start--continue--any-of
+                target: any-of-stage
+                trigger: continue
+          - stageKey: any-of-stage
+            displayName: Any-of stage
+            queueKey: gated-any-of
+            components:
+              - type: text
+                fieldKey: notes2
+                label: Notes
+            routes:
+              - id: any-of--continue--ungated
+                target: ungated-stage
+                trigger: continue
+          - stageKey: ungated-stage
+            displayName: Ungated stage
+            queueKey: ungated
+            components:
+              - type: panel
+                heading: Done
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
