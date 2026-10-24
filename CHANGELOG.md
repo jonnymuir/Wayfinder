@@ -11,6 +11,12 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-24
+
+Also releases `Wayfinder.Editor` 0.11.0, `Wayfinder.Editor.Http` 0.3.0, `Wayfinder.Engine.Http`
+0.5.0, `Wayfinder.Engine.Journey` 0.3.0, `Wayfinder.Engine.Worklist` 0.5.0 and
+`Wayfinder.Rendering.GovUk` 0.12.0, all built against the changed model.
+
 ### Changed (breaking)
 
 - A service blueprint is written in YAML everywhere it is stored or travels: seed files
