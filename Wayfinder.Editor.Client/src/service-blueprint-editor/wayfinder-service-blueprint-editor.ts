@@ -635,7 +635,7 @@ export class WayfinderServiceBlueprintEditorElement extends LitElement {
           opensTowards: 'left',
           onToggle: this._layout.toggleInspector,
         })}
-        <div id="service-blueprint-editor-inspector-panel" class="panel-body" ?hidden=${collapsed}>
+        <div id="service-blueprint-editor-inspector-panel" class="panel-body inspector-panel-body" ?hidden=${collapsed}>
           <wayfinder-step-inspector
             class="inspector-panel"
             tabindex="0"

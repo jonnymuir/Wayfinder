@@ -11,6 +11,12 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Fixed
+
+- `Wayfinder.Editor`: the way to add a note to the selected stage, gateway or route is pinned under
+  the Properties panel, which scrolls on its own. It was below the panel's visible area and could
+  not be reached.
+
 ## [0.24.0] - 2026-10-22
 
 Also releases `Wayfinder.Editor` 0.10.0 (design notes, and following changes saved elsewhere).
