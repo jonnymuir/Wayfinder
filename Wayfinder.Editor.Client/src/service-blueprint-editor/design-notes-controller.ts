@@ -30,6 +30,8 @@ export class DesignNotesController implements ReactiveController {
   notes: DesignNote[] = [];
   filter: NotesFilter = 'Open';
   busy = false;
+  /** Whether the notes under the Properties panel are expanded; kept as the selection changes. */
+  selectionNotesOpen = false;
   private counted: { notes: DesignNote[]; blueprint: ServiceBlueprint | null; counts: Record<string, number> } = {
     notes: [],
     blueprint: null,
@@ -43,6 +45,13 @@ export class DesignNotesController implements ReactiveController {
     private readonly inputs: DesignNotesInputs
   ) {
     host.addController(this);
+  }
+
+  setSelectionNotesOpen(open: boolean): void {
+    if (this.selectionNotesOpen !== open) {
+      this.selectionNotesOpen = open;
+      this.host.requestUpdate();
+    }
   }
 
   get available(): boolean {

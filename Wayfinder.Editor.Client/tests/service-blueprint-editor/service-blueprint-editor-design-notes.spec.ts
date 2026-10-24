@@ -39,8 +39,16 @@ async function openEditor(page: Page) {
   await expect(page.locator('[data-wayfinder-stage="declaration"]')).toBeVisible({ timeout: 10_000 });
 }
 
+async function openSelectionNotes(page: Page) {
+  const notes = page.locator('[data-wayfinder-selection-notes]');
+  if ((await notes.getAttribute('open')) === null) {
+    await notes.locator('summary').click();
+  }
+}
+
 async function addNoteTo(page: Page, stageKey: string, text: string) {
   await page.locator(`[data-wayfinder-stage="${stageKey}"]`).click();
+  await openSelectionNotes(page);
   const form = page.locator('[data-wayfinder-add-design-note]');
   await form.getByRole('textbox').fill(text);
   await form.getByRole('button', { name: 'Add note' }).click();
@@ -51,10 +59,30 @@ test.describe('ServiceBlueprint editor design notes', () => {
     await openEditor(page);
 
     await page.locator('[data-wayfinder-stage="application-form"]').click();
+    await openSelectionNotes(page);
 
     const form = page.locator('[data-wayfinder-add-design-note]');
     await expect(form.getByRole('textbox')).toBeInViewport();
     await expect(form.getByRole('button', { name: 'Add note' })).toBeInViewport();
+  });
+
+  test('the notes under Properties start closed, say how many are open, and stay open between selections', async ({ page }) => {
+    await openEditor(page);
+    await asDesignPartner(page, 'add', { anchor: { kind: 'Stage', key: 'declaration' }, text: 'Is a declaration needed?' });
+    await page.clock.fastForward(6_000);
+
+    await page.locator('[data-wayfinder-stage="declaration"]').click();
+
+    const notes = page.locator('[data-wayfinder-selection-notes]');
+    await expect(notes.locator('summary')).toHaveText('Notes (1 open)');
+    await expect(notes.getByRole('textbox')).toBeHidden();
+
+    await notes.locator('summary').click();
+    await expect(notes.getByRole('textbox')).toBeVisible();
+
+    await page.locator('[data-wayfinder-stage="application-form"]').click();
+    await expect(notes.locator('summary')).toHaveText('Notes');
+    await expect(notes.getByRole('textbox')).toBeVisible();
   });
 
   test('a note added to a selected stage is marked on the canvas and listed in Notes', async ({ page }) => {

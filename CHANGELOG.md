@@ -11,6 +11,12 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Changed
+
+- `Wayfinder.Editor`: the notes under the Properties panel fold away. They start closed, the heading
+  says how many notes are open on what is selected, and once opened they stay open as the selection
+  changes.
+
 ## [0.24.1] - 2026-10-24
 
 Releases `Wayfinder.Editor` 0.10.1. The four lockstep packages have no changes.

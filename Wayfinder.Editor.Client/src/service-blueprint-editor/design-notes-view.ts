@@ -134,9 +134,15 @@ export function renderSelectionNotes(
   }
   const here = notes.notes.filter((note) => note.status === 'Open' && anchorMatchesSelection(blueprint, note.anchor, selection));
   const anchor = notes.label(notes.newNoteAnchor()).text;
+  const summary = here.length > 0 ? `Notes (${here.length} open)` : 'Notes';
   return html`
-    <section class="selection-notes" aria-labelledby="selection-notes-title" data-wayfinder-selection-notes>
-      <h3 id="selection-notes-title" class="selection-notes-title">Notes</h3>
+    <details
+      class="selection-notes"
+      data-wayfinder-selection-notes
+      ?open=${notes.selectionNotesOpen}
+      @toggle=${(event: Event) => notes.setSelectionNotesOpen((event.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary class="selection-notes-title">${summary}</summary>
       ${
         here.length > 0
           ? html`<ul class="selection-note-list">
@@ -150,6 +156,6 @@ export function renderSelectionNotes(
         <textarea id="design-note-new" class="note-textarea" name="text" rows="2" maxlength=${MAX_TEXT_LENGTH} required></textarea>
         <button type="submit" class="note-btn" ?disabled=${notes.busy}>Add note</button>
       </form>
-    </section>
+    </details>
   `;
 }
