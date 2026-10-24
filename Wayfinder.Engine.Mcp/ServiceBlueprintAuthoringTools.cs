@@ -39,7 +39,7 @@ public static class ServiceBlueprintAuthoringTools
     private const string CalculationsShapeReminder =
         "A `calculations` block is a sibling of `stages`/`gateways`/`queues`, not an action or a " +
         "component property: `calculations:` with `tables:`, `fields:` and `series:` mappings, e.g. " +
-        "`fields: { total: { expr: \"price * quantity\" } }` — `fields` is a MAPPING keyed by field name, each " +
+        "`fields: { total: { expr: \"price * quantity\" } }`. `fields` is a MAPPING keyed by field name, each " +
         "value a mapping with an `expr` string (NOT a list of {name, expression} pairs). Only `stat-group`, `chart`, and " +
         "`summary-list` components render a calculated value on screen (binding by field/series name) — " +
         "`text`/`number`/etc. are INPUT components and never display one, however they're labelled, and a " +
@@ -50,7 +50,7 @@ public static class ServiceBlueprintAuthoringTools
         "gateway needs a real, unique `key` (a keyless one can never be a route target), and every route's " +
         "`target` must actually match an existing gateway/stage key — an empty target is fine mid-edit but " +
         "must be wired up before you consider the blueprint finished. A `StageDefinition` may also carry " +
-        "its own `validations`: a list of { code, when?, rule, field?, message } — cross-field " +
+        "its own `validations`: a list of { code, when?, rule, field?, message }: cross-field " +
         "business rules checked before that stage can advance (the declarative alternative to a host " +
         "writing custom validation code), evaluated against the same blueprint-wide scope, so `rule` may " +
         "reference a field captured on an earlier stage. `when`/`rule` are both plain calculation-language " +
@@ -109,7 +109,7 @@ public static class ServiceBlueprintAuthoringTools
 
     [McpServerTool(Name = "validate_service_blueprint")]
     [Description(
-        "Validate a service blueprint written in YAML — checks that every stage route targets a gateway " +
+        "Validate a service blueprint written in YAML. Checks that every stage route targets a gateway " +
         "(never another stage directly), that any calculations block evaluates cleanly, that " +
         "every stage's own `validations` when/rule expressions evaluate cleanly and to a real " +
         "boolean (STAGE_VALIDATION_WHEN_EVAL_ERROR/_RULE_EVAL_ERROR) and that any `field` they " +
@@ -148,7 +148,7 @@ public static class ServiceBlueprintAuthoringTools
 
     [McpServerTool(Name = "save_service_blueprint")]
     [Description(
-        "Validate and save a service blueprint (YAML) to the connected host's live store — the " +
+        "Validate and save a service blueprint (YAML) to the connected host's live store. The " +
         "change is visible to the running app immediately, no restart. Invalid definitions " +
         "are rejected and NOT saved — check { status, errors } in the response (status: " +
         "\"Saved\", \"Invalid\", or \"Conflict\"). A Conflict means the blueprint's `version` " +

@@ -70,7 +70,7 @@ async function readInternalServiceBlueprintDisplayName(page: Page): Promise<stri
   });
 }
 
-test.describe('Definition (YAML) ↔ Canvas bidirectional sync — real CodeMirror path', () => {
+test.describe('Definition (YAML) ↔ Canvas bidirectional sync, real CodeMirror path', () => {
   test('a) Edit stage name in YAML → switch to Canvas → canvas shows new name', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);

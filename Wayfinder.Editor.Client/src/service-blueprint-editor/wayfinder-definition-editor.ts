@@ -3,12 +3,12 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { Diagnostic } from '@codemirror/lint';
 
 /**
- * @internal Composition detail of <wayfinder-service-blueprint-editor> — the YAML twin-pane
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>, the YAML twin-pane
  * Definition tab editor. Loads CodeMirror 6 lazily on first connection so the
  * main editor bundle stays slim for authors who never open this tab.
  *
  * Inputs:
- *   value (property)        — the canonical YAML text to display.
+ *   value (property):       the canonical YAML text to display.
  *   readOnly (attribute)    — disables editing.
  *   diagnostics (property)  — schema/lint issues from the host. Each rendered
  *                             as a CodeMirror gutter marker on its line.
