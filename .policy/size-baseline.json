@@ -1,7 +1,7 @@
 {
   "files": {
     "Wayfinder/Models/ServiceDesign/Components/BuiltInComponentDescriptors.cs": 447,
-    "Wayfinder/Models/ServiceDesign/ServiceBlueprint.DataDisplayBindings.cs": 412,
+    "Wayfinder/Models/ServiceDesign/ServiceBlueprint.DataDisplayBindings.cs": 410,
     "Wayfinder/Models/ServiceDesign/ServiceRequestResponseEnvelope.cs": 419,
     "Wayfinder/Services/Calculations/CalculationEvaluator.cs": 544,
     "Wayfinder.Editor.Client/src/service-blueprint-editor/component-property-editor.ts": 534,
@@ -44,7 +44,6 @@
     "Wayfinder.Engine/Services/WorkQueues.cs": 106,
     "Wayfinder.Engine/Stores/InMemoryBulkDatasetStore.cs": 116,
     "Wayfinder.Engine/SupportSystems/WebhookSupportSystemClient.cs": 65,
-    "Wayfinder.Engine.Api/ServiceBlueprintAuthoringApiExtensions.cs": 76,
     "Wayfinder.Engine.Http/StageFileUploads.cs": 66,
     "Wayfinder.Engine.Http/SupportSystemCallbacks.cs": 92,
     "Wayfinder.Engine.Journey/JourneyExtensions.cs": 76,

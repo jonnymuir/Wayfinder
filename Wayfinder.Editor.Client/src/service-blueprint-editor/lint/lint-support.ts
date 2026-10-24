@@ -1,4 +1,4 @@
-import { isScalar, LineCounter, parseDocument, visit } from 'yaml';
+import { LineCounter, parseDocument, visit } from 'yaml';
 
 export type DefinitionLint = {
   message: string;
@@ -22,8 +22,8 @@ function scalarLines(source: string): Map<string, number> {
     visit(parseDocument(source, { lineCounter }), {
       Scalar(_key, node) {
         const text = String(node.value);
-        if (isScalar(node) && node.range && !lines.has(text)) {
-          lines.set(text, lineCounter.linePos(node.range[0]).line);
+        if (!lines.has(text)) {
+          lines.set(text, lineCounter.linePos(node.range?.[0] ?? 0).line);
         }
       },
     });

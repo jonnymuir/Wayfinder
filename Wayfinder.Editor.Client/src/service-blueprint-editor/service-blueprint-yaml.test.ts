@@ -34,9 +34,7 @@ function minimalBlueprint(overrides: Partial<ServiceBlueprint> = {}): ServiceBlu
   };
 }
 
-export function run(): number {
-  failures = 0;
-
+function writtenTheWayTheServerWritesIt(): void {
   // ── written the way the server writes it ─────────────────────────────────
   {
     const yaml = serializeAuthoredServiceBlueprint(
@@ -87,7 +85,9 @@ export function run(): number {
     const parsed = parseYaml('definitionKey: apply\nstages: [unclosed\n');
     check('a syntax error is reported where it is found, not at the top', !parsed.ok && parsed.line >= 2, JSON.stringify(parsed));
   }
+}
 
+function keyOrderInCalculationsIsKept(): void {
   // ── calculations.fields' own key order must survive verbatim ─────────────
   // Regression test: a real save through this exact path once turned a working calculation
   // set into a broken one, because sortKeys() alphabetised calculations.fields — silently
@@ -141,7 +141,9 @@ export function run(): number {
     const clone: ServiceBlueprint = structuredClone(blueprint);
     check('two structurally-identical blueprints (including calculations) compare equal', authoredServiceBlueprintEquals(blueprint, clone));
   }
+}
 
+function stageValidationsRoundTrip(): void {
   // ── Stage validations round-trip ──────────────────────────────────────────
   {
     const blueprint = minimalBlueprint({
@@ -176,7 +178,9 @@ export function run(): number {
     const parsed = fromYaml(yaml);
     check('a stage with no validations omits the key entirely', !('validations' in parsed.stages[0]));
   }
+}
 
+function topLevelFieldsRoundTrip(): void {
   {
     const loaded = hydrateServiceBlueprintDefinition(structuredClone(minimalBlueprint({ allowManualRestart: true })));
     const parsed = fromYaml(serializeAuthoredServiceBlueprint(loaded));
@@ -225,6 +229,13 @@ export function run(): number {
       JSON.stringify(parsed)
     );
   }
+}
 
+export function run(): number {
+  failures = 0;
+  writtenTheWayTheServerWritesIt();
+  keyOrderInCalculationsIsKept();
+  stageValidationsRoundTrip();
+  topLevelFieldsRoundTrip();
   return failures;
 }

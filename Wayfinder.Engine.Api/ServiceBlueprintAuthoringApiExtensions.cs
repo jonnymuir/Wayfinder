@@ -82,48 +82,8 @@ public static class ServiceBlueprintAuthoringApiExtensions
         // first) IS the expected version for the optimistic-concurrency check — no separate field
         // needed. The store ignores it as a *value to write*; it only compares against it, then
         // authoritatively sets the new persisted version itself.
-        group.MapPut("/blueprints/{definitionKey}", async (
-            string definitionKey,
-            HttpRequest request,
-            ServiceBlueprintAuthoringService service,
-            CancellationToken ct) =>
-        {
-            if (!ServiceBlueprintYaml.TryDeserialize(await ReadBodyAsync(request, ct), out var blueprint, out var diagnostic))
-            {
-                return Results.BadRequest(ServiceBlueprintSaveOutcome.Invalid([diagnostic]));
-            }
-
-            if (!string.Equals(blueprint.DefinitionKey, definitionKey, StringComparison.Ordinal))
-            {
-                return Results.BadRequest(new ServiceBlueprintValidationOutcome(
-                    false,
-                    [new ServiceBlueprintDiagnostic(
-                        "ROUTE_KEY_MISMATCH",
-                        "definitionKey",
-                        $"Route key '{definitionKey}' does not match body definitionKey '{blueprint.DefinitionKey}'.")]));
-            }
-
-            var outcome = await service.SaveAsync(blueprint, blueprint.Version, ct);
-            return outcome.Status switch
-            {
-                ServiceBlueprintSaveStatus.Saved => Results.Ok(outcome),
-                ServiceBlueprintSaveStatus.Conflict => Results.Conflict(outcome),
-                _ => Results.BadRequest(outcome)
-            };
-        });
-
-        group.MapPost("/blueprints/simulate", (SimulateServiceBlueprintRequest request) =>
-        {
-            if (!ServiceBlueprintYaml.TryDeserialize(request.Blueprint, out var blueprint, out var diagnostic))
-            {
-                return Results.BadRequest(new ServiceBlueprintValidationOutcome(false, [diagnostic]));
-            }
-
-            var mockServiceInputs = request.MockServiceInputs is { } element
-                ? (IReadOnlyDictionary<string, object?>)CalculationScopeJson.ToScopeValue(element)!
-                : null;
-            return Results.Ok(ServiceBlueprintSimulationRunner.Run(blueprint, request.Steps, mockServiceInputs));
-        });
+        group.MapPut("/blueprints/{definitionKey}", SaveBlueprintAsync);
+        group.MapPost("/blueprints/simulate", SimulateBlueprint);
 
         // Cheap enough to poll: a client that has a blueprint open (e.g. the visual editor) can
         // check every ~15s whether it's still current without re-fetching the full definition.
@@ -137,6 +97,50 @@ public static class ServiceBlueprintAuthoringApiExtensions
             var blueprint = await service.ReadAsync(definitionKey, ct);
             return blueprint is null ? Results.NotFound() : Results.Ok(new { version = blueprint.Version });
         });
+    }
+
+    // The body's own `version` (already round-tripped by any client that loaded the blueprint
+    // first) IS the expected version for the optimistic-concurrency check — no separate field
+    // needed. The store ignores it as a *value to write*; it only compares against it, then
+    // authoritatively sets the new persisted version itself.
+    private static async Task<IResult> SaveBlueprintAsync(
+        string definitionKey, HttpRequest request, ServiceBlueprintAuthoringService service, CancellationToken ct)
+    {
+        if (!ServiceBlueprintYaml.TryDeserialize(await ReadBodyAsync(request, ct), out var blueprint, out var diagnostic))
+        {
+            return Results.BadRequest(ServiceBlueprintSaveOutcome.Invalid([diagnostic]));
+        }
+
+        if (!string.Equals(blueprint.DefinitionKey, definitionKey, StringComparison.Ordinal))
+        {
+            return Results.BadRequest(new ServiceBlueprintValidationOutcome(
+                false,
+                [new ServiceBlueprintDiagnostic(
+                    "ROUTE_KEY_MISMATCH",
+                    "definitionKey",
+                    $"Route key '{definitionKey}' does not match body definitionKey '{blueprint.DefinitionKey}'.")]));
+        }
+
+        var outcome = await service.SaveAsync(blueprint, blueprint.Version, ct);
+        return outcome.Status switch
+        {
+            ServiceBlueprintSaveStatus.Saved => Results.Ok(outcome),
+            ServiceBlueprintSaveStatus.Conflict => Results.Conflict(outcome),
+            _ => Results.BadRequest(outcome)
+        };
+    }
+
+    private static IResult SimulateBlueprint(SimulateServiceBlueprintRequest request)
+    {
+        if (!ServiceBlueprintYaml.TryDeserialize(request.Blueprint, out var blueprint, out var diagnostic))
+        {
+            return Results.BadRequest(new ServiceBlueprintValidationOutcome(false, [diagnostic]));
+        }
+
+        var mockServiceInputs = request.MockServiceInputs is { } element
+            ? (IReadOnlyDictionary<string, object?>)CalculationScopeJson.ToScopeValue(element)!
+            : null;
+        return Results.Ok(ServiceBlueprintSimulationRunner.Run(blueprint, request.Steps, mockServiceInputs));
     }
 
     private const string YamlContentType = "application/yaml";

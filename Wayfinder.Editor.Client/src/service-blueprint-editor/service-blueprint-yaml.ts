@@ -1,6 +1,6 @@
-import { isAlias, isNode, LineCounter, parseDocument, stringify, visit } from 'yaml';
+import { type Document, isAlias, isNode, LineCounter, type Node, parseDocument, stringify, visit } from 'yaml';
 import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
-import { yamlDiscriminators, yamlShapes } from './generated/wayfinder-model.js';
+import { type YamlShape, yamlDiscriminators, yamlShapes } from './generated/wayfinder-model.js';
 import type {
   NodePosition,
   ServiceBlueprintGatewayDefinition,
@@ -172,31 +172,42 @@ function serialisableLayout(
   return nodes || routes ? { nodes, routes } : undefined;
 }
 
+/** The shape a record is written with: its own type's, or that of the concrete type its discriminator names. */
+function shapeOf(record: Record<string, unknown>, typeName: string | undefined): YamlShape | undefined {
+  const discriminator = typeName ? yamlDiscriminators[typeName] : undefined;
+  const concrete = discriminator ? discriminator.types[String(record[discriminator.property])] : typeName;
+  return concrete ? yamlShapes[concrete] : undefined;
+}
+
+function keysInOrder(record: Record<string, unknown>, shape: YamlShape | undefined): string[] {
+  return shape ? [...shape.keys, ...Object.keys(record).filter((key) => !shape.keys.includes(key))] : Object.keys(record);
+}
+
+function orderedEntry(item: unknown, shape: YamlShape | undefined, key: string): unknown {
+  const mapOf = shape?.maps[key];
+  if (!mapOf) {
+    return ordered(item, shape?.nested[key]);
+  }
+  return Object.fromEntries(Object.entries(item as Record<string, unknown>).map(([entry, inner]) => [entry, ordered(inner, mapOf)]));
+}
+
+function orderedRecord(record: Record<string, unknown>, typeName: string | undefined): Record<string, unknown> {
+  const shape = shapeOf(record, typeName);
+  const result: Record<string, unknown> = {};
+  for (const key of keysInOrder(record, shape)) {
+    if (record[key] !== undefined && record[key] !== null) {
+      result[key] = orderedEntry(record[key], shape, key);
+    }
+  }
+  return result;
+}
+
 /** Keys in the order `typeName` is written in, nested values ordered by their own types; nulls left out. */
 function ordered(value: unknown, typeName: string | undefined): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => ordered(item, typeName));
   }
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-  const record = value as Record<string, unknown>;
-  const discriminator = typeName ? yamlDiscriminators[typeName] : undefined;
-  const concrete = discriminator ? discriminator.types[String(record[discriminator.property])] : typeName;
-  const shape = concrete ? yamlShapes[concrete] : undefined;
-  const keys = shape ? [...shape.keys, ...Object.keys(record).filter((key) => !shape.keys.includes(key))] : Object.keys(record);
-  const result: Record<string, unknown> = {};
-  for (const key of keys) {
-    const item = record[key];
-    if (item === undefined || item === null) {
-      continue;
-    }
-    const mapOf = shape?.maps[key];
-    result[key] = mapOf
-      ? Object.fromEntries(Object.entries(item as Record<string, unknown>).map(([entry, inner]) => [entry, ordered(inner, mapOf)]))
-      : ordered(item, shape?.nested[key]);
-  }
-  return result;
+  return value && typeof value === 'object' ? orderedRecord(value as Record<string, unknown>, typeName) : value;
 }
 
 /** Writes YAML the way ServiceBlueprintYaml does: two-space indents, indented lists, multi-line text as `|` blocks, no anchors. */
@@ -223,6 +234,21 @@ export function authoredServiceBlueprintEquals(left: ServiceBlueprint | null, ri
   return serializeAuthoredServiceBlueprint(left) === serializeAuthoredServiceBlueprint(right);
 }
 
+const isAnchorOrAlias = (node: unknown): boolean => isAlias(node) || Boolean(isNode(node) && node.anchor);
+
+/** The line of the first anchor (`&`) or alias (`*`) in a document, if it has one. */
+function firstAnchorOrAlias(document: Document, lineCounter: LineCounter): number | undefined {
+  let line: number | undefined;
+  visit(document, (_key, node) => {
+    if (!isAnchorOrAlias(node)) {
+      return undefined;
+    }
+    line = lineCounter.linePos((node as Node).range?.[0] ?? 0).line;
+    return visit.BREAK;
+  });
+  return line;
+}
+
 export type ParsedYaml = { ok: true; value: unknown } | { ok: false; message: string; line: number };
 
 /**
@@ -237,14 +263,7 @@ export function parseYaml(text: string): ParsedYaml {
   if (error) {
     return { ok: false, message: error.message.split('\n')[0], line: lineCounter.linePos(error.pos[0]).line };
   }
-  let aliasAt: number | undefined;
-  visit(document, (_key, node) => {
-    if (isAlias(node) || (isNode(node) && node.anchor)) {
-      aliasAt = lineCounter.linePos(node.range?.[0] ?? 0).line;
-      return visit.BREAK;
-    }
-    return undefined;
-  });
+  const aliasAt = firstAnchorOrAlias(document, lineCounter);
   if (aliasAt !== undefined) {
     return { ok: false, message: 'Anchors and aliases (& and *) are not allowed in a service blueprint.', line: aliasAt };
   }

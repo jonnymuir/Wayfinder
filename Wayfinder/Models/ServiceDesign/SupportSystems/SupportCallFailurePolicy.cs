@@ -56,8 +56,7 @@ public sealed record SupportCallFailurePolicy
             }
         }
 
-        if (parameters.GetValueOrDefault("onFailure") is not null
-            && !(parameters.GetMap("onFailure")?.GetString("outcome") is { } outcome && declaredOutcomeKeys.Contains(outcome)))
+        if (parameters.GetValueOrDefault("onFailure") is not null && !FallsBackToADeclaredOutcome(parameters, declaredOutcomeKeys))
         {
             yield return Invalid(
                 $"{path}.params.onFailure.outcome",
@@ -67,6 +66,9 @@ public sealed record SupportCallFailurePolicy
 
     private static ServiceBlueprintDiagnostic Invalid(string path, string message) =>
         new("SUPPORT_SYSTEM_ACTION_INVALID_FAILURE_POLICY", path, message);
+
+    private static bool FallsBackToADeclaredOutcome(IReadOnlyDictionary<string, object?> parameters, IReadOnlySet<string> declaredOutcomeKeys) =>
+        parameters.GetMap("onFailure")?.GetString("outcome") is { } outcome && declaredOutcomeKeys.Contains(outcome);
 
     private static bool InRange(int? number, int min, int max) => number >= min && number <= max;
 }
