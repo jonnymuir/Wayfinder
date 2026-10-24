@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
@@ -17,40 +16,40 @@ public class ProcessManagerEngineDefaultFromServiceTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    private static string BlueprintJson(string defaultFrom) => $$"""
-        {
-          "definitionKey": "default-from-service-test",
-          "displayName": "Default From Service Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "calculations": {
-            "fields": {
-              "user": { "source": "service" },
-              "signedInName": { "source": "service", "valueKind": "string" }
-            }
-          },
-          "queues": [ { "key": "citizen", "displayName": "Applicant", "actor": "citizen" } ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "citizen",
-              "components": [
-                { "type": "text", "fieldKey": "applicantName", "label": "Name", "defaultFrom": "{{defaultFrom}}" }
-              ],
-              "routes": []
-            }
-          ],
-          "gateways": []
-        }
+    private static string BlueprintYaml(string defaultFrom) => $$"""
+        definitionKey: default-from-service-test
+        displayName: Default From Service Test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: citizen
+            displayName: Applicant
+            actor: citizen
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: citizen
+            components:
+              - type: text
+                fieldKey: applicantName
+                label: Name
+                defaultFrom: {{defaultFrom}}
+            routes: []
+        gateways: []
+        calculations:
+          fields:
+            user:
+              source: service
+            signedInName:
+              source: service
+              valueKind: string
         """;
 
     private static string? RenderedDefault(string defaultFrom)
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson(defaultFrom), JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml(defaultFrom));
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

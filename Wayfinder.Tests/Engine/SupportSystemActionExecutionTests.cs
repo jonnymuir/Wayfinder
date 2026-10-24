@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,102 +42,99 @@ public class SupportSystemActionExecutionTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     // Caseworker sends a case to an external system (the automation queue) and waits on the same
     // join-gateway wait/poll machinery the citizen already gets in juggling-licence's post-review
     // — mirroring the approved design's "to-insurer-check Split -> insurer-check-complete Join"
     // shape, just with generic stage/queue names since this is testing the mechanism, not the
     // juggling scenario itself.
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "support-system-test",
-          "displayName": "Support System Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [
-                { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false }
-              ],
-              "routes": [
-                { "id": "start--send--split", "target": "to-support-system", "trigger": "send-to-support-system" }
-              ]
-            },
-            {
-              "stageKey": "in-review",
-              "displayName": "In review",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "In review" } ],
-              "actions": [
-                {
-                  "type": "support-system-call",
-                  "timing": "onEnter",
-                  "params": {
-                    "supportSystemKey": "safetynet-underwriting",
-                    "capabilityKey": "validate-risk-assessment",
-                    "inputs": { "notes": "notes" }
-                  }
-                }
-              ],
-              "routes": [
-                { "id": "in-review--approved--join", "target": "check-complete", "trigger": "approved" },
-                { "id": "in-review--rejected--join", "target": "check-complete", "trigger": "rejected" }
-              ]
-            },
-            {
-              "stageKey": "approved",
-              "displayName": "Approved",
-              "queueKey": "caseworker",
-              "components": [
-                { "type": "text", "fieldKey": "decisionNotes", "label": "Decision notes", "required": false }
-              ]
-            },
-            {
-              "stageKey": "rejected",
-              "displayName": "Rejected",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Rejected" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-support-system",
-              "displayName": "Send to support system",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [
-                { "id": "to-support-system--send--join", "target": "check-complete", "trigger": "send-to-support-system" },
-                { "id": "to-support-system--send--review", "target": "in-review", "trigger": "send-to-support-system" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "caseworker",
-              "waitingContent": "Waiting for the support system's decision.",
-              "waitingPollIntervalMs": 2000,
-              "routes": [
-                { "id": "check-complete--approved--approved", "target": "approved", "trigger": "approved" },
-                { "id": "check-complete--rejected--rejected", "target": "rejected", "trigger": "rejected" }
-              ],
-              "requiredIncomingQueues": ["caseworker", "automation"]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: support-system-test
+        displayName: Support System Test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+          - key: automation
+            displayName: Automation
+            actor: system
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--send--split
+                target: to-support-system
+                trigger: send-to-support-system
+          - stageKey: in-review
+            displayName: In review
+            queueKey: automation
+            actions:
+              - type: support-system-call
+                timing: onEnter
+                params:
+                  supportSystemKey: safetynet-underwriting
+                  capabilityKey: validate-risk-assessment
+                  inputs:
+                    notes: notes
+            components:
+              - type: panel
+                heading: In review
+            routes:
+              - id: in-review--approved--join
+                target: check-complete
+                trigger: approved
+              - id: in-review--rejected--join
+                target: check-complete
+                trigger: rejected
+          - stageKey: approved
+            displayName: Approved
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: decisionNotes
+                label: Decision notes
+          - stageKey: rejected
+            displayName: Rejected
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Rejected
+        gateways:
+          - key: to-support-system
+            displayName: Send to support system
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-support-system--send--join
+                target: check-complete
+                trigger: send-to-support-system
+              - id: to-support-system--send--review
+                target: in-review
+                trigger: send-to-support-system
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: caseworker
+            waitingContent: Waiting for the support system's decision.
+            waitingPollIntervalMs: 2000
+            routes:
+              - id: check-complete--approved--approved
+                target: approved
+                trigger: approved
+              - id: check-complete--rejected--rejected
+                target: rejected
+                trigger: rejected
+            requiredIncomingQueues:
+              - caseworker
+              - automation
         """;
 
     private sealed class ScriptedSupportSystemClient : ISupportSystemClient
@@ -205,7 +201,7 @@ public class SupportSystemActionExecutionTests
     };
 
     private static (ProcessManagerEngine Engine, ScriptedSupportSystemClient Client) BuildEngine(
-        params SupportSystemCompletionMode[] modes) => BuildEngine(BlueprintJson, modes);
+        params SupportSystemCompletionMode[] modes) => BuildEngine(BlueprintYaml, modes);
 
     private static (ProcessManagerEngine Engine, ScriptedSupportSystemClient Client) BuildEngine(
         string blueprintJson,
@@ -214,7 +210,7 @@ public class SupportSystemActionExecutionTests
         SupportSystemRegistry.ResetForTests();
         SupportSystemRegistry.Register(FixtureDescriptor(modes));
 
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(blueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(blueprintJson);
         var client = new ScriptedSupportSystemClient();
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
@@ -255,8 +251,13 @@ public class SupportSystemActionExecutionTests
         }
     }
 
+    private const string ParamsInputs = "          inputs:\n            notes: notes\n";
+
+    // Adds lines (written unindented) to the support-system-call action's params.
     private static string WithActionParams(string extraParams) =>
-        BlueprintJson.Replace("\"inputs\": { \"notes\": \"notes\" }", "\"inputs\": { \"notes\": \"notes\" }, " + extraParams);
+        BlueprintYaml.Replace(
+            ParamsInputs,
+            ParamsInputs + string.Concat(extraParams.Split('\n').Select(line => "          " + line + "\n")));
 
     [Fact]
     public void FailedDispatch_ShowsATryAgainMessageAndSavesNothing_ThenSucceedsOnceTheSystemRecovers()
@@ -291,7 +292,7 @@ public class SupportSystemActionExecutionTests
     [Fact]
     public void OptedInRetries_ResendTheCallWithoutBotheringTheVisitor()
     {
-        var (engine, client) = BuildEngine(WithActionParams("\"retries\": 1, \"retryDelaySeconds\": 1"), SupportSystemCompletionMode.Poll);
+        var (engine, client) = BuildEngine(WithActionParams("retries: 1\nretryDelaySeconds: 1"), SupportSystemCompletionMode.Poll);
         try
         {
             client.FailuresRemaining = 1;
@@ -314,7 +315,7 @@ public class SupportSystemActionExecutionTests
     public void OnFailureFallback_CarriesTheJourneyOnAsTheDeclaredOutcome_WithItsLiteralOutputs()
     {
         var (engine, client) = BuildEngine(
-            WithActionParams("\"onFailure\": { \"outcome\": \"approved\", \"outputs\": { \"decisionNotes\": \"No suggestion was available.\" } }"),
+            WithActionParams("onFailure:\n  outcome: approved\n  outputs:\n    decisionNotes: No suggestion was available."),
             SupportSystemCompletionMode.Poll);
         try
         {
@@ -343,8 +344,7 @@ public class SupportSystemActionExecutionTests
         SupportSystemRegistry.Register(FixtureDescriptor(SupportSystemCompletionMode.Poll));
         try
         {
-            var blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(
-                WithActionParams("\"retries\": 9, \"onFailure\": { \"outcome\": \"exploded\" }"), JsonOptions)!;
+            var blueprint = ServiceBlueprintYaml.Deserialize(WithActionParams("retries: 9\nonFailure:\n  outcome: exploded"));
 
             var diagnostics = blueprint.ValidateSupportSystemActions();
 

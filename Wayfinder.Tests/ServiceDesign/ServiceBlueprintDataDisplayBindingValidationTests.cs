@@ -205,13 +205,13 @@ public class ServiceBlueprintDataDisplayBindingValidationTests
                         {
                             Type = Wayfinder.Models.ServiceDesign.BulkData.BulkDataActionTypes.BulkDatasetIngest,
                             Timing = ActionTiming.OnEnter,
-                            Parameters = new System.Text.Json.Nodes.JsonObject
+                            Parameters = new Dictionary<string, object?>
                             {
                                 ["sourceFileField"] = "contributionsResponseFile",
                                 ["datasetIdField"] = "contributionsDatasetId",
-                                ["columns"] = new System.Text.Json.Nodes.JsonArray
+                                ["columns"] = new List<object?>
                                 {
-                                    new System.Text.Json.Nodes.JsonObject
+                                    new Dictionary<string, object?>
                                     {
                                         ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey",
                                     },

@@ -18,16 +18,9 @@ namespace Wayfinder.Engine.Mcp;
 [McpServerToolType]
 public static class ServiceBlueprintAuthoringTools
 {
-    // ServiceBlueprint.Stages[].Components is a [JsonPolymorphic] Component
-    // hierarchy. The MCP SDK's own tool-argument binding doesn't set
-    // AllowOutOfOrderMetadataProperties (github.com/modelcontextprotocol/csharp-sdk#795 —
-    // no supported hook to configure it), so it fails whenever a component's "type"
-    // discriminator isn't the first JSON property, which a model-constructed payload can't
-    // be relied on to guarantee. Tools that take a blueprint as input accept it as a JSON
-    // string and deserialize it themselves with ServiceBlueprintJson.ReadOptions — the same
-    // shared options every other store/tool in the engine uses. Tools that only return a
-    // ServiceBlueprint (read_service_blueprint) are unaffected — serialization already writes
-    // the discriminator first — so those stay typed.
+    // A blueprint crosses this boundary as YAML text, in both directions: the same text an
+    // author sees in the editor's Definition tab and in a host's seed files, read and written by
+    // ServiceBlueprintYaml. Catalogs, diagnostics and outcomes are ordinary structured results.
 
     [McpServerTool(Name = "list_service_blueprints")]
     [Description("List every service blueprint available in the connected host's store, with key and display name.")]
@@ -36,28 +29,28 @@ public static class ServiceBlueprintAuthoringTools
         service.ListAsync(ct);
 
     [McpServerTool(Name = "read_service_blueprint")]
-    [Description("Read a service blueprint's full JSON by its definitionKey.")]
-    public static Task<ServiceBlueprint?> ReadServiceBlueprint(
+    [Description("Read a service blueprint's full YAML definition by its definitionKey.")]
+    public static async Task<string?> ReadServiceBlueprint(
         ServiceBlueprintAuthoringService service,
         [Description("The blueprint's definitionKey, as returned by list_service_blueprints.")] string definitionKey,
         CancellationToken ct) =>
-        service.ReadAsync(definitionKey, ct);
+        await service.ReadAsync(definitionKey, ct) is { } blueprint ? ServiceBlueprintYaml.Serialize(blueprint) : null;
 
     private const string CalculationsShapeReminder =
         "A `calculations` block is a sibling of `stages`/`gateways`/`queues`, not an action or a " +
-        "component property: { \"tables\": {}, \"fields\": { \"<fieldName>\": { \"expr\": \"<expression>\" } }, " +
-        "\"series\": {} } — `fields` is a JSON OBJECT keyed by field name, each value an object with an " +
-        "`expr` string (NOT a list of {name, expression} pairs). Only `stat-group`, `chart`, and " +
+        "component property: `calculations:` with `tables:`, `fields:` and `series:` mappings, e.g. " +
+        "`fields: { total: { expr: \"price * quantity\" } }`. `fields` is a MAPPING keyed by field name, each " +
+        "value a mapping with an `expr` string (NOT a list of {name, expression} pairs). Only `stat-group`, `chart`, and " +
         "`summary-list` components render a calculated value on screen (binding by field/series name) — " +
         "`text`/`number`/etc. are INPUT components and never display one, however they're labelled, and a " +
         "`stat-group` with an empty `items` list renders nothing. Every input component's own `fieldKey` " +
         "is already automatically in the calculation scope — never redeclare it as a calculations.fields " +
-        "entry with `\"source\": \"service\"`; that marker is only for a value an external system supplies " +
+        "entry with `source: service`; that marker is only for a value an external system supplies " +
         "(e.g. a lookup), and doing this to your own captured input makes it permanently unresolvable. A " +
         "gateway needs a real, unique `key` (a keyless one can never be a route target), and every route's " +
         "`target` must actually match an existing gateway/stage key — an empty target is fine mid-edit but " +
         "must be wired up before you consider the blueprint finished. A `StageDefinition` may also carry " +
-        "its own `validations`: [{ \"code\", \"when\"?, \"rule\", \"field\"?, \"message\" }] — cross-field " +
+        "its own `validations`: a list of { code, when?, rule, field?, message }: cross-field " +
         "business rules checked before that stage can advance (the declarative alternative to a host " +
         "writing custom validation code), evaluated against the same blueprint-wide scope, so `rule` may " +
         "reference a field captured on an earlier stage. `when`/`rule` are both plain calculation-language " +
@@ -116,7 +109,7 @@ public static class ServiceBlueprintAuthoringTools
 
     [McpServerTool(Name = "validate_service_blueprint")]
     [Description(
-        "Validate a service blueprint JSON — checks that every stage route targets a gateway " +
+        "Validate a service blueprint written in YAML. Checks that every stage route targets a gateway " +
         "(never another stage directly), that any calculations block evaluates cleanly, that " +
         "every stage's own `validations` when/rule expressions evaluate cleanly and to a real " +
         "boolean (STAGE_VALIDATION_WHEN_EVAL_ERROR/_RULE_EVAL_ERROR) and that any `field` they " +
@@ -144,18 +137,18 @@ public static class ServiceBlueprintAuthoringTools
         "See also service-blueprint-docs://authoring-guide for the full contract shape.")]
     public static ServiceBlueprintValidationOutcome ValidateServiceBlueprint(
         ServiceBlueprintAuthoringService service,
-        [Description("The full ServiceBlueprint JSON to validate.")] string blueprintJson)
+        [Description("The full service blueprint, as YAML.")] string blueprintYaml)
     {
-        if (!TryDeserialize(blueprintJson, out var blueprint, out var diagnostic))
+        if (!ServiceBlueprintYaml.TryDeserialize(blueprintYaml, out var blueprint, out var diagnostic))
         {
-            return new ServiceBlueprintValidationOutcome(false, [diagnostic!]);
+            return new ServiceBlueprintValidationOutcome(false, [diagnostic]);
         }
         return service.Validate(blueprint);
     }
 
     [McpServerTool(Name = "save_service_blueprint")]
     [Description(
-        "Validate and save a service blueprint JSON to the connected host's live store — the " +
+        "Validate and save a service blueprint (YAML) to the connected host's live store. The " +
         "change is visible to the running app immediately, no restart. Invalid definitions " +
         "are rejected and NOT saved — check { status, errors } in the response (status: " +
         "\"Saved\", \"Invalid\", or \"Conflict\"). A Conflict means the blueprint's `version` " +
@@ -163,20 +156,20 @@ public static class ServiceBlueprintAuthoringTools
         "version; re-read_service_blueprint to get the current version and reapply your change on top of " +
         "it before saving again. For a brand-new definitionKey that has never been saved, set " +
         "`version` to 0, not 1 — a non-existent blueprint's current version is 0, and copying " +
-        "`\"version\": 1` from an existing seed you read as a style reference (that's its " +
+        "`version: 1` from an existing seed you read as a style reference (that's its " +
         "*current* saved version, not a starting value) will Conflict on your very first save. " +
         "This is the only way to persist a blueprint change the running " +
-        "app will honor; editing seed/source files directly (e.g. workflow-seeds/*.json) has no " +
+        "app will honor; editing seed/source files directly (e.g. service-blueprints/*.yaml) has no " +
         "effect on the live app. " + CalculationsShapeReminder + " " +
         "See also service-blueprint-docs://authoring-guide for the full contract shape.")]
     public static Task<ServiceBlueprintSaveOutcome> SaveServiceBlueprint(
         ServiceBlueprintAuthoringService service,
-        [Description("The full ServiceBlueprint JSON to save, including the `version` you read it at.")] string blueprintJson,
+        [Description("The full service blueprint as YAML, including the `version` you read it at.")] string blueprintYaml,
         CancellationToken ct)
     {
-        if (!TryDeserialize(blueprintJson, out var blueprint, out var diagnostic))
+        if (!ServiceBlueprintYaml.TryDeserialize(blueprintYaml, out var blueprint, out var diagnostic))
         {
-            return Task.FromResult(ServiceBlueprintSaveOutcome.Invalid([diagnostic!]));
+            return Task.FromResult(ServiceBlueprintSaveOutcome.Invalid([diagnostic]));
         }
         return service.SaveAsync(blueprint, blueprint.Version, ct);
     }
@@ -198,7 +191,7 @@ public static class ServiceBlueprintAuthoringTools
         "go unverified — route a reviewer/business action only into the Join, matching " +
         "payment-demo/information-request's convention, rather than giving it a parallel terminal.")]
     public static ServiceBlueprintSimulationResult SimulateServiceBlueprint(
-        [Description("The full ServiceBlueprint JSON to simulate.")] string blueprintJson,
+        [Description("The full service blueprint to simulate, as YAML.")] string blueprintYaml,
         [Description(
             "JSON array of steps to advance through in order, e.g. " +
             "[{\"action\":\"submit\",\"fieldValues\":{\"name\":\"Ada\"}}].")]
@@ -208,39 +201,16 @@ public static class ServiceBlueprintAuthoringTools
             "{\"member\":{\"age\":47,\"active\":true}}. Omit if the definition has none.")]
         string? mockServiceInputsJson = null)
     {
-        if (!TryDeserialize(blueprintJson, out var blueprint, out var diagnostic))
+        if (!ServiceBlueprintYaml.TryDeserialize(blueprintYaml, out var blueprint, out var diagnostic))
         {
-            throw new InvalidOperationException(diagnostic!.Message);
+            throw new InvalidOperationException(diagnostic.Message);
         }
-        var steps = JsonSerializer.Deserialize<List<ProcessManagerSimulationStep>>(stepsJson, ServiceBlueprintJson.ReadOptions)
-            ?? [];
+        var steps = JsonSerializer.Deserialize<List<ProcessManagerSimulationStep>>(stepsJson, StepsJsonOptions) ?? [];
         var mockServiceInputs = string.IsNullOrWhiteSpace(mockServiceInputsJson)
             ? null
             : CalculationScopeJson.ToScopeValues(mockServiceInputsJson);
         return ServiceBlueprintSimulationRunner.Run(blueprint, steps, mockServiceInputs);
     }
 
-    // System.Text.Json throws on any malformed blueprintJson (wrong types, truncated JSON,
-    // etc.) — without this guard, that exception bubbles out of the MCP tool call unhandled
-    // instead of the structured { isValid/status, diagnostics } shape these tools document,
-    // which the MCP SDK then surfaces as an opaque tool-call error rather than something an
-    // agent can act on.
-    private static bool TryDeserialize(
-        string blueprintJson, out ServiceBlueprint blueprint, out ServiceBlueprintDiagnostic? diagnostic)
-    {
-        try
-        {
-            blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(blueprintJson, ServiceBlueprintJson.ReadOptions)
-                ?? throw new JsonException("blueprintJson did not deserialize to a ServiceBlueprint.");
-            diagnostic = null;
-            return true;
-        }
-        catch (JsonException ex)
-        {
-            blueprint = null!;
-            diagnostic = new ServiceBlueprintDiagnostic(
-                "INVALID_JSON", ex.Path ?? "$", $"blueprintJson is not a valid ServiceBlueprint: {ex.Message}");
-            return false;
-        }
-    }
+    private static readonly JsonSerializerOptions StepsJsonOptions = new(JsonSerializerDefaults.Web);
 }

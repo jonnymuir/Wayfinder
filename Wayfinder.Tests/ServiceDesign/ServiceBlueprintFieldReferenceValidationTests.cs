@@ -259,7 +259,7 @@ public class ServiceBlueprintFieldReferenceValidationTests
                     DisplayName = "only",
                     QueueKey = "citizen",
                     Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes" }],
-                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "true", "Message", Field: "notes")],
+                    Validations = [new ServiceBlueprintStageValidationRule { Code = "evidence-required", Rule = "true", Message = "Message", Field = "notes" }],
                 },
             ],
         };
@@ -283,7 +283,7 @@ public class ServiceBlueprintFieldReferenceValidationTests
                     DisplayName = "only",
                     QueueKey = "citizen",
                     Components = [new TextInputComponent { FieldKey = "notes", Label = "Notes" }],
-                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "true", "Message", Field: "notess")],
+                    Validations = [new ServiceBlueprintStageValidationRule { Code = "evidence-required", Rule = "true", Message = "Message", Field = "notess" }],
                 },
             ],
         };
@@ -313,7 +313,7 @@ public class ServiceBlueprintFieldReferenceValidationTests
                     DisplayName = "second",
                     QueueKey = "citizen",
                     Components = [],
-                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "true", "Message", Field: "notes")],
+                    Validations = [new ServiceBlueprintStageValidationRule { Code = "evidence-required", Rule = "true", Message = "Message", Field = "notes" }],
                 },
             ],
         };
@@ -338,7 +338,7 @@ public class ServiceBlueprintFieldReferenceValidationTests
                     DisplayName = "only",
                     QueueKey = "citizen",
                     Components = [],
-                    Validations = [new ServiceBlueprintStageValidationRule("evidence-required", "true", "Message")],
+                    Validations = [new ServiceBlueprintStageValidationRule { Code = "evidence-required", Rule = "true", Message = "Message" }],
                 },
             ],
         };

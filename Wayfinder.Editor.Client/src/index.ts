@@ -26,7 +26,10 @@ export type {
   ServiceBlueprintCalculationSet,
 } from './service-blueprint-editor/types.js';
 export { hydrateServiceBlueprintDefinition } from './service-blueprint-editor/blueprint-hydration.js';
-export { serializeAuthoredServiceBlueprint } from './service-blueprint-editor/service-blueprint-canonical-json.js';
+export {
+  parseServiceBlueprintYaml,
+  serializeAuthoredServiceBlueprint,
+} from './service-blueprint-editor/service-blueprint-yaml.js';
 
 export type {
   ServiceBlueprintSource,

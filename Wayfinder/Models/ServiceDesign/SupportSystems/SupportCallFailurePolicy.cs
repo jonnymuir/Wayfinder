@@ -1,5 +1,3 @@
-using System.Text.Json.Nodes;
-
 namespace Wayfinder.Models.ServiceDesign.SupportSystems;
 
 /// <summary>
@@ -24,7 +22,7 @@ public sealed record SupportCallFailurePolicy
 
     public string? FallbackOutcome { get; init; }
 
-    public JsonObject? FallbackOutputs { get; init; }
+    public IReadOnlyDictionary<string, object?>? FallbackOutputs { get; init; }
 
     public const int MaxRetries = 5;
 
@@ -32,33 +30,33 @@ public sealed record SupportCallFailurePolicy
 
     private const int DefaultRetryDelaySeconds = 2;
 
-    public static SupportCallFailurePolicy From(JsonObject parameters)
+    public static SupportCallFailurePolicy From(IReadOnlyDictionary<string, object?> parameters)
     {
-        var retries = Math.Clamp(ReadInt(parameters, "retries") ?? 0, 0, MaxRetries);
-        var delaySeconds = Math.Clamp(ReadInt(parameters, "retryDelaySeconds") ?? DefaultRetryDelaySeconds, 1, MaxRetryDelaySeconds);
-        var onFailure = parameters["onFailure"] as JsonObject;
+        var retries = Math.Clamp(parameters.GetInt("retries") ?? 0, 0, MaxRetries);
+        var delaySeconds = Math.Clamp(parameters.GetInt("retryDelaySeconds") ?? DefaultRetryDelaySeconds, 1, MaxRetryDelaySeconds);
+        var onFailure = parameters.GetMap("onFailure");
         return new SupportCallFailurePolicy
         {
             Retries = retries,
             InitialRetryDelay = TimeSpan.FromSeconds(delaySeconds),
-            FallbackOutcome = onFailure?["outcome"]?.GetValue<string>(),
-            FallbackOutputs = onFailure?["outputs"] as JsonObject,
+            FallbackOutcome = onFailure?.GetString("outcome"),
+            FallbackOutputs = onFailure?.GetMap("outputs"),
         };
     }
 
     /// <summary>Authoring diagnostics for the failure settings of one action; <paramref name="path"/> is the action's path.</summary>
     public static IEnumerable<ServiceBlueprintDiagnostic> Validate(
-        JsonObject parameters, string path, IReadOnlySet<string> declaredOutcomeKeys)
+        IReadOnlyDictionary<string, object?> parameters, string path, IReadOnlySet<string> declaredOutcomeKeys)
     {
         foreach (var (key, min, max) in new[] { ("retries", 0, MaxRetries), ("retryDelaySeconds", 1, MaxRetryDelaySeconds) })
         {
-            if (parameters[key] is { } value && !InRange(value, min, max))
+            if (parameters.GetValueOrDefault(key) is not null && !InRange(parameters.GetInt(key), min, max))
             {
                 yield return Invalid($"{path}.params.{key}", $"params.{key} must be a whole number from {min} to {max}.");
             }
         }
 
-        if (parameters["onFailure"] is { } onFailure && !IsDeclaredOutcome(onFailure, declaredOutcomeKeys))
+        if (parameters.GetValueOrDefault("onFailure") is not null && !FallsBackToADeclaredOutcome(parameters, declaredOutcomeKeys))
         {
             yield return Invalid(
                 $"{path}.params.onFailure.outcome",
@@ -66,17 +64,11 @@ public sealed record SupportCallFailurePolicy
         }
     }
 
-    private static bool IsDeclaredOutcome(JsonNode onFailure, IReadOnlySet<string> declaredOutcomeKeys) =>
-        (onFailure as JsonObject)?["outcome"] is JsonValue value
-        && value.TryGetValue<string>(out var outcome)
-        && declaredOutcomeKeys.Contains(outcome);
-
     private static ServiceBlueprintDiagnostic Invalid(string path, string message) =>
         new("SUPPORT_SYSTEM_ACTION_INVALID_FAILURE_POLICY", path, message);
 
-    private static int? ReadInt(JsonObject parameters, string key) =>
-        parameters[key] is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
+    private static bool FallsBackToADeclaredOutcome(IReadOnlyDictionary<string, object?> parameters, IReadOnlySet<string> declaredOutcomeKeys) =>
+        parameters.GetMap("onFailure")?.GetString("outcome") is { } outcome && declaredOutcomeKeys.Contains(outcome);
 
-    private static bool InRange(JsonNode node, int min, int max) =>
-        node is JsonValue value && value.TryGetValue<int>(out var number) && number >= min && number <= max;
+    private static bool InRange(int? number, int min, int max) => number >= min && number <= max;
 }

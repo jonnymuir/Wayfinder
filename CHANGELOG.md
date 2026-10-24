@@ -11,6 +11,29 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- A service blueprint is written in YAML everywhere it is stored or travels: seed files
+  (`service-blueprints/*.yaml`), the filesystem stores, the REST authoring API and the editor's
+  host routes (a whole blueprint is an `application/yaml` body, both ways), the MCP tools
+  (`validate_service_blueprint`, `save_service_blueprint` and `simulate_service_blueprint` take
+  `blueprintYaml`; `read_service_blueprint` returns YAML), and the editor's Definition tab.
+  Catalogs, diagnostics and outcomes are still JSON. To upgrade, convert each JSON blueprint to
+  YAML (JSON is valid YAML, so `ServiceBlueprintYaml.Deserialize` reads one, and
+  `ServiceBlueprintYaml.Serialize` writes the YAML) and reseed.
+- `ServiceBlueprintYaml` replaces `ServiceBlueprintJson` as the one blueprint serializer, and the
+  model carries no `System.Text.Json` attributes. Reading is strict: an unknown key or component
+  type is an error naming its line and column, not silently dropped. Anchors and aliases are
+  refused.
+- `AddServiceBlueprintAuthoringApi()` is removed; the REST API needs no registration of its own.
+- The simulate route takes the blueprint as a YAML string in its JSON body.
+- `ActionDefinition.Parameters` (`params`) is a plain `IReadOnlyDictionary<string, object?>`, read
+  with `GetString`, `GetInt`, `GetBool`, `GetMap` and `GetList`.
+- `ServiceBlueprintStageValidationRule` has init properties instead of a positional constructor.
+- `Wayfinder.Editor`: the Definition tab edits YAML; "Copy stage JSON" is "Copy stage YAML"; the
+  graph's declarative attribute is `service-blueprint-yaml`; `parseServiceBlueprintYaml` is exported
+  for hosts reading a blueprint from their own routes.
+
 ## [0.24.2] - 2026-10-24
 
 Releases `Wayfinder.Editor` 0.10.2. The four lockstep packages have no changes.

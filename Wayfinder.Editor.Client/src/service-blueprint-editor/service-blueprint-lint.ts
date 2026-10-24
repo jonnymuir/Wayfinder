@@ -1,4 +1,4 @@
-import { EDITOR_TOP_LEVEL_FIELDS, matchesTopLevelFieldKind } from './service-blueprint-canonical-json.js';
+import { EDITOR_TOP_LEVEL_FIELDS, matchesTopLevelFieldKind } from './service-blueprint-yaml.js';
 import type { ComponentDescriptor, ServiceBlueprint } from './types.js';
 import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
 import { DocumentLinter } from './lint/document-lint.js';

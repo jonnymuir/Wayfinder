@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Models;
@@ -22,45 +21,43 @@ public class GetCurrentOrManualRestartTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     // Same shape as GetCurrentOrStartFreshTests' own fixture: "start" (not terminal) routes to
     // "done" (a bare panel, infers "confirmation" — terminal).
-    private static string BlueprintJson(string definitionKey, bool allowManualRestart, string requestPolicy = "single") => $$"""
-        {
-          "definitionKey": "{{definitionKey}}",
-          "displayName": "GetCurrentOrManualRestart Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "{{requestPolicy}}",
-          "allowManualRestart": {{(allowManualRestart ? "true" : "false")}},
-          "queues": [ { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" } ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "start--continue--done", "target": "done", "trigger": "continue" } ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            }
-          ]
-        }
+    private static string BlueprintYaml(string definitionKey, bool allowManualRestart, string requestPolicy = "single") => $$"""
+        definitionKey: {{definitionKey}}
+        displayName: GetCurrentOrManualRestart Test
+        version: 1
+        initialStage: start
+        requestPolicy: {{requestPolicy}}
+        allowManualRestart: {{(allowManualRestart ? "true" : "false")}}
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--continue--done
+                target: done
+                trigger: continue
+          - stageKey: done
+            displayName: Done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Done
         """;
 
     private static ProcessManagerEngine BuildEngine(string definitionKey, bool allowManualRestart, string requestPolicy = "single")
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(
-            BlueprintJson(definitionKey, allowManualRestart, requestPolicy), JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml(definitionKey, allowManualRestart, requestPolicy));
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

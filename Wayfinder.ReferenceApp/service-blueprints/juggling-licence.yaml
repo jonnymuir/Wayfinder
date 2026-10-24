@@ -1,0 +1,398 @@
+definitionKey: juggling-licence
+displayName: Apply for a licence to hold a juggling event
+version: 1
+description: "GOV.UK Service Manual's own teaching exemplar, used here to demonstrate a two-actor service blueprint: an applicant's frontstage journey and a caseworker's backstage review queue."
+initialStage: your-details
+requestPolicy: single
+queues:
+  - key: citizen
+    displayName: Applicant
+    actor: citizen
+  - key: caseworker
+    displayName: Caseworker
+    actor: caseworker
+    assignmentPolicy: team-tray
+    owningTeamId: juggling-licence-reviewers
+    roleGates:
+      - juggling-licence-review
+  - key: automation
+    displayName: SafetyNet Underwriting
+    actor: system
+stages:
+  - stageKey: your-details
+    displayName: Your details
+    queueKey: citizen
+    components:
+      - type: fieldset
+        legend: Your details
+        children:
+          - type: text
+            fieldKey: applicantName
+            label: Full name
+            required: true
+          - type: email
+            fieldKey: applicantEmail
+            label: Email address
+            required: true
+    routes:
+      - id: your-details--continue--to-event-details
+        target: to-event-details
+        trigger: continue
+        label: Continue
+        style: primary
+  - stageKey: event-details
+    displayName: About the event
+    queueKey: citizen
+    components:
+      - type: fieldset
+        legend: About the event
+        children:
+          - type: text
+            fieldKey: eventName
+            label: Name of the event
+            required: true
+          - type: date
+            fieldKey: eventDate
+            label: Date of the event
+            required: true
+          - type: number
+            fieldKey: jugglerCount
+            label: Number of jugglers taking part
+            required: true
+            min: 1
+          - type: boolean
+            fieldKey: hasDangerousProps
+            label: This act involves fire, knives, or other dangerous props
+            default: "false"
+    routes:
+      - id: event-details--continue--to-risk-assessment
+        target: to-risk-assessment
+        trigger: continue
+        label: Continue
+        style: primary
+  - stageKey: risk-assessment
+    displayName: Risk assessment
+    queueKey: citizen
+    components:
+      - type: body
+        content: If your act involves fire, knives, or other dangerous props, upload a risk assessment or public liability insurance certificate. This is optional for every other act.
+      - type: details
+        heading: "Wayfinder demo note: what's being shown on this stage"
+        content: "This stage demonstrates cross-stage validation. Ticking \"fire, knives or other dangerous props\" on the previous stage adds a declarative rule here, checked server-side with no custom code: if you don't attach a file, your mitigation notes below must contain a measurable detail (a distance in metres) or name a recognised body (HSE, IOSH, NOABA) before you can continue. See docs/guides/calculation-language.md's \"Stage validations\" section."
+      - type: file-upload
+        fieldKey: riskAssessment
+        label: Risk assessment or public liability insurance certificate
+        hint: Optional. PDF, JPG or PNG, up to 5MB.
+        default: ""
+        maxSizeBytes: 5242880
+        acceptedFileTypes:
+          - .pdf
+          - .jpg
+          - .png
+      - type: textarea
+        fieldKey: riskMitigationNotes
+        label: How are you mitigating the risk?
+        hint: If you're not attaching a file above, describe your mitigation here — a safety distance, or a recognised body overseeing the act (e.g. HSE, IOSH, NOABA).
+        default: ""
+    routes:
+      - id: risk-assessment--continue--to-declaration
+        target: to-declaration
+        trigger: continue
+        label: Continue
+        style: primary
+    validations:
+      - code: risk-mitigation-evidence-required
+        when: hasDangerousProps
+        rule: riskAssessment <> '' or mitigationHasEvidence
+        field: riskMitigationNotes
+        message: Attach a risk assessment or insurance certificate above, or describe your mitigation with a measurable detail below — a safety distance in metres, or a recognised body (HSE, IOSH, NOABA). This event was flagged as involving fire, knives, or other dangerous props on the previous stage.
+  - stageKey: declaration
+    displayName: Check your answers and declare
+    queueKey: citizen
+    components:
+      - type: summary-list
+        title: Application details
+        children:
+          - type: text
+            fieldKey: applicantName
+            label: Full name
+            changeStateKey: your-details
+          - type: email
+            fieldKey: applicantEmail
+            label: Email address
+            changeStateKey: your-details
+          - type: text
+            fieldKey: eventName
+            label: Name of the event
+            changeStateKey: event-details
+          - type: date
+            fieldKey: eventDate
+            label: Date of the event
+            changeStateKey: event-details
+          - type: number
+            fieldKey: jugglerCount
+            label: Number of jugglers taking part
+            changeStateKey: event-details
+          - type: boolean
+            fieldKey: hasDangerousProps
+            label: Fire, knives or other dangerous props
+            changeStateKey: event-details
+          - type: file-upload
+            fieldKey: riskAssessment
+            label: Risk assessment / insurance certificate
+            changeStateKey: risk-assessment
+          - type: textarea
+            fieldKey: riskMitigationNotes
+            label: How are you mitigating the risk?
+            changeStateKey: risk-assessment
+      - type: boolean
+        fieldKey: declarationConfirmed
+        label: I confirm the details above are correct
+        required: true
+    routes:
+      - id: declaration--submit--to-under-review
+        target: to-under-review
+        trigger: submit
+        label: Submit application
+        style: primary
+  - stageKey: under-review
+    displayName: Review application
+    queueKey: caseworker
+    components:
+      - type: panel
+        heading: Review application
+      - type: body
+        content: Check the application below. If a risk assessment was attached, send it to SafetyNet Underwriting for validation; otherwise continue straight to a decision.
+      - type: summary-list
+        title: Application details
+        children:
+          - type: text
+            fieldKey: applicantName
+            label: Full name
+          - type: email
+            fieldKey: applicantEmail
+            label: Email address
+          - type: text
+            fieldKey: eventName
+            label: Name of the event
+          - type: date
+            fieldKey: eventDate
+            label: Date of the event
+          - type: number
+            fieldKey: jugglerCount
+            label: Number of jugglers taking part
+          - type: boolean
+            fieldKey: hasDangerousProps
+            label: Fire, knives or other dangerous props
+          - type: file-upload
+            fieldKey: riskAssessment
+            label: Risk assessment / insurance certificate
+          - type: text
+            fieldKey: riskMitigationNotes
+            label: How are you mitigating the risk?
+          - type: text
+            fieldKey: insurerDecision
+            label: Insurer decision
+          - type: text
+            fieldKey: insurerDecisionNotes
+            label: Insurer notes
+    routes:
+      - id: under-review--send-to-insurer--to-insurer-check
+        target: to-insurer-check
+        trigger: send-to-insurer
+        label: Send risk assessment to insurer
+        style: primary
+        showWhen: riskAssessment <> ''
+      - id: under-review--continue--to-caseworker-decision
+        target: to-caseworker-decision
+        trigger: continue
+        label: Continue to decision
+        style: secondary
+        showWhen: riskAssessment = ''
+  - stageKey: caseworker-decision
+    displayName: Record your decision
+    queueKey: caseworker
+    components:
+      - type: panel
+        heading: Record your decision
+      - type: body
+        content: Record the licensing decision for this application.
+      - type: summary-list
+        title: Application details
+        children:
+          - type: text
+            fieldKey: applicantName
+            label: Full name
+          - type: email
+            fieldKey: applicantEmail
+            label: Email address
+          - type: text
+            fieldKey: eventName
+            label: Name of the event
+          - type: date
+            fieldKey: eventDate
+            label: Date of the event
+          - type: number
+            fieldKey: jugglerCount
+            label: Number of jugglers taking part
+          - type: boolean
+            fieldKey: hasDangerousProps
+            label: Fire, knives or other dangerous props
+          - type: file-upload
+            fieldKey: riskAssessment
+            label: Risk assessment / insurance certificate
+          - type: text
+            fieldKey: riskMitigationNotes
+            label: How are you mitigating the risk?
+          - type: text
+            fieldKey: insurerDecision
+            label: Insurer decision
+          - type: text
+            fieldKey: insurerDecisionNotes
+            label: Insurer notes
+    routes:
+      - id: caseworker-decision--approve--post-review
+        target: post-review
+        trigger: approve
+        label: Approve
+        style: primary
+      - id: caseworker-decision--reject--post-review
+        target: post-review
+        trigger: reject
+        label: Reject
+        style: destructive
+  - stageKey: insurer-validation
+    displayName: Insurer validation
+    queueKey: automation
+    actions:
+      - type: support-system-call
+        timing: onEnter
+        params:
+          supportSystemKey: safetynet-underwriting
+          capabilityKey: validate-risk-assessment
+          inputs:
+            file: riskAssessment
+            applicantName: applicantName
+            eventName: eventName
+            notes: riskMitigationNotes
+    components:
+      - type: panel
+        heading: Awaiting SafetyNet Underwriting's decision
+    routes:
+      - id: insurer-validation--approved--insurer-check-complete
+        target: insurer-check-complete
+        trigger: approved
+      - id: insurer-validation--rejected--insurer-check-complete
+        target: insurer-check-complete
+        trigger: rejected
+  - stageKey: approved
+    displayName: Licence granted
+    stageType: Confirmation
+    queueKey: citizen
+    components:
+      - type: panel
+        heading: Licence granted
+      - type: body
+        content: Your licence to hold a juggling event has been granted. Keep this confirmation for your records.
+  - stageKey: rejected
+    displayName: Application not approved
+    stageType: Confirmation
+    queueKey: citizen
+    components:
+      - type: panel
+        heading: Application not approved
+      - type: body
+        content: Your application was not approved this time. Contact the licensing team for more information.
+gateways:
+  - key: to-event-details
+    displayName: Continue to event details
+    gatewayType: Split
+    queueKey: citizen
+    routes:
+      - id: to-event-details--continue--event-details
+        target: event-details
+        trigger: continue
+  - key: to-risk-assessment
+    displayName: Continue to risk assessment
+    gatewayType: Split
+    queueKey: citizen
+    routes:
+      - id: to-risk-assessment--continue--risk-assessment
+        target: risk-assessment
+        trigger: continue
+  - key: to-declaration
+    displayName: Continue to declaration
+    gatewayType: Split
+    queueKey: citizen
+    routes:
+      - id: to-declaration--continue--declaration
+        target: declaration
+        trigger: continue
+  - key: to-under-review
+    displayName: Hand off to caseworker
+    gatewayType: Split
+    queueKey: citizen
+    routes:
+      - id: to-under-review--continue--under-review
+        target: under-review
+        trigger: continue
+      - id: to-under-review--continue--post-review
+        target: post-review
+        trigger: continue
+  - key: post-review
+    displayName: Application under review
+    gatewayType: Join
+    queueKey: citizen
+    waitingContent: A caseworker is reviewing your application. We'll update this page once a decision is made.
+    waitingExpectedSeconds: 120
+    waitingPollIntervalMs: 5000
+    routes:
+      - id: post-review--approve--approved
+        target: approved
+        trigger: approve
+      - id: post-review--reject--rejected
+        target: rejected
+        trigger: reject
+    requiredIncomingQueues:
+      - citizen
+      - caseworker
+  - key: to-insurer-check
+    displayName: Send to insurer
+    gatewayType: Split
+    queueKey: caseworker
+    routes:
+      - id: to-insurer-check--send-to-insurer--insurer-check-complete
+        target: insurer-check-complete
+        trigger: send-to-insurer
+      - id: to-insurer-check--send-to-insurer--insurer-validation
+        target: insurer-validation
+        trigger: send-to-insurer
+  - key: insurer-check-complete
+    displayName: Awaiting insurer decision
+    gatewayType: Join
+    queueKey: caseworker
+    waitingContent: SafetyNet Underwriting is reviewing the risk assessment. We'll update this page once a decision is made.
+    waitingExpectedSeconds: 120
+    waitingPollIntervalMs: 5000
+    routes:
+      - id: insurer-check-complete--approved--caseworker-decision
+        target: caseworker-decision
+        trigger: approved
+      - id: insurer-check-complete--rejected--caseworker-decision
+        target: caseworker-decision
+        trigger: rejected
+    requiredIncomingQueues:
+      - caseworker
+      - automation
+  - key: to-caseworker-decision
+    displayName: Continue to decision
+    gatewayType: Split
+    queueKey: caseworker
+    routes:
+      - id: to-caseworker-decision--continue--caseworker-decision
+        target: caseworker-decision
+        trigger: continue
+calculations:
+  fields:
+    mitigationHasEvidence:
+      expr: matches(riskMitigationNotes, '\b\d+\s?(m|metres|meters)\b') or matches(riskMitigationNotes, '\b(HSE|IOSH|NOABA)\b')

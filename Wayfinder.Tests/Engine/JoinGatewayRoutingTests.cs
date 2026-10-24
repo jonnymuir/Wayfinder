@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
@@ -20,141 +19,139 @@ public class JoinGatewayRoutingTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     // Two queues converge on one Join gateway with two outgoing routes ("approve"/"reject"),
     // mirroring juggling-licence's under-review -> post-review shape.
     private const string BranchingJoinDefinitionKey = "branching-join-test";
-    private const string BranchingJoinJson = """
-        {
-          "definitionKey": "branching-join-test",
-          "displayName": "Branching Join Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "applicant", "displayName": "Applicant", "actor": "applicant" },
-            { "key": "reviewer", "displayName": "Reviewer", "actor": "reviewer" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "applicant",
-              "components": [ { "type": "panel", "heading": "Start" } ],
-              "routes": [
-                { "id": "start--continue--fan-out", "target": "fan-out", "trigger": "continue" }
-              ]
-            },
-            {
-              "stageKey": "review",
-              "displayName": "Review",
-              "queueKey": "reviewer",
-              "components": [ { "type": "panel", "heading": "Review" } ],
-              "routes": [
-                { "id": "review--approve--join", "target": "join", "trigger": "approve" },
-                { "id": "review--reject--join", "target": "join", "trigger": "reject" }
-              ]
-            },
-            {
-              "stageKey": "approved",
-              "displayName": "Approved",
-              "queueKey": "applicant",
-              "components": [ { "type": "panel", "heading": "Approved" } ]
-            },
-            {
-              "stageKey": "rejected",
-              "displayName": "Rejected",
-              "queueKey": "applicant",
-              "components": [ { "type": "panel", "heading": "Rejected" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "fan-out",
-              "displayName": "Hand off to reviewer",
-              "gatewayType": "Split",
-              "queueKey": "applicant",
-              "routes": [
-                { "id": "fan-out--continue--review", "target": "review", "trigger": "continue" },
-                { "id": "fan-out--continue--join", "target": "join", "trigger": "continue" }
-              ]
-            },
-            {
-              "key": "join",
-              "displayName": "Under review",
-              "gatewayType": "Join",
-              "queueKey": "applicant",
-              "routes": [
-                { "id": "join--approve--approved", "target": "approved", "trigger": "approve" },
-                { "id": "join--reject--rejected", "target": "rejected", "trigger": "reject" }
-              ],
-              "requiredIncomingQueues": ["applicant", "reviewer"]
-            }
-          ]
-        }
+    private const string BranchingJoinYaml = """
+        definitionKey: branching-join-test
+        displayName: Branching Join Test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: applicant
+            displayName: Applicant
+            actor: applicant
+          - key: reviewer
+            displayName: Reviewer
+            actor: reviewer
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: applicant
+            components:
+              - type: panel
+                heading: Start
+            routes:
+              - id: start--continue--fan-out
+                target: fan-out
+                trigger: continue
+          - stageKey: review
+            displayName: Review
+            queueKey: reviewer
+            components:
+              - type: panel
+                heading: Review
+            routes:
+              - id: review--approve--join
+                target: join
+                trigger: approve
+              - id: review--reject--join
+                target: join
+                trigger: reject
+          - stageKey: approved
+            displayName: Approved
+            queueKey: applicant
+            components:
+              - type: panel
+                heading: Approved
+          - stageKey: rejected
+            displayName: Rejected
+            queueKey: applicant
+            components:
+              - type: panel
+                heading: Rejected
+        gateways:
+          - key: fan-out
+            displayName: Hand off to reviewer
+            gatewayType: Split
+            queueKey: applicant
+            routes:
+              - id: fan-out--continue--review
+                target: review
+                trigger: continue
+              - id: fan-out--continue--join
+                target: join
+                trigger: continue
+          - key: join
+            displayName: Under review
+            gatewayType: Join
+            queueKey: applicant
+            routes:
+              - id: join--approve--approved
+                target: approved
+                trigger: approve
+              - id: join--reject--rejected
+                target: rejected
+                trigger: reject
+            requiredIncomingQueues:
+              - applicant
+              - reviewer
         """;
 
     // Split -> single-route Join -> stage, with no requiredIncomingQueues. Regression guard for
     // the pre-existing "always fire the one outgoing route" behaviour.
     private const string SingleRouteJoinDefinitionKey = "single-route-join-test";
     private const string SingleRouteJoinJson = """
-        {
-          "definitionKey": "single-route-join-test",
-          "displayName": "Single Route Join Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "citizen", "displayName": "Citizen", "actor": "citizen" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "citizen",
-              "components": [ { "type": "panel", "heading": "Start" } ],
-              "routes": [
-                { "id": "start--continue--split", "target": "split", "trigger": "continue" }
-              ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "citizen",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "split",
-              "displayName": "Split",
-              "gatewayType": "Split",
-              "queueKey": "citizen",
-              "routes": [
-                { "id": "split--continue--join", "target": "join", "trigger": "continue" }
-              ]
-            },
-            {
-              "key": "join",
-              "displayName": "Join",
-              "gatewayType": "Join",
-              "queueKey": "citizen",
-              "routes": [
-                { "id": "join--continue--done", "target": "done", "trigger": "continue" }
-              ]
-            }
-          ]
-        }
+        definitionKey: single-route-join-test
+        displayName: Single Route Join Test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: citizen
+            displayName: Citizen
+            actor: citizen
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: citizen
+            components:
+              - type: panel
+                heading: Start
+            routes:
+              - id: start--continue--split
+                target: split
+                trigger: continue
+          - stageKey: done
+            displayName: Done
+            queueKey: citizen
+            components:
+              - type: panel
+                heading: Done
+        gateways:
+          - key: split
+            displayName: Split
+            gatewayType: Split
+            queueKey: citizen
+            routes:
+              - id: split--continue--join
+                target: join
+                trigger: continue
+          - key: join
+            displayName: Join
+            gatewayType: Join
+            queueKey: citizen
+            routes:
+              - id: join--continue--done
+                target: done
+                trigger: continue
         """;
 
     private static ProcessManagerEngine BuildEngine(string json)
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(json, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(json);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
@@ -164,7 +161,7 @@ public class JoinGatewayRoutingTests
     [Fact]
     public void Join_ReleasesOnlyTheApproveRoute_WhenApproveArrives()
     {
-        var engine = BuildEngine(BranchingJoinJson);
+        var engine = BuildEngine(BranchingJoinYaml);
 
         var started = engine.GetCurrent(BranchingJoinDefinitionKey, TenantId, UserId);
         var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, "continue", started.StateVersion, null);
@@ -184,7 +181,7 @@ public class JoinGatewayRoutingTests
     [Fact]
     public void Join_ReleasesOnlyTheRejectRoute_WhenRejectArrives()
     {
-        var engine = BuildEngine(BranchingJoinJson);
+        var engine = BuildEngine(BranchingJoinYaml);
 
         var started = engine.GetCurrent(BranchingJoinDefinitionKey, TenantId, UserId);
         var afterSplit = engine.Advance(started.InstanceId, TenantId, UserId, "continue", started.StateVersion, null);
@@ -211,13 +208,13 @@ public class JoinGatewayRoutingTests
     private static string JugglingLicenceSeedPath([CallerFilePath] string testFilePath = "") =>
         Path.Combine(
             Path.GetDirectoryName(testFilePath)!, "..", "..",
-            "Wayfinder.ReferenceApp", "service-blueprints", "juggling-licence.json");
+            "Wayfinder.ReferenceApp", "service-blueprints", "juggling-licence.yaml");
 
     [Fact]
     public void RealJugglingLicenceBlueprint_MergedJoinGatewayPassesValidation()
     {
         var json = File.ReadAllText(JugglingLicenceSeedPath());
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(json, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(json);
 
         var routingDiagnostics = definition.ValidateGatewayRouting();
         var reachabilityDiagnostics = definition.ValidateReachability();
@@ -251,7 +248,7 @@ public class JoinGatewayRoutingTests
     [Fact]
     public void ValidateGatewayRouting_FlagsBlankTriggerOnMultiRouteJoin()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BranchingJoinJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BranchingJoinYaml);
         var withBlankTrigger = definition with
         {
             Gateways = definition.Gateways!.Select(g => g.Key != "join"
@@ -270,7 +267,7 @@ public class JoinGatewayRoutingTests
     [Fact]
     public void ValidateGatewayRouting_FlagsDuplicateTriggerOnMultiRouteJoin()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BranchingJoinJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BranchingJoinYaml);
         var withDuplicateTrigger = definition with
         {
             Gateways = definition.Gateways!.Select(g => g.Key != "join"

@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+using YamlDotNet.Serialization;
 
 namespace Wayfinder.Models.ServiceDesign.Components;
 
@@ -31,7 +31,7 @@ public sealed record StatItemDefinition
     public string? Qualifier { get; init; }
 
     /// <summary>Whether to render this tile with visual emphasis.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool Emphasis { get; init; }
 
     /// <summary>
@@ -39,14 +39,12 @@ public sealed record StatItemDefinition
     /// show a read-only map when the bound value is a <c>"latitude,longitude"</c> point (what a
     /// <c>location-picker</c> captures). A value that is not a point is shown as text.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Display { get; init; }
 
     /// <summary>
     /// How much room the tile needs: omitted (or <c>"auto"</c>) for one grid cell, or <c>"full"</c>
     /// for the whole row (a long value such as free text). A map tile is always full width.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Width { get; init; }
 }
 
@@ -124,7 +122,7 @@ public sealed record BulkDataReviewComponent : Component
     /// <summary>
     /// Label shown when a row/the whole dataset has changed since the last check — null/empty
     /// falls back to "Needs resubmission". This is genuinely per-service vocabulary: a file
-    /// resubmission flow (njf-contributions.json sets this to "Pending resubmission") reads very
+    /// resubmission flow (njf-contributions.yaml sets this to "Pending resubmission") reads very
     /// differently from, say, a service that revalidates by re-running an internal check with no
     /// external file at all. See docs/guides/bulk-data-review.md's sync-state section.
     /// </summary>

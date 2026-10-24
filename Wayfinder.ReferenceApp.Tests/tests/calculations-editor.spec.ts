@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { acceptCompletion, captureDocScreenshot, DEMO_USERS, loginAs, resetApp } from './fixtures';
+import { readBlueprint, saveBlueprint } from './support/blueprint-api';
 
 const DOCS_DIR = 'docs/skills/calculations-editor/screenshots';
 
@@ -196,7 +197,7 @@ test.describe('Calculations tab', () => {
   });
 
   test('an edit reaches the saved blueprint with the correct dependency order', async ({ page, request }) => {
-    const original = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-insurance-modeller')).json();
+    const original = await readBlueprint(request, 'juggling-insurance-modeller');
 
     try {
       await loginAs(page, DEMO_USERS.caseworker);
@@ -236,14 +237,13 @@ test.describe('Calculations tab', () => {
       await expect(page.locator('[data-wayfinder-toast]')).toContainText(/saved/i, { timeout: 5_000 });
       await captureDocScreenshot(page.locator('[data-wayfinder-toast]'), `${DOCS_DIR}/save-confirmation.png`);
 
-      const saved = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-insurance-modeller')).json();
+      const saved = await readBlueprint(request, 'juggling-insurance-modeller');
       const fieldNames = Object.keys(saved.calculations.fields);
 
       expect(fieldNames).toContain('bonusAmount');
       // bonusAmount depends on totalPremium, so it must be declared after it — this is exactly
-      // the ordering guarantee the canonical-JSON serializer must not disturb (see
-      // service-blueprint-canonical-json.ts: calculations is deliberately excluded from
-      // alphabetical key sorting).
+      // the ordering guarantee the YAML serializers must keep (a map's keys are never sorted;
+      // see service-blueprint-yaml.ts).
       expect(fieldNames.indexOf('bonusAmount')).toBeGreaterThan(fieldNames.indexOf('totalPremium'));
       expect(saved.calculations.fields.bonusAmount.expr).toBe('totalPremium * 0.1');
       // Every original field must still be present and untouched.
@@ -251,10 +251,8 @@ test.describe('Calculations tab', () => {
         expect(saved.calculations.fields[name].expr).toBe(original.calculations.fields[name].expr);
       }
     } finally {
-      const current = await (await request.get('/wayfinder/service-blueprint-authoring/blueprints/juggling-insurance-modeller')).json();
-      await request.put('/wayfinder/service-blueprint-authoring/blueprints/juggling-insurance-modeller', {
-        data: { ...original, version: current.version },
-      });
+      const current = await readBlueprint(request, 'juggling-insurance-modeller');
+      await saveBlueprint(request, 'juggling-insurance-modeller', { ...original, version: current.version });
     }
   });
 

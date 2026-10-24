@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Wayfinder.Engine.Models;
 using Wayfinder.Engine.Services;
 using Wayfinder.Models.ServiceDesign;
@@ -14,15 +17,22 @@ if (args is not [var mode and ("write" or "check"), var path])
     return 2;
 }
 
-var generated = new TypeScriptEmitter(ServiceBlueprintJson.WriteOptions).Emit(
-[
-    typeof(ServiceBlueprint),
-    typeof(ComponentDescriptor),
-    typeof(SupportSystemDescriptor),
-    typeof(ServiceBlueprintValidationOutcome),
-    typeof(ServiceBlueprintSaveOutcome),
-    typeof(DesignNote),
-]);
+// A blueprint travels as YAML; the authoring API's catalogs and outcomes are JSON.
+var apiJson = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+{
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+};
+var generated = new TypeScriptEmitter()
+    .Add(new YamlWireContract(), typeof(ServiceBlueprint))
+    .Add(
+        new JsonWireContract(apiJson),
+        typeof(ComponentDescriptor),
+        typeof(SupportSystemDescriptor),
+        typeof(ServiceBlueprintValidationOutcome),
+        typeof(ServiceBlueprintSaveOutcome),
+        typeof(DesignNote))
+    .Render();
 
 if (mode == "write")
 {

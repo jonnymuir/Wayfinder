@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { DEMO_USERS, loginAs, resetApp } from './fixtures';
 
-// Real coverage for the team view (see docs/guides/team-assignment.md) — juggling-licence.json's
+// Real coverage for the team view (see docs/guides/team-assignment.md) — juggling-licence.yaml's
 // own caseworker queue is team-tray, so Casey and Jordan (both on "Juggling Licence Team") must
 // genuinely contend for the same row, unlike Casey/Priya's own capability-partitioned split, which
 // never exercises this. Zero coverage of this existed before this spec.

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FluentAssertions;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Engine.Services;
@@ -16,7 +15,7 @@ public class DocumentedExampleBlueprintTests
     public static TheoryData<string> Examples()
     {
         var data = new TheoryData<string>();
-        foreach (var path in Directory.GetFiles(ExamplesFolder(), "*.json").Order(StringComparer.Ordinal))
+        foreach (var path in Directory.GetFiles(ExamplesFolder(), "*.yaml").Order(StringComparer.Ordinal))
         {
             data.Add(Path.GetFileName(path));
         }
@@ -29,7 +28,7 @@ public class DocumentedExampleBlueprintTests
     public void EveryDocumentedExampleIsAValidBlueprint(string fileName)
     {
         var json = File.ReadAllText(Path.Combine(ExamplesFolder(), fileName));
-        var blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(json, ServiceBlueprintJson.ReadOptions)!;
+        var blueprint = ServiceBlueprintYaml.Deserialize(json);
 
         var outcome = new ServiceBlueprintAuthoringService(new UnusedSourceStore()).Validate(blueprint);
 

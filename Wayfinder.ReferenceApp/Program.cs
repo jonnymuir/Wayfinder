@@ -18,14 +18,14 @@ using Wayfinder.ReferenceApp.Services.SupportSystems;
 using Wayfinder.Rendering.GovUk;
 using Wayfinder.Services.Sanitization;
 
-// The seeded demo blueprints' keys — see service-blueprints/juggling-licence.json and
-// service-blueprints/juggling-insurance-modeller.json.
+// The seeded demo blueprints' keys — see service-blueprints/juggling-licence.yaml and
+// service-blueprints/juggling-insurance-modeller.yaml.
 const string JugglingLicenceDefinitionKey = "juggling-licence";
 const string InsuranceModellerDefinitionKey = "juggling-insurance-modeller";
 const string NjfContributionsDefinitionKey = "njf-contributions";
 
 // Must run before anything reads ComponentTypeRegistry (it freezes on first read) — the seed
-// blueprints below declare a "rating" component (juggling-licence.json's "event-details" stage),
+// blueprints below declare a "rating" component (juggling-licence.yaml's "event-details" stage),
 // proving a genuinely new, host-defined component type registered from outside Wayfinder's own
 // assembly. See Services/CustomComponents.cs and docs/guides/extending-the-component-catalog.md.
 CustomComponents.Register();
@@ -101,7 +101,7 @@ builder.Services.AddSingleton(sp => new ProcessManagerEngine(
     sp.GetRequiredService<ILogger<ProcessManagerEngine>>(),
     sp.GetRequiredService<IServiceBlueprintStore>(),
     sp.GetRequiredService<IServiceContentSanitizer>(),
-    // No serviceInputsResolver: the only "source: service" fields here (njf-contributions.json's
+    // No serviceInputsResolver: the only "source: service" fields here (njf-contributions.yaml's
     // contribution counts) are written by the engine's own bulk-dataset-ingest action, and the
     // engine reads those from the request's stored values itself.
     supportSystemClients:
@@ -120,7 +120,6 @@ builder.Services.AddSingleton<IProcessManager>(sp => sp.GetRequiredService<Proce
 builder.Services.AddSingleton<InMemoryRuntimeServiceBlueprintSourceStore>();
 builder.Services.AddSingleton<IServiceBlueprintSourceStore>(sp => sp.GetRequiredService<InMemoryRuntimeServiceBlueprintSourceStore>());
 builder.Services.AddServiceBlueprintAuthoring();
-builder.Services.AddServiceBlueprintAuthoringApi();
 builder.Services.AddServiceBlueprintAuthoringMcp();
 
 // See Wayfinder.Engine.Journey's own README — the default single-actor journey surface (get

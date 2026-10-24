@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Models;
@@ -32,38 +31,41 @@ public class WorklistFileDownloadTests
         RestrictToInstanceOwner = false
     };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "file-download-test",
-          "displayName": "File download test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "multiple",
-          "queues": [ { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" } ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "attachment", "label": "Attachment", "required": false } ],
-              "routes": [ { "id": "start--submit--done", "target": "done", "trigger": "submit" } ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Done" } ],
-              "routes": []
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: file-download-test
+        displayName: File download test
+        version: 1
+        initialStage: start
+        requestPolicy: multiple
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: attachment
+                label: Attachment
+            routes:
+              - id: start--submit--done
+                target: done
+                trigger: submit
+          - stageKey: done
+            displayName: Done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Done
+            routes: []
         """;
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

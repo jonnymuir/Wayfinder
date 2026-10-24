@@ -1,5 +1,5 @@
 import { type ReactiveController, type ReactiveControllerHost, type TemplateResult, html, nothing } from 'lit';
-import { authoredServiceBlueprintJsonEquals, serializeAuthoredServiceBlueprint } from './service-blueprint-canonical-json.js';
+import { authoredServiceBlueprintEquals, parseYaml, serializeAuthoredServiceBlueprint } from './service-blueprint-yaml.js';
 import {
   type DefinitionLint,
   coerceParsedAuthoredServiceBlueprint,
@@ -18,19 +18,20 @@ export interface DefinitionInputs {
 const APPLY_DEBOUNCE_MS = 250;
 
 /**
- * The Definition tab: the blueprint as JSON text that stays in step with the visual editor in both directions. Text the
+ * The Definition tab: the blueprint as YAML text that stays in step with the visual editor in both directions. Text the
  * author types is parsed, linted and, once valid, applied as an edit; edits made visually rewrite the text. Invalid
  * text is kept (and explained) rather than thrown away, so a half-typed change is never lost.
  */
 export class DefinitionController implements ReactiveController {
   text = '';
   parseError: string | null = null;
+  parseErrorLine = 1;
   schemaIssues: DefinitionLint[] = [];
   announcement = '';
-  /** The JSON editor is a lazy chunk; it is fetched the first time the tab is opened. */
+  /** The YAML editor is a lazy chunk; it is fetched the first time the tab is opened. */
   editorLoaded = false;
 
-  /** Canonical JSON of the blueprint when the text last matched it, so a visual edit is not echoed back as a text edit. */
+  /** Canonical YAML of the blueprint when the text last matched it, so a visual edit is not echoed back as a text edit. */
   private lastCanonical = '';
   private debounce: number | null = null;
 
@@ -58,9 +59,7 @@ export class DefinitionController implements ReactiveController {
   get diagnostics(): Array<{ line: number; severity: 'error' | 'warning'; message: string }> {
     const out: Array<{ line: number; severity: 'error' | 'warning'; message: string }> = [];
     if (this.parseError) {
-      // JSON.parse errors often say "line N".
-      const lineMatch = /line (\d+)/i.exec(this.parseError);
-      out.push({ line: lineMatch ? Number(lineMatch[1]) : 1, severity: 'error', message: this.parseError });
+      out.push({ line: this.parseErrorLine, severity: 'error', message: this.parseError });
     }
     for (const issue of this.schemaIssues) {
       if (issue.line) {
@@ -149,15 +148,15 @@ export class DefinitionController implements ReactiveController {
   };
 
   private applyText(): void {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(this.text);
-    } catch (err) {
-      this.parseError = err instanceof Error ? err.message : String(err);
+    const result = parseYaml(this.text);
+    if (!result.ok) {
+      this.parseError = result.message;
+      this.parseErrorLine = result.line;
       this.schemaIssues = [];
       this.host.requestUpdate();
       return;
     }
+    const parsed = result.value;
 
     const issues = lintAuthoredServiceBlueprintDocument(parsed, this.text, [...this.inputs.componentCatalog()]);
     if (issues.length > 0) {
@@ -174,7 +173,7 @@ export class DefinitionController implements ReactiveController {
     this.lastCanonical = serializeAuthoredServiceBlueprint(next);
     this.host.requestUpdate();
 
-    if (authoredServiceBlueprintJsonEquals(this.inputs.blueprint(), next)) {
+    if (authoredServiceBlueprintEquals(this.inputs.blueprint(), next)) {
       return;
     }
 
@@ -223,7 +222,7 @@ export class DefinitionController implements ReactiveController {
                 ></wayfinder-definition-editor>
               `
               : html`<p class="definition-loading" role="status" data-wayfinder-definition-tab-loading>
-                Preparing the JSON editor…
+                Preparing the YAML editor…
               </p>`
           }
         </div>
@@ -239,7 +238,7 @@ export class DefinitionController implements ReactiveController {
       return nothing;
     }
     const summary = this.parseError
-      ? `JSON is not valid: ${this.parseError}`
+      ? `YAML is not valid (line ${this.parseErrorLine}): ${this.parseError}`
       : (this.schemaIssues[0]?.message ?? 'Definition does not match the service blueprint schema.');
     const additional =
       !this.parseError && this.schemaIssues.length > 1

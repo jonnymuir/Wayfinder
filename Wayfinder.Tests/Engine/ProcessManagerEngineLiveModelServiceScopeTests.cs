@@ -31,46 +31,37 @@ public class ProcessManagerEngineLiveModelServiceScopeTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "live-model-service-scope-test",
-          "displayName": "Live Model Service Scope Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "calculations": {
-            "fields": {
-              "member": { "source": "service" },
-              "minAge": { "expr": "max(55, member.age + 1)" }
-            }
-          },
-          "queues": [
-            { "key": "citizen", "displayName": "Applicant", "actor": "citizen" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "citizen",
-              "components": [
-                { "type": "panel", "heading": "Start" }
-              ],
-              "routes": []
-            }
-          ],
-          "gateways": []
-        }
+    private const string BlueprintYaml = """
+        definitionKey: live-model-service-scope-test
+        displayName: Live Model Service Scope Test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: citizen
+            displayName: Applicant
+            actor: citizen
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: citizen
+            components:
+              - type: panel
+                heading: Start
+            routes: []
+        gateways: []
+        calculations:
+          fields:
+            member:
+              source: service
+            minAge:
+              expr: max(55, member.age + 1)
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

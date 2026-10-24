@@ -16,8 +16,10 @@ async function openDefinitionTab(page: Page): Promise<void> {
   const definitionTab = editor.locator('wayfinder-confidence-tabs').locator('button[data-wayfinder-confidence-tab="definition"]');
   await definitionTab.click();
   await expect(editor.locator('[data-wayfinder-definition-panel]')).toBeVisible();
-  // Wait for the definition editor element to be present *and* populated.
+  // Wait for the definition editor element to be present *and* populated, and for the lazily
+  // loaded CodeMirror view to have mounted (a doc screenshot taken earlier shows only the loader).
   await expect.poll(async () => readDefinitionText(page), { timeout: 10_000 }).not.toEqual('');
+  await expect(editor.locator('wayfinder-definition-editor .cm-content')).toBeVisible({ timeout: 10_000 });
 }
 
 /** Arrow right from the first tab (which must be focused and selected) to `tab`, pressing once per
@@ -64,27 +66,27 @@ async function waitForDefinitionTextContains(page: Page, fragment: string): Prom
   await expect.poll(async () => readDefinitionText(page), { timeout: 5_000 }).toContain(fragment);
 }
 
-test.describe('Definition (JSON twin-pane) tab', () => {
-  test('Author switches to Definition tab and sees the current service blueprint as JSON', async ({ page }) => {
+test.describe('Definition (YAML twin-pane) tab', () => {
+  test('Author switches to Definition tab and sees the current service blueprint as YAML', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);
 
     const text = await readDefinitionText(page);
-    expect(text).toContain('"definitionKey"');
-    expect(text).toContain('"stages"');
-    // 2-space indent — first nested key sits at two spaces.
-    expect(text).toMatch(/\n {2}"/);
-    await captureDocScreenshot(page.locator('[data-wayfinder-definition-panel]'), `${DOCS_DIR}/definition-json-view.png`);
+    expect(text).toMatch(/^definitionKey: /);
+    expect(text).toContain('\nstages:\n');
+    // 2-space indent, lists indented under their key.
+    expect(text).toContain('\nstages:\n  - stageKey: ');
+    await captureDocScreenshot(page.locator('[data-wayfinder-definition-panel]'), `${DOCS_DIR}/definition-yaml-view.png`);
   });
 
-  test('Editing JSON to rename a stage updates the visual pane after debounce', async ({ page }) => {
+  test('Editing YAML to rename a stage updates the visual pane after debounce', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);
 
     const original = await readDefinitionText(page);
     expect(original).toContain('Application Form');
 
-    const renamed = original.replace(/"displayName": "Application Form"/, '"displayName": "Renamed Form"');
+    const renamed = original.replace('displayName: Application Form\n', 'displayName: Renamed Form\n');
     await setDefinitionText(page, renamed);
 
     // Auto-applies after a 250 ms debounce; the assertion below waits for it.
@@ -97,15 +99,15 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toContainText('Renamed Form');
   });
 
-  test('Invalid JSON shows banner with parse error and Apply is disabled', async ({ page }) => {
+  test('Invalid YAML shows banner with parse error and Apply is disabled', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);
 
     const original = await readDefinitionText(page);
     expect(original).toBeTruthy();
 
-    // Corrupt the JSON.
-    await setDefinitionText(page, original.slice(0, original.length - 5));
+    // Corrupt the YAML with an unclosed list.
+    await setDefinitionText(page, `${original}routes: [unclosed\n`);
 
     const banner = page.locator('[data-wayfinder-definition-banner]');
     await expect(banner).toBeVisible();
@@ -119,13 +121,13 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     await expect(editor.locator('[data-wayfinder-stage="application-form"]')).toBeVisible();
   });
 
-  test('Schema-violating JSON (retired Waiting kind) is blocked with Apply disabled', async ({ page }) => {
+  test('Schema-violating YAML (retired Waiting kind) is blocked with Apply disabled', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);
 
     const original = await readDefinitionText(page);
     // Replace the first "kind" value with the retired Waiting kind.
-    const broken = original.replace(/"stageType":\s*"Question"/, '"stageType": "Waiting"');
+    const broken = original.replace('stageType: Question\n', 'stageType: Waiting\n');
     expect(broken).not.toEqual(original);
     await setDefinitionText(page, broken);
 
@@ -161,16 +163,16 @@ test.describe('Definition (JSON twin-pane) tab', () => {
       );
     });
 
-    // Wait for the host to reflect the change in JSON.
+    // Wait for the host to reflect the change in the YAML.
     await waitForDefinitionTextContains(page, 'Definition Twin Demo');
   });
 
-  test('Document-level undo from the visual side reverses a Definition-applied JSON edit', async ({ page }) => {
+  test('Document-level undo from the visual side reverses a Definition-applied YAML edit', async ({ page }) => {
     await page.goto(storyUrl('service-blueprint-editor-editor-host--planning-service-blueprint'));
     await openDefinitionTab(page);
 
     const original = await readDefinitionText(page);
-    const renamed = original.replace(/"displayName": "Application Form"/, '"displayName": "From Definition Tab"');
+    const renamed = original.replace('displayName: Application Form\n', 'displayName: From Definition Tab\n');
     expect(renamed).not.toEqual(original);
 
     await setDefinitionText(page, renamed);
@@ -181,7 +183,7 @@ test.describe('Definition (JSON twin-pane) tab', () => {
     await editor.locator('wayfinder-confidence-tabs').locator('button[data-wayfinder-confidence-tab="canvas"]').click();
     await page.locator('[data-wayfinder-undo]').click();
 
-    // Switch back to Definition; the JSON should be restored.
+    // Switch back to Definition; the YAML should be restored.
     await editor.locator('wayfinder-confidence-tabs').locator('button[data-wayfinder-confidence-tab="definition"]').click();
     await waitForDefinitionTextContains(page, 'Application Form');
     const after = await readDefinitionText(page);

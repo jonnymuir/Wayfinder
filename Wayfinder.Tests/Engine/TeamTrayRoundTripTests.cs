@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Abstractions;
@@ -15,7 +13,7 @@ namespace Wayfinder.Tests.Engine;
 
 /// <summary>
 /// A team-tray queue's holder keeps the work when it leaves the queue (Split into automation) and
-/// comes back (Join). Mirrors njf-coaching-register.json's own topology: citizen submit -> Split ->
+/// comes back (Join). Mirrors njf-coaching-register.yaml's own topology: citizen submit -> Split ->
 /// registrar review (team-tray) -> Split into the standards system queue -> Join -> registrar again.
 /// </summary>
 public class TeamTrayRoundTripTests
@@ -48,82 +46,128 @@ public class TeamTrayRoundTripTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "team-tray-round-trip",
-          "displayName": "Team tray round trip",
-          "version": 1,
-          "initialStage": "apply",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "applicant", "displayName": "Coach", "actor": "citizen" },
-            { "key": "registrar", "displayName": "Registrar", "actor": "caseworker", "assignmentPolicy": "team-tray", "owningTeamId": "registrars" },
-            { "key": "standards", "displayName": "Standards", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "apply", "displayName": "Apply", "queueKey": "applicant",
-              "components": [ { "type": "text", "fieldKey": "name", "label": "Name", "required": false } ],
-              "routes": [ { "id": "apply--submit--to-review", "target": "to-review", "trigger": "submit" } ]
-            },
-            {
-              "stageKey": "review", "displayName": "Review", "queueKey": "registrar",
-              "components": [ { "type": "text", "fieldKey": "reviewNote", "label": "Note", "required": false } ],
-              "routes": [ { "id": "review--check--to-standards", "target": "to-standards", "trigger": "check" } ]
-            },
-            {
-              "stageKey": "standards-validation", "displayName": "Standards check", "queueKey": "standards",
-              "components": [ { "type": "panel", "heading": "Checking" } ],
-              "routes": [ { "id": "sv--accredited--standards-done", "target": "standards-done", "trigger": "accredited" } ]
-            },
-            {
-              "stageKey": "registrar-decision", "displayName": "Confirm the outcome", "queueKey": "registrar",
-              "components": [ { "type": "text", "fieldKey": "decisionNote", "label": "Note", "required": false } ],
-              "routes": [ { "id": "rd--record--decision-made", "target": "decision-made", "trigger": "record" } ]
-            },
-            {
-              "stageKey": "outcome", "displayName": "Outcome", "queueKey": "applicant", "stageType": "Confirmation",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-review", "displayName": "To review", "gatewayType": "Split", "queueKey": "applicant",
-              "routes": [
-                { "id": "to-review--submit--decision-made", "target": "decision-made", "trigger": "submit" },
-                { "id": "to-review--submit--review", "target": "review", "trigger": "submit" }
-              ]
-            },
-            {
-              "key": "to-standards", "displayName": "To standards", "gatewayType": "Split", "queueKey": "registrar",
-              "routes": [
-                { "id": "to-standards--check--standards-done", "target": "standards-done", "trigger": "check" },
-                { "id": "to-standards--check--standards-validation", "target": "standards-validation", "trigger": "check" }
-              ]
-            },
-            {
-              "key": "standards-done", "displayName": "Standards done", "gatewayType": "Join", "queueKey": "registrar",
-              "waitingContent": "Waiting.", "requiredIncomingQueues": ["registrar", "standards"],
-              "routes": [ { "id": "standards-done--accredited--registrar-decision", "target": "registrar-decision", "trigger": "accredited" } ]
-            },
-            {
-              "key": "decision-made", "displayName": "Decision made", "gatewayType": "Join", "queueKey": "applicant",
-              "waitingContent": "Waiting.", "requiredIncomingQueues": ["applicant", "registrar"],
-              "routes": [ { "id": "decision-made--record--outcome", "target": "outcome", "trigger": "record" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: team-tray-round-trip
+        displayName: Team tray round trip
+        version: 1
+        initialStage: apply
+        requestPolicy: single
+        queues:
+          - key: applicant
+            displayName: Coach
+            actor: citizen
+          - key: registrar
+            displayName: Registrar
+            actor: caseworker
+            assignmentPolicy: team-tray
+            owningTeamId: registrars
+          - key: standards
+            displayName: Standards
+            actor: system
+        stages:
+          - stageKey: apply
+            displayName: Apply
+            queueKey: applicant
+            components:
+              - type: text
+                fieldKey: name
+                label: Name
+            routes:
+              - id: apply--submit--to-review
+                target: to-review
+                trigger: submit
+          - stageKey: review
+            displayName: Review
+            queueKey: registrar
+            components:
+              - type: text
+                fieldKey: reviewNote
+                label: Note
+            routes:
+              - id: review--check--to-standards
+                target: to-standards
+                trigger: check
+          - stageKey: standards-validation
+            displayName: Standards check
+            queueKey: standards
+            components:
+              - type: panel
+                heading: Checking
+            routes:
+              - id: sv--accredited--standards-done
+                target: standards-done
+                trigger: accredited
+          - stageKey: registrar-decision
+            displayName: Confirm the outcome
+            queueKey: registrar
+            components:
+              - type: text
+                fieldKey: decisionNote
+                label: Note
+            routes:
+              - id: rd--record--decision-made
+                target: decision-made
+                trigger: record
+          - stageKey: outcome
+            displayName: Outcome
+            stageType: Confirmation
+            queueKey: applicant
+            components:
+              - type: panel
+                heading: Done
+        gateways:
+          - key: to-review
+            displayName: To review
+            gatewayType: Split
+            queueKey: applicant
+            routes:
+              - id: to-review--submit--decision-made
+                target: decision-made
+                trigger: submit
+              - id: to-review--submit--review
+                target: review
+                trigger: submit
+          - key: to-standards
+            displayName: To standards
+            gatewayType: Split
+            queueKey: registrar
+            routes:
+              - id: to-standards--check--standards-done
+                target: standards-done
+                trigger: check
+              - id: to-standards--check--standards-validation
+                target: standards-validation
+                trigger: check
+          - key: standards-done
+            displayName: Standards done
+            gatewayType: Join
+            queueKey: registrar
+            waitingContent: Waiting.
+            routes:
+              - id: standards-done--accredited--registrar-decision
+                target: registrar-decision
+                trigger: accredited
+            requiredIncomingQueues:
+              - registrar
+              - standards
+          - key: decision-made
+            displayName: Decision made
+            gatewayType: Join
+            queueKey: applicant
+            waitingContent: Waiting.
+            routes:
+              - id: decision-made--record--outcome
+                target: outcome
+                trigger: record
+            requiredIncomingQueues:
+              - applicant
+              - registrar
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
@@ -199,12 +243,21 @@ public class TeamTrayRoundTripTests
 
         try
         {
-            var json = BlueprintJson.Replace(
-                "\"components\": [ { \"type\": \"panel\", \"heading\": \"Checking\" } ],",
-                "\"components\": [ { \"type\": \"panel\", \"heading\": \"Checking\" } ], " +
-                "\"actions\": [ { \"type\": \"support-system-call\", \"timing\": \"onEnter\", \"params\": " +
-                "{ \"supportSystemKey\": \"tray-test-support-system\", \"capabilityKey\": \"check\", \"inputs\": { \"name\": \"name\" } } } ],");
-            var definition = JsonSerializer.Deserialize<ServiceBlueprint>(json, JsonOptions)!;
+            var yaml = BlueprintYaml.Replace(
+                "        heading: Checking\n",
+                """
+                        heading: Checking
+                    actions:
+                      - type: support-system-call
+                        timing: onEnter
+                        params:
+                          supportSystemKey: tray-test-support-system
+                          capabilityKey: check
+                          inputs:
+                            name: name
+
+                """);
+            var definition = ServiceBlueprintYaml.Deserialize(yaml);
             var store = new InMemoryServiceRequestStore();
             var engine = new ProcessManagerEngine(
                 NullLogger.Instance,

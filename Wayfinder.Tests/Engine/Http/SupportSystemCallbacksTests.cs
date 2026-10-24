@@ -44,74 +44,91 @@ public class SupportSystemCallbacksTests
         RestrictToInstanceOwner = false,
     };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "cb-test",
-          "displayName": "Callback test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "applicantName", "label": "Name", "required": false } ],
-              "routes": [ { "id": "start--send--split", "target": "to-support-system", "trigger": "send" } ]
-            },
-            {
-              "stageKey": "in-review",
-              "displayName": "In review",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "In review" } ],
-              "actions": [
-                {
-                  "type": "support-system-call",
-                  "timing": "onEnter",
-                  "params": {
-                    "supportSystemKey": "njf-coaching-standards",
-                    "capabilityKey": "check-coaching-standards",
-                    "inputs": { "applicantName": "applicantName" }
-                  }
-                }
-              ],
-              "routes": [
-                { "id": "in-review--accredited--join", "target": "check-complete", "trigger": "accredited" },
-                { "id": "in-review--referred--join", "target": "check-complete", "trigger": "referred" }
-              ]
-            },
-            { "stageKey": "accredited", "displayName": "Accredited", "queueKey": "caseworker", "components": [ { "type": "panel", "heading": "Accredited" } ] },
-            { "stageKey": "referred", "displayName": "Referred", "queueKey": "caseworker", "components": [ { "type": "panel", "heading": "Referred" } ] }
-          ],
-          "gateways": [
-            {
-              "key": "to-support-system",
-              "displayName": "Send",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [
-                { "id": "split--join", "target": "check-complete", "trigger": "send" },
-                { "id": "split--review", "target": "in-review", "trigger": "send" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "caseworker",
-              "waitingContent": "Waiting for the coaching-standards decision.",
-              "routes": [
-                { "id": "join--accredited", "target": "accredited", "trigger": "accredited" },
-                { "id": "join--referred", "target": "referred", "trigger": "referred" }
-              ],
-              "requiredIncomingQueues": ["caseworker", "automation"]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: cb-test
+        displayName: Callback test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+          - key: automation
+            displayName: Automation
+            actor: system
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: applicantName
+                label: Name
+            routes:
+              - id: start--send--split
+                target: to-support-system
+                trigger: send
+          - stageKey: in-review
+            displayName: In review
+            queueKey: automation
+            actions:
+              - type: support-system-call
+                timing: onEnter
+                params:
+                  supportSystemKey: njf-coaching-standards
+                  capabilityKey: check-coaching-standards
+                  inputs:
+                    applicantName: applicantName
+            components:
+              - type: panel
+                heading: In review
+            routes:
+              - id: in-review--accredited--join
+                target: check-complete
+                trigger: accredited
+              - id: in-review--referred--join
+                target: check-complete
+                trigger: referred
+          - stageKey: accredited
+            displayName: Accredited
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Accredited
+          - stageKey: referred
+            displayName: Referred
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Referred
+        gateways:
+          - key: to-support-system
+            displayName: Send
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: split--join
+                target: check-complete
+                trigger: send
+              - id: split--review
+                target: in-review
+                trigger: send
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: caseworker
+            waitingContent: Waiting for the coaching-standards decision.
+            routes:
+              - id: join--accredited
+                target: accredited
+                trigger: accredited
+              - id: join--referred
+                target: referred
+                trigger: referred
+            requiredIncomingQueues:
+              - caseworker
+              - automation
         """;
 
     private sealed class StubClient : ISupportSystemClient
@@ -153,8 +170,7 @@ public class SupportSystemCallbacksTests
             ],
         });
 
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(
-            BlueprintJson, CaseInsensitive)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         var client = new StubClient();
         var engine = new ProcessManagerEngine(
             NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),

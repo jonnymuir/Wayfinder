@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -38,89 +37,97 @@ public class QueueWorkListQueryTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     // requestPolicy "multiple" so every GetCurrent call mints a genuinely fresh instance
     // regardless of sharing the same tenant/user — lets each test build exactly the mix of
     // Actionable/Waiting/Done/orphan instances it needs without juggling distinct user ids.
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "queue-query-test",
-          "displayName": "Queue Query Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "multiple",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [
-                { "type": "text", "fieldKey": "applicantName", "label": "Applicant name", "required": false },
-                { "type": "boolean", "fieldKey": "unlock", "label": "Unlock", "default": "false" }
-              ],
-              "routes": [
-                { "id": "start--go-wait--split", "target": "to-automation", "trigger": "go-wait" },
-                { "id": "start--go-done--done", "target": "done", "trigger": "go-done" },
-                { "id": "start--go-hidden--hidden", "target": "hidden-stage", "trigger": "go-hidden" }
-              ]
-            },
-            {
-              "stageKey": "in-review",
-              "displayName": "In review",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "In review" } ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            },
-            {
-              "stageKey": "hidden-stage",
-              "displayName": "Hidden stage",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [
-                { "id": "hidden-stage--continue--done", "target": "done", "trigger": "continue", "showWhen": "unlock" }
-              ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-automation",
-              "displayName": "Send to automation",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [
-                { "id": "to-automation--go-wait--join", "target": "check-complete", "trigger": "go-wait" },
-                { "id": "to-automation--go-wait--review", "target": "in-review", "trigger": "go-wait" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "check-complete--approved--start", "target": "start", "trigger": "approved" } ],
-              "requiredIncomingQueues": ["caseworker", "automation"]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: queue-query-test
+        displayName: Queue Query Test
+        version: 1
+        initialStage: start
+        requestPolicy: multiple
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+          - key: automation
+            displayName: Automation
+            actor: system
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: applicantName
+                label: Applicant name
+              - type: boolean
+                fieldKey: unlock
+                label: Unlock
+                default: "false"
+            routes:
+              - id: start--go-wait--split
+                target: to-automation
+                trigger: go-wait
+              - id: start--go-done--done
+                target: done
+                trigger: go-done
+              - id: start--go-hidden--hidden
+                target: hidden-stage
+                trigger: go-hidden
+          - stageKey: in-review
+            displayName: In review
+            queueKey: automation
+            components:
+              - type: panel
+                heading: In review
+          - stageKey: done
+            displayName: Done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Done
+          - stageKey: hidden-stage
+            displayName: Hidden stage
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: hidden-stage--continue--done
+                target: done
+                trigger: continue
+                showWhen: unlock
+        gateways:
+          - key: to-automation
+            displayName: Send to automation
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-automation--go-wait--join
+                target: check-complete
+                trigger: go-wait
+              - id: to-automation--go-wait--review
+                target: in-review
+                trigger: go-wait
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: caseworker
+            routes:
+              - id: check-complete--approved--start
+                target: start
+                trigger: approved
+            requiredIncomingQueues:
+              - caseworker
+              - automation
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
@@ -396,79 +403,90 @@ public class QueueWorkListQueryTests
             Task.FromResult(OnCheckStatus?.Invoke(capabilityKey, receipt));
     }
 
-    private const string RefreshBlueprintJson = """
-        {
-          "definitionKey": "queue-query-refresh-test",
-          "displayName": "Queue Query Refresh Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "start--send--split", "target": "to-support-system", "trigger": "send" } ]
-            },
-            {
-              "stageKey": "in-review",
-              "displayName": "In review",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "In review" } ],
-              "actions": [
-                {
-                  "type": "support-system-call",
-                  "timing": "onEnter",
-                  "params": {
-                    "supportSystemKey": "refresh-test-support-system",
-                    "capabilityKey": "check",
-                    "inputs": { "notes": "notes" }
-                  }
-                }
-              ],
-              "routes": [ { "id": "in-review--approved--join", "target": "check-complete", "trigger": "approved" } ]
-            },
-            {
-              "stageKey": "approved",
-              "displayName": "Approved",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "decisionNotes", "label": "Decision notes", "required": false } ],
-              "routes": [ { "id": "approved--continue--closed", "target": "closed", "trigger": "continue" } ]
-            },
-            {
-              "stageKey": "closed",
-              "displayName": "Closed",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Closed" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-support-system",
-              "displayName": "Send to support system",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [
-                { "id": "to-support-system--send--join", "target": "check-complete", "trigger": "send" },
-                { "id": "to-support-system--send--review", "target": "in-review", "trigger": "send" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "caseworker",
-              "waitingContent": "Waiting.",
-              "routes": [ { "id": "check-complete--approved--approved", "target": "approved", "trigger": "approved" } ],
-              "requiredIncomingQueues": ["caseworker", "automation"]
-            }
-          ]
-        }
+    private const string RefreshBlueprintYaml = """
+        definitionKey: queue-query-refresh-test
+        displayName: Queue Query Refresh Test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+          - key: automation
+            displayName: Automation
+            actor: system
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--send--split
+                target: to-support-system
+                trigger: send
+          - stageKey: in-review
+            displayName: In review
+            queueKey: automation
+            actions:
+              - type: support-system-call
+                timing: onEnter
+                params:
+                  supportSystemKey: refresh-test-support-system
+                  capabilityKey: check
+                  inputs:
+                    notes: notes
+            components:
+              - type: panel
+                heading: In review
+            routes:
+              - id: in-review--approved--join
+                target: check-complete
+                trigger: approved
+          - stageKey: approved
+            displayName: Approved
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: decisionNotes
+                label: Decision notes
+            routes:
+              - id: approved--continue--closed
+                target: closed
+                trigger: continue
+          - stageKey: closed
+            displayName: Closed
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Closed
+        gateways:
+          - key: to-support-system
+            displayName: Send to support system
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-support-system--send--join
+                target: check-complete
+                trigger: send
+              - id: to-support-system--send--review
+                target: in-review
+                trigger: send
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: caseworker
+            waitingContent: Waiting.
+            routes:
+              - id: check-complete--approved--approved
+                target: approved
+                trigger: approved
+            requiredIncomingQueues:
+              - caseworker
+              - automation
         """;
 
     [Fact]
@@ -494,7 +512,7 @@ public class QueueWorkListQueryTests
 
         try
         {
-            var definition = JsonSerializer.Deserialize<ServiceBlueprint>(RefreshBlueprintJson, JsonOptions)!;
+            var definition = ServiceBlueprintYaml.Deserialize(RefreshBlueprintYaml);
             var client = new ScriptedSupportSystemClient();
             var engine = new ProcessManagerEngine(
                 NullLogger.Instance,

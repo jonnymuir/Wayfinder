@@ -86,10 +86,10 @@ This mirrors the same "a cursor crossing a gateway is a new unit of work in a ne
 
 ## Worked example: the reference app
 
-`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json`'s `"caseworker"` queue declares
+`Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml`'s `"caseworker"` queue declares
 `assignmentPolicy: "team-tray"`, `owningTeamId` matching `DemoTeams.JugglingLicenceReviewers`,
 `ReferenceActors.CaseworkerProfile()` (Casey, Jordan) carries that team id in
-`ActorProfile.TeamIds`. `njf-contributions.json`'s own queue (`ReferenceActors.NjfTeamQueue`)
+`ActorProfile.TeamIds`. `njf-contributions.yaml`'s own queue (`ReferenceActors.NjfTeamQueue`)
 declares `assignmentPolicy: "assign-to-initiator"`, whoever from NJF operations (Priya, Sam)
 uploads a file owns the resulting instance outright, with `ActorProfile.ConcurrencyScopeKey`
 additionally treating every NJF operations user as one owner for concurrency purposes (see

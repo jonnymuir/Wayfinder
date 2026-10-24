@@ -1,41 +1,6 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using YamlDotNet.Serialization;
 
 namespace Wayfinder.Models.ServiceDesign.Components;
-
-/// <summary>
-/// Accepts a default value authored as its natural JSON scalar type (string, boolean, or
-/// number) and normalizes it to a string — an agent authoring a BooleanComponent or
-/// NumberInputComponent naturally writes <c>"default": false</c> or <c>"default": 5</c>
-/// rather than a quoted string, and without this, System.Text.Json throws deserializing it
-/// into <see cref="InputComponent.Default"/>'s <c>string?</c> type.
-/// </summary>
-public sealed class LenientDefaultValueConverter : JsonConverter<string?>
-{
-    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-        reader.TokenType switch
-        {
-            JsonTokenType.String => reader.GetString(),
-            JsonTokenType.True => "true",
-            JsonTokenType.False => "false",
-            JsonTokenType.Number => reader.GetDecimal().ToString(System.Globalization.CultureInfo.InvariantCulture),
-            JsonTokenType.Null => null,
-            _ => throw new JsonException(
-                $"A component's \"default\" must be a string, boolean, or number, not {reader.TokenType}.")
-        };
-
-    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
-    {
-        if (value is null)
-        {
-            writer.WriteNullValue();
-        }
-        else
-        {
-            writer.WriteStringValue(value);
-        }
-    }
-}
 
 /// <summary>
 /// Abstract base for all input field components, carrying common field properties.
@@ -52,7 +17,7 @@ public abstract record InputComponent : Component
     public string? Hint { get; init; }
 
     /// <summary>Whether this field must be completed before submission.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool Required { get; init; }
 
     /// <summary>The field key this field depends on for visibility.</summary>
@@ -65,7 +30,6 @@ public abstract record InputComponent : Component
     /// Default value used when the instance has no saved value for this field —
     /// pre-populates the rendered control and seeds the calculation scope.
     /// </summary>
-    [JsonConverter(typeof(LenientDefaultValueConverter))]
     public string? Default { get; init; }
 
     /// <summary>
@@ -110,7 +74,7 @@ public sealed record TextInputComponent : InputComponent
     /// Fills the field with the current time (24-hour <c>HH:mm</c>, for example <c>14:30</c>) from the
     /// visitor's own device clock when they have not entered one. It is a starting value they can change.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool DefaultToCurrentTime { get; init; }
 }
 
@@ -192,7 +156,7 @@ public sealed record DateInputComponent : InputComponent
     /// Fills the field with today's date from the visitor's own device clock when they have not entered
     /// one, so a record made in the field starts on the right day. It is a starting value they can change.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool DefaultToToday { get; init; }
 }
 

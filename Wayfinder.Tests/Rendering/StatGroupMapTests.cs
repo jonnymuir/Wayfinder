@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
@@ -17,7 +16,6 @@ namespace Wayfinder.Tests.Rendering;
 public class StatGroupMapTests
 {
     private static readonly GovUkComponentRenderer Renderer = new();
-    private static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
 
     private static string Render(StatItem stat)
     {
@@ -82,33 +80,58 @@ public class StatGroupMapTests
     [Fact]
     public void TheDisplayChoiceSurvivesSerialisation_AndIsOmittedWhenUnset()
     {
-        var withMap = JsonSerializer.Serialize(new StatItemDefinition { Label = "Where", FieldKey = "location", Display = "map" });
-        var without = JsonSerializer.Serialize(new StatItemDefinition { Label = "Where", FieldKey = "location" });
+        var withMap = ServiceBlueprintYaml.Serialize(new StatItemDefinition { Label = "Where", FieldKey = "location", Display = "map" });
+        var without = ServiceBlueprintYaml.Serialize(new StatItemDefinition { Label = "Where", FieldKey = "location" });
 
-        Assert.Contains("\"Display\":\"map\"", withMap);
-        Assert.DoesNotContain("Display", without);
+        Assert.Contains("display: map\n", withMap);
+        Assert.DoesNotContain("display", without);
     }
 
     [Fact]
     public void TheEngineCarriesDisplayAndTheCapturedPointToTheRenderedTile()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>("""
-            {
-              "definitionKey": "map-test", "displayName": "Map test", "version": 1, "initialStage": "where", "requestPolicy": "single",
-              "queues": [{ "key": "citizen", "displayName": "Applicant", "actor": "citizen" }],
-              "stages": [
-                { "stageKey": "where", "displayName": "Where", "queueKey": "citizen",
-                  "components": [{ "type": "location-picker", "fieldKey": "location", "label": "Where" }],
-                  "routes": [{ "id": "where--continue", "target": "go", "trigger": "continue", "label": "Continue" }] },
-                { "stageKey": "recorded", "displayName": "Recorded", "queueKey": "citizen",
-                  "components": [{ "type": "stat-group", "items": [{ "label": "Where", "fieldKey": "location", "display": "map" }] }] }
-              ],
-              "gateways": [
-                { "key": "go", "displayName": "Go", "gatewayType": "Split", "queueKey": "citizen",
-                  "routes": [{ "id": "go--continue", "target": "recorded", "trigger": "continue" }] }
-              ]
-            }
-            """, CaseInsensitive)!;
+        var definition = ServiceBlueprintYaml.Deserialize("""
+            definitionKey: map-test
+            displayName: Map test
+            version: 1
+            initialStage: where
+            requestPolicy: single
+            queues:
+              - key: citizen
+                displayName: Applicant
+                actor: citizen
+            stages:
+              - stageKey: where
+                displayName: Where
+                queueKey: citizen
+                components:
+                  - type: location-picker
+                    fieldKey: location
+                    label: Where
+                routes:
+                  - id: where--continue
+                    target: go
+                    trigger: continue
+                    label: Continue
+              - stageKey: recorded
+                displayName: Recorded
+                queueKey: citizen
+                components:
+                  - type: stat-group
+                    items:
+                      - label: Where
+                        fieldKey: location
+                        display: map
+            gateways:
+              - key: go
+                displayName: Go
+                gatewayType: Split
+                queueKey: citizen
+                routes:
+                  - id: go--continue
+                    target: recorded
+                    trigger: continue
+            """);
         var engine = new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition), new PassthroughContentSanitizer());
 
         var started = engine.GetCurrent("map-test", "tenant", "user");

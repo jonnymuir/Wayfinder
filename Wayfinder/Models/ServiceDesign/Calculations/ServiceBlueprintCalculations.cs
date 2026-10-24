@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 
 namespace Wayfinder.Models.ServiceDesign.Calculations;
 
@@ -12,7 +11,6 @@ namespace Wayfinder.Models.ServiceDesign.Calculations;
 public sealed record ServiceBlueprintCalculationSet
 {
     /// <summary>Named lookup tables (e.g. actuarial factor tables).</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, ServiceBlueprintCalculationTable>? Tables { get; init; }
 
     /// <summary>
@@ -23,7 +21,6 @@ public sealed record ServiceBlueprintCalculationSet
         = new Dictionary<string, ServiceBlueprintCalculationField>();
 
     /// <summary>Named series — one row per integer step of the loop variable.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, ServiceBlueprintCalculationSeries>? Series { get; init; }
 }
 
@@ -31,14 +28,12 @@ public sealed record ServiceBlueprintCalculationSet
 public sealed record ServiceBlueprintCalculationField
 {
     /// <summary>Expression to evaluate. Null when <see cref="Source"/> is "service".</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Expr { get; init; }
 
     /// <summary>
     /// "service" marks a value the host application supplies at render time (the declared
     /// seam for maths that lives in an external system of record).
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Source { get; init; }
 
     /// <summary>
@@ -46,7 +41,6 @@ public sealed record ServiceBlueprintCalculationField
     /// (stat-groups, summary-lists). Currently supported: "gbp" (£, no pence).
     /// The raw value stays numeric inside expressions.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Format { get; init; }
 
     /// <summary>
@@ -60,7 +54,6 @@ public sealed record ServiceBlueprintCalculationField
     /// a field with neither stays statically unverifiable. Never consulted at runtime; the host's
     /// own resolver still supplies the real value.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ValueKind { get; init; }
 
     /// <summary>
@@ -70,7 +63,6 @@ public sealed record ServiceBlueprintCalculationField
     /// field against a concrete value. Never a runtime fallback — if the host's resolver fails to
     /// supply the value, that is still an error at render time, not silently papered over.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Default { get; init; }
 
     /// <summary>
@@ -87,7 +79,6 @@ public sealed record ServiceBlueprintCalculationField
     /// Mutually exclusive with <see cref="ValueKind"/> in practice (an object has no single scalar
     /// kind) — a field with neither stays unresolvable, same as before this existed.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, ServiceBlueprintCalculationFieldShape>? Shape { get; init; }
 }
 
@@ -104,7 +95,6 @@ public sealed record ServiceBlueprintCalculationFieldShape
     /// The scalar kind of this leaf property — "number", "string" or "boolean". Omit when
     /// <see cref="Shape"/> is set instead (this property is itself an object, not a scalar).
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ValueKind { get; init; }
 
     /// <summary>
@@ -112,11 +102,9 @@ public sealed record ServiceBlueprintCalculationFieldShape
     /// precedence and "number needs a default, string/boolean can fall back to a safe placeholder"
     /// rule as <see cref="ServiceBlueprintCalculationField.Default"/>.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Default { get; init; }
 
     /// <summary>Nested properties, when this property is itself an object rather than a scalar.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, ServiceBlueprintCalculationFieldShape>? Shape { get; init; }
 }
 
@@ -128,7 +116,6 @@ public sealed record ServiceBlueprintCalculationFieldShape
 public sealed record ServiceBlueprintCalculationTable
 {
     /// <summary>"linear" (default) or "step" (use the nearest key at or below).</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Interpolate { get; init; }
 
     /// <summary>Key → value pairs. Keys are parsed as invariant decimals.</summary>

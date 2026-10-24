@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Engine.Abstractions;
@@ -17,15 +16,12 @@ public sealed partial class FilesystemServiceBlueprintStore(string blueprintSeed
             return definitions;
         }
 
-        foreach (var file in Directory.GetFiles(blueprintSeedPath, "*.json"))
+        foreach (var file in Directory.GetFiles(blueprintSeedPath, "*.yaml"))
         {
             try
             {
-                var definition = JsonSerializer.Deserialize<ServiceBlueprint>(
-                    File.ReadAllText(file),
-                    ServiceBlueprintJson.ReadOptions);
-
-                if (definition == null || string.IsNullOrWhiteSpace(definition.DefinitionKey))
+                var definition = ServiceBlueprintYaml.Deserialize(File.ReadAllText(file));
+                if (string.IsNullOrWhiteSpace(definition.DefinitionKey))
                 {
                     continue;
                 }

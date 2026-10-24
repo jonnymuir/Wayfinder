@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +23,7 @@ public sealed class ReadmeQuickstartTests : IDisposable
     [Fact]
     public void TheReadmeBlueprintPassesTheSameValidationAnAuthoringSaveApplies()
     {
-        var blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(ReadmeBlueprintJson(), ServiceBlueprintJson.ReadOptions)!;
+        var blueprint = ServiceBlueprintYaml.Deserialize(ReadmeBlueprintYaml());
 
         var outcome = new ServiceBlueprintAuthoringService(new UnusedSourceStore()).Validate(blueprint);
 
@@ -34,7 +33,7 @@ public sealed class ReadmeQuickstartTests : IDisposable
     [Fact]
     public void AHostWiredOnlyAsTheReadmeShows_RunsTheJourneyToCompletion()
     {
-        File.WriteAllText(Path.Combine(_blueprintFolder, "apply-for-a-licence.json"), ReadmeBlueprintJson());
+        File.WriteAllText(Path.Combine(_blueprintFolder, "apply-for-a-licence.yaml"), ReadmeBlueprintYaml());
         var services = new ServiceCollection();
         services.AddProcessManager(_blueprintFolder);
         services.AddSingleton<IServiceContentSanitizer, PassthroughContentSanitizer>();
@@ -54,12 +53,12 @@ public sealed class ReadmeQuickstartTests : IDisposable
         advanced.Render!.StateDisplayName.Should().Be("Application submitted");
     }
 
-    private static string ReadmeBlueprintJson()
+    private static string ReadmeBlueprintYaml()
     {
         var readme = File.ReadAllText(FindReadme());
-        var block = Regex.Match(readme, @"```json\s*\n// blueprints/apply-for-a-licence\.json\n(?<json>.*?)```", RegexOptions.Singleline);
-        block.Success.Should().BeTrue("README.md's quickstart must keep its blueprints/apply-for-a-licence.json block");
-        return block.Groups["json"].Value;
+        var block = Regex.Match(readme, @"```yaml\s*\n# blueprints/apply-for-a-licence\.yaml\n(?<yaml>.*?)```", RegexOptions.Singleline);
+        block.Success.Should().BeTrue("README.md's quickstart must keep its blueprints/apply-for-a-licence.yaml block");
+        return block.Groups["yaml"].Value;
     }
 
     private static string FindReadme()

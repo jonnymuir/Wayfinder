@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using FluentAssertions;
+using Wayfinder.Models.ServiceDesign;
 using Wayfinder.TypeGen;
 using Xunit;
 
@@ -10,7 +11,39 @@ namespace Wayfinder.Tests.TypeGen;
 public class TypeScriptEmitterTests
 {
     private static string Emit(params Type[] roots) =>
-        new TypeScriptEmitter(new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() }).Emit(roots);
+        new TypeScriptEmitter()
+            .Add(new JsonWireContract(new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() }), roots)
+            .Render();
+
+    private static string EmitBlueprint() => new TypeScriptEmitter().Add(new YamlWireContract(), typeof(ServiceBlueprint)).Render();
+
+    [Fact]
+    public void ABlueprintComponent_IsDiscriminatedByItsRegisteredType()
+    {
+        var ts = EmitBlueprint();
+
+        ts.Should().Contain("export interface TextInputComponent {\n  type: 'text';\n");
+        ts.Should().Contain("  | TextInputComponent\n");
+    }
+
+    [Fact]
+    public void ABlueprintEnum_IsWrittenAsItsYamlName()
+    {
+        var ts = EmitBlueprint();
+
+        ts.Should().Contain("export const actionTimingValues = ['onEnter', 'onExit', 'onTransition'] as const;");
+        ts.Should().Contain("export const gatewayKindValues = ['Split', 'Join'] as const;");
+    }
+
+    [Fact]
+    public void ABlueprintPropertyThatOmitsItsDefault_IsOptional_AndAnAliasIsUsed()
+    {
+        var ts = EmitBlueprint();
+
+        ts.Should().Contain("  params?: Record<string, unknown>;");
+        ts.Should().Contain("  allowManualRestart?: boolean;");
+        ts.Should().Contain("  stages: StageDefinition[];");
+    }
 
     [Fact]
     public void ANullableProperty_IsOptionalAndANonNullableOneIsRequired()

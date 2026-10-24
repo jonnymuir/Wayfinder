@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Models;
@@ -17,35 +16,34 @@ namespace Wayfinder.Tests.Engine;
 /// </summary>
 public class ServiceInputsStoredValueTests
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "stored-service-value",
-          "displayName": "Stored service value",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "calculations": {
-            "fields": {
-              "count": { "source": "service" },
-              "doubled": { "expr": "count * 2" }
-            }
-          },
-          "queues": [ { "key": "citizen", "displayName": "Applicant", "actor": "citizen" } ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "citizen",
-              "components": [ { "type": "panel", "heading": "Start" } ],
-              "routes": []
-            }
-          ],
-          "gateways": []
-        }
+    private const string BlueprintYaml = """
+        definitionKey: stored-service-value
+        displayName: Stored service value
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: citizen
+            displayName: Applicant
+            actor: citizen
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: citizen
+            components:
+              - type: panel
+                heading: Start
+            routes: []
+        gateways: []
+        calculations:
+          fields:
+            count:
+              source: service
+            doubled:
+              expr: count * 2
         """;
 
     [Fact]
@@ -68,7 +66,7 @@ public class ServiceInputsStoredValueTests
     // renders it again, and returns the calculated `doubled`.
     private static object? DoubledAfterStoring(decimal count, decimal? hostSupplies)
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         var store = new InMemoryServiceRequestStore();
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,

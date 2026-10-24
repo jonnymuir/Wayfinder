@@ -31,7 +31,7 @@ test.describe('File upload: risk assessment', () => {
 
   test('the upload is optional even when dangerous props are declared, provided mitigation notes cover it instead', async ({ page }) => {
     // The upload itself stays optional (this stage's own field-level `required` never changes) —
-    // but juggling-licence.json now carries a cross-stage StageDefinition.Validations rule
+    // but juggling-licence.yaml now carries a cross-stage StageDefinition.Validations rule
     // (StageValidationTests.cs / citizen-journey.spec.ts's dedicated test cover the rule itself):
     // dangerousProps + no upload requires the mitigation notes to say something concrete instead.
     // Skipping BOTH is covered separately; this proves the "upload OR notes" relationship, not

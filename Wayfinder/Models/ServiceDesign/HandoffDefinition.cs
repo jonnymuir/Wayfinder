@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using SupportSystems = Wayfinder.Models.ServiceDesign.SupportSystems;
@@ -18,6 +16,5 @@ public record HandoffDefinition
 
     public string Label { get; init; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ActorChange { get; init; }
 }

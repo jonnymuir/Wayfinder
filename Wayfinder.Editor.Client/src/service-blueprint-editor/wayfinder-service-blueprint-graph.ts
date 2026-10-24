@@ -1,3 +1,4 @@
+import { parseYaml, serializeBlueprintPart, stringifyYaml } from './service-blueprint-yaml.js';
 import { LitElement, html, nothing, unsafeCSS } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { ServiceBlueprint } from './types.js';
@@ -65,13 +66,13 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   hideOwnToolbar = false;
 
   /**
-   * Declarative JSON form of {@link serviceBlueprint}. Lets the element be initialised
+   * Declarative YAML form of {@link serviceBlueprint}. Lets the element be initialised
    * from HTML/Razor markup without JS wiring — Razor authors can write
-   * `<wayfinder-service-blueprint-graph read-only service-blueprint-json='...'>` and skip the prop
+   * `<wayfinder-service-blueprint-graph read-only service-blueprint-yaml='...'>` and skip the prop
    * assignment. When set, this attribute is parsed and assigned to `serviceBlueprint`.
    */
-  @property({ type: String, attribute: 'service-blueprint-json' })
-  serviceBlueprintJson: string | null = null;
+  @property({ type: String, attribute: 'service-blueprint-yaml' })
+  serviceBlueprintYaml: string | null = null;
 
   @property({ attribute: false })
   selectedStageKey: string | null = null;
@@ -154,11 +155,14 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   });
 
   protected willUpdate(changed: Map<string, unknown>) {
-    if (changed.has('serviceBlueprintJson') && this.serviceBlueprintJson) {
-      try {
-        this.serviceBlueprint = JSON.parse(this.serviceBlueprintJson) as ServiceBlueprint;
-      } catch (error) {
-        console.error('wayfinder-service-blueprint-graph: service-blueprint-json could not be parsed.', error);
+    if (changed.has('serviceBlueprintYaml') && this.serviceBlueprintYaml) {
+      const parsed = parseYaml(this.serviceBlueprintYaml);
+      if (parsed.ok) {
+        this.serviceBlueprint = parsed.value as ServiceBlueprint;
+      } else {
+        console.error(
+          `wayfinder-service-blueprint-graph: service-blueprint-yaml could not be read (line ${parsed.line}): ${parsed.message}`
+        );
       }
     }
     this._selection.sync(changed);
@@ -295,7 +299,7 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
     addStage: (afterStageKey) => this._openAddStage(afterStageKey ?? this._selection.stageKey, afterStageKey ? 'after' : 'append'),
     fitToScreen: () => this.fitToScreen(),
     openInspector: (target) => this._openInspector(target),
-    copyJson: (target) => this._copyJson(target),
+    copyYaml: (target) => this._copyYaml(target),
     remove: (target) => this._remove(target),
   };
 
@@ -313,21 +317,21 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
   }
 
   /** The thing a menu target points at, with the name it is announced by. */
-  private _describe(target: NodeTarget): { value: unknown; name: string } | null {
+  private _describe(target: NodeTarget): { value: unknown; name: string; typeName?: string } | null {
     const blueprint = this.serviceBlueprint;
     if (target.kind === 'stage') {
       const stage = blueprint?.stages.find((candidate) => candidate.stageKey === target.stageKey);
-      return stage ? { value: stage, name: stage.displayName } : null;
+      return stage ? { value: stage, name: stage.displayName, typeName: 'StageDefinition' } : null;
     }
     if (target.kind === 'gateway') {
       const gateway = serviceBlueprintGateways(blueprint).find((candidate) => candidate.key === target.gatewayKey);
-      return gateway ? { value: gateway, name: gateway.displayName } : null;
+      return gateway ? { value: gateway, name: gateway.displayName, typeName: 'ServiceBlueprintGatewayDefinition' } : null;
     }
     const transition = flattenRoutes(blueprint)[target.transitionIndex];
     return transition ? { value: transition, name: `Transition “${transition.action}”` } : null;
   }
 
-  private async _copyJson(target: NodeTarget) {
+  private async _copyYaml(target: NodeTarget) {
     const described = this._describe(target);
     if (!described) {
       return;
@@ -335,7 +339,9 @@ export class WayfinderServiceBlueprintGraphElement extends LitElement {
 
     try {
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(JSON.stringify(described.value, null, 2));
+        await navigator.clipboard.writeText(
+          described.typeName ? serializeBlueprintPart(described.value, described.typeName) : stringifyYaml(described.value)
+        );
       }
       this._announce(`${described.name} copied.`);
     } catch {

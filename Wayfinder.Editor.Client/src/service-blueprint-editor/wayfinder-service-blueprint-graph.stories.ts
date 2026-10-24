@@ -1,3 +1,4 @@
+import { serializeAuthoredServiceBlueprint } from './service-blueprint-yaml.js';
 import type { Meta, StoryObj } from '@storybook/web-components-vite';
 import { expect, waitFor } from 'storybook/test';
 import './wayfinder-service-blueprint-graph.js';
@@ -328,7 +329,7 @@ export const GraphReadOnly: Story = {
       description: {
         story:
           'Renders a published serviceBlueprint purely from HTML attributes — no JS plumbing. ' +
-          'Demonstrates the `<wayfinder-service-blueprint-graph read-only service-blueprint-json="...">` recipe an ' +
+          'Demonstrates the `<wayfinder-service-blueprint-graph read-only service-blueprint-yaml="...">` recipe an ' +
           'integrator can drop into a Razor view to show a service blueprint diagram on a public page.',
       },
     },
@@ -336,8 +337,11 @@ export const GraphReadOnly: Story = {
   render: () => {
     const container = document.createElement('div');
     container.style.cssText = 'display:block;height:560px;';
-    const json = JSON.stringify(GATEWAY_SERVICE_BLUEPRINT).replaceAll('"', '&quot;');
-    container.innerHTML = `<wayfinder-service-blueprint-graph read-only service-blueprint-json="${json}" style="display:block;height:100%;"></wayfinder-service-blueprint-graph>`;
+    const yaml = serializeAuthoredServiceBlueprint(GATEWAY_SERVICE_BLUEPRINT)
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('<', '&lt;');
+    container.innerHTML = `<wayfinder-service-blueprint-graph read-only service-blueprint-yaml="${yaml}" style="display:block;height:100%;"></wayfinder-service-blueprint-graph>`;
     return container;
   },
   play: async ({ canvasElement }) => {

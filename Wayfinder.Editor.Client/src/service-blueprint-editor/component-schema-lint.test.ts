@@ -7,7 +7,13 @@ import type {
 } from './types.js';
 import { generateComponentJsonSchema } from './component-json-schema.js';
 import { coerceParsedAuthoredServiceBlueprint, lintAuthoredServiceBlueprintDocument } from './service-blueprint-lint.js';
-import { EDITOR_TOP_LEVEL_FIELDS, serializeAuthoredServiceBlueprint } from './service-blueprint-canonical-json.js';
+import { EDITOR_TOP_LEVEL_FIELDS, parseYaml, serializeAuthoredServiceBlueprint, stringifyYaml } from './service-blueprint-yaml.js';
+
+// biome-ignore lint/suspicious/noExplicitAny: a test reads back arbitrary shapes from the YAML it wrote.
+function readYaml(text: string): any {
+  const parsed = parseYaml(text);
+  return parsed.ok ? parsed.value : undefined;
+}
 
 const CATALOG: ComponentDescriptor[] = [
   {
@@ -128,13 +134,13 @@ export function run(): number {
   // ── lintAuthoredServiceBlueprintDocument — component checks ──────────────
   {
     const parsed = minimalBlueprint([{ type: 'text', fieldKey: 'name', label: 'Name' }]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check('lint: a valid component produces no issues', issues.length === 0, JSON.stringify(issues));
   }
 
   {
     const parsed = minimalBlueprint([{ type: 'made-up-type', fieldKey: 'name' }]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: an unknown component type is flagged',
       issues.some((issue) => issue.message.includes('Unknown component type'))
@@ -143,7 +149,7 @@ export function run(): number {
 
   {
     const parsed = minimalBlueprint([{ type: 'text', fieldKey: '', label: '' }]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: an empty required property is flagged',
       issues.filter((issue) => issue.message.includes('is required')).length === 2,
@@ -153,7 +159,7 @@ export function run(): number {
 
   {
     const parsed = minimalBlueprint([{ type: 'heading', content: 'Section', level: 9 }]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a numeric property above its maximum is flagged',
       issues.some((issue) => issue.message.includes('at most 6'))
@@ -168,7 +174,7 @@ export function run(): number {
         children: [{ type: 'text', fieldKey: '', label: 'Name' }],
       },
     ]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: recurses into a ChildList child and flags its own issue',
       issues.some((issue) => issue.pathHint?.includes('children[0].fieldKey')),
@@ -186,7 +192,7 @@ export function run(): number {
         conditionalChildren: { Maybe: [{ type: 'text', fieldKey: 'why', label: 'Why?' }] },
       },
     ]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a KeyedChildren key not in Options is flagged',
       issues.some((issue) => issue.message.includes('"Maybe" is a key'))
@@ -195,7 +201,7 @@ export function run(): number {
 
   {
     const parsed = minimalBlueprint([{ type: 'made-up-type' }]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed));
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed));
     check('lint: component checks are skipped entirely when no catalog is supplied (back-compat default)', issues.length === 0);
   }
 
@@ -205,7 +211,7 @@ export function run(): number {
       { type: 'text', fieldKey: 'name', label: 'Name' },
       { type: 'text', fieldKey: 'nickname', label: 'Nickname', conditionalOn: 'nam' },
     ]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a conditionalOn not matching a sibling fieldKey is flagged',
       issues.some((issue) => issue.pathHint?.includes('[1].conditionalOn') && issue.message.includes('"nam"')),
@@ -218,7 +224,7 @@ export function run(): number {
       { type: 'text', fieldKey: 'name', label: 'Name' },
       { type: 'text', fieldKey: 'nickname', label: 'Nickname', conditionalOn: 'name' },
     ]);
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a conditionalOn matching a real sibling fieldKey produces no issue for it',
       !issues.some((issue) => issue.pathHint?.includes('conditionalOn')),
@@ -244,7 +250,7 @@ export function run(): number {
         },
       ],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a defaultFrom not matching a calculations.fields name is flagged',
       issues.some((issue) => issue.pathHint?.includes('defaultFrom') && issue.message.includes('"suggestdName"')),
@@ -256,13 +262,13 @@ export function run(): number {
     const applied = coerceParsedAuthoredServiceBlueprint({ ...minimalBlueprint([]), allowManualRestart: true });
     check(
       'a Definition-tab edit that sets allowManualRestart true is kept when applied and saved',
-      JSON.parse(serializeAuthoredServiceBlueprint(applied)).allowManualRestart === true,
+      readYaml(serializeAuthoredServiceBlueprint(applied)).allowManualRestart === true,
       serializeAuthoredServiceBlueprint(applied)
     );
     const notOptedIn = coerceParsedAuthoredServiceBlueprint(minimalBlueprint([]));
     check(
       'a Definition-tab edit that omits allowManualRestart saves without it',
-      !('allowManualRestart' in JSON.parse(serializeAuthoredServiceBlueprint(notOptedIn)))
+      !('allowManualRestart' in readYaml(serializeAuthoredServiceBlueprint(notOptedIn)))
     );
   }
 
@@ -291,7 +297,7 @@ export function run(): number {
       check(`top-level "${key}" has a test sample (declare one when adding a field)`, sample !== undefined);
       if (!sample) continue;
       const withGood = { ...minimalBlueprint([]), [key]: sample.good };
-      const applied = JSON.parse(serializeAuthoredServiceBlueprint(coerceParsedAuthoredServiceBlueprint(withGood)));
+      const applied = readYaml(serializeAuthoredServiceBlueprint(coerceParsedAuthoredServiceBlueprint(withGood)));
       check(
         `top-level "${key}" survives a Definition-tab apply and save`,
         key in applied && JSON.stringify(applied[key]) !== undefined,
@@ -301,13 +307,13 @@ export function run(): number {
         check(`top-level "${key}" keeps its value through apply and save`, applied[key] === sample.good, JSON.stringify(applied[key]));
       }
       const withBad = { ...minimalBlueprint([]), [key]: sample.bad };
-      const issues = lintAuthoredServiceBlueprintDocument(withBad, JSON.stringify(withBad), CATALOG);
+      const issues = lintAuthoredServiceBlueprintDocument(withBad, stringifyYaml(withBad), CATALOG);
       check(
         `top-level "${key}" with the wrong type is reported, not silently dropped`,
         issues.some((issue) => issue.pathHint === key),
         JSON.stringify(issues)
       );
-      const withGoodIssues = lintAuthoredServiceBlueprintDocument(withGood, JSON.stringify(withGood), CATALOG);
+      const withGoodIssues = lintAuthoredServiceBlueprintDocument(withGood, stringifyYaml(withGood), CATALOG);
       check(
         `top-level "${key}" with the right type raises no issue about it`,
         !withGoodIssues.some((issue) => issue.pathHint === key),
@@ -318,7 +324,7 @@ export function run(): number {
     const typo = { ...minimalBlueprint([]), allowManualRestat: true };
     check(
       'an unrecognised top-level property is reported, since saving would discard it',
-      lintAuthoredServiceBlueprintDocument(typo, JSON.stringify(typo), CATALOG).some((issue) => issue.pathHint === 'allowManualRestat')
+      lintAuthoredServiceBlueprintDocument(typo, stringifyYaml(typo), CATALOG).some((issue) => issue.pathHint === 'allowManualRestat')
     );
   }
 
@@ -419,7 +425,7 @@ export function run(): number {
 
     for (const record of Object.keys(SAMPLES) as Array<keyof typeof SAMPLES>) {
       const sample: Record<string, unknown> = SAMPLES[record];
-      const saved = JSON.parse(serializeAuthoredServiceBlueprint(coerceParsedAuthoredServiceBlueprint(embed(record, sample))));
+      const saved = readYaml(serializeAuthoredServiceBlueprint(coerceParsedAuthoredServiceBlueprint(embed(record, sample))));
       const out = extract(record, saved);
       for (const property of Object.keys(sample)) {
         check(
@@ -451,7 +457,7 @@ export function run(): number {
     });
     const lint = (defaultFrom: string) => {
       const parsed = userBlueprint(defaultFrom);
-      return lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+      return lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     };
     check(
       'lint: a dotted defaultFrom into a declared service-field shape is accepted',
@@ -488,7 +494,7 @@ export function run(): number {
         },
       ],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a changeStateKey not matching a real stage key is flagged',
       issues.some((issue) => issue.pathHint?.includes('changeStateKey') && issue.message.includes('"frist"')),
@@ -507,7 +513,7 @@ export function run(): number {
       calculations: { fields: { a: { expr: '1 +' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: an unparseable calculations.fields expression is flagged',
       issues.some((issue) => issue.pathHint === 'calculations.fields.a'),
@@ -525,7 +531,7 @@ export function run(): number {
       calculations: { fields: { a: { expr: 'nosuchname + 1' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a calculations.fields expression referencing an unknown name is flagged',
       issues.some((issue) => issue.message.includes('"nosuchname"')),
@@ -543,7 +549,7 @@ export function run(): number {
       calculations: { fields: { a: { expr: 'lookup(nosuchtable, 1)' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a lookup() call against an unknown table is flagged',
       issues.some((issue) => issue.message.includes('unknown table "nosuchtable"')),
@@ -561,7 +567,7 @@ export function run(): number {
       calculations: { fields: { b: { expr: 'a + 1' }, a: { expr: '1' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: calculations.fields declared out of dependency order is flagged',
       issues.some((issue) => issue.pathHint === 'calculations.fields' && issue.message.includes('out of dependency order')),
@@ -579,7 +585,7 @@ export function run(): number {
       calculations: { fields: { a: { expr: 'b + 1' }, b: { expr: 'a + 1' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a genuine calculations.fields cycle is flagged by name',
       issues.some((issue) => issue.pathHint === 'calculations.fields' && issue.message.includes('circular dependency')),
@@ -600,7 +606,7 @@ export function run(): number {
       },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a series value expression referencing an unknown name is flagged',
       issues.some((issue) => issue.pathHint === 'calculations.series.s.values.x' && issue.message.includes('"nosuchname2"')),
@@ -628,7 +634,7 @@ export function run(): number {
         },
       ],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a calculations.fields name colliding with a WITH-default input fieldKey is flagged',
       issues.some((issue) => issue.pathHint === 'calculations.fields.age' && issue.message.includes('collides with an input')),
@@ -659,7 +665,7 @@ export function run(): number {
         },
       ],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a calculations.fields name matching a NO-default NUMERIC input fieldKey is NOT flagged as a collision',
       !issues.some((issue) => issue.message.includes('collides with an input')),
@@ -687,7 +693,7 @@ export function run(): number {
         },
       ],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a calculations.fields name matching a NO-default TEXT input fieldKey IS flagged as a collision',
       issues.some((issue) => issue.message.includes('collides with an input')),
@@ -708,7 +714,7 @@ export function run(): number {
       },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a series loop variable colliding with an earlier field name is flagged',
       issues.some((issue) => issue.pathHint === 'calculations.series.s.over' && issue.message.includes('collides with an existing')),
@@ -728,9 +734,9 @@ export function run(): number {
       },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
-      "lint: a series' own loop variable is valid inside its values columns (real juggling-insurance-modeller.json shape)",
+      "lint: a series' own loop variable is valid inside its values columns (real juggling-insurance-modeller.yaml shape)",
       issues.length === 0,
       JSON.stringify(issues)
     );
@@ -746,7 +752,7 @@ export function run(): number {
       calculations: { fields: { a: { expr: '1' }, b: { expr: 'a + 1' } } },
       stages: [{ stageKey: 'only', displayName: 'Only', queueKey: 'citizen', stageType: 'Question', components: [] }],
     };
-    const issues = lintAuthoredServiceBlueprintDocument(parsed, JSON.stringify(parsed), CATALOG);
+    const issues = lintAuthoredServiceBlueprintDocument(parsed, stringifyYaml(parsed), CATALOG);
     check(
       'lint: a valid, already-correctly-ordered calculations.fields block produces no issues',
       !issues.some((issue) => issue.pathHint?.startsWith('calculations')),

@@ -20,7 +20,6 @@ public class ConversationTests
     private const string Visitor = "anonymous-visitor-1";
     private const string Caseworker = "caseworker-1";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static readonly ActorProfile VisitorProfile = new()
     {
@@ -34,43 +33,63 @@ public class ConversationTests
 
     // Contact us: the visitor writes, the team replies or closes, the visitor can write again.
     private const string ContactBlueprint = """
-        {
-          "definitionKey": "contact",
-          "displayName": "Contact us",
-          "version": 1,
-          "initialStage": "write",
-          "queues": [
-            { "key": "visitor", "displayName": "Visitor", "actor": "citizen" },
-            { "key": "team", "displayName": "The Exchange", "actor": "caseworker" }
-          ],
-          "stages": [
-            {
-              "stageKey": "write", "displayName": "Your message", "queueKey": "visitor",
-              "components": [ { "type": "conversation", "fieldKey": "thread", "label": "Your message", "required": true, "maxLength": 200 } ],
-              "routes": [ { "id": "write--send--respond", "target": "respond", "trigger": "send" } ]
-            },
-            {
-              "stageKey": "respond", "displayName": "Reply", "queueKey": "team",
-              "components": [
-                { "type": "conversation", "fieldKey": "thread", "label": "Reply" },
-                { "type": "summary-list", "title": "Latest", "children": [ { "type": "text", "fieldKey": "thread", "label": "Latest message" } ] }
-              ],
-              "routes": [
-                { "id": "respond--reply--write", "target": "write", "trigger": "reply" },
-                { "id": "respond--close--closed", "target": "closed", "trigger": "close" }
-              ]
-            },
-            {
-              "stageKey": "closed", "displayName": "Closed", "queueKey": "team",
-              "components": [ { "type": "panel", "heading": "Closed" } ]
-            }
-          ]
-        }
+        definitionKey: contact
+        displayName: Contact us
+        version: 1
+        initialStage: write
+        requestPolicy: single
+        queues:
+          - key: visitor
+            displayName: Visitor
+            actor: citizen
+          - key: team
+            displayName: The Exchange
+            actor: caseworker
+        stages:
+          - stageKey: write
+            displayName: Your message
+            queueKey: visitor
+            components:
+              - type: conversation
+                fieldKey: thread
+                label: Your message
+                required: true
+                maxLength: 200
+            routes:
+              - id: write--send--respond
+                target: respond
+                trigger: send
+          - stageKey: respond
+            displayName: Reply
+            queueKey: team
+            components:
+              - type: conversation
+                fieldKey: thread
+                label: Reply
+              - type: summary-list
+                title: Latest
+                children:
+                  - type: text
+                    fieldKey: thread
+                    label: Latest message
+            routes:
+              - id: respond--reply--write
+                target: write
+                trigger: reply
+              - id: respond--close--closed
+                target: closed
+                trigger: close
+          - stageKey: closed
+            displayName: Closed
+            queueKey: team
+            components:
+              - type: panel
+                heading: Closed
         """;
 
     private static (ProcessManagerEngine Engine, InMemoryServiceRequestStore Store) Build()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(ContactBlueprint, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(ContactBlueprint);
         var store = new InMemoryServiceRequestStore();
         return (new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),
             new PassthroughContentSanitizer(), instanceStore: store), store);

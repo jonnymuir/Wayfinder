@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using SupportSystems = Wayfinder.Models.ServiceDesign.SupportSystems;
@@ -17,13 +15,10 @@ public record StageDefinition
 
     public string DisplayName { get; init; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StageKind? StageType { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Actor { get; init; }
 
     public string QueueKey
@@ -32,15 +27,12 @@ public record StageDefinition
         init => _queueKey = value;
     }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? RoleGates { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ActionDefinition>? Actions { get; init; }
 
     public IReadOnlyList<Component> Components { get; init; } = Array.Empty<Component>();
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ServiceBlueprintRouteDefinition>? Routes
     {
         get => _routes;
@@ -53,11 +45,9 @@ public record StageDefinition
     /// <c>ProcessManagerEngine.Advance</c> after field-level validation passes, in addition to
     /// (and ahead of) the <c>ValidateAdvance</c> host hook.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ServiceBlueprintStageValidationRule>? Validations { get; init; }
 
     /// <summary>Curated icon-set key (see the client's graph/node-icons.ts). Falls back to a stage-kind default when unset.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Icon { get; init; }
 
 }

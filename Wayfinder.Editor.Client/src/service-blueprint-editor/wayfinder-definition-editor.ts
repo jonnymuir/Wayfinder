@@ -3,12 +3,12 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { Diagnostic } from '@codemirror/lint';
 
 /**
- * @internal Composition detail of <wayfinder-service-blueprint-editor> — the JSON twin-pane
+ * @internal Composition detail of <wayfinder-service-blueprint-editor>, the YAML twin-pane
  * Definition tab editor. Loads CodeMirror 6 lazily on first connection so the
  * main editor bundle stays slim for authors who never open this tab.
  *
  * Inputs:
- *   value (property)        — the canonical JSON text to display.
+ *   value (property):       the canonical YAML text to display.
  *   readOnly (attribute)    — disables editing.
  *   diagnostics (property)  — schema/lint issues from the host. Each rendered
  *                             as a CodeMirror gutter marker on its line.
@@ -19,7 +19,7 @@ import type { Diagnostic } from '@codemirror/lint';
  */
 @customElement('wayfinder-definition-editor')
 export class WayfinderDefinitionEditorElement extends LitElement {
-  /** The canonical JSON text shown in the editor. */
+  /** The canonical YAML text shown in the editor. */
   @property({ type: String })
   value = '';
 
@@ -154,11 +154,11 @@ export class WayfinderDefinitionEditorElement extends LitElement {
       ${
         this._loadError
           ? html`<p class="load-error" role="alert" data-wayfinder-definition-load-error>
-            Couldn't load the JSON editor: ${this._loadError}
+            Couldn't load the YAML editor: ${this._loadError}
           </p>`
           : !this._ready
             ? html`<p class="loading" role="status" data-wayfinder-definition-loading>
-              Loading the JSON editor…
+              Loading the YAML editor…
             </p>`
             : ''
       }

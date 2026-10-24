@@ -1,6 +1,5 @@
+using YamlDotNet.Serialization;
 using System.Globalization;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using SupportSystems = Wayfinder.Models.ServiceDesign.SupportSystems;
@@ -22,14 +21,11 @@ public record ActionDefinition
 
     public required ActionTiming Timing { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    [JsonPropertyName("parameterSchemaKey")]
+    [YamlMember(Alias = "parameterSchemaKey")]
     public string? ParameterSchemaKey { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Summary { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    [JsonPropertyName("params")]
-    public JsonObject Parameters { get; init; } = [];
+    [YamlMember(Alias = "params", DefaultValuesHandling = DefaultValuesHandling.OmitEmptyCollections)]
+    public IReadOnlyDictionary<string, object?> Parameters { get; init; } = new Dictionary<string, object?>();
 }

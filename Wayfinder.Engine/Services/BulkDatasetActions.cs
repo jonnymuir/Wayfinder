@@ -32,7 +32,7 @@ internal sealed partial class BulkDatasetActions(IBulkDatasetStore? bulkDatasetS
             .SelectMany(stage => stage.Actions ?? [])
             .FirstOrDefault(action =>
                 string.Equals(action.Type, BulkDataActionTypes.BulkDatasetIngest, StringComparison.Ordinal)
-                && action.Parameters["datasetIdField"]?.GetValue<string>() is { Length: > 0 } datasetIdField
+                && action.Parameters.GetString("datasetIdField") is { Length: > 0 } datasetIdField
                 && string.Equals(ReadStringFieldValue(fieldValues, datasetIdField), datasetId, StringComparison.Ordinal));
 
     /// <summary>
@@ -123,8 +123,8 @@ internal sealed partial class BulkDatasetActions(IBulkDatasetStore? bulkDatasetS
         RequestCursor cursor,
         ActionDefinition action)
     {
-        var datasetIdField = action.Parameters["datasetIdField"]?.GetValue<string>();
-        var targetFileField = action.Parameters["targetFileField"]?.GetValue<string>();
+        var datasetIdField = action.Parameters.GetString("datasetIdField");
+        var targetFileField = action.Parameters.GetString("targetFileField");
         if (string.IsNullOrWhiteSpace(datasetIdField) || string.IsNullOrWhiteSpace(targetFileField))
         {
             MaterializeMissingFields(logger, cursor.CurrentNodeKey);
@@ -178,8 +178,8 @@ internal sealed partial class BulkDatasetActions(IBulkDatasetStore? bulkDatasetS
         RequestCursor cursor,
         ActionDefinition action)
     {
-        var sourceFileField = action.Parameters["sourceFileField"]?.GetValue<string>();
-        var datasetIdField = action.Parameters["datasetIdField"]?.GetValue<string>();
+        var sourceFileField = action.Parameters.GetString("sourceFileField");
+        var datasetIdField = action.Parameters.GetString("datasetIdField");
         if (string.IsNullOrWhiteSpace(sourceFileField) || string.IsNullOrWhiteSpace(datasetIdField))
         {
             IngestMissingFields(logger, cursor.CurrentNodeKey);
@@ -239,13 +239,13 @@ internal sealed partial class BulkDatasetActions(IBulkDatasetStore? bulkDatasetS
     private static void AddDeclaredCountUpdate(
         ActionDefinition action, string paramName, int value, Dictionary<string, object?> updates)
     {
-        var fieldKey = action.Parameters[paramName]?.GetValue<string>();
+        var fieldKey = action.Parameters.GetString(paramName);
         if (!string.IsNullOrWhiteSpace(fieldKey))
         {
             // decimal, not int: CalculationEvaluator.ValuesEqual only coerces when BOTH sides of
             // "=" are decimal — a numeric literal in a showWhen/calculation expression parses as
             // decimal, so a plain boxed int here would silently compare unequal to it even when
-            // numerically equal (found live: njf-contributions.json's "Accept and finish" route,
+            // numerically equal (found live: njf-contributions.yaml's "Accept and finish" route,
             // showWhen: "contributionsErrorCount = 0", never became visible even once the count
             // genuinely reached zero). Matches ToFieldValues' own JsonValue-decimal handling —
             // "decimal for numbers in FieldValues" is this engine's established convention, not
@@ -257,13 +257,13 @@ internal sealed partial class BulkDatasetActions(IBulkDatasetStore? bulkDatasetS
     private static List<BulkDatasetColumnDescriptor> ParseBulkDatasetColumns(ActionDefinition action)
     {
         var columns = new List<BulkDatasetColumnDescriptor>();
-        foreach (var columnNode in action.Parameters["columns"]?.AsArray() ?? [])
+        foreach (var columnNode in action.Parameters.GetList("columns") ?? [])
         {
-            var column = columnNode?.AsObject();
-            var key = column?["key"]?.GetValue<string>();
-            var title = column?["title"]?.GetValue<string>();
-            var roleValue = column?["role"]?.GetValue<string>();
-            var valueKindValue = column?["valueKind"]?.GetValue<string>();
+            var column = columnNode as IReadOnlyDictionary<string, object?>;
+            var key = column?.GetString("key");
+            var title = column?.GetString("title");
+            var roleValue = column?.GetString("role");
+            var valueKindValue = column?.GetString("valueKind");
             if (string.IsNullOrWhiteSpace(key)
                 || string.IsNullOrWhiteSpace(title)
                 || !Enum.TryParse<BulkDatasetColumnRole>(roleValue, out var role)
@@ -277,10 +277,10 @@ internal sealed partial class BulkDatasetActions(IBulkDatasetStore? bulkDatasetS
                 Key = key,
                 Title = title,
                 ValueKind = valueKind,
-                Format = column?["format"]?.GetValue<string>(),
+                Format = column?.GetString("format"),
                 Role = role,
-                Visible = column?["visible"]?.GetValue<bool>() ?? true,
-                Editable = column?["editable"]?.GetValue<bool>() ?? false,
+                Visible = column?.GetBool("visible") ?? true,
+                Editable = column?.GetBool("editable") ?? false,
             });
         }
 

@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using SupportSystems = Wayfinder.Models.ServiceDesign.SupportSystems;
@@ -33,7 +31,7 @@ public partial record ServiceBlueprint
 
                 foreach (var countFieldParam in new[] { "datasetIdField", "errorCountField", "warningCountField", "acceptedCountField", "dirtyCountField" })
                 {
-                    var fieldKey = action.Parameters[countFieldParam]?.GetValue<string>();
+                    var fieldKey = action.Parameters.GetString(countFieldParam);
                     if (!string.IsNullOrWhiteSpace(fieldKey))
                     {
                         outputFieldKeys.Add(fieldKey);
@@ -92,7 +90,7 @@ public partial record ServiceBlueprint
                     continue;
                 }
 
-                var datasetIdField = action.Parameters["datasetIdField"]?.GetValue<string>();
+                var datasetIdField = action.Parameters.GetString("datasetIdField");
                 if (string.IsNullOrWhiteSpace(datasetIdField))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
@@ -104,7 +102,7 @@ public partial record ServiceBlueprint
 
                 ingestDatasetIdFields.Add(datasetIdField);
 
-                var sourceFileField = action.Parameters["sourceFileField"]?.GetValue<string>();
+                var sourceFileField = action.Parameters.GetString("sourceFileField");
                 if (string.IsNullOrWhiteSpace(sourceFileField))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
@@ -121,7 +119,7 @@ public partial record ServiceBlueprint
                         "support system capability's declared output anywhere in this blueprint."));
                 }
 
-                var columns = action.Parameters["columns"]?.AsArray();
+                var columns = action.Parameters.GetList("columns");
                 if (columns is null || columns.Count == 0)
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
@@ -139,9 +137,9 @@ public partial record ServiceBlueprint
                     var columnPath = $"{path}.params.columns[{columnIndex}]";
                     columnIndex++;
 
-                    var column = columnNode?.AsObject();
-                    var columnKey = column?["key"]?.GetValue<string>();
-                    var columnTitle = column?["title"]?.GetValue<string>();
+                    var column = columnNode as IReadOnlyDictionary<string, object?>;
+                    var columnKey = column?.GetString("key");
+                    var columnTitle = column?.GetString("title");
                     if (string.IsNullOrWhiteSpace(columnKey) || string.IsNullOrWhiteSpace(columnTitle))
                     {
                         diagnostics.Add(new ServiceBlueprintDiagnostic(
@@ -159,7 +157,7 @@ public partial record ServiceBlueprint
                             $"Column key '{columnKey}' is declared more than once."));
                     }
 
-                    var roleValue = column?["role"]?.GetValue<string>();
+                    var roleValue = column?.GetString("role");
                     if (string.IsNullOrWhiteSpace(roleValue) ||
                         !Enum.TryParse<BulkData.BulkDatasetColumnRole>(roleValue, out var role))
                     {
@@ -176,7 +174,7 @@ public partial record ServiceBlueprint
                         rowKeyColumnCount++;
                     }
 
-                    var valueKindValue = column?["valueKind"]?.GetValue<string>();
+                    var valueKindValue = column?.GetString("valueKind");
                     if (string.IsNullOrWhiteSpace(valueKindValue) ||
                         !Enum.TryParse<ComponentPropertyValueKind>(valueKindValue, out _))
                     {
@@ -222,7 +220,7 @@ public partial record ServiceBlueprint
                     continue;
                 }
 
-                var datasetIdField = action.Parameters["datasetIdField"]?.GetValue<string>();
+                var datasetIdField = action.Parameters.GetString("datasetIdField");
                 if (string.IsNullOrWhiteSpace(datasetIdField))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(
@@ -239,7 +237,7 @@ public partial record ServiceBlueprint
                         "datasetIdField in this blueprint — there's no dataset for this action to materialize."));
                 }
 
-                var targetFileField = action.Parameters["targetFileField"]?.GetValue<string>();
+                var targetFileField = action.Parameters.GetString("targetFileField");
                 if (string.IsNullOrWhiteSpace(targetFileField))
                 {
                     diagnostics.Add(new ServiceBlueprintDiagnostic(

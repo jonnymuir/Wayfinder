@@ -25,7 +25,6 @@ public class DesignNoteApiTests
             {
                 s.AddSingleton<IServiceBlueprintSourceStore>(blueprints);
                 s.AddServiceBlueprintAuthoring();
-                s.AddServiceBlueprintAuthoringApi();
             },
             e => e.MapServiceBlueprintAuthoringApi(authorizationPolicy: AuthTestHost.BlueprintsAdminPolicy));
         return client;
@@ -48,7 +47,7 @@ public class DesignNoteApiTests
         var listed = await client.SendAsync(As("admin", HttpMethod.Get, Notes));
 
         created.StatusCode.Should().Be(HttpStatusCode.OK);
-        var notes = await listed.Content.ReadFromJsonAsync<DesignNote[]>(ServiceBlueprintJson.ReadOptions);
+        var notes = await listed.Content.ReadFromJsonAsync<DesignNote[]>();
         notes.Should().NotBeNull();
         notes!.Single().Author.Should().Be(new DesignNoteAuthor("admin", DesignNoteAuthorKind.Person));
         notes!.Single().Anchor.Should().Be(new DesignNoteAnchor(DesignNoteAnchorKind.Stage, "check"));

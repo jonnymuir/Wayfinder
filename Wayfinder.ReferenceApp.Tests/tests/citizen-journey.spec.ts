@@ -64,7 +64,7 @@ test.describe('Citizen journey: apply for a juggling licence', () => {
   });
 
   test('dangerous-props cross-stage validation is demonstrated live and actually enforced through the real HTML journey', async ({ page }) => {
-    // Proves both halves of what juggling-licence.json's "Wayfinder demo note" on the Risk
+    // Proves both halves of what juggling-licence.yaml's "Wayfinder demo note" on the Risk
     // assessment stage tells a visitor: the rule exists (the demo note itself renders), and it's
     // genuinely enforced (StageDefinition.Validations, not just a UI hint) — driven through the
     // real citizen-facing HTML forms, not the engine API directly.

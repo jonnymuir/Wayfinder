@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Services;
@@ -22,36 +21,32 @@ public class RequestConcurrencyScopeTests
     private const string TenantId = "tenant";
     private const string DefinitionKey = "concurrency-scope-test";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     // A single-stage, single-policy ("single", the default) blueprint — just enough to exercise
     // FindLatestInstance's own matching, nothing about the concurrency-scope question depends on
     // anything more elaborate than "does GetCurrent return the same or a different instance".
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "concurrency-scope-test",
-          "displayName": "Concurrency Scope Test",
-          "version": 1,
-          "initialStage": "only",
-          "queues": [ { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" } ],
-          "stages": [
-            {
-              "stageKey": "only",
-              "displayName": "Only",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Only stage" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: concurrency-scope-test
+        displayName: Concurrency Scope Test
+        version: 1
+        initialStage: only
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: only
+            displayName: Only
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Only stage
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

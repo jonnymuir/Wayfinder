@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,8 +10,8 @@ using Wayfinder.Services.Sanitization;
 namespace Wayfinder.Tests.ServiceDesign;
 
 /// <summary>
-/// A real, pre-existing gap this session's work-allocation feature closes: `juggling-licence.json`
-/// and `njf-contributions.json` both independently declare a queue literally named "caseworker" —
+/// A real, pre-existing gap this session's work-allocation feature closes: `juggling-licence.yaml`
+/// and `njf-contributions.yaml` both independently declare a queue literally named "caseworker" —
 /// before either declared `roleGates`, Casey (juggling-licence) and Priya (NJF operations) could
 /// each already see the *other's* blueprint's rows purely because the queue keys collided, with no
 /// relationship to which blueprint either of them actually works on. See
@@ -25,7 +24,7 @@ public class CaseworkerQueueCrossVisibilityTests
     private const string CaseyUserId = "caseworker@example.test";
     private const string PriyaUserId = "njf-operations@example.test";
 
-    // juggling-licence.json's own "caseworker" queue is now team-tray (see
+    // juggling-licence.yaml's own "caseworker" queue is now team-tray (see
     // docs/guides/team-assignment.md) — TeamIds is required for Casey to see even her own
     // not-yet-picked-up row in the worklist, not just optional polish.
     private static readonly ActorProfile CaseyProfile = new()
@@ -37,8 +36,8 @@ public class CaseworkerQueueCrossVisibilityTests
         TeamIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "juggling-licence-reviewers" }
     };
 
-    // njf-contributions.json's own queue is "njf-team", not "caseworker" (see
-    // docs/guides/team-assignment.md — it used to share that key with juggling-licence.json,
+    // njf-contributions.yaml's own queue is "njf-team", not "caseworker" (see
+    // docs/guides/team-assignment.md — it used to share that key with juggling-licence.yaml,
     // disambiguated only by RoleGates, but now gets its own distinct, team-scoped identity).
     private static readonly ActorProfile PriyaProfile = new()
     {
@@ -49,11 +48,6 @@ public class CaseworkerQueueCrossVisibilityTests
         TeamIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "njf-contributions-team" }
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     private static string SeedPath(string fileName, [CallerFilePath] string testFilePath = "") =>
         Path.Combine(Path.GetDirectoryName(testFilePath)!, "..", "..", "Wayfinder.ReferenceApp", "service-blueprints", fileName);
@@ -62,10 +56,8 @@ public class CaseworkerQueueCrossVisibilityTests
     {
         public IReadOnlyDictionary<string, ServiceBlueprint> LoadDefinitions(ILogger logger)
         {
-            var jugglingLicence = JsonSerializer.Deserialize<ServiceBlueprint>(
-                File.ReadAllText(SeedPath("juggling-licence.json")), JsonOptions)!;
-            var njfContributions = JsonSerializer.Deserialize<ServiceBlueprint>(
-                File.ReadAllText(SeedPath("njf-contributions.json")), JsonOptions)!;
+            var jugglingLicence = ServiceBlueprintYaml.Deserialize(File.ReadAllText(SeedPath("juggling-licence.yaml")));
+            var njfContributions = ServiceBlueprintYaml.Deserialize(File.ReadAllText(SeedPath("njf-contributions.yaml")));
             return new Dictionary<string, ServiceBlueprint>(StringComparer.OrdinalIgnoreCase)
             {
                 [jugglingLicence.DefinitionKey] = jugglingLicence,

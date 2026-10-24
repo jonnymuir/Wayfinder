@@ -83,14 +83,14 @@ URL (`blueprintsUrl`, with optional `headers` for a bearer token). `InMemoryDesi
 notes in the page, and `InMemoryServiceBlueprintSource` comes with one. Without a `designNotes`,
 the editor shows no notes at all.
 
-**Definition tab, JSON twin-pane**
+**Definition tab, YAML twin-pane**
 
 Alongside Canvas / Calculations / Validation, the editor exposes a **Definition**
-tab containing an editable JSON view of the current `ServiceBlueprint`.
-Author-facing copy uses "Definition", JSON is the implementation detail.
+tab containing the current `ServiceBlueprint` as editable YAML, the same text a host
+stores and the MCP tools read and write.
 
 * **Editor library:** [CodeMirror 6](https://codemirror.net/) (modules
-  `@codemirror/{state,view,commands,language,lang-json,lint}`). Chosen for
+  `@codemirror/{state,view,commands,language,lang-yaml,lint}`). Chosen for
   bundle size and clean shadow-DOM mounting over Monaco. Loaded **dynamically**
   on first activation of the Definition tab, so authors who stay on Canvas
   never download it. Static bundle stays ~338 KB; CodeMirror adds ~371 KB and
@@ -98,21 +98,22 @@ Author-facing copy uses "Definition", JSON is the implementation detail.
   each only on-demand.
 * **Visual → Definition sync:** every visual edit (stage add/rename/move,
   gateway add/edit, route change, undo, redo) re-serializes the serviceBlueprint in
-  canonical form (top-level key order: `definitionKey`, `displayName`,
-  `version`, `schemaVersion`, `requestPolicy`, `initialStage`, `roles`,
-  `stages`, `gateways`; nested keys alphabetical; 2-space
-  indent) and pushes the new text into the editor.
+  canonical form (every type's keys in the order the server's `ServiceBlueprintYaml`
+  writes them, from the generated `yamlShapes`; a map's own keys, such as
+  `calculations.fields`, never reordered; 2-space indent with indented lists;
+  multi-line text as `|` blocks) and pushes the new text into the editor.
 * **Definition → Visual sync:** typing is debounced by **250 ms**. On
   settling:
-  - **Valid JSON + schema-clean** → coerced to `ServiceBlueprint`, applied
+  - **Valid YAML + schema-clean** → coerced to `ServiceBlueprint`, applied
     through the host's normal commit path (so the change lands on the
     document-level undo stack), and announced to a polite live region
     ("Definition updated. N stages, M gateways.").
-  - **Invalid JSON or schema-violating** (e.g. retired `Waiting` /
-    `StatusTimeline` stage kind, unnamed gateway, duplicate keys) → a banner
+  - **Invalid YAML or schema-violating** (e.g. retired `Waiting` /
+    `StatusTimeline` stage kind, unnamed gateway, duplicate keys, an anchor or
+    alias) → a banner
     above the editor explains why the definition can't be applied, with a
     disabled **Apply when valid** button and an enabled **Revert to current**
-    button that rewinds the JSON to the serviceBlueprint's current canonical
+    button that rewinds the YAML to the serviceBlueprint's current canonical
     serialization. The visual pane stays on the last good state.
 * **Diagnostics:** parse errors and schema violations render as inline
   CodeMirror lint markers on the offending lines.
@@ -171,13 +172,13 @@ the cards.
 | Attribute | Type | Default | Notes |
 |-----------|------|---------|-------|
 | `read-only` | boolean | `false` | Viewer mode, hides Add stage / Add gateway HUD buttons, all dialogs, and the canvas context menu. Selection and zoom remain available. Reflected to the DOM, so CSS can target `[read-only]`. |
-| `service-blueprint-json` | string | `null` | Declarative form of the `serviceBlueprint` property. Parsed in `updated()` and assigned to `serviceBlueprint`. Invalid JSON is logged via `console.error`. Lets Razor / static HTML embed a graph with no JS wiring: `<wayfinder-service-blueprint-graph read-only service-blueprint-json='...'>`. |
+| `service-blueprint-yaml` | string | `null` | Declarative form of the `serviceBlueprint` property, as the blueprint's YAML. Parsed and assigned to `serviceBlueprint`. YAML that can't be read is logged via `console.error` with its line. Lets Razor / static HTML embed a graph with no JS wiring: `<wayfinder-service-blueprint-graph read-only service-blueprint-yaml='...'>`. |
 
 **JS-only properties**
 
 | Property | Type | Notes |
 |----------|------|-------|
-| `serviceBlueprint` | `ServiceBlueprint \| null` | Programmatic form of `service-blueprint-json`. |
+| `serviceBlueprint` | `ServiceBlueprint \| null` | Programmatic form of `service-blueprint-yaml`. |
 | `selectedStageKey` | `string \| null` | Inbound selection, host sets this to drive the graph's highlight. |
 | `selectedGatewayKey` | `string \| null` | Inbound selection. |
 | `selectedTransitionIndex` | `number \| null` | Inbound transition highlight. |
@@ -214,7 +215,7 @@ A typical read-only embed:
 ```html
 <wayfinder-service-blueprint-graph
   read-only
-  service-blueprint-json='{"blueprintKey":"planning","stages":[...],"gateways":[...]}'>
+  service-blueprint-yaml="@Model.BlueprintYaml">
 </wayfinder-service-blueprint-graph>
 ```
 
@@ -231,7 +232,7 @@ notice:
 * `<wayfinder-service-blueprint-outline>`
 * `<wayfinder-stage-action-editor>`
 * `<wayfinder-inline-help>`
-* `<wayfinder-definition-editor>`, JSON twin-pane for the Definition tab
+* `<wayfinder-definition-editor>`, YAML twin-pane for the Definition tab
 
 If a host needs functionality that one of these provides, raise a Squad
 decision, we'd rather promote a stable element than have callers reach past

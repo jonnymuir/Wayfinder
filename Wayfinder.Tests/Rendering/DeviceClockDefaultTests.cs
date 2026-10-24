@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
@@ -17,7 +16,6 @@ namespace Wayfinder.Tests.Rendering;
 public class DeviceClockDefaultTests
 {
     private static readonly GovUkComponentRenderer Renderer = new();
-    private static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
 
     private static string Render(FieldRenderPayload field)
     {
@@ -58,32 +56,49 @@ public class DeviceClockDefaultTests
     }
 
     [Fact]
-    public void TheChoicesAreOmittedFromAuthoredJsonWhenOff_AndKeptWhenOn()
+    public void TheChoicesAreOmittedFromAuthoredYamlWhenOff_AndKeptWhenOn()
     {
-        Assert.DoesNotContain("DefaultToToday", JsonSerializer.Serialize(new DateInputComponent { FieldKey = "d" }));
-        Assert.DoesNotContain("DefaultToCurrentTime", JsonSerializer.Serialize(new TextInputComponent { FieldKey = "t" }));
-        Assert.Contains("\"DefaultToToday\":true", JsonSerializer.Serialize(new DateInputComponent { FieldKey = "d", DefaultToToday = true }));
-        Assert.Contains("\"DefaultToCurrentTime\":true", JsonSerializer.Serialize(new TextInputComponent { FieldKey = "t", DefaultToCurrentTime = true }));
+        Assert.DoesNotContain("defaultToToday", ServiceBlueprintYaml.Serialize(new DateInputComponent { FieldKey = "d" }));
+        Assert.DoesNotContain("defaultToCurrentTime", ServiceBlueprintYaml.Serialize(new TextInputComponent { FieldKey = "t" }));
+        Assert.Contains("defaultToToday: true\n", ServiceBlueprintYaml.Serialize(new DateInputComponent { FieldKey = "d", DefaultToToday = true }));
+        Assert.Contains("defaultToCurrentTime: true\n", ServiceBlueprintYaml.Serialize(new TextInputComponent { FieldKey = "t", DefaultToCurrentTime = true }));
     }
 
     [Fact]
     public void TheEngineMarksOnlyTheFieldsThatAskedForADeviceDefault()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>("""
-            {
-              "definitionKey": "clock-test", "displayName": "Clock test", "version": 1, "initialStage": "when", "requestPolicy": "single",
-              "queues": [{ "key": "citizen", "displayName": "Applicant", "actor": "citizen" }],
-              "stages": [
-                { "stageKey": "when", "displayName": "When", "queueKey": "citizen",
-                  "components": [{ "type": "fieldset", "legend": "When", "children": [
-                    { "type": "date", "fieldKey": "day", "label": "Day", "defaultToToday": true },
-                    { "type": "text", "fieldKey": "time", "label": "Time", "defaultToCurrentTime": true },
-                    { "type": "text", "fieldKey": "plain", "label": "Plain" } ] }],
-                  "routes": [] }
-              ],
-              "gateways": []
-            }
-            """, CaseInsensitive)!;
+        var definition = ServiceBlueprintYaml.Deserialize("""
+            definitionKey: clock-test
+            displayName: Clock test
+            version: 1
+            initialStage: when
+            requestPolicy: single
+            queues:
+              - key: citizen
+                displayName: Applicant
+                actor: citizen
+            stages:
+              - stageKey: when
+                displayName: When
+                queueKey: citizen
+                components:
+                  - type: fieldset
+                    legend: When
+                    children:
+                      - type: date
+                        fieldKey: day
+                        label: Day
+                        defaultToToday: true
+                      - type: text
+                        fieldKey: time
+                        label: Time
+                        defaultToCurrentTime: true
+                      - type: text
+                        fieldKey: plain
+                        label: Plain
+                routes: []
+            gateways: []
+            """);
         var engine = new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition), new PassthroughContentSanitizer());
 
         var fields = engine.GetCurrent("clock-test", "tenant", "user").Render!.Components.Single().Fields.ToDictionary(f => f.FieldKey);

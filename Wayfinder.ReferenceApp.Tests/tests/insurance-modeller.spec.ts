@@ -197,7 +197,7 @@ test.describe('Insurance premium modeller: model, request, review', () => {
 
     // There's no "Recalculate" action left on this blueprint's model stage at all — the route
     // and its pass-through gateway were removed once client-side recalculation made them
-    // unnecessary (see juggling-insurance-modeller.json).
+    // unnecessary (see juggling-insurance-modeller.yaml).
     await expect(page.getByRole('button', { name: 'Recalculate' })).toHaveCount(0);
 
     let postRequests = 0;

@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using SupportSystems = Wayfinder.Models.ServiceDesign.SupportSystems;
@@ -20,10 +18,8 @@ public record QueueDefinition
 
     public string DisplayName { get; init; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Actor { get; init; }
 
     /// <summary>
@@ -34,7 +30,6 @@ public record QueueDefinition
     /// <c>IQueueCapabilitiesProvider</c>'s unrelated, pre-existing use of the word "capability"
     /// (which component types a host can render for a queue) — see docs/guides/work-allocation.md.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? RoleGates { get; init; }
 
     /// <summary>
@@ -47,13 +42,10 @@ public record QueueDefinition
     /// this governs who, among those already eligible, actually owns a given row. See
     /// docs/guides/team-assignment.md.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? AssignmentPolicy { get; init; }
 
     /// <summary>The team that owns this queue — only meaningful when <see cref="AssignmentPolicy"/> is set.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? OwningTeamId { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, string>? Tags { get; init; }
 }

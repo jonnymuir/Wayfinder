@@ -3,7 +3,7 @@
 Wayfinder's model is the
 [Nielsen Norman Group service blueprint](https://www.nngroup.com/articles/service-blueprints-definition/)
 (Sarah Gibbons, 2017), so the first column uses NN/g's terms. The plain-language column is the
-wording the Wayfinder.Umbraco README and walkthroughs use for people who don't read JSON.
+wording the Wayfinder.Umbraco README and walkthroughs use for people who don't read YAML.
 [Wayfinder.Umbraco](https://github.com/jonnymuir/Wayfinder.Umbraco) and
 [Umbraco Prism](https://github.com/jonnymuir/Umbraco.Prism) use the same terms.
 
@@ -11,7 +11,7 @@ wording the Wayfinder.Umbraco README and walkthroughs use for people who don't r
 
 | NN/g term | Wayfinder term | Plain language | What it is |
 |---|---|---|---|
-| Service blueprint | `ServiceBlueprint` | Service, blueprint | The whole service: its queues, stages, gateways and calculations, as one JSON document. |
+| Service blueprint | `ServiceBlueprint` | Service, blueprint | The whole service: its queues, stages, gateways and calculations, as one YAML document. |
 | Lane (customer actions, frontstage, backstage) | Queue (`queues`) | Lane, queue, team | A lane of work owned by one actor: the citizen, a caseworker team, a system. The worklist renders a queue. |
 | Support processes | Support system | Another system, integration | An external system a stage calls and waits on. See [support systems](./guides/support-systems.md). |
 | Line of interaction, visibility, internal interaction | (implicit) | | The boundary between two lanes. A route that crosses lanes crosses one of these lines. |

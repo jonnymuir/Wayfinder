@@ -4,7 +4,7 @@ How Wayfinder models real work-allocation scenarios beyond a static "can this ac
 queue" check: which team is eligible to work a queue, who currently owns one specific item within
 it, an atomic "pick up next available" primitive for automated/scaled-out workers, and a full audit
 trail of who did what. For whoever is *building* a Wayfinder host, a blueprint author only needs
-to know about `RoleGates` (declaring eligibility); nothing else here is authored in blueprint JSON.
+to know about `RoleGates` (declaring eligibility); nothing else here is authored in blueprint YAML.
 
 This document is also exposed as an MCP resource (`service-blueprint-docs://work-allocation`) so
 an agent can fetch it directly without repo access.
@@ -155,7 +155,7 @@ left, so nobody in the queue it arrived in (including a citizen it was sent back
 ### The zero-cursor edge case
 
 `CreateNewInstance` leaves `Cursors = []` until an instance crosses its first gateway, not a rare
-edge case: `njf-contributions.json`'s own initial stage already sits in the shared "caseworker"
+edge case: `njf-contributions.yaml`'s own initial stage already sits in the shared "caseworker"
 queue, so a freshly created, not-picked-up bulk upload sits in exactly this state until someone
 picks it up. `RequestCursor.PrimaryCursorId` (`"$primary"`) is the well-known cursor id for picking
 up in this state; `PickupWorkItem` materializes a real cursor the first time it's used, the same
@@ -262,14 +262,14 @@ express "does this actor hold X".
 
 ## Worked example: the reference app
 
-Both `juggling-licence.json` and `njf-contributions.json` independently declare a queue literally
+Both `juggling-licence.yaml` and `njf-contributions.yaml` independently declare a queue literally
 named `"caseworker"`, before `RoleGates` existed, Casey (juggling-licence) and Priya (NJF
 operations) could each already see the *other's* blueprint's rows purely because the queue keys
 collided, regardless of which blueprint either of them actually works on. Fixed and demonstrated
 together:
 
-- `njf-contributions.json`'s `"caseworker"` queue: `"roleGates": ["njf-contributions-review"]`.
-- `juggling-licence.json`'s `"caseworker"` queue: `"roleGates": ["juggling-licence-review"]`.
+- `njf-contributions.yaml`'s `"caseworker"` queue: `"roleGates": ["njf-contributions-review"]`.
+- `juggling-licence.yaml`'s `"caseworker"` queue: `"roleGates": ["juggling-licence-review"]`.
 - `ReferenceActors.CaseworkerProfile()` (Casey): `Capabilities = ["juggling-licence-review"]`.
 - `ReferenceActors.NjfOperationsProfile()` (Priya): `Capabilities = ["njf-contributions-review"]`.
 - `ReferenceActors.ProfileForCaseworkerUser(userId)` resolves the right one per signed-in demo

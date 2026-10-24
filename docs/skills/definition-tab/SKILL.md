@@ -1,15 +1,15 @@
 ---
 name: definition-tab
-description: How the service blueprint editor's Definition tab works, the raw JSON escape hatch behind every visual tab, with live parse/schema/calculation linting before you can apply an edit.
+description: How the service blueprint editor's Definition tab works, the raw YAML escape hatch behind every visual tab, with live parse/schema/calculation linting before you can apply an edit.
 ---
 
 # The Definition tab
 
 ## Overview
 
-The Definition tab (`wayfinder-definition-editor.ts`) is a CodeMirror-based JSON editor
+The Definition tab (`wayfinder-definition-editor.ts`) is a CodeMirror-based YAML editor
 showing the exact same `AuthoredServiceBlueprint` document every visual tab reads and
-writes, there is no separate "export" format. Anything the visual tabs don't yet expose
+writes, in the same YAML a host stores and the MCP tools read and write; there is no separate "export" format. Anything the visual tabs don't yet expose
 can be hand-edited here directly. An edit only takes effect once it's genuinely valid: it's
 parsed, schema-checked, and cross-referenced (250ms after typing stops) before "Apply when
 valid" is even enabled, an invalid or unsafe edit never silently reaches the live
@@ -17,22 +17,22 @@ blueprint.
 
 ## Walkthrough
 
-### The current blueprint, as JSON
+### The current blueprint, as YAML
 
 Switching to Definition shows the live document, syntax-highlighted, with line numbers:
 
-![The Definition tab showing the current blueprint as JSON](screenshots/definition-json-view.png)
+![The Definition tab showing the current blueprint as YAML](screenshots/definition-yaml-view.png)
 
-### Invalid JSON is caught before it can be applied
+### Invalid YAML is caught before it can be applied
 
-A syntax error is reported with the exact position, and "Apply when valid" stays disabled,
+A syntax error, a duplicate key, or an anchor or alias (`&`, `*`, which blueprints never use) is reported with its line, and "Apply when valid" stays disabled,
 the visual tabs keep showing the last-valid blueprint, never a half-applied broken one:
 
-![A JSON syntax error banner with Apply disabled](screenshots/parse-error-banner.png)
+![A YAML syntax error banner with Apply disabled](screenshots/parse-error-banner.png)
 
-### Structurally valid JSON can still be rejected
+### Structurally valid YAML can still be rejected
 
-Valid JSON that violates the schema, here, a retired `stageType` value, is caught the
+Valid YAML that violates the schema, here, a retired `stageType` value, is caught the
 same way, naming exactly what's wrong and what's actually allowed:
 
 ![A schema violation banner naming the invalid value and its allowed alternatives](screenshots/schema-violation-banner.png)
@@ -44,7 +44,7 @@ Validation tab share, every `calculations` problem too (a bad expression, an unk
 reference, a field-name collision, a circular dependency). See
 [`docs/skills/calculations-editor/SKILL.md`](../calculations-editor/SKILL.md) for what
 those checks are; this tab doesn't re-list them, it just applies the same ones to
-hand-edited JSON.
+hand-edited YAML.
 
 ## For agents
 
@@ -62,7 +62,7 @@ hand-edited JSON.
   document replacement), versus focusing `.cm-content` and using real keyboard input (for
   testing the editor's own UX, search, select-all, wheel scroll). Prefer the former for
   anything that isn't specifically testing CodeMirror interaction itself.
-- **This is arguably the most direct surface for an agent that already has the full JSON**
+- **This is arguably the most direct surface for an agent that already has the full YAML**
   and wants to paste/verify it in a human-visible UI, but for a fully-scripted workflow
   with no human in the loop at all, `validate_service_blueprint` and a direct REST
   PUT/`simulate_service_blueprint` call are the better fit (no browser, no debounce, a

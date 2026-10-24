@@ -14,7 +14,7 @@ so an agent can fetch it directly without repo access.
 
 ## The scenario this solves
 
-The worked example (`Wayfinder.ReferenceApp/service-blueprints/njf-contributions.json`): the
+The worked example (`Wayfinder.ReferenceApp/service-blueprints/njf-contributions.yaml`): the
 National Juggling Federation (NJF) arranges a group public-liability policy with SafetyNet
 Underwriting (the same fictional insurer from [Support systems](./support-systems.md)) and must
 periodically submit a CSV contributions file listing its members, tiers, and premiums. SafetyNet's
@@ -116,54 +116,67 @@ The automation stage, entered on the initial upload's Split branch, and re-enter
 "revalidate" route loops back to it, carries both actions, materialize ordered before the call
 that reads its output:
 
-```json
-{
-  "actions": [
-    {
-      "type": "bulk-dataset-materialize",
-      "timing": "onEnter",
-      "params": {
-        "datasetIdField": "contributionsDatasetId",
-        "targetFileField": "contributionsFile"
-      }
-    },
-    {
-      "type": "support-system-call",
-      "timing": "onEnter",
-      "params": {
-        "supportSystemKey": "safetynet-underwriting",
-        "capabilityKey": "validate-contributions-file",
-        "inputs": { "file": "contributionsFile" }
-      }
-    }
-  ]
-}
+```yaml
+actions:
+  - type: bulk-dataset-materialize
+    timing: onEnter
+    params:
+      datasetIdField: contributionsDatasetId
+      targetFileField: contributionsFile
+  - type: support-system-call
+    timing: onEnter
+    params:
+      supportSystemKey: safetynet-underwriting
+      capabilityKey: validate-contributions-file
+      inputs:
+        file: contributionsFile
 ```
 
 The review stage, reached once the join gateway releases, after SafetyNet's response resolves,
 carries the ingest action:
 
-```json
-{
-  "type": "bulk-dataset-ingest",
-  "timing": "onEnter",
-  "params": {
-    "sourceFileField": "contributionsResponseFile",
-    "datasetIdField": "contributionsDatasetId",
-    "errorCountField": "contributionsErrorCount",
-    "warningCountField": "contributionsWarningCount",
-    "acceptedCountField": "contributionsAcceptedCount",
-    "columns": [
-      { "key": "memberRef", "title": "Member reference", "valueKind": "String", "role": "RowKey" },
-      { "key": "memberName", "title": "Name", "valueKind": "String", "role": "Data", "editable": true },
-      { "key": "tier", "title": "Membership tier", "valueKind": "String", "role": "Data", "editable": true },
-      { "key": "monthlyContribution", "title": "Monthly contribution", "valueKind": "Number", "format": "currency", "role": "Data", "editable": true },
-      { "key": "safetyNetMemberId", "title": "SafetyNet member ID", "valueKind": "String", "role": "ResponseMatchedId" },
-      { "key": "errorText", "title": "Errors", "valueKind": "String", "role": "ResponseError" },
-      { "key": "warningText", "title": "Warnings", "valueKind": "String", "role": "ResponseWarning" }
-    ]
-  }
-}
+```yaml
+type: bulk-dataset-ingest
+timing: onEnter
+params:
+  sourceFileField: contributionsResponseFile
+  datasetIdField: contributionsDatasetId
+  errorCountField: contributionsErrorCount
+  warningCountField: contributionsWarningCount
+  acceptedCountField: contributionsAcceptedCount
+  columns:
+    - key: memberRef
+      title: Member reference
+      valueKind: String
+      role: RowKey
+    - key: memberName
+      title: Name
+      valueKind: String
+      role: Data
+      editable: true
+    - key: tier
+      title: Membership tier
+      valueKind: String
+      role: Data
+      editable: true
+    - key: monthlyContribution
+      title: Monthly contribution
+      valueKind: Number
+      format: currency
+      role: Data
+      editable: true
+    - key: safetyNetMemberId
+      title: SafetyNet member ID
+      valueKind: String
+      role: ResponseMatchedId
+    - key: errorText
+      title: Errors
+      valueKind: String
+      role: ResponseError
+    - key: warningText
+      title: Warnings
+      valueKind: String
+      role: ResponseWarning
 ```
 
 Placing a `BulkDataReviewComponent` on that same stage, bound to `contributionsDatasetId`, renders
@@ -203,15 +216,16 @@ stop someone finishing who's already checked it's fine. The worked example still
 engine at all, two routes sharing one trigger and label, gated by mutually exclusive `showWhen`
 conditions, one of them routing through a small interstitial stage instead of straight to done:
 
-```json
-{
-  "routes": [
-    { "target": "to-done", "trigger": "accept", "label": "Accept and finish",
-      "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0" },
-    { "target": "to-confirm-warnings", "trigger": "accept-with-warnings", "label": "Accept and finish",
-      "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount > 0" }
-  ]
-}
+```yaml
+routes:
+  - target: to-done
+    trigger: accept
+    label: Accept and finish
+    showWhen: contributionsErrorCount = 0 and contributionsWarningCount = 0
+  - target: to-confirm-warnings
+    trigger: accept-with-warnings
+    label: Accept and finish
+    showWhen: contributionsErrorCount = 0 and contributionsWarningCount > 0
 ```
 
 The caseworker only ever sees one "Accept and finish" button (never both) since the two
@@ -231,7 +245,7 @@ in a `showWhen` expression still requires declaring it under the blueprint's own
 `calculations.fields` block with `source: "service"`. The engine reads a declared service field
 the host doesn't supply from `FieldValues`, so no host code is needed. Skip that
 declaration and every route conditioned on the field **stays visible regardless of its actual
-value**, silently, since the failure is swallowed. `njf-contributions.json` declares both
+value**, silently, since the failure is swallowed. `njf-contributions.yaml` declares both
 `contributionsErrorCount` and `contributionsWarningCount` for exactly this reason.
 
 ## Corrections autosave
@@ -262,18 +276,16 @@ ingest, same as the other three counts; kept live for the rest of the stage's dw
 `IProcessManager.SyncBulkDatasetSyncState`, called automatically by the correction/revert endpoints
 below.
 
-```json
-{
-  "params": {
-    "errorCountField": "contributionsErrorCount",
-    "warningCountField": "contributionsWarningCount",
-    "dirtyCountField": "contributionsDirtyCount"
-  }
-}
+```yaml
+params:
+  errorCountField: contributionsErrorCount
+  warningCountField: contributionsWarningCount
+  dirtyCountField: contributionsDirtyCount
 ```
 
-```json
-{ "trigger": "accept", "showWhen": "contributionsErrorCount = 0 and contributionsWarningCount = 0 and contributionsDirtyCount = 0" }
+```yaml
+trigger: accept
+showWhen: contributionsErrorCount = 0 and contributionsWarningCount = 0 and contributionsDirtyCount = 0
 ```
 
 Same footgun as `errorCountField` (see above) applies here just as easily forgotten: declare
@@ -287,7 +299,7 @@ file, a different service might revalidate some other way entirely, where that w
 wrong. `BulkDataReviewComponent` exposes three optional properties rather than baking in fixed
 copy:
 
-| Property | Default | `njf-contributions.json` sets it to |
+| Property | Default | `njf-contributions.yaml` sets it to |
 |---|---|---|
 | `syncedLabel` | `"Synced"` | *(left at the default)* |
 | `pendingLabel` | `"Needs resubmission"` | `"Pending resubmission"` |

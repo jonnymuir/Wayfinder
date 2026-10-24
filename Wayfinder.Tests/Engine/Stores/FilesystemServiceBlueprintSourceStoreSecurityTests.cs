@@ -104,6 +104,6 @@ public class FilesystemServiceBlueprintSourceStoreSecurityTests : IDisposable
         loaded!.DefinitionKey.Should().Be("round-trip-key");
 
         Directory.GetFiles(_baseDir).Should().ContainSingle()
-            .Which.Should().EndWith("round-trip-key.json");
+            .Which.Should().EndWith("round-trip-key.yaml");
     }
 }

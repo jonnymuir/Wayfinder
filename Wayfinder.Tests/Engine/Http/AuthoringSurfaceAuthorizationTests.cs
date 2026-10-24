@@ -46,7 +46,6 @@ public class AuthoringSurfaceAuthorizationTests
     {
         s.AddSingleton<IServiceBlueprintSourceStore, UnusedStore>();
         s.AddServiceBlueprintAuthoring();
-        s.AddServiceBlueprintAuthoringApi();
         s.AddServiceBlueprintAuthoringMcp();
     }
 

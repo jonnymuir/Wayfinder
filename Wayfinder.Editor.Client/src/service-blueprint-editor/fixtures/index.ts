@@ -882,7 +882,7 @@ export const PLANNING_SERVICE_BLUEPRINT_MIGRATED: ServiceBlueprint = hydrateServ
 
 /**
  * Money Modeller — the fully declarative pension modeller demo (see
- * UmbracoPrism.MockBusinessApp/serviceBlueprint-seeds/money-modeller.json, mirrored
+ * UmbracoPrism.MockBusinessApp/serviceBlueprint-seeds/money-modeller.yaml, mirrored
  * here rather than imported so the fixture stays a plain TS literal like the
  * rest of this file). Two queues, a calculations block driving live
  * stat-group/chart components, a recalculate self-loop, and a fan-out to a

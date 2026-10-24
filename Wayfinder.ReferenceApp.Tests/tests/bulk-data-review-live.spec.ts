@@ -4,7 +4,7 @@ import { LiveAppHost } from './support/live-app-host';
 import { DEMO_USERS, loginAs } from './fixtures';
 
 // Real cross-process integration for docs/guides/bulk-data-review.md's own worked example
-// (Wayfinder.ReferenceApp/service-blueprints/njf-contributions.json): proves a caseworker can
+// (Wayfinder.ReferenceApp/service-blueprints/njf-contributions.yaml): proves a caseworker can
 // upload a real CSV, have it genuinely validated by SafetyNetUnderwriting's own
 // ContributionsValidation.cs (a separately-running app, not a stub), correct only the row that's
 // flagged via the client-fetched bulk-data-review card UI, and resubmit — without the "Accept

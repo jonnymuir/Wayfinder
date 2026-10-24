@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Models;
@@ -58,103 +57,127 @@ public class TeamAssignmentTests
         RestrictToInstanceOwner = false
     };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    // Mirrors njf-contributions.json's own shape: an "ops-team" queue (assign-to-initiator) whose
+    // Mirrors njf-contributions.yaml's own shape: an "ops-team" queue (assign-to-initiator) whose
     // own "review" stage can both loop back through automation (resubmit) and hand off to a
     // genuinely different, team-tray-owned queue ("review-team", escalate) — the two policies and
     // the queue-boundary reset, all in one blueprint.
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "team-assignment-test",
-          "displayName": "Team Assignment Test",
-          "version": 1,
-          "initialStage": "upload",
-          "requestPolicy": "multiple",
-          "queues": [
-            { "key": "ops-team", "displayName": "Ops Team", "actor": "caseworker", "assignmentPolicy": "assign-to-initiator", "owningTeamId": "ops" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" },
-            { "key": "review-team", "displayName": "Review Team", "actor": "caseworker", "assignmentPolicy": "team-tray", "owningTeamId": "reviewers" }
-          ],
-          "stages": [
-            {
-              "stageKey": "upload",
-              "displayName": "Upload",
-              "queueKey": "ops-team",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "upload--submit--split", "target": "to-automation", "trigger": "submit" } ]
-            },
-            {
-              "stageKey": "processing",
-              "displayName": "Processing",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "Processing" } ],
-              "routes": [ { "id": "processing--processed--join", "target": "check-complete", "trigger": "processed" } ]
-            },
-            {
-              "stageKey": "review",
-              "displayName": "Review",
-              "queueKey": "ops-team",
-              "components": [ { "type": "text", "fieldKey": "notes2", "label": "Notes", "required": false } ],
-              "routes": [
-                { "id": "review--resubmit--split", "target": "to-automation", "trigger": "resubmit" },
-                { "id": "review--escalate--split", "target": "to-review-team", "trigger": "escalate" }
-              ]
-            },
-            {
-              "stageKey": "escalated",
-              "displayName": "Escalated",
-              "queueKey": "review-team",
-              "components": [ { "type": "text", "fieldKey": "resolution", "label": "Resolution notes", "required": false } ],
-              "routes": [ { "id": "escalated--resolve--resolved", "target": "resolved", "trigger": "resolve" } ]
-            },
-            {
-              "stageKey": "resolved",
-              "displayName": "Resolved",
-              "queueKey": "review-team",
-              "components": [ { "type": "panel", "heading": "Resolved" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-automation",
-              "displayName": "Send to automation",
-              "gatewayType": "Split",
-              "queueKey": "ops-team",
-              "routes": [
-                { "id": "to-automation--submit--join", "target": "check-complete", "trigger": "submit" },
-                { "id": "to-automation--submit--processing", "target": "processing", "trigger": "submit" },
-                { "id": "to-automation--resubmit--join", "target": "check-complete", "trigger": "resubmit" },
-                { "id": "to-automation--resubmit--processing", "target": "processing", "trigger": "resubmit" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "ops-team",
-              "waitingContent": "Waiting.",
-              "routes": [ { "id": "check-complete--processed--review", "target": "review", "trigger": "processed" } ],
-              "requiredIncomingQueues": ["ops-team", "automation"]
-            },
-            {
-              "key": "to-review-team",
-              "displayName": "Escalate to review team",
-              "gatewayType": "Split",
-              "queueKey": "ops-team",
-              "routes": [ { "id": "to-review-team--escalate--escalated", "target": "escalated", "trigger": "escalate" } ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: team-assignment-test
+        displayName: Team Assignment Test
+        version: 1
+        initialStage: upload
+        requestPolicy: multiple
+        queues:
+          - key: ops-team
+            displayName: Ops Team
+            actor: caseworker
+            assignmentPolicy: assign-to-initiator
+            owningTeamId: ops
+          - key: automation
+            displayName: Automation
+            actor: system
+          - key: review-team
+            displayName: Review Team
+            actor: caseworker
+            assignmentPolicy: team-tray
+            owningTeamId: reviewers
+        stages:
+          - stageKey: upload
+            displayName: Upload
+            queueKey: ops-team
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: upload--submit--split
+                target: to-automation
+                trigger: submit
+          - stageKey: processing
+            displayName: Processing
+            queueKey: automation
+            components:
+              - type: panel
+                heading: Processing
+            routes:
+              - id: processing--processed--join
+                target: check-complete
+                trigger: processed
+          - stageKey: review
+            displayName: Review
+            queueKey: ops-team
+            components:
+              - type: text
+                fieldKey: notes2
+                label: Notes
+            routes:
+              - id: review--resubmit--split
+                target: to-automation
+                trigger: resubmit
+              - id: review--escalate--split
+                target: to-review-team
+                trigger: escalate
+          - stageKey: escalated
+            displayName: Escalated
+            queueKey: review-team
+            components:
+              - type: text
+                fieldKey: resolution
+                label: Resolution notes
+            routes:
+              - id: escalated--resolve--resolved
+                target: resolved
+                trigger: resolve
+          - stageKey: resolved
+            displayName: Resolved
+            queueKey: review-team
+            components:
+              - type: panel
+                heading: Resolved
+        gateways:
+          - key: to-automation
+            displayName: Send to automation
+            gatewayType: Split
+            queueKey: ops-team
+            routes:
+              - id: to-automation--submit--join
+                target: check-complete
+                trigger: submit
+              - id: to-automation--submit--processing
+                target: processing
+                trigger: submit
+              - id: to-automation--resubmit--join
+                target: check-complete
+                trigger: resubmit
+              - id: to-automation--resubmit--processing
+                target: processing
+                trigger: resubmit
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: ops-team
+            waitingContent: Waiting.
+            routes:
+              - id: check-complete--processed--review
+                target: review
+                trigger: processed
+            requiredIncomingQueues:
+              - ops-team
+              - automation
+          - key: to-review-team
+            displayName: Escalate to review team
+            gatewayType: Split
+            queueKey: ops-team
+            routes:
+              - id: to-review-team--escalate--escalated
+                target: escalated
+                trigger: escalate
         """;
 
     private static ProcessManagerEngine BuildEngine()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
@@ -162,7 +185,7 @@ public class TeamAssignmentTests
     }
 
     /// <summary>Drives priya's instance from "upload" through the automation round trip to "review",
-    /// mirroring njf-contributions.json's own submit -> split -> join -> review flow.</summary>
+    /// mirroring njf-contributions.yaml's own submit -> split -> join -> review flow.</summary>
     private static ServiceRequestResponseEnvelope ReachReview(ProcessManagerEngine engine, string instanceId, int stateVersion, string trigger)
     {
         var afterSplit = engine.Advance(instanceId, TenantId, "priya", OpsProfile, trigger, stateVersion, null);

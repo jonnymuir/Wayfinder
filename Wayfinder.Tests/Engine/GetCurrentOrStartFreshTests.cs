@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Models;
@@ -20,43 +19,42 @@ public class GetCurrentOrStartFreshTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
     // "start" (a plain text question — infers step type "question", not terminal) routes to
     // "done" (a bare panel — infers "confirmation", the one thing IsTerminalInstance checks for).
-    private static string BlueprintJson(string requestPolicy, string definitionKey) => $$"""
-        {
-          "definitionKey": "{{definitionKey}}",
-          "displayName": "GetCurrentOrStartFresh Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "{{requestPolicy}}",
-          "queues": [ { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" } ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "start--continue--done", "target": "done", "trigger": "continue" } ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "caseworker",
-              "components": [ { "type": "panel", "heading": "Done" } ]
-            }
-          ]
-        }
+    private static string BlueprintYaml(string requestPolicy, string definitionKey) => $$"""
+        definitionKey: {{definitionKey}}
+        displayName: GetCurrentOrStartFresh Test
+        version: 1
+        initialStage: start
+        requestPolicy: {{requestPolicy}}
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--continue--done
+                target: done
+                trigger: continue
+          - stageKey: done
+            displayName: Done
+            queueKey: caseworker
+            components:
+              - type: panel
+                heading: Done
         """;
 
     private static ProcessManagerEngine BuildEngine(string requestPolicy, string definitionKey)
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson(requestPolicy, definitionKey), JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml(requestPolicy, definitionKey));
         return new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),
@@ -124,52 +122,60 @@ public class GetCurrentOrStartFreshTests
     // terminal stage would. Found live: this alone made an in-progress, still-waiting instance
     // register as terminal, because ServiceRequest.CurrentStage (a single field covering
     // every cursor) had been set from the automation cursor, not the caseworker's own.
-    private const string SplitJoinBlueprintJson = """
-        {
-          "definitionKey": "split-join-terminal-check",
-          "displayName": "Split/Join Terminal Check",
-          "version": 1,
-          "initialStage": "start",
-          "queues": [
-            { "key": "caseworker", "displayName": "Caseworker", "actor": "caseworker" },
-            { "key": "automation", "displayName": "Automation", "actor": "system" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "caseworker",
-              "components": [ { "type": "text", "fieldKey": "notes", "label": "Notes", "required": false } ],
-              "routes": [ { "id": "start--send--split", "target": "to-automation", "trigger": "send" } ]
-            },
-            {
-              "stageKey": "in-review",
-              "displayName": "In review",
-              "queueKey": "automation",
-              "components": [ { "type": "panel", "heading": "In review" } ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-automation",
-              "displayName": "Send to automation",
-              "gatewayType": "Split",
-              "queueKey": "caseworker",
-              "routes": [
-                { "id": "to-automation--send--join", "target": "check-complete", "trigger": "send" },
-                { "id": "to-automation--send--review", "target": "in-review", "trigger": "send" }
-              ]
-            },
-            {
-              "key": "check-complete",
-              "displayName": "Check complete",
-              "gatewayType": "Join",
-              "queueKey": "caseworker",
-              "routes": [ { "id": "check-complete--approved--start", "target": "start", "trigger": "approved" } ],
-              "requiredIncomingQueues": ["caseworker", "automation"]
-            }
-          ]
-        }
+    private const string SplitJoinBlueprintYaml = """
+        definitionKey: split-join-terminal-check
+        displayName: Split/Join Terminal Check
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: caseworker
+            displayName: Caseworker
+            actor: caseworker
+          - key: automation
+            displayName: Automation
+            actor: system
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: caseworker
+            components:
+              - type: text
+                fieldKey: notes
+                label: Notes
+            routes:
+              - id: start--send--split
+                target: to-automation
+                trigger: send
+          - stageKey: in-review
+            displayName: In review
+            queueKey: automation
+            components:
+              - type: panel
+                heading: In review
+        gateways:
+          - key: to-automation
+            displayName: Send to automation
+            gatewayType: Split
+            queueKey: caseworker
+            routes:
+              - id: to-automation--send--join
+                target: check-complete
+                trigger: send
+              - id: to-automation--send--review
+                target: in-review
+                trigger: send
+          - key: check-complete
+            displayName: Check complete
+            gatewayType: Join
+            queueKey: caseworker
+            routes:
+              - id: check-complete--approved--start
+                target: start
+                trigger: approved
+            requiredIncomingQueues:
+              - caseworker
+              - automation
         """;
 
     private static readonly ActorProfile CaseworkerOnlyProfile = new()
@@ -183,7 +189,7 @@ public class GetCurrentOrStartFreshTests
     [Fact]
     public void Single_CaseworkerWaitingAtJoinWhileAutomationCursorSitsOnABarePanelStage_IsNotMisreadAsTerminal()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(SplitJoinBlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(SplitJoinBlueprintYaml);
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

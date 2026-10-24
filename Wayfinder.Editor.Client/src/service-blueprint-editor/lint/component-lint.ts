@@ -1,5 +1,5 @@
 import type { ComponentContainment, ComponentDescriptor, ComponentPropertyDescriptor } from '../types.js';
-import { type DefinitionLint, type JsonObject, isJsonObject, lineOfString } from './lint-support.js';
+import { type DefinitionLint, type Mapping, isMapping, lineOfString } from './lint-support.js';
 
 /**
  * Blueprint-wide reference data for the dangling-reference checks — mirrors what
@@ -55,8 +55,8 @@ export class ComponentLinter {
   }
 
   private _lintComponent(raw: unknown, path: string): void {
-    if (!isJsonObject(raw)) {
-      this._report(`Component at "${path}" must be an object.`, path);
+    if (!isMapping(raw)) {
+      this._report(`Component at "${path}" must be a mapping.`, path);
       return;
     }
 
@@ -80,7 +80,7 @@ export class ComponentLinter {
     this._lintChildren(raw, descriptor.containment, path);
   }
 
-  private _lintChildren(component: JsonObject, containment: ComponentContainment, path: string): void {
+  private _lintChildren(component: Mapping, containment: ComponentContainment, path: string): void {
     const key = containment.propertyName;
     if (!key) {
       return;
@@ -100,15 +100,15 @@ export class ComponentLinter {
       return;
     }
     sections.forEach((section, index) => {
-      if (isJsonObject(section)) {
+      if (isMapping(section)) {
         this.lintList(section[childrenKey], `${sectionsPath}[${index}].${childrenKey}`);
       }
     });
   }
 
-  private _lintKeyedChildren(component: JsonObject, key: string, optionsKey: string, path: string): void {
+  private _lintKeyedChildren(component: Mapping, key: string, optionsKey: string, path: string): void {
     const byKey = component[key];
-    if (!isJsonObject(byKey)) {
+    if (!isMapping(byKey)) {
       return;
     }
 
@@ -126,7 +126,7 @@ export class ComponentLinter {
     }
   }
 
-  lintProperties(component: JsonObject, properties: ComponentPropertyDescriptor[], path: string): void {
+  lintProperties(component: Mapping, properties: ComponentPropertyDescriptor[], path: string): void {
     for (const property of properties) {
       this._lintProperty(component[property.key], property, `${path}.${property.key}`);
     }
@@ -175,7 +175,7 @@ export class ComponentLinter {
   }
 
   private _lintObject(value: unknown, properties: ComponentPropertyDescriptor[] | undefined, path: string): void {
-    if (isJsonObject(value) && properties) {
+    if (isMapping(value) && properties) {
       this.lintProperties(value, properties, path);
     }
   }

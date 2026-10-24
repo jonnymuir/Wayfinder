@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Models;
@@ -22,7 +21,6 @@ public class PickupAcrossQueuesTests
     private const string Caseworker = "caseworker-1";
     private const string Reviewer = "reviewer-1";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static readonly ActorProfile VisitorProfile = new()
     {
@@ -40,38 +38,68 @@ public class PickupAcrossQueuesTests
     };
 
     private const string Blueprint = """
-        {
-          "definitionKey": "application",
-          "displayName": "Application",
-          "version": 1,
-          "initialStage": "apply",
-          "queues": [
-            { "key": "visitor", "displayName": "Applicant", "actor": "citizen" },
-            { "key": "casework", "displayName": "Casework", "actor": "caseworker" },
-            { "key": "review", "displayName": "Review", "actor": "caseworker" }
-          ],
-          "stages": [
-            { "stageKey": "apply", "displayName": "Apply", "queueKey": "visitor",
-              "components": [ { "type": "text", "fieldKey": "detail", "label": "Detail" } ],
-              "routes": [ { "id": "apply--submit--assess", "target": "assess", "trigger": "submit" } ] },
-            { "stageKey": "assess", "displayName": "Assess", "queueKey": "casework",
-              "components": [ { "type": "panel", "heading": "Assess" } ],
-              "routes": [
-                { "id": "assess--more--apply", "target": "apply", "trigger": "need-more" },
-                { "id": "assess--escalate--check", "target": "check", "trigger": "escalate" }
-              ] },
-            { "stageKey": "check", "displayName": "Check", "queueKey": "review",
-              "components": [ { "type": "text", "fieldKey": "verdict", "label": "Verdict" } ],
-              "routes": [ { "id": "check--approve--done", "target": "done", "trigger": "approve" } ] },
-            { "stageKey": "done", "displayName": "Done", "queueKey": "review",
-              "components": [ { "type": "panel", "heading": "Done" } ] }
-          ]
-        }
+        definitionKey: application
+        displayName: Application
+        version: 1
+        initialStage: apply
+        requestPolicy: single
+        queues:
+          - key: visitor
+            displayName: Applicant
+            actor: citizen
+          - key: casework
+            displayName: Casework
+            actor: caseworker
+          - key: review
+            displayName: Review
+            actor: caseworker
+        stages:
+          - stageKey: apply
+            displayName: Apply
+            queueKey: visitor
+            components:
+              - type: text
+                fieldKey: detail
+                label: Detail
+            routes:
+              - id: apply--submit--assess
+                target: assess
+                trigger: submit
+          - stageKey: assess
+            displayName: Assess
+            queueKey: casework
+            components:
+              - type: panel
+                heading: Assess
+            routes:
+              - id: assess--more--apply
+                target: apply
+                trigger: need-more
+              - id: assess--escalate--check
+                target: check
+                trigger: escalate
+          - stageKey: check
+            displayName: Check
+            queueKey: review
+            components:
+              - type: text
+                fieldKey: verdict
+                label: Verdict
+            routes:
+              - id: check--approve--done
+                target: done
+                trigger: approve
+          - stageKey: done
+            displayName: Done
+            queueKey: review
+            components:
+              - type: panel
+                heading: Done
         """;
 
     private static ProcessManagerEngine Build()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(Blueprint, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(Blueprint);
         return new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),
             new PassthroughContentSanitizer(), instanceStore: new InMemoryServiceRequestStore());
     }

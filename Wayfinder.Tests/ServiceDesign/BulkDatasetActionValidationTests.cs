@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using FluentAssertions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.BulkData;
@@ -17,18 +16,18 @@ namespace Wayfinder.Tests.ServiceDesign;
 /// </summary>
 public class BulkDatasetActionValidationTests
 {
-    private static JsonArray ValidColumns() => new()
+    private static List<object?> ValidColumns() => new()
     {
-        new JsonObject { ["key"] = "memberRef", ["title"] = "Member reference", ["valueKind"] = "String", ["role"] = "RowKey" },
-        new JsonObject { ["key"] = "memberName", ["title"] = "Name", ["valueKind"] = "String", ["role"] = "Data", ["editable"] = true },
-        new JsonObject { ["key"] = "errorText", ["title"] = "Errors", ["valueKind"] = "String", ["role"] = "ResponseError" },
+        new Dictionary<string, object?> { ["key"] = "memberRef", ["title"] = "Member reference", ["valueKind"] = "String", ["role"] = "RowKey" },
+        new Dictionary<string, object?> { ["key"] = "memberName", ["title"] = "Name", ["valueKind"] = "String", ["role"] = "Data", ["editable"] = true },
+        new Dictionary<string, object?> { ["key"] = "errorText", ["title"] = "Errors", ["valueKind"] = "String", ["role"] = "ResponseError" },
     };
 
-    private static ActionDefinition MakeIngestAction(JsonObject? parameters = null) => new()
+    private static ActionDefinition MakeIngestAction(Dictionary<string, object?>? parameters = null) => new()
     {
         Type = BulkDataActionTypes.BulkDatasetIngest,
         Timing = ActionTiming.OnEnter,
-        Parameters = parameters ?? new JsonObject
+        Parameters = parameters ?? new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -37,11 +36,11 @@ public class BulkDatasetActionValidationTests
         },
     };
 
-    private static ActionDefinition MakeMaterializeAction(JsonObject? parameters = null) => new()
+    private static ActionDefinition MakeMaterializeAction(Dictionary<string, object?>? parameters = null) => new()
     {
         Type = BulkDataActionTypes.BulkDatasetMaterialize,
         Timing = ActionTiming.OnEnter,
-        Parameters = parameters ?? new JsonObject
+        Parameters = parameters ?? new Dictionary<string, object?>
         {
             ["datasetIdField"] = "contributionsDatasetId",
             ["targetFileField"] = "contributionsFile",
@@ -92,7 +91,7 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_MissingDatasetIdField_Flagged()
     {
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["columns"] = ValidColumns(),
@@ -104,7 +103,7 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_MissingSourceField_Flagged()
     {
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["datasetIdField"] = "contributionsDatasetId",
             ["columns"] = ValidColumns(),
@@ -116,7 +115,7 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_SourceFieldNotAKnownField_Flagged()
     {
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "notARealField",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -129,7 +128,7 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_MissingColumns_Flagged()
     {
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -141,11 +140,11 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_NoRowKeyColumn_Flagged()
     {
-        var columns = new JsonArray
+        var columns = new List<object?>
         {
-            new JsonObject { ["key"] = "memberName", ["title"] = "Name", ["valueKind"] = "String", ["role"] = "Data" },
+            new Dictionary<string, object?> { ["key"] = "memberName", ["title"] = "Name", ["valueKind"] = "String", ["role"] = "Data" },
         };
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -158,12 +157,12 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_MoreThanOneRowKeyColumn_Flagged()
     {
-        var columns = new JsonArray
+        var columns = new List<object?>
         {
-            new JsonObject { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
-            new JsonObject { ["key"] = "altRef", ["title"] = "Alt ref", ["valueKind"] = "String", ["role"] = "RowKey" },
+            new Dictionary<string, object?> { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
+            new Dictionary<string, object?> { ["key"] = "altRef", ["title"] = "Alt ref", ["valueKind"] = "String", ["role"] = "RowKey" },
         };
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -176,12 +175,12 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_DuplicateColumnKey_Flagged()
     {
-        var columns = new JsonArray
+        var columns = new List<object?>
         {
-            new JsonObject { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
-            new JsonObject { ["key"] = "memberRef", ["title"] = "Ref again", ["valueKind"] = "String", ["role"] = "Data" },
+            new Dictionary<string, object?> { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
+            new Dictionary<string, object?> { ["key"] = "memberRef", ["title"] = "Ref again", ["valueKind"] = "String", ["role"] = "Data" },
         };
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -194,12 +193,12 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_UnrecognisedRole_Flagged()
     {
-        var columns = new JsonArray
+        var columns = new List<object?>
         {
-            new JsonObject { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
-            new JsonObject { ["key"] = "weird", ["title"] = "Weird", ["valueKind"] = "String", ["role"] = "NotARealRole" },
+            new Dictionary<string, object?> { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
+            new Dictionary<string, object?> { ["key"] = "weird", ["title"] = "Weird", ["valueKind"] = "String", ["role"] = "NotARealRole" },
         };
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -212,12 +211,12 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_UnrecognisedValueKind_Flagged()
     {
-        var columns = new JsonArray
+        var columns = new List<object?>
         {
-            new JsonObject { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
-            new JsonObject { ["key"] = "weird", ["title"] = "Weird", ["valueKind"] = "NotARealKind", ["role"] = "Data" },
+            new Dictionary<string, object?> { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
+            new Dictionary<string, object?> { ["key"] = "weird", ["title"] = "Weird", ["valueKind"] = "NotARealKind", ["role"] = "Data" },
         };
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -230,12 +229,12 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Ingest_ColumnMissingKeyOrTitle_Flagged()
     {
-        var columns = new JsonArray
+        var columns = new List<object?>
         {
-            new JsonObject { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
-            new JsonObject { ["valueKind"] = "String", ["role"] = "Data" },
+            new Dictionary<string, object?> { ["key"] = "memberRef", ["title"] = "Ref", ["valueKind"] = "String", ["role"] = "RowKey" },
+            new Dictionary<string, object?> { ["valueKind"] = "String", ["role"] = "Data" },
         };
-        var blueprint = MakeBlueprint(MakeIngestAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(new Dictionary<string, object?>
         {
             ["sourceFileField"] = "contributionsFile",
             ["datasetIdField"] = "contributionsDatasetId",
@@ -248,7 +247,7 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Materialize_MissingDatasetIdField_Flagged()
     {
-        var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new Dictionary<string, object?>
         {
             ["targetFileField"] = "contributionsFile",
         }));
@@ -259,7 +258,7 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Materialize_MissingTargetField_Flagged()
     {
-        var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new Dictionary<string, object?>
         {
             ["datasetIdField"] = "contributionsDatasetId",
         }));
@@ -270,7 +269,7 @@ public class BulkDatasetActionValidationTests
     [Fact]
     public void Materialize_DatasetIdFieldNotAnyIngestActions_Flagged()
     {
-        var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new JsonObject
+        var blueprint = MakeBlueprint(MakeIngestAction(), MakeMaterializeAction(new Dictionary<string, object?>
         {
             ["datasetIdField"] = "someOtherDatasetId",
             ["targetFileField"] = "contributionsFile",

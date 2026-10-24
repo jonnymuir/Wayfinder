@@ -1,10 +1,10 @@
-import { EDITOR_TOP_LEVEL_FIELDS, matchesTopLevelFieldKind } from '../service-blueprint-canonical-json.js';
+import { EDITOR_TOP_LEVEL_FIELDS, matchesTopLevelFieldKind } from '../service-blueprint-yaml.js';
 import type { Component, ComponentDescriptor } from '../types.js';
 import { gatewayKindValues, stageKindValues } from '../types.js';
 import { collectStageInputFields } from '../component-property-references.js';
 import { ComponentLinter, type ReferenceLintContext } from './component-lint.js';
 import { lintCalculations } from './calculation-lint.js';
-import { type DefinitionLint, type JsonObject, isJsonObject, lineOfString } from './lint-support.js';
+import { type DefinitionLint, type Mapping, isMapping, lineOfString } from './lint-support.js';
 
 const ALLOWED_STAGE_KINDS: ReadonlySet<string> = new Set(stageKindValues);
 const ALLOWED_GATEWAY_KINDS: ReadonlySet<string> = new Set(gatewayKindValues);
@@ -14,38 +14,38 @@ const isAbsentOrWellTyped = (value: unknown, kind: Parameters<typeof matchesTopL
 
 const isBlank = (value: unknown) => typeof value !== 'string' || !value.trim();
 
-function describeJsonType(value: unknown): string {
-  if (Array.isArray(value)) return 'an array';
-  return typeof value === 'object' ? 'an object' : `a ${typeof value}`;
+function describeYamlType(value: unknown): string {
+  if (Array.isArray(value)) return 'a list';
+  return typeof value === 'object' ? 'a mapping' : `a ${typeof value}`;
 }
 
 function describeExpectedKind(kind: string): string {
-  const named: Record<string, string> = { boolean: 'true or false', array: 'an array', object: 'an object' };
+  const named: Record<string, string> = { boolean: 'true or false', array: 'a list', object: 'a mapping' };
   return named[kind] ?? `a ${kind}`;
 }
 
 /** Property names declared in each service field's `shape`. */
-function shapesOf(fields: JsonObject): Map<string, Set<string>> {
+function shapesOf(fields: Mapping): Map<string, Set<string>> {
   const shapes = new Map<string, Set<string>>();
   for (const [name, field] of Object.entries(fields)) {
-    const shape = isJsonObject(field) ? field.shape : undefined;
-    if (isJsonObject(shape)) {
+    const shape = isMapping(field) ? field.shape : undefined;
+    if (isMapping(shape)) {
       shapes.set(name, new Set(Object.keys(shape)));
     }
   }
   return shapes;
 }
 
-function stageKeysOf(root: JsonObject): Set<string> {
+function stageKeysOf(root: Mapping): Set<string> {
   const stages = Array.isArray(root.stages) ? root.stages : [];
-  const keys = stages.map((stage) => (isJsonObject(stage) ? stage.stageKey : undefined));
+  const keys = stages.map((stage) => (isMapping(stage) ? stage.stageKey : undefined));
   return new Set(keys.filter((key): key is string => typeof key === 'string' && key !== ''));
 }
 
 /** The blueprint-wide reference data the dangling-reference checks resolve against. */
-function referenceContextFor(root: JsonObject): Omit<ReferenceLintContext, 'siblingFieldKeys'> {
-  const calculations = isJsonObject(root.calculations) ? root.calculations : {};
-  const fields = isJsonObject(calculations.fields) ? calculations.fields : {};
+function referenceContextFor(root: Mapping): Omit<ReferenceLintContext, 'siblingFieldKeys'> {
+  const calculations = isMapping(root.calculations) ? root.calculations : {};
+  const fields = isMapping(calculations.fields) ? calculations.fields : {};
   return { calculationFieldNames: new Set(Object.keys(fields)), calculationShapes: shapesOf(fields), stageKeys: stageKeysOf(root) };
 }
 
@@ -59,15 +59,15 @@ export class DocumentLinter {
   ) {}
 
   lint(parsed: unknown): DefinitionLint[] {
-    if (!isJsonObject(parsed)) {
-      return [{ message: 'Definition must be a JSON object.' }];
+    if (!isMapping(parsed)) {
+      return [{ message: 'Definition must be a YAML mapping.' }];
     }
 
     this._lintRequiredStrings(parsed);
     this._lintTopLevelFieldKinds(parsed);
     this._lintUnknownKeys(parsed);
     if (!Array.isArray(parsed.queues)) {
-      this._report('"queues" must be an array.', 'queues');
+      this._report('"queues" must be a list.', 'queues');
     }
     lintCalculations(parsed, this._source, this._catalog, this._issues);
     this._lintStages(parsed);
@@ -79,7 +79,7 @@ export class DocumentLinter {
     this._issues.push(pathHint === undefined && line === undefined ? { message } : { message, pathHint, line });
   }
 
-  private _lintRequiredStrings(root: JsonObject) {
+  private _lintRequiredStrings(root: Mapping) {
     for (const required of ['definitionKey', 'displayName', 'initialStage']) {
       if (isBlank(root[required])) {
         this._report(`Missing or empty "${required}".`, required, lineOfString(this._source, required));
@@ -92,18 +92,18 @@ export class DocumentLinter {
    * is reported instead of being silently dropped when the definition is applied. Only reported when
    * the more specific check above has not already flagged the same property.
    */
-  private _lintTopLevelFieldKinds(root: JsonObject) {
+  private _lintTopLevelFieldKinds(root: Mapping) {
     for (const [key, kind] of Object.entries(EDITOR_TOP_LEVEL_FIELDS)) {
       const value = root[key];
       if (isAbsentOrWellTyped(value, kind) || this._issues.some((issue) => issue.pathHint === key)) {
         continue;
       }
-      this._report(`"${key}" must be ${describeExpectedKind(kind)}, not ${describeJsonType(value)}.`, key, lineOfString(this._source, key));
+      this._report(`"${key}" must be ${describeExpectedKind(kind)}, not ${describeYamlType(value)}.`, key, lineOfString(this._source, key));
     }
   }
 
   /** Properties the editor does not own are discarded on save, so say so rather than let a typo vanish without a word. */
-  private _lintUnknownKeys(root: JsonObject) {
+  private _lintUnknownKeys(root: Mapping) {
     for (const key of Object.keys(root).filter((candidate) => !(candidate in EDITOR_TOP_LEVEL_FIELDS))) {
       this._report(
         `"${key}" is not a property the editor keeps, so it would be discarded when this definition is saved. Check the spelling.`,
@@ -113,17 +113,17 @@ export class DocumentLinter {
     }
   }
 
-  private _lintStages(root: JsonObject) {
+  private _lintStages(root: Mapping) {
     if (!Array.isArray(root.stages)) {
-      this._report('"stages" must be an array.', 'stages');
+      this._report('"stages" must be a list.', 'stages');
       return;
     }
 
     const references = referenceContextFor(root);
     const seenKeys = new Set<string>();
     root.stages.forEach((stage, index) => {
-      if (!isJsonObject(stage)) {
-        this._report(`State at index ${index} must be an object.`);
+      if (!isMapping(stage)) {
+        this._report(`State at index ${index} must be a mapping.`);
         return;
       }
       const stageKey = typeof stage.stageKey === 'string' ? stage.stageKey : '';
@@ -137,7 +137,7 @@ export class DocumentLinter {
     });
   }
 
-  private _lintStageShape(stage: JsonObject, label: string) {
+  private _lintStageShape(stage: Mapping, label: string) {
     const kind = typeof stage.stageType === 'string' ? stage.stageType : '';
     this._checkKind(kind, ALLOWED_STAGE_KINDS, `State "${label}" has unsupported stageType "${kind}".`);
     this._checkQueueKey(stage, `State "${label}" is missing "queueKey".`);
@@ -163,13 +163,13 @@ export class DocumentLinter {
     }
   }
 
-  private _checkQueueKey(node: JsonObject, missing: string) {
+  private _checkQueueKey(node: Mapping, missing: string) {
     if (isBlank(node.queueKey)) {
       this._report(missing);
     }
   }
 
-  private _lintStageComponents(stage: JsonObject, index: number, references: Omit<ReferenceLintContext, 'siblingFieldKeys'>) {
+  private _lintStageComponents(stage: Mapping, index: number, references: Omit<ReferenceLintContext, 'siblingFieldKeys'>) {
     if (this._catalog.length === 0 || stage.components === undefined) {
       return;
     }
@@ -182,16 +182,16 @@ export class DocumentLinter {
     );
   }
 
-  private _lintGateways(root: JsonObject) {
+  private _lintGateways(root: Mapping) {
     if (!Array.isArray(root.gateways)) {
-      this._report('"gateways" must be an array.', 'gateways');
+      this._report('"gateways" must be a list.', 'gateways');
       return;
     }
 
     const seenKeys = new Set<string>();
     root.gateways.forEach((gateway, index) => {
-      if (!isJsonObject(gateway)) {
-        this._report(`Gateway at index ${index} must be an object.`);
+      if (!isMapping(gateway)) {
+        this._report(`Gateway at index ${index} must be a mapping.`);
         return;
       }
       const key = typeof gateway.key === 'string' ? gateway.key : '';
@@ -204,7 +204,7 @@ export class DocumentLinter {
     });
   }
 
-  private _lintGatewayShape(gateway: JsonObject, label: string) {
+  private _lintGatewayShape(gateway: Mapping, label: string) {
     const kind = typeof gateway.gatewayType === 'string' ? gateway.gatewayType : '';
     this._checkKind(kind, ALLOWED_GATEWAY_KINDS, `Gateway "${label}" has unsupported gatewayType "${kind}".`);
     this._checkQueueKey(gateway, `Gateway "${label}" is missing "queueKey".`);

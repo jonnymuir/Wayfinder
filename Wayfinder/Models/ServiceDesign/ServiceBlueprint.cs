@@ -1,6 +1,5 @@
+using YamlDotNet.Serialization;
 using System.Globalization;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using SupportSystems = Wayfinder.Models.ServiceDesign.SupportSystems;
@@ -21,13 +20,10 @@ public partial record ServiceBlueprint
 
     public int Version { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SchemaVersion { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Guid? AuthoredServiceBlueprintId { get; init; }
 
     public string InitialStage { get; init; } = "";
@@ -47,19 +43,17 @@ public partial record ServiceBlueprint
     /// tool) call <see cref="Abstractions.IProcessManager"/>'s lower-level primitives directly and
     /// are unaffected — this flag only gates the untrusted, citizen-reachable path.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool AllowManualRestart { get; init; }
 
-    public IReadOnlyList<StageDefinition> Stages { get; init; } = Array.Empty<StageDefinition>();
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<QueueDefinition>? Queues
     {
         get => _queues;
         init => _queues = value;
     }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<StageDefinition> Stages { get; init; } = Array.Empty<StageDefinition>();
+
     public IReadOnlyList<ServiceBlueprintGatewayDefinition>? Gateways { get; init; }
 
     /// <summary>
@@ -67,13 +61,10 @@ public partial record ServiceBlueprint
     /// evaluated by <c>CalculationEvaluator</c> against instance field values plus
     /// host-supplied service inputs.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Calculations.ServiceBlueprintCalculationSet? Calculations { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<HandoffDefinition>? Handoffs { get; init; }
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, string>? Tags { get; init; }
 
     /// <summary>
@@ -83,7 +74,6 @@ public partial record ServiceBlueprint
     /// parses or branches on the prefix). The runtime never reads this — it exists
     /// so authored arrangements survive the save/load round-trip.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ServiceBlueprintLayoutDefinition? Layout { get; init; }
 
 }

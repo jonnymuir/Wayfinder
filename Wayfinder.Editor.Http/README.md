@@ -22,9 +22,12 @@ authoring surface (API, MCP, this) requires has already registered.
 The contract (matching `MockBusinessAppServiceBlueprintSource` exactly):
 
 - `GET  {prefix}` → JSON array of `{ definitionKey, displayName }`.
-- `GET  {prefix}/{key}` → the raw `ServiceBlueprint` JSON, or `404`.
-- `PUT  {prefix}/{key}` → body is a full `ServiceBlueprint`; `204` on save, `409` +
-  `ServiceBlueprintSaveOutcome` body on a version conflict, `400` otherwise.
+- `GET  {prefix}/{key}` → the `ServiceBlueprint` as YAML (`application/yaml`), or `404`.
+- `PUT  {prefix}/{key}` → body is a full `ServiceBlueprint` as YAML; `204` on save, `409` +
+  `ServiceBlueprintSaveOutcome` body on a version conflict, `400` otherwise (including YAML that
+  can't be read, reported as an `INVALID_YAML` diagnostic with its line).
+- `POST {prefix}/validate` → body is a full `ServiceBlueprint` as YAML; returns the
+  `ServiceBlueprintValidationOutcome` as JSON.
 
 ## Why a separate package from `Wayfinder.Editor`
 

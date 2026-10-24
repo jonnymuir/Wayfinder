@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Wayfinder.Engine.Services;
 using Wayfinder.Engine.Stores;
@@ -18,68 +17,68 @@ public class ProcessManagerEngineValidationTests
     private const string TenantId = "tenant";
     private const string UserId = "user";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
 
-    private const string BlueprintJson = """
-        {
-          "definitionKey": "validation-test",
-          "displayName": "Validation Test",
-          "version": 1,
-          "initialStage": "start",
-          "requestPolicy": "single",
-          "queues": [
-            { "key": "citizen", "displayName": "Applicant", "actor": "citizen" }
-          ],
-          "stages": [
-            {
-              "stageKey": "start",
-              "displayName": "Start",
-              "queueKey": "citizen",
-              "components": [
-                {
-                  "type": "fieldset",
-                  "legend": "Details",
-                  "children": [
-                    { "type": "text", "fieldKey": "name", "label": "Name", "required": true, "maxLength": 10 },
-                    { "type": "radio", "fieldKey": "colour", "label": "Colour", "required": true, "options": ["red", "blue"] },
-                    { "type": "number", "fieldKey": "amount", "label": "Amount", "required": true, "min": 1, "max": 100 }
-                  ]
-                }
-              ],
-              "routes": [
-                { "id": "start--continue", "target": "to-done", "trigger": "continue", "label": "Continue" }
-              ]
-            },
-            {
-              "stageKey": "done",
-              "displayName": "Done",
-              "queueKey": "citizen",
-              "components": [
-                { "type": "panel", "heading": "Done" }
-              ]
-            }
-          ],
-          "gateways": [
-            {
-              "key": "to-done",
-              "displayName": "To done",
-              "gatewayType": "Split",
-              "queueKey": "citizen",
-              "routes": [
-                { "id": "to-done--continue", "target": "done", "trigger": "continue" }
-              ]
-            }
-          ]
-        }
+    private const string BlueprintYaml = """
+        definitionKey: validation-test
+        displayName: Validation Test
+        version: 1
+        initialStage: start
+        requestPolicy: single
+        queues:
+          - key: citizen
+            displayName: Applicant
+            actor: citizen
+        stages:
+          - stageKey: start
+            displayName: Start
+            queueKey: citizen
+            components:
+              - type: fieldset
+                legend: Details
+                children:
+                  - type: text
+                    fieldKey: name
+                    label: Name
+                    required: true
+                    maxLength: 10
+                  - type: radio
+                    fieldKey: colour
+                    label: Colour
+                    required: true
+                    options:
+                      - red
+                      - blue
+                  - type: number
+                    fieldKey: amount
+                    label: Amount
+                    required: true
+                    min: 1
+                    max: 100
+            routes:
+              - id: start--continue
+                target: to-done
+                trigger: continue
+                label: Continue
+          - stageKey: done
+            displayName: Done
+            queueKey: citizen
+            components:
+              - type: panel
+                heading: Done
+        gateways:
+          - key: to-done
+            displayName: To done
+            gatewayType: Split
+            queueKey: citizen
+            routes:
+              - id: to-done--continue
+                target: done
+                trigger: continue
         """;
 
     private static (ProcessManagerEngine Engine, string InstanceId, int StateVersion) StartInstance()
     {
-        var definition = JsonSerializer.Deserialize<ServiceBlueprint>(BlueprintJson, JsonOptions)!;
+        var definition = ServiceBlueprintYaml.Deserialize(BlueprintYaml);
         var engine = new ProcessManagerEngine(
             NullLogger.Instance,
             new SingleDefinitionServiceBlueprintStore(definition),

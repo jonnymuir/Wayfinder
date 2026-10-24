@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Engine.Abstractions;
@@ -8,8 +6,8 @@ namespace Wayfinder.Engine.Stores;
 
 /// <summary>
 /// File-backed, dependency-light implementation of <see cref="IServiceBlueprintSourceStore"/> — one
-/// <c>{definitionKey}.json</c> file per blueprint under <paramref name="basePath"/>. Reads with
-/// plain <see cref="System.Text.Json"/> only (no editor/projector dependency), so it's usable
+/// <c>{definitionKey}.yaml</c> file per blueprint under <paramref name="basePath"/>, read and
+/// written with <see cref="ServiceBlueprintYaml"/> (no editor/projector dependency), so it's usable
 /// by any standalone host — e.g. the MCP server, which runs as its own process and can't share
 /// a running app's in-memory engine.
 /// </summary>
@@ -36,7 +34,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
                 $"Invalid blueprint definition key '{definitionKey}'. A key must be a slug of letters, digits, '-' and '_'.");
         }
 
-        var combined = Path.Combine(basePath, definitionKey + ".json");
+        var combined = Path.Combine(basePath, definitionKey + ".yaml");
         var resolved = Path.GetFullPath(combined);
         var baseFull = Path.GetFullPath(basePath);
         if (!resolved.StartsWith(baseFull + Path.DirectorySeparatorChar, StringComparison.Ordinal)
@@ -54,18 +52,10 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
             return Array.Empty<ServiceBlueprintSourceSummary>();
 
         var summaries = new List<ServiceBlueprintSourceSummary>();
-        foreach (var path in Directory.EnumerateFiles(basePath, "*.json"))
+        foreach (var path in Directory.EnumerateFiles(basePath, "*.yaml"))
         {
-            // Deserialize from a fully-read string, not DeserializeAsync(stream, ...) — System.Text.Json's
-            // streaming reader can fail to resolve Component's [JsonDerivedType] polymorphism on
-            // some buffer boundaries. The sync string overload (used throughout the rest of the codebase,
-            // e.g. FilesystemServiceBlueprintStore) doesn't have this issue.
-            var json = await File.ReadAllTextAsync(path, ct);
-            var blueprint = JsonSerializer.Deserialize<ServiceBlueprint>(json, ServiceBlueprintJson.ReadOptions);
-            if (blueprint is not null)
-            {
-                summaries.Add(new ServiceBlueprintSourceSummary(blueprint.DefinitionKey, blueprint.DisplayName));
-            }
+            var blueprint = ServiceBlueprintYaml.Deserialize(await File.ReadAllTextAsync(path, ct));
+            summaries.Add(new ServiceBlueprintSourceSummary(blueprint.DefinitionKey, blueprint.DisplayName));
         }
 
         return summaries
@@ -79,8 +69,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
         if (!File.Exists(path))
             return null;
 
-        var json = await File.ReadAllTextAsync(path, ct);
-        return JsonSerializer.Deserialize<ServiceBlueprint>(json, ServiceBlueprintJson.ReadOptions);
+        return ServiceBlueprintYaml.Deserialize(await File.ReadAllTextAsync(path, ct));
     }
 
     public async Task<ServiceBlueprintSaveResult> SaveAsync(ServiceBlueprint blueprint, int expectedVersion, CancellationToken ct = default)
@@ -101,8 +90,7 @@ public sealed class FilesystemServiceBlueprintSourceStore(string basePath) : ISe
             var toSave = blueprint with { Version = newVersion };
 
             var path = ResolveSafePath(blueprint.DefinitionKey);
-            await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
-            await JsonSerializer.SerializeAsync(stream, toSave, ServiceBlueprintJson.WriteOptions, ct);
+            await File.WriteAllTextAsync(path, ServiceBlueprintYaml.Serialize(toSave), ct);
             return new ServiceBlueprintSaveResult(Saved: true, CurrentVersion: newVersion, Location: path);
         }
         finally

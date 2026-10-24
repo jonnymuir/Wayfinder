@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Wayfinder.Extensions;
 using Wayfinder.Models.ServiceDesign.Components;
 using SupportSystems = Wayfinder.Models.ServiceDesign.SupportSystems;
@@ -14,7 +12,6 @@ namespace Wayfinder.Models.ServiceDesign;
 /// </summary>
 public record ServiceBlueprintLayoutDefinition
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, NodePosition>? Nodes { get; init; }
 
     /// <summary>
@@ -22,6 +19,5 @@ public record ServiceBlueprintLayoutDefinition
     /// edge key the canvas uses for its graph edges. Only set once an author
     /// drags a route; absent routes fall back to the auto-computed path.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyDictionary<string, NodePosition>? Routes { get; init; }
 }

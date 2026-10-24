@@ -9,7 +9,7 @@ Aspire plumbing) is a small ASP.NET Core app in this repo that demonstrates ever
 `Wayfinder.Rendering.GovUk`, `Wayfinder.Editor`, running together, with real GOV.UK Design
 System rendering and a real (if intentionally minimal) auth boundary. See
 [Package Architecture](#package-architecture) below for what each of these owns and why. It is
-**completely transient**: seeded from a JSON
+**completely transient**: seeded from a YAML
 file on disk, everything else in memory, nothing survives a restart. That's deliberate, this
 host exists to be booted and reset constantly by Playwright (`DELETE /api/test/reset`), not to
 be a real content store. See ["Service blueprint definitions: seed vs. save"](#service-blueprint-definitions-seed-vs-save)
@@ -64,7 +64,7 @@ see the file paths below.)
 
 | Extension point | This reference app | Wayfinder.Umbraco |
 |---|---|---|
-| `IServiceBlueprintStore` (boot-time definition load) | `FilesystemServiceBlueprintStore` reading `service-blueprints/*.json`, a type `Wayfinder.Engine` already ships, not custom code | `UmbracoServiceBlueprintBootStore`, reads the `wayfinderServiceBlueprint` DB table at boot |
+| `IServiceBlueprintStore` (boot-time definition load) | `FilesystemServiceBlueprintStore` reading `service-blueprints/*.yaml`, a type `Wayfinder.Engine` already ships, not custom code | `UmbracoServiceBlueprintBootStore`, reads the `wayfinderServiceBlueprint` DB table at boot |
 | `IServiceBlueprintSourceStore` (authoring saves, editor/REST/MCP) | `InMemoryRuntimeServiceBlueprintSourceStore`, a `Dictionary`, lost on restart | `UmbracoServiceBlueprintStore`, same DB table, atomic optimistic-concurrency `UPDATE ... WHERE Version = @expected`, **plus** `ServiceBlueprintHandler` (a real uSync `SyncHandlerRoot`) giving every definition export/import portability across environments, the same as any other uSync-tracked Umbraco content |
 | `IServiceRequestStore` (running instance state) | Nothing registered, `ProcessManagerEngine`'s own default, `InMemoryServiceRequestStore`, applies | `UmbracoServiceRequestStore`, the `wayfinderServiceRequest` DB table, durable across an app-pool recycle; sliding expiry for an anonymous visitor, permanent for a signed-in member |
 | `IQueueCapabilitiesProvider` | `StaticQueueCapabilitiesProvider` declaring exactly what `citizen`/`caseworker` render (`Services/ReferenceActors.cs`) | Same pattern, declares whatever a host's own rendering surface actually supports |
@@ -98,7 +98,7 @@ package or an identity model to lean on the way an Umbraco host does; it's demon
 This is the one distinction worth being precise about, because it's easy to assume "the editor
 saved it" means "it's on disk now."
 
-**At boot**, `FilesystemServiceBlueprintStore.LoadDefinitions()` reads every `*.json` file in
+**At boot**, `FilesystemServiceBlueprintStore.LoadDefinitions()` reads every `*.yaml` file in
 `service-blueprints/` once, keyed by each file's own `definitionKey` (not the filename):
 
 ```csharp
@@ -107,7 +107,7 @@ builder.Services.AddSingleton<IServiceBlueprintStore>(
 ```
 
 That's the entire seed mechanism, no custom code, just the store `Wayfinder.Engine` already
-ships. `service-blueprints/juggling-licence.json` is real output from this app's own authoring
+ships. `service-blueprints/juggling-licence.yaml` is real output from this app's own authoring
 API (`GET /wayfinder/service-blueprint-authoring/blueprints/juggling-licence`), captured once
 and committed, not hand-written.
 
@@ -120,15 +120,15 @@ Proven, not just asserted, this is exactly reproducible against a running instan
 
 ```bash
 # 1. Note the seed file's checksum
-md5 Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json
+md5 Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml
 
 # 2. Change something and save it through the real authoring API
 curl -X PUT http://localhost:<port>/wayfinder/service-blueprint-authoring/blueprints/juggling-licence \
-  -H "Content-Type: application/json" --data @modified.json
+  -H "Content-Type: application/yaml" --data-binary @modified.yaml
 # -> {"status":"Saved","newVersion":2,...}
 
 # 3. The file on disk is byte-identical — unchanged
-md5 Wayfinder.ReferenceApp/service-blueprints/juggling-licence.json
+md5 Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml
 
 # 4. But the running app now serves the change immediately
 curl http://localhost:<port>/wayfinder/service-blueprint-authoring/blueprints/juggling-licence
@@ -151,9 +151,9 @@ compare-and-swap:
 ```csharp
 // Wayfinder.Umbraco/Services/UmbracoServiceBlueprintStore.cs
 var rowsAffected = db.Execute(
-    "UPDATE wayfinderServiceBlueprint SET DisplayName = @0, Json = @1, Version = @2, UpdatedUtc = @3 " +
+    "UPDATE wayfinderServiceBlueprint SET DisplayName = @0, Yaml = @1, Version = @2, UpdatedUtc = @3 " +
     "WHERE DefinitionKey = @4 AND Version = @5",
-    blueprint.DisplayName, json, newVersion, DateTime.UtcNow, blueprint.DefinitionKey, expectedVersion);
+    blueprint.DisplayName, yaml, newVersion, DateTime.UtcNow, blueprint.DefinitionKey, expectedVersion);
 ```
 
 On top of that, `Wayfinder.Umbraco/SyncHandlers/ServiceBlueprintHandler.cs` registers a real
@@ -168,8 +168,8 @@ node would be. `Wayfinder` itself has no opinion about this at all, it's a capab
 
 - `Wayfinder.AppHost/Program.cs`, the Aspire orchestrator (one resource, no containers)
 - `Wayfinder.ReferenceApp/Program.cs`, all the wiring described above, plus the routes
-- `Wayfinder.ReferenceApp/service-blueprints/`, the seeds (`juggling-licence.json`, and
-  `juggling-insurance-modeller.json` for the slider/stat-group/chart-driven premium modeller demo
+- `Wayfinder.ReferenceApp/service-blueprints/`, the seeds (`juggling-licence.yaml`, and
+  `juggling-insurance-modeller.yaml` for the slider/stat-group/chart-driven premium modeller demo
   at `/premium`, see [Package Architecture](#package-architecture) for what renders that)
 - `Wayfinder.ReferenceApp/Services/`, every custom implementation in the table above
 - `Wayfinder.ReferenceApp/Services/SupportSystems/`, `SafetyNetUnderwritingClient`
@@ -307,9 +307,9 @@ Prism's own `fields[key]` form-naming convention to this package's `field:{key}`
 (`GovUk.FieldName`). As with the calculation engine, Umbraco.Prism has since deleted its copy.
 
 `/premium`'s own "Recalculate" button, a plain, fully declarative self-loop gateway
-(`money-modeller.json`'s own documented pattern, see
+(`money-modeller.yaml`'s own documented pattern, see
 [calculation-language.md](./calculation-language.md)) that any blueprint can still declare
-without any client-side runtime at all, is gone from `juggling-insurance-modeller.json` now
+without any client-side runtime at all, is gone from `juggling-insurance-modeller.yaml` now
 that `wayfinder-live-form.js` makes it redundant for this specific demo: every input change
 recalculates instantly, client-side, with zero network requests (see
 `insurance-modeller.spec.ts`'s own "genuinely local" test, which asserts exactly that).

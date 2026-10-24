@@ -1,3 +1,6 @@
+import { type Document, isAlias, isNode, LineCounter, type Node, parseDocument, stringify, visit } from 'yaml';
+import { hydrateServiceBlueprintDefinition } from './blueprint-hydration.js';
+import { type YamlShape, yamlDiscriminators, yamlShapes } from './generated/wayfinder-model.js';
 import type {
   NodePosition,
   ServiceBlueprintGatewayDefinition,
@@ -13,16 +16,17 @@ import type {
 type Serialised<T> = { [K in keyof T]-?: unknown };
 
 /**
- * Stable, deterministic JSON serialization for the flattened serviceBlueprint definition
- * used by the Definition tab.
+ * A blueprint as YAML text, the way the Definition tab, the clipboard and a host's routes carry it.
+ * Writing is canonical (the same blueprint always gives the same text) and keys come in the order the
+ * server's ServiceBlueprintYaml writes them (`yamlShapes`, generated from the C# model). Reading
+ * refuses anchors and aliases, as the server does.
  */
 export type TopLevelFieldKind = 'string' | 'number' | 'boolean' | 'array' | 'object';
 
 /**
  * Every top-level property the editor owns: it is read from a pasted/typed definition, kept
- * through hydrate, and written back by the serialiser, in this order. This is the one place a new
- * top-level field is declared; the lint's type checks, the Definition-tab coerce and the canonical
- * key order all derive from it, and service-blueprint-top-level-fields.test.ts fails if a field here
+ * through hydrate, and written back by the serialiser. This is the one place a new top-level field
+ * is declared; the lint's type checks and the Definition-tab coerce derive from it, and service-blueprint-top-level-fields.test.ts fails if a field here
  * is dropped anywhere along that path, or if the C# ServiceBlueprint gains a property nobody
  * has decided about.
  */
@@ -55,8 +59,6 @@ export function matchesTopLevelFieldKind(value: unknown, kind: TopLevelFieldKind
       return typeof value === kind;
   }
 }
-
-const TOP_LEVEL_KEY_ORDER: readonly string[] = Object.keys(EDITOR_TOP_LEVEL_FIELDS);
 
 function serialisableRoute(route: ServiceBlueprintRouteDefinition): Serialised<ServiceBlueprintRouteDefinition> {
   return {
@@ -170,68 +172,59 @@ function serialisableLayout(
   return nodes || routes ? { nodes, routes } : undefined;
 }
 
-function orderTopLevel(value: Record<string, unknown>): Record<string, unknown> {
-  const ordered: Record<string, unknown> = {};
-  for (const key of TOP_LEVEL_KEY_ORDER) {
-    if (key in value && value[key] !== undefined) {
-      ordered[key] = value[key];
-    }
-  }
-  for (const key of Object.keys(value).sort()) {
-    if (!(key in ordered) && value[key] !== undefined) {
-      ordered[key] = value[key];
-    }
-  }
-  return ordered;
+/** The shape a record is written with: its own type's, or that of the concrete type its discriminator names. */
+function shapeOf(record: Record<string, unknown>, typeName: string | undefined): YamlShape | undefined {
+  const discriminator = typeName ? yamlDiscriminators[typeName] : undefined;
+  const concrete = discriminator ? discriminator.types[String(record[discriminator.property])] : typeName;
+  return concrete ? yamlShapes[concrete] : undefined;
 }
 
-function sortKeys(value: unknown): unknown {
+function keysInOrder(record: Record<string, unknown>, shape: YamlShape | undefined): string[] {
+  return shape ? [...shape.keys, ...Object.keys(record).filter((key) => !shape.keys.includes(key))] : Object.keys(record);
+}
+
+function orderedEntry(item: unknown, shape: YamlShape | undefined, key: string): unknown {
+  const mapOf = shape?.maps[key];
+  if (!mapOf) {
+    return ordered(item, shape?.nested[key]);
+  }
+  return Object.fromEntries(Object.entries(item as Record<string, unknown>).map(([entry, inner]) => [entry, ordered(inner, mapOf)]));
+}
+
+function orderedRecord(record: Record<string, unknown>, typeName: string | undefined): Record<string, unknown> {
+  const shape = shapeOf(record, typeName);
+  const result: Record<string, unknown> = {};
+  for (const key of keysInOrder(record, shape)) {
+    if (record[key] !== undefined && record[key] !== null) {
+      result[key] = orderedEntry(record[key], shape, key);
+    }
+  }
+  return result;
+}
+
+/** Keys in the order `typeName` is written in, nested values ordered by their own types; nulls left out. */
+function ordered(value: unknown, typeName: string | undefined): unknown {
   if (Array.isArray(value)) {
-    return value.map(sortKeys);
+    return value.map((item) => ordered(item, typeName));
   }
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    const sorted: Record<string, unknown> = {};
-    // PrismComponent (Wayfinder.Models.ServiceDesign.Components) is a polymorphic type discriminated by "type".
-    // System.Text.Json's built-in polymorphic deserialization requires that discriminator
-    // to be the first property in the JSON object, so it must survive alphabetical sorting.
-    if (record.type !== undefined) {
-      sorted.type = sortKeys(record.type);
-    }
-    for (const key of Object.keys(record).sort()) {
-      if (key === 'type') {
-        continue;
-      }
-      if (record[key] !== undefined) {
-        sorted[key] = sortKeys(record[key]);
-      }
-    }
-    return sorted;
-  }
-  return value;
+  return value && typeof value === 'object' ? orderedRecord(value as Record<string, unknown>, typeName) : value;
+}
+
+/** Writes YAML the way ServiceBlueprintYaml does: two-space indents, indented lists, multi-line text as `|` blocks, no anchors. */
+export function stringifyYaml(value: unknown): string {
+  return stringify(value, { indent: 2, indentSeq: true, lineWidth: 0, blockQuote: 'literal', aliasDuplicateObjects: false });
 }
 
 export function serializeAuthoredServiceBlueprint(serviceBlueprint: ServiceBlueprint): string {
-  const top = orderTopLevel(serialisableServiceBlueprint(serviceBlueprint));
-  const canonical: Record<string, unknown> = {};
-  for (const key of Object.keys(top)) {
-    // `calculations` is deliberately NOT run through sortKeys. calculations.fields' own key
-    // order IS the declaration/evaluation order (docs/guides/calculation-language.md: "Fields
-    // are evaluated once, in declaration order" — a forward reference is a hard error) —
-    // calculation-ordering.ts computes and preserves that order deliberately when the
-    // Calculations tab authors it. Alphabetising it here would silently reorder any blueprint
-    // whose fields rely on evaluation order, which is effectively all of them — found live: a
-    // save through this exact path turned a working calculation set into one where nearly
-    // every field errored with "Unknown name", since the field it depended on now sorted after
-    // it. tables/series don't strictly require this, but are left untouched for the same
-    // reason: this key isn't a "make it comparable" concern the way stage/gateway shape is —
-    // it's real, order-sensitive content the author (human or the ordering algorithm) controls.
-    canonical[key] = key === 'calculations' ? top[key] : sortKeys(top[key]);
-  }
-  return JSON.stringify(canonical, null, 2);
+  return stringifyYaml(ordered(serialisableServiceBlueprint(serviceBlueprint), 'ServiceBlueprint'));
 }
 
-export function authoredServiceBlueprintJsonEquals(left: ServiceBlueprint | null, right: ServiceBlueprint | null): boolean {
+/** Writes any part of a blueprint (a stage, a gateway, a component) as YAML, in its type's key order. */
+export function serializeBlueprintPart(value: unknown, typeName: string): string {
+  return stringifyYaml(ordered(value, typeName));
+}
+
+export function authoredServiceBlueprintEquals(left: ServiceBlueprint | null, right: ServiceBlueprint | null): boolean {
   if (!left && !right) {
     return true;
   }
@@ -239,4 +232,49 @@ export function authoredServiceBlueprintJsonEquals(left: ServiceBlueprint | null
     return false;
   }
   return serializeAuthoredServiceBlueprint(left) === serializeAuthoredServiceBlueprint(right);
+}
+
+const isAnchorOrAlias = (node: unknown): boolean => isAlias(node) || Boolean(isNode(node) && node.anchor);
+
+/** The line of the first anchor (`&`) or alias (`*`) in a document, if it has one. */
+function firstAnchorOrAlias(document: Document, lineCounter: LineCounter): number | undefined {
+  let line: number | undefined;
+  visit(document, (_key, node) => {
+    if (!isAnchorOrAlias(node)) {
+      return undefined;
+    }
+    line = lineCounter.linePos((node as Node).range?.[0] ?? 0).line;
+    return visit.BREAK;
+  });
+  return line;
+}
+
+export type ParsedYaml = { ok: true; value: unknown } | { ok: false; message: string; line: number };
+
+/**
+ * Reads YAML text (a whole blueprint or a part of one). A syntax error, a duplicate key, or an
+ * anchor or alias (`&`, `*`, which the server refuses because they let a small document expand
+ * without bound) is reported with its 1-based line.
+ */
+export function parseYaml(text: string): ParsedYaml {
+  const lineCounter = new LineCounter();
+  const document = parseDocument(text, { lineCounter, uniqueKeys: true, prettyErrors: false });
+  const [error] = document.errors;
+  if (error) {
+    return { ok: false, message: error.message.split('\n')[0], line: lineCounter.linePos(error.pos[0]).line };
+  }
+  const aliasAt = firstAnchorOrAlias(document, lineCounter);
+  if (aliasAt !== undefined) {
+    return { ok: false, message: 'Anchors and aliases (& and *) are not allowed in a service blueprint.', line: aliasAt };
+  }
+  return { ok: true, value: document.toJS() };
+}
+
+/** Reads a whole blueprint a host sent as YAML, ready for the editor. Throws, naming the line, if the text cannot be read. */
+export function parseServiceBlueprintYaml(text: string): ServiceBlueprint {
+  const parsed = parseYaml(text);
+  if (!parsed.ok) {
+    throw new Error(`The service blueprint's YAML could not be read (line ${parsed.line}): ${parsed.message}`);
+  }
+  return hydrateServiceBlueprintDefinition(parsed.value as ServiceBlueprint);
 }
