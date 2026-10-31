@@ -215,6 +215,7 @@ gateways:
     gatewayType: Join
     queueKey: njf-team
     waitingContent: SafetyNet Underwriting is processing the contributions file. We'll update this page once it's done.
+    waitingPace: WhileTheyWait
     waitingExpectedSeconds: 15
     waitingPollIntervalMs: 3000
     routes:

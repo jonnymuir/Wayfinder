@@ -95,7 +95,7 @@ internal sealed partial class InstanceAdvancer(
         // a normal forward Advance would move — so the jump actually takes.
         var updatedCursors = instance.Cursors.Count == 0
             ? instance.Cursors
-            : GatewayAdvancer.MoveCursor(
+            : CursorMoves.MoveCursor(
                 instance.Cursors,
                 instance.Cursors.FirstOrDefault(c => !c.IsAtGateway && c.QueueKey == GetQueueKey(targetStage))?.CursorId,
                 targetStageKey,
@@ -261,7 +261,7 @@ internal sealed partial class InstanceAdvancer(
 
         var sourceCursor = instance.Cursors.FirstOrDefault(c => c.CurrentNodeKey == fromStageKey && !c.IsAtGateway);
         var targetStage = definition.Stages.FirstOrDefault(s => s.StageKey == transition.ToState);
-        var updatedCursors = GatewayAdvancer.MoveCursor(
+        var updatedCursors = CursorMoves.MoveCursor(
             instance.Cursors, sourceCursor?.CursorId, transition.ToState, isAtGateway: false,
             newQueueKey: GetQueueKey(targetStage));
         var primaryStage = GatewayAdvancer.FirstActiveStageCursorKey(updatedCursors) ?? transition.ToState;

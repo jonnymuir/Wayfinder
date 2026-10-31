@@ -45,9 +45,7 @@ internal sealed partial class GatewayAdvancer(
 
         if (outgoing.Count == 0)
         {
-            return Envelopes.Error(
-                $"Split gateway '{splitGateway.Key}' has no outgoing transitions.",
-                "GATEWAY_NO_OUTGOING");
+            return Envelopes.Error($"Split gateway '{splitGateway.Key}' has no outgoing transitions.", "GATEWAY_NO_OUTGOING");
         }
 
         // Identify the cursor being advanced (if we are already in multi-cursor mode).
@@ -77,7 +75,8 @@ internal sealed partial class GatewayAdvancer(
                 QueueKey = targetQueueKey ?? string.Empty,
                 CurrentNodeKey = t.ToState,
                 IsAtGateway = targetGateway != null,
-                ArrivedViaAction = targetGateway != null ? t.Action : null
+                ArrivedViaAction = targetGateway != null ? t.Action : null,
+                ArrivedAt = DateTimeOffset.UtcNow
             };
         }).ToList();
 
@@ -193,8 +192,8 @@ internal sealed partial class GatewayAdvancer(
 
         // Move the arriving cursor to the join gateway.
         var cursorsAfterArrival = instance.Cursors.Count > 0
-            ? MoveCursor(instance.Cursors, arrivingCursor?.CursorId, gatewayKey, isAtGateway: true, arrivedViaAction: arrivingTransition.Action)
-            : [new RequestCursor { CursorId = arrivingCursorId, QueueKey = arrivingQueueKey, CurrentNodeKey = gatewayKey, IsAtGateway = true, ArrivedViaAction = arrivingTransition.Action }];
+            ? CursorMoves.MoveCursor(instance.Cursors, arrivingCursor?.CursorId, gatewayKey, isAtGateway: true, arrivedViaAction: arrivingTransition.Action)
+            : [new RequestCursor { CursorId = arrivingCursorId, QueueKey = arrivingQueueKey, CurrentNodeKey = gatewayKey, IsAtGateway = true, ArrivedViaAction = arrivingTransition.Action, ArrivedAt = DateTimeOffset.UtcNow }];
 
         var updatedArrivals = new Dictionary<string, IReadOnlyList<string>>(instance.JoinArrivals)
         {
@@ -277,9 +276,7 @@ internal sealed partial class GatewayAdvancer(
 
         if (outgoing.Count == 0)
         {
-            return Envelopes.Error(
-                $"Join gateway '{gatewayKey}' has no outgoing transitions.",
-                "GATEWAY_NO_OUTGOING");
+            return Envelopes.Error($"Join gateway '{gatewayKey}' has no outgoing transitions.", "GATEWAY_NO_OUTGOING");
         }
 
         // A join with a single outgoing route always fires it — unchanged from before this
@@ -333,7 +330,8 @@ internal sealed partial class GatewayAdvancer(
                            ?? string.Empty,
                 CurrentNodeKey = transition.ToState,
                 IsAtGateway = targetGateway != null,
-                ArrivedViaAction = targetGateway != null ? transition.Action : null
+                ArrivedViaAction = targetGateway != null ? transition.Action : null,
+                ArrivedAt = DateTimeOffset.UtcNow
             };
         }).ToList();
 
@@ -368,30 +366,6 @@ internal sealed partial class GatewayAdvancer(
             fromStageKey: gatewayKey, toStageKey: selectedOutgoing[0].ToState, action: selectedOutgoing[0].Action,
             detail: "join released"));
         return envelopes.BuildAfterMove(releasedInstance, definition, accessProfile, userId);
-    }
-
-    public static IReadOnlyList<RequestCursor> MoveCursor(
-        IReadOnlyList<RequestCursor> cursors,
-        string? cursorId,
-        string newNodeKey,
-        bool isAtGateway,
-        string? arrivedViaAction = null,
-        string? newQueueKey = null)
-    {
-        if (cursorId == null)
-            return cursors;
-        return cursors
-            .Select(c => c.CursorId == cursorId
-                ? c with
-                {
-                    CurrentNodeKey = newNodeKey,
-                    IsAtGateway = isAtGateway,
-                    ArrivedViaAction = isAtGateway ? arrivedViaAction : null,
-                    QueueKey = newQueueKey ?? c.QueueKey,
-                    AssignedTo = newQueueKey is null || newQueueKey == c.QueueKey ? c.AssignedTo : null
-                }
-                : c)
-            .ToArray();
     }
 
     public static string? FirstActiveStageCursorKey(IReadOnlyList<RequestCursor> cursors) =>

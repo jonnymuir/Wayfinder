@@ -121,7 +121,7 @@ gateways:
     gatewayType: Join
     queueKey: web-user
     waitingContent: We're waiting for the payments team to confirm receipt of your payment.
-    waitingExpectedSeconds: 60
+    waitingPace: Later
     waitingPollIntervalMs: 5000
     waitingAllowDefer: true
     waitingDeferMessage: You can leave this page and return later. We'll update this payment as soon as the confirmation arrives.

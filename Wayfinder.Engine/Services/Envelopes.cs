@@ -70,8 +70,10 @@ internal static class Envelopes
     {
         var waitingContent = joinGateway.WaitingContent
                              ?? "Please wait while other parts of this blueprint are completed.";
-        var pollMs = joinGateway.WaitingPollIntervalMs > 0 ? joinGateway.WaitingPollIntervalMs : 3000;
-        var expectedSeconds = joinGateway.WaitingExpectedSeconds > 0 ? joinGateway.WaitingExpectedSeconds : 30;
+        var pollMs = joinGateway.WaitingPollIntervalMs > 0 ? joinGateway.WaitingPollIntervalMs : DefaultPollMs(joinGateway.WaitingPace);
+        int? expectedSeconds = joinGateway.WaitingPace == WaitingPace.WhileTheyWait
+            ? joinGateway.WaitingExpectedSeconds > 0 ? joinGateway.WaitingExpectedSeconds : 60
+            : null;
         var allowDefer = joinGateway.WaitingDeferMessage is not null || joinGateway.WaitingAllowDefer;
 
         var waitingFor = PendingQueueNames(instance, definition, joinGateway);
@@ -87,6 +89,9 @@ internal static class Envelopes
                     Type = "waiting",
                     Content = waitingContent,
                     WaitingFor = waitingFor,
+                    WaitingPace = joinGateway.WaitingPace,
+                    WaitingIcon = joinGateway.WaitingIcon,
+                    WaitedSeconds = WaitedSeconds(instance, joinGateway),
                     ExpectedWaitSeconds = expectedSeconds,
                     PollIntervalMs = pollMs,
                     AllowDefer = allowDefer,
@@ -108,6 +113,19 @@ internal static class Envelopes
             RequestPolicy = definition.RequestPolicy,
             AllowManualRestart = definition.AllowManualRestart
         };
+    }
+
+    /// <summary>A "later" answer can take days, so checking every few seconds would only cost requests.</summary>
+    private static int DefaultPollMs(WaitingPace? pace) => pace == WaitingPace.Later ? 30_000 : 3_000;
+
+    /// <summary>How long since the first cursor arrived at this join, or null when no arrival time was kept.</summary>
+    private static int? WaitedSeconds(ServiceRequest instance, ServiceBlueprintGatewayDefinition joinGateway)
+    {
+        var arrived = instance.Cursors
+            .Where(c => c.IsAtGateway && string.Equals(c.CurrentNodeKey, joinGateway.Key, StringComparison.Ordinal))
+            .Select(c => c.ArrivedAt)
+            .Min();
+        return arrived is { } at ? (int)Math.Max(0, (DateTimeOffset.UtcNow - at).TotalSeconds) : null;
     }
 
     /// <summary>The display names of the queues this join is still waiting on (never their internal keys, which a

@@ -344,7 +344,7 @@ gateways:
     gatewayType: Join
     queueKey: citizen
     waitingContent: A caseworker is reviewing your application. We'll update this page once a decision is made.
-    waitingExpectedSeconds: 120
+    waitingPace: Later
     waitingPollIntervalMs: 5000
     routes:
       - id: post-review--approve--approved
@@ -372,7 +372,7 @@ gateways:
     gatewayType: Join
     queueKey: caseworker
     waitingContent: SafetyNet Underwriting is reviewing the risk assessment. We'll update this page once a decision is made.
-    waitingExpectedSeconds: 120
+    waitingPace: Later
     waitingPollIntervalMs: 5000
     routes:
       - id: insurer-check-complete--approved--caseworker-decision

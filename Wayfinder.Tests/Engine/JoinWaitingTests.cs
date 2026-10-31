@@ -94,9 +94,12 @@ public class JoinWaitingTests
               - team-internal-key
         """;
 
-    private static ComponentRenderPayload WaitingAfterSending()
+    private static ComponentRenderPayload WaitingAfterSending(string? paceLines = null)
     {
-        var definition = ServiceBlueprintYaml.Deserialize(Blueprint);
+        var yaml = paceLines is null
+            ? Blueprint
+            : Blueprint.Replace("    waitingContent: We'll email you when we reply.\n", $"    waitingContent: We'll email you when we reply.\n{paceLines}\n", StringComparison.Ordinal);
+        var definition = ServiceBlueprintYaml.Deserialize(yaml);
         var engine = new ProcessManagerEngine(NullLogger.Instance, new SingleDefinitionServiceBlueprintStore(definition),
             new PassthroughContentSanitizer(), instanceStore: new InMemoryServiceRequestStore());
         var started = engine.GetCurrent("contact", TenantId, Visitor, VisitorProfile);
@@ -119,5 +122,43 @@ public class JoinWaitingTests
 
         waiting.WaitingFor.Should().Equal("The Exchange");
         JsonSerializer.Serialize(waiting).Should().NotContain("team-internal-key");
+    }
+
+    [Fact]
+    public void AnAnswerThatComesBackWhileTheyWait_SaysHowLongItUsuallyTakes_AndChecksOften()
+    {
+        var waiting = WaitingAfterSending("    waitingPace: WhileTheyWait\n    waitingExpectedSeconds: 45\n    waitingIcon: Hedgehog");
+
+        waiting.WaitingPace.Should().Be(WaitingPace.WhileTheyWait);
+        waiting.ExpectedWaitSeconds.Should().Be(45);
+        waiting.PollIntervalMs.Should().Be(3000);
+        waiting.WaitingIcon.Should().Be(WaitingIcon.Hedgehog);
+    }
+
+    [Fact]
+    public void AnAnswerThatComesBackWhileTheyWait_WithNoTimeGiven_UsuallyTakesAboutAMinute()
+    {
+        WaitingAfterSending("    waitingPace: WhileTheyWait").ExpectedWaitSeconds.Should().Be(60);
+    }
+
+    [Fact]
+    public void AnAnswerThatComesBackLater_MakesNoTimeClaim_AndChecksRarely()
+    {
+        var waiting = WaitingAfterSending("    waitingPace: Later\n    waitingExpectedSeconds: 120");
+
+        waiting.ExpectedWaitSeconds.Should().BeNull();
+        waiting.PollIntervalMs.Should().Be(30_000);
+    }
+
+    [Fact]
+    public void AWaitWithNoPace_MakesNoTimeClaim()
+    {
+        WaitingAfterSending().ExpectedWaitSeconds.Should().BeNull();
+    }
+
+    [Fact]
+    public void TheWaitScreen_KnowsHowLongThePersonHasBeenWaiting()
+    {
+        WaitingAfterSending().WaitedSeconds.Should().BeInRange(0, 5);
     }
 }

@@ -70,8 +70,8 @@ public static class PageShell
                   </div>
                 </div>
               </footer>
-
               <script type="module" src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-govuk-frontend-init.js"></script>
+              <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-waiting.js"></script>
               <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-poll.js"></script>
               <script src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-slider.js"></script>
               <script type="module" src="/_content/Wayfinder.Rendering.GovUk/js/wayfinder-live-form.js"></script>

@@ -33,11 +33,19 @@ public record ServiceBlueprintGatewayDefinition
 
     public string? WaitingContent { get; init; }
 
+    /// <summary>When the answer this join waits for usually comes back. Unset gives a neutral page that makes no time claims.</summary>
+    public WaitingPace? WaitingPace { get; init; }
+
+    /// <summary>How long a <see cref="ServiceDesign.WaitingPace.WhileTheyWait"/> wait usually takes. Ignored for any other pace.</summary>
     [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public int WaitingExpectedSeconds { get; init; }
 
+    /// <summary>Overrides how often the page checks for the answer. Normally left unset, so the pace decides.</summary>
     [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public int WaitingPollIntervalMs { get; init; }
+
+    /// <summary>An optional small line icon shown in place of the plain "still working" dot. Unset (the default) shows none.</summary>
+    public WaitingIcon? WaitingIcon { get; init; }
 
     [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool WaitingAllowDefer { get; init; }

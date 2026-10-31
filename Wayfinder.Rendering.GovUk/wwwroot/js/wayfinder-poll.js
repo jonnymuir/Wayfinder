@@ -20,6 +20,9 @@
 //     data-wayfinder-poll-status-id  — id of an aria-live element to narrate progress into
 //     data-wayfinder-poll-max-retries — cap on poll attempts before asking for a manual refresh
 //                                       (default 100)
+//   Each check dispatches wayfinder:poll-succeeded or wayfinder:poll-failed (detail.consecutiveFailures) on
+//   document, so the waiting page (wayfinder-waiting.js) can say when it cannot reach the service. The status
+//   element is only narrated into when something changes, never on every check.
 //
 // Backgrounding: a mobile browser or WebView routinely throttles or fully suspends setTimeout
 // while the tab/app is hidden, so a citizen who backgrounds the app right as their join gateway
@@ -47,7 +50,8 @@
     }
   }
 
-  var el = document.querySelector('[data-wayfinder-poll-url], [data-wayfinder-poll-interval-ms]');
+  // A host's poll URL wins over a waiting component's own interval-only element when a page carries both.
+  var el = document.querySelector('[data-wayfinder-poll-url]') || document.querySelector('[data-wayfinder-poll-interval-ms]');
   if (!el) {
     return;
   }
@@ -85,6 +89,13 @@
   // (worse) falling back to a full-interval wait, the in-flight request's own completion handler
   // sees this and polls again straight away once it's done.
   var pendingPoll = false;
+  var consecutiveFailures = 0;
+
+  function announce(name, detail) {
+    if (typeof CustomEvent === 'function' && document.dispatchEvent) {
+      document.dispatchEvent(new CustomEvent(name, { detail: detail }));
+    }
+  }
 
   function setStatus(message) {
     if (statusEl) {
@@ -94,7 +105,7 @@
 
   function poll() {
     if (retries >= maxRetries) {
-      setStatus('Please refresh the page to check for updates.');
+      setStatus('Refresh this page to see if anything has changed.');
       return;
     }
     if (inFlight) {
@@ -107,15 +118,16 @@
     }
     inFlight = true;
     retries++;
-    setStatus('Checking for updates…');
     fetch(pollUrl, { headers: { 'Accept': 'application/json' } })
       .then(function (response) {
         return response.ok ? response.json() : Promise.reject(response.status);
       })
       .then(function (data) {
         inFlight = false;
+        consecutiveFailures = 0;
+        announce('wayfinder:poll-succeeded', {});
         if (data && data.changed) {
-          setStatus('Update received — reloading.');
+          setStatus('Loading the next step.');
           location.reload();
         } else if (pendingPoll) {
           pendingPoll = false;
@@ -126,6 +138,8 @@
       })
       .catch(function () {
         inFlight = false;
+        consecutiveFailures++;
+        announce('wayfinder:poll-failed', { consecutiveFailures: consecutiveFailures });
         if (pendingPoll) {
           pendingPoll = false;
           poll();

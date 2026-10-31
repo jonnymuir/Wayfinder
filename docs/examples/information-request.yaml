@@ -135,7 +135,7 @@ gateways:
     gatewayType: Join
     queueKey: web-user
     waitingContent: We've received your submission and it's currently being reviewed. You'll hear from us soon — no further action is needed right now.
-    waitingExpectedSeconds: 60
+    waitingPace: Later
     waitingPollIntervalMs: 5000
     waitingAllowDefer: true
     waitingDeferMessage: You can leave this page and return later.
