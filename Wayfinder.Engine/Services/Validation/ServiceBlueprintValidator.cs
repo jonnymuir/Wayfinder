@@ -57,6 +57,7 @@ internal sealed class ServiceBlueprintValidator(
             .Concat(blueprint.ValidateRequestPolicy())
             .Concat(blueprint.ValidateSupportSystemActions())
             .Concat(blueprint.ValidateBulkDatasetActions())
+            .Concat(blueprint.ValidateWaiting())
             .Concat(ComponentPropertyDiagnostics(blueprint))
             .Concat(_queueChecks.Diagnostics(blueprint))
             .Concat(structuralValidators.SelectMany(validator => validator.Validate(blueprint)));

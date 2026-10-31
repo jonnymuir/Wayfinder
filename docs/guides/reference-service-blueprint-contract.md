@@ -125,14 +125,41 @@ routes:
   multiple routes from a Split gateway all fire, e.g. sending the member to a
   confirmation screen *and* routing a copy to the reviewer queue) or `"Join"`
   (converge multiple incoming cursors before proceeding, carries additional
-  `waiting*` fields: `waitingContent`, `waitingExpectedSeconds`,
-  `waitingPollIntervalMs`, `waitingAllowDefer`, `waitingDeferMessage`,
-  `requiredIncomingQueues`).
+  `waiting*` fields: `waitingContent`, `waitingPace`, `waitingExpectedSeconds`,
+  `waitingIcon`, `waitingPollIntervalMs`, `waitingAllowDefer`, `waitingDeferMessage`,
+  `requiredIncomingQueues`, see [The waiting page](#the-waiting-page)).
 - A route's `trigger` on a gateway is typically `"continue"`, gateways aren't
   usually waiting on user choice the way a stage's routes are, they're evaluating
   where an already-triggered action goes next. The exception is a Join gateway
   with more than one outgoing route (see below), where the trigger is exactly
   what a real decision (not "continue") needs to be.
+
+### The waiting page
+
+A person parked at a Join sees a waiting page. What it can honestly promise depends on who or what
+they are waiting for, so every Join that makes someone wait says when the answer usually comes back
+with **`waitingPace`**:
+
+| `waitingPace` | Choose it when | The page says |
+|---|---|---|
+| `WhileTheyWait` | The answer comes back in seconds or minutes, usually an automated check or a support system call. | "Still working on it", how long it usually takes (`waitingExpectedSeconds`, default 60), then "This is taking a bit longer than usual" past that time, and that they can leave and come back past three times it. |
+| `Later` | The answer can take hours or days, usually a person (a caseworker, an underwriter) or a slow process. | That they do not need to stay on the page and can come back at any time. It never says how long it should take, and never says it is taking longer than usual. |
+| unset | | A neutral "Still working on it" with no time claim. Validation warns (`GATEWAY_WAITING_PACE_UNSET`). |
+
+If in doubt, choose `Later`: telling someone a caseworker's decision is "taking longer than usual"
+after two minutes is worse than not promising a time at all.
+
+- `waitingContent` is the author's own sentence about what is happening ("We have sent your photo
+  to be identified."). Keep time promises out of it, the pace adds the right one.
+- `waitingIcon` is optional and unset by default: one of `Hourglass`, `Search`, `Document`,
+  `Butterfly` or `Hedgehog`, a small line drawing shown in place of the plain "still working"
+  dot. Most waits need none.
+- `waitingPollIntervalMs` is normally left unset: the page checks every 3 seconds for
+  `WhileTheyWait` and every 30 seconds for `Later`. Set it only when a demo or test needs a
+  `Later` page to move on faster.
+- Every message sits in one `role="status"` region that changes only when there is something new
+  to say, and the indicator stays still for anyone who prefers reduced motion. If the page cannot
+  reach the service twice in a row it says so, and goes back to "Still working on it" when it can.
 
 **A Join with one outgoing route always fires it, once every
 `requiredIncomingQueues` has a cursor parked at the gateway**, it doesn't

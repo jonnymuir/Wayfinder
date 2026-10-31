@@ -439,3 +439,45 @@
   margin-top: 0.5rem;
   margin-bottom: 0;
 }
+
+/* The "still working" line on a waiting page (GovUkWaiting.cs, wayfinder-waiting.js). The indicator is decorative,
+   the words beside it carry the meaning, so with reduced motion it simply stays still. */
+.wayfinder-waiting__working {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wayfinder-waiting__indicator {
+  flex: none;
+  display: inline-flex;
+  color: #1d70b8;
+}
+
+.wayfinder-waiting__indicator--dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.wayfinder-waiting__indicator--animated {
+  animation: wayfinder-waiting-breathe 2s ease-in-out infinite;
+}
+
+/* Offline: the indicator stops so it never suggests progress that is not happening. */
+[data-wayfinder-waiting-offline-active] .wayfinder-waiting__indicator {
+  animation: none;
+  color: #505a5f;
+}
+
+@keyframes wayfinder-waiting-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.88); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wayfinder-waiting__indicator--animated {
+    animation: none;
+  }
+}

@@ -576,8 +576,10 @@ export interface ServiceBlueprintGatewayDefinition {
   queueKey: string;
   actor?: string;
   waitingContent?: string;
+  waitingPace?: WaitingPace;
   waitingExpectedSeconds?: number;
   waitingPollIntervalMs?: number;
+  waitingIcon?: WaitingIcon;
   waitingAllowDefer?: boolean;
   waitingDeferMessage?: string;
   icon?: string;
@@ -690,6 +692,12 @@ export interface TaskSection {
   tasks: TaskItem[];
 }
 
+export const waitingIconValues = ['Hourglass', 'Search', 'Document', 'Butterfly', 'Hedgehog'] as const;
+export type WaitingIcon = (typeof waitingIconValues)[number];
+
+export const waitingPaceValues = ['WhileTheyWait', 'Later'] as const;
+export type WaitingPace = (typeof waitingPaceValues)[number];
+
 /** The order each type's keys are written in, and the named type of each nested value or map entry. */
 export const yamlShapes: Record<string, YamlShape> = {
   AccordionComponent: { keys: ['type', 'showWhen', 'sections'], nested: { sections: 'AccordionSection' }, maps: {} },
@@ -727,7 +735,7 @@ export const yamlShapes: Record<string, YamlShape> = {
   ServiceBlueprintCalculationSeries: { keys: ['over', 'from', 'to', 'values'], nested: {}, maps: {} },
   ServiceBlueprintCalculationSet: { keys: ['tables', 'fields', 'series'], nested: {}, maps: { tables: 'ServiceBlueprintCalculationTable', fields: 'ServiceBlueprintCalculationField', series: 'ServiceBlueprintCalculationSeries' } },
   ServiceBlueprintCalculationTable: { keys: ['interpolate', 'values'], nested: {}, maps: {} },
-  ServiceBlueprintGatewayDefinition: { keys: ['key', 'displayName', 'description', 'gatewayType', 'queueKey', 'actor', 'waitingContent', 'waitingExpectedSeconds', 'waitingPollIntervalMs', 'waitingAllowDefer', 'waitingDeferMessage', 'icon', 'roleGates', 'routes', 'requiredIncomingQueues'], nested: { routes: 'ServiceBlueprintRouteDefinition' }, maps: {} },
+  ServiceBlueprintGatewayDefinition: { keys: ['key', 'displayName', 'description', 'gatewayType', 'queueKey', 'actor', 'waitingContent', 'waitingPace', 'waitingExpectedSeconds', 'waitingPollIntervalMs', 'waitingIcon', 'waitingAllowDefer', 'waitingDeferMessage', 'icon', 'roleGates', 'routes', 'requiredIncomingQueues'], nested: { routes: 'ServiceBlueprintRouteDefinition' }, maps: {} },
   ServiceBlueprintLayoutDefinition: { keys: ['nodes', 'routes'], nested: {}, maps: { nodes: 'NodePosition', routes: 'NodePosition' } },
   ServiceBlueprintRouteDefinition: { keys: ['id', 'target', 'trigger', 'label', 'style', 'requiresRole', 'showWhen', 'actions'], nested: { actions: 'ActionDefinition' }, maps: {} },
   ServiceBlueprintStageValidationRule: { keys: ['code', 'when', 'rule', 'field', 'message', 'actions'], nested: {}, maps: {} },

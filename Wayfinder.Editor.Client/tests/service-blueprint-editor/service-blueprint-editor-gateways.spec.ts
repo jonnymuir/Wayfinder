@@ -119,6 +119,35 @@ test.describe('ServiceBlueprint editor gateway representation', () => {
     await expect(inspector.locator('[data-wayfinder-field="kind"]')).toContainText('Join gateway', { timeout: 5_000 });
   });
 
+  test('join gateway inspector asks when the answer usually comes back, in plain words', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await page.goto(editorStoryUrl());
+    await expect(page.locator('wayfinder-service-blueprint-editor')).toBeVisible({ timeout: 10_000 });
+
+    const joinGateway = page.locator('[data-wayfinder-gateway="decision-join"]');
+    await joinGateway.click();
+    await joinGateway.press('e');
+
+    const inspector = page.locator('wayfinder-step-inspector');
+    const pace = inspector.getByRole('group', { name: 'When does the answer usually come back?' });
+    await expect(pace).toBeVisible({ timeout: 5_000 });
+    await expect(inspector.getByText('Not chosen yet, so the page stays neutral and makes no promise about time.')).toBeVisible();
+
+    await pace.getByRole('radio', { name: /While they wait/ }).check();
+    const usual = inspector.getByRole('combobox', { name: 'How long does it usually take?' });
+    await expect(usual).toBeVisible();
+    await expect(usual.locator('option:checked')).toHaveText('About a minute');
+
+    await pace.getByRole('radio', { name: /Later/ }).check();
+    await expect(usual).toHaveCount(0);
+    await expect(inspector.getByText('Not chosen yet, so the page stays neutral and makes no promise about time.')).toHaveCount(0);
+
+    const icon = inspector.getByRole('combobox', { name: 'Icon (optional)' });
+    await expect(icon.locator('option:checked')).toHaveText('None');
+    await icon.selectOption({ label: 'Butterfly' });
+    await expect(icon.locator('option:checked')).toHaveText('Butterfly');
+  });
+
   test('split gateway inspector does not show a waiting copy field', async ({ page }) => {
     // Waiting information belongs to join gateways only. A split gateway routes — it does
     // not wait. The inspector must not show a waiting copy field for split gateways.

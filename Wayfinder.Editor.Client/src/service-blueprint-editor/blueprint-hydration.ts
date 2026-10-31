@@ -14,6 +14,7 @@ import type {
   StageDefinition,
   StageKind,
 } from './types.js';
+import { waitingIconValues, waitingPaceValues } from './types.js';
 
 /**
  * Parses an authored blueprint into the editor's model: required lists exist, strings are
@@ -210,6 +211,8 @@ function normaliseGateway(rawGateway: Record<string, unknown>): Complete<Service
     roleGates: asStringArray(rawGateway.roleGates),
     routes: normaliseRoutes(rawGateway.routes, key),
     waitingContent: firstString(rawGateway.waitingContent),
+    waitingPace: waitingPaceValues.find((pace) => pace === rawGateway.waitingPace),
+    waitingIcon: waitingIconValues.find((icon) => icon === rawGateway.waitingIcon),
     waitingExpectedSeconds: typeof rawGateway.waitingExpectedSeconds === 'number' ? rawGateway.waitingExpectedSeconds : 0,
     waitingPollIntervalMs: typeof rawGateway.waitingPollIntervalMs === 'number' ? rawGateway.waitingPollIntervalMs : 0,
     waitingAllowDefer: rawGateway.waitingAllowDefer === true,

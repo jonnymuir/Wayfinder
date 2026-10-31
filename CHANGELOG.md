@@ -11,6 +11,30 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+### Added
+
+- A Join gateway says when the answer it waits for usually comes back, with `waitingPace`:
+  `WhileTheyWait` (seconds or minutes) or `Later` (hours or days). The waiting page then tells the
+  person what to expect in plain words: "Still working on it" and how long it usually takes, then
+  that it is taking longer than usual, for an answer that comes back while they wait; that they can
+  leave and come back, with no time claim, for one that comes back later. It moves between those
+  messages on its own as time passes, says when it cannot reach the service, and announces each
+  change once to screen readers. The editor asks the question in the same words.
+- An optional `waitingIcon` on a Join gateway (`Hourglass`, `Search`, `Document`, `Butterfly`,
+  `Hedgehog`) shows a small line drawing beside "Still working on it". None by default.
+- `wayfinder-waiting.js` in `Wayfinder.Rendering.GovUk` keeps the waiting page's message current.
+  A host that renders the waiting component itself should load it alongside `wayfinder-poll.js`.
+
+### Changed
+
+- A Join gateway with no `waitingPace` shows a neutral waiting page with no time claim, where it
+  used to say a default "usually takes about 30 seconds". Validation warns
+  (`GATEWAY_WAITING_PACE_UNSET`) so authors choose a pace. `waitingExpectedSeconds` now only
+  applies to `WhileTheyWait`.
+- `wayfinder-poll.js` no longer announces "Checking for updates" to screen readers on every check,
+  and prefers a host's `data-wayfinder-poll-url` element when a page also carries a waiting
+  component's own interval.
+
 ## [0.25.0] - 2026-10-24
 
 Also releases `Wayfinder.Editor` 0.11.0, `Wayfinder.Editor.Http` 0.3.0, `Wayfinder.Engine.Http`

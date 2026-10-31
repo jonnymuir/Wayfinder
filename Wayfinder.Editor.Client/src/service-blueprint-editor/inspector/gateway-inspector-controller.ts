@@ -9,6 +9,7 @@ import { deriveGatewayBindings, gatewayQueueKey } from '../gateway-representatio
 import type { InspectorHost } from './inspector-host.js';
 import type { RouteListController } from './route-list-controller.js';
 import { renderIconPicker } from './node-icon-picker.js';
+import { renderJoinWaitingPace } from './join-waiting-section.js';
 
 /** The properties panel for a selected gateway: identity, queue, join-waiting behaviour, delete, and its routes. */
 export class GatewayInspectorController implements ReactiveController {
@@ -154,15 +155,6 @@ export class GatewayInspectorController implements ReactiveController {
     const content = (event.currentTarget as HTMLTextAreaElement).value.trim() || undefined;
     this._replaceSelectedGateway({ ...gateway, waitingContent: content });
     this._host.announce(`${gateway.displayName} waiting message updated.`);
-  };
-
-  private readonly _updateJoinWaitingExpectedSeconds = (event: Event) => {
-    const gateway = this._host.selectedGateway;
-    if (gateway?.gatewayType !== 'Join') return;
-    const raw = (event.currentTarget as HTMLInputElement).value;
-    const expectedWaitSeconds = raw ? Number(raw) : undefined;
-    this._replaceSelectedGateway({ ...gateway, waitingExpectedSeconds: expectedWaitSeconds });
-    this._host.announce(`${gateway.displayName} expected wait updated.`);
   };
 
   private readonly _updateJoinWaitingAllowDefer = (event: Event) => {
@@ -357,24 +349,10 @@ export class GatewayInspectorController implements ReactiveController {
                       @change=${this._updateJoinWaitingContent}
                     ></textarea>
                   </label>
-                  <label class="field-block">
-                    <span class="field-label-row">
-                      <span class="field-label">Expected wait (seconds)</span>
-                      <wayfinder-inline-help
-                        label="Expected wait help"
-                        message="An approximate maximum wait in seconds. Used by the runtime to set a progress indicator. Leave blank if the wait is open-ended."
-                      ></wayfinder-inline-help>
-                    </span>
-                    <input
-                      type="number"
-                      class="field-control"
-                      data-wayfinder-gateway-waiting-seconds
-                      min="0"
-                      .value=${String(gateway.waitingExpectedSeconds ?? '')}
-                      placeholder="3600"
-                      @change=${this._updateJoinWaitingExpectedSeconds}
-                    />
-                  </label>
+                  ${renderJoinWaitingPace(gateway, (next, announcement) => {
+                    this._replaceSelectedGateway(next);
+                    this._host.announce(announcement);
+                  })}
                   <div class="field-block">
                     <span class="field-label">Allow defer</span>
                     <label class="checkbox-row">

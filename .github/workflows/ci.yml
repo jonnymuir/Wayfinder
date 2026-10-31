@@ -79,6 +79,9 @@ jobs:
       - name: JS poll script behaviour
         run: node Wayfinder.Rendering.GovUk/test/wayfinder-poll.behaviour.mjs
 
+      - name: JS waiting page behaviour
+        run: node Wayfinder.Rendering.GovUk/test/wayfinder-waiting.behaviour.mjs
+
       - name: Vendored govuk-frontend CSS is self-contained
         run: node Wayfinder.Rendering.GovUk/test/govuk-frontend-assets.mjs
 

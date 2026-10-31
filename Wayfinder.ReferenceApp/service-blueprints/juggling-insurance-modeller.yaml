@@ -181,7 +181,7 @@ gateways:
     gatewayType: Join
     queueKey: citizen
     waitingContent: A caseworker is reviewing your modelled premium. We'll update this page once they've confirmed it.
-    waitingExpectedSeconds: 60
+    waitingPace: Later
     waitingPollIntervalMs: 5000
     routes:
       - id: awaiting-review--approve--quote-approved

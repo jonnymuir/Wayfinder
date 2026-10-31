@@ -29,6 +29,12 @@ public record RequestCursor
     public string? ArrivedViaAction { get; init; }
 
     /// <summary>
+    /// When this cursor arrived at its current node. Lets a waiting page say how long someone has been waiting
+    /// across page loads. Null on a cursor saved before this was kept.
+    /// </summary>
+    public DateTimeOffset? ArrivedAt { get; init; }
+
+    /// <summary>
     /// The userId currently holding this cursor's work, or null if not picked up (or not a row
     /// available to pick up at all — see docs/guides/work-allocation.md). A pickup is scoped to
     /// this cursor's dwell at its current node: cleared automatically the instant this cursor is

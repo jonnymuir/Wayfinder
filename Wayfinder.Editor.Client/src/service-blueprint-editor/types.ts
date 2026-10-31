@@ -79,10 +79,18 @@ export type {
   TextInputComponent,
   TextareaComponent,
   WaitingComponent,
+  WaitingIcon,
+  WaitingPace,
   WarningTextComponent,
 } from './generated/wayfinder-model.js';
 
-export { componentPropertyValueKindValues, gatewayKindValues, stageKindValues } from './generated/wayfinder-model.js';
+export {
+  componentPropertyValueKindValues,
+  gatewayKindValues,
+  stageKindValues,
+  waitingIconValues,
+  waitingPaceValues,
+} from './generated/wayfinder-model.js';
 
 import type {
   ActionDefinition,
