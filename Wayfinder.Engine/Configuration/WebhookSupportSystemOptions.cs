@@ -26,6 +26,13 @@ public sealed class WebhookSupportSystemOptions
 
     public WebhookSupportSystemEndpointOptions Endpoint { get; set; } = new();
 
+    /// <summary>
+    /// When true, no request leaves the host: every capability answers from its own
+    /// <see cref="WebhookSupportSystemCapabilityOptions.Mock"/> instead, so a prototype runs before
+    /// the real system exists. Swapping in the real system is a configuration change only.
+    /// </summary>
+    public bool Mock { get; set; }
+
     public List<WebhookSupportSystemCapabilityOptions> Capabilities { get; set; } = [];
 }
 
@@ -91,6 +98,37 @@ public sealed class WebhookSupportSystemCapabilityOptions
     public List<WebhookSupportSystemPropertyOptions> Outputs { get; set; } = [];
 
     public List<WebhookSupportSystemOutcomeOptions> Outcomes { get; set; } = [];
+
+    /// <summary>The canned answer this capability gives when its support system is a mock.</summary>
+    public MockSupportSystemResponseOptions? Mock { get; set; }
+}
+
+/// <summary>
+/// A mocked capability's answer: a default <see cref="Outcome"/> and <see cref="Outputs"/>, and
+/// optional <see cref="Cases"/> that answer differently for particular input values, so every
+/// route out of the calling stage can be tried.
+/// </summary>
+public class MockSupportSystemAnswerOptions
+{
+    /// <summary>One of the capability's declared outcome keys.</summary>
+    public string Outcome { get; set; } = "";
+
+    /// <summary>Values for the capability's declared outputs, keyed by output key.</summary>
+    public Dictionary<string, string?> Outputs { get; set; } = [];
+}
+
+/// <summary>The default answer plus the cases that override it.</summary>
+public sealed class MockSupportSystemResponseOptions : MockSupportSystemAnswerOptions
+{
+    /// <summary>Checked in order; the first whose every <c>when</c> entry matches wins.</summary>
+    public List<MockSupportSystemCaseOptions> Cases { get; set; } = [];
+}
+
+/// <summary>An answer given only when the named inputs have the given values.</summary>
+public sealed class MockSupportSystemCaseOptions : MockSupportSystemAnswerOptions
+{
+    /// <summary>Input key to the value it must have, compared as text, ignoring case.</summary>
+    public Dictionary<string, string?> When { get; set; } = [];
 }
 
 /// <summary>Slim config shape mapped onto <see cref="ComponentPropertyDescriptor"/>.</summary>

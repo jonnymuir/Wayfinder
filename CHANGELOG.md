@@ -11,6 +11,31 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-31
+
+### Added
+
+- A support system can be a mock: mark its `Wayfinder:SupportSystems` entry `mock: true` and give
+  each capability a `mock` answer (a default outcome and outputs, plus `cases` that answer
+  differently for particular input values). Nothing leaves the host, the journey carries on at
+  once, and swapping in the real system is a configuration change. Startup fails when an answer
+  names an outcome, output or input the capability does not declare.
+- A new guide, [Building a service with Wayfinder](docs/guides/building-with-wayfinder.md): which
+  parts of a site belong in a blueprint and which in host content, styling or code, the signs a
+  build has gone the wrong way, a checklist for rebuilding an existing design, and how
+  business-system data reaches a journey. It is also the MCP resource
+  `service-blueprint-docs://building-with-wayfinder`.
+- The authoring MCP endpoint tells every connecting agent how to work with it (build services as
+  blueprints, read the building guide first, validate and simulate before saving, mock what is not
+  ready, report gaps), and offers three prompts: `design-a-service`, `convert-an-existing-design`
+  and `work-through-design-notes`.
+
+### Changed
+
+- Instructions passed to `AddServiceBlueprintAuthoringMcp(instructions)` are added after the
+  default instructions, under "About this host", instead of being the only instructions.
+- The `authoring-guide` MCP resource describes the blueprint contract as YAML.
+
 ## [0.26.0] - 2026-10-31
 
 Also releases `Wayfinder.Editor` 0.12.0, `Wayfinder.Editor.Http` 0.4.0, `Wayfinder.Engine.Http`

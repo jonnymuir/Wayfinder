@@ -35,19 +35,45 @@ for the full picture.
 | `reply_to_design_note` | Reply to a note without resolving it, to ask the designer before acting. |
 | `simulate_service_blueprint` | Dry-run a scripted sequence of actions with zero persistence. Returns `{ trace, calculations }`, the resulting state trace, plus the raw calculated field/series values per step (not just what's baked into rendered UI text). Accepts optional `mockServiceInputsJson` to resolve any `source: "service"` calculation field. |
 
+## Instructions
+
+Every connecting client is told, at `initialize`, how to work with this server: build services as
+blueprints rather than host code or content, read `building-with-wayfinder` and `authoring-guide`
+first, validate and simulate before saving, mock a business system that is not ready, and report
+gaps rather than working around them. The text is `ServiceBlueprintAuthoringInstructions.Default`.
+Pass host-specific guidance to `AddServiceBlueprintAuthoringMcp(instructions)` and it is added
+after the defaults, under "About this host".
+
+## Prompts
+
+| Prompt | Argument | What it starts |
+|---|---|---|
+| `design-a-service` | `brief` | A new service from a plain-language brief: read the guides, agree the queues and stages, then write, validate, simulate and save. |
+| `convert-an-existing-design` | `design` | Rebuilding an existing design, prototype or site: inventory it, map each part to a blueprint, content, styling or a support system, and report the gaps before building. |
+| `work-through-design-notes` | `definitionKey` | A round of the designer's notes: change, save, and resolve each one with what was done. |
+
+Clients show prompts as starters; Claude Code lists them as slash commands.
+
 ## Resources
 
-Alongside the tools, this project registers five MCP resources: the canonical authoring docs,
+Alongside the tools, this project registers the canonical authoring docs as MCP resources,
 embedded from `docs/guides/` at build time, so any MCP client can fetch them with no repo
 checkout.
 
 | Resource URI | Content |
 |---|---|
-| `service-blueprint-docs://calculation-language` | [The Wayfinder Calculation Language](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/calculation-language.md), grammar, functions, tables/series, `showWhen`. |
+| `service-blueprint-docs://building-with-wayfinder` | [Building a service with Wayfinder](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/building-with-wayfinder.md), what belongs in a blueprint and what does not. Read first. |
 | `service-blueprint-docs://authoring-guide` | [Reference Service Blueprint Contract](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/reference-service-blueprint-contract.md), the full `ServiceBlueprint` YAML shape. |
+| `service-blueprint-docs://calculation-language` | [The Wayfinder Calculation Language](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/calculation-language.md), grammar, functions, tables/series, `showWhen`. |
 | `service-blueprint-docs://service-design-principles` | [Service Design Principles](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/service-design-principles.md), Double Diamond, the GOV.UK Service Standard, and Lou Downe's 15 principles of good services, industry-agnostic. |
+| `service-blueprint-docs://support-systems` | [Support systems](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/support-systems.md), registering, mocking and calling another system. |
+| `service-blueprint-docs://bulk-data-review` | [Bulk data review](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/bulk-data-review.md), row-level review of whole-file data. |
 | `service-blueprint-docs://ai-service-blueprint-authoring` | [AI-Ready Service Blueprint Authoring, Integrator Guide](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/ai-service-blueprint-authoring.md), how a host app wires this MCP surface into its own pipeline. |
 | `service-blueprint-docs://extending-the-component-catalog` | [Extending the Component Catalog](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/extending-the-component-catalog.md), how to register a genuinely new `Component` type. |
+| `service-blueprint-docs://request-concurrency` | [Request concurrency](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/request-concurrency.md). |
+| `service-blueprint-docs://queue-worklist-filtering` | [Queue worklist filtering](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/queue-worklist-filtering.md). |
+| `service-blueprint-docs://work-allocation` | [Work allocation](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/work-allocation.md). |
+| `service-blueprint-docs://team-assignment` | [Team assignment](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/team-assignment.md). |
 
 ## Connect it to Claude Code
 

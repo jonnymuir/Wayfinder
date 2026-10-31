@@ -9,10 +9,10 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Wayfinder.Engine.Mcp</PackageId>
     <Title>Wayfinder Blueprint Authoring MCP</Title>
-    <Version>0.26.0</Version>
+    <Version>0.27.0</Version>
     <Authors>Jonny Muir</Authors>
     <Company>Wayfinder</Company>
-    <Description>ASP.NET Core MCP-over-HTTP endpoint mapping that exposes Wayfinder service blueprint authoring (list/read/validate/save/simulate) as MCP tools — a single MapServiceBlueprintAuthoringMcp() call any host adds to its own pipeline, alongside MapServiceBlueprintAuthoringApi(), inheriting its own auth.</Description>
+    <Description>ASP.NET Core MCP-over-HTTP endpoint mapping that exposes Wayfinder service blueprint authoring (list/read/validate/save/simulate) as MCP tools, with the authoring guides as resources and ready-made prompts — a single MapServiceBlueprintAuthoringMcp() call any host adds to its own pipeline, alongside MapServiceBlueprintAuthoringApi(), inheriting its own auth.</Description>
     <PackageTags>Blueprint;MCP;Model-Context-Protocol;GDS;Wayfinder</PackageTags>
     <PackageProjectUrl>https://github.com/jonnymuir/Wayfinder</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jonnymuir/Wayfinder</RepositoryUrl>
@@ -35,6 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="../docs/guides/building-with-wayfinder.md" LogicalName="Wayfinder.Engine.Mcp.docs.building-with-wayfinder.md" />
     <EmbeddedResource Include="../docs/guides/calculation-language.md" LogicalName="Wayfinder.Engine.Mcp.docs.calculation-language.md" />
     <EmbeddedResource Include="../docs/guides/reference-service-blueprint-contract.md" LogicalName="Wayfinder.Engine.Mcp.docs.reference-service-blueprint-contract.md" />
     <EmbeddedResource Include="../docs/guides/service-design-principles.md" LogicalName="Wayfinder.Engine.Mcp.docs.service-design-principles.md" />

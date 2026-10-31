@@ -4,7 +4,8 @@ using ModelContextProtocol.Server;
 namespace Wayfinder.Engine.Mcp;
 
 /// <summary>
-/// MCP resources exposing the service blueprint authoring reference docs — the calculation
+/// MCP resources exposing the service blueprint authoring reference docs — what belongs in a
+/// blueprint and what does not, the calculation
 /// expression grammar, the full ServiceBlueprint contract, the general
 /// service design principles a blueprint should be judged against, and how to extend the
 /// component catalog or register a support system — so an agent
@@ -15,6 +16,18 @@ namespace Wayfinder.Engine.Mcp;
 [McpServerResourceType]
 public static class ServiceBlueprintAuthoringResources
 {
+    [McpServerResource(
+        Name = "building-with-wayfinder",
+        UriTemplate = "service-blueprint-docs://building-with-wayfinder",
+        Title = "Building a Service with Wayfinder",
+        MimeType = "text/markdown")]
+    [System.ComponentModel.Description(
+        "Read this first when building a site or service: which parts belong in a blueprint (forms, steps, rules, " +
+        "calculations, staff queues, calls to other systems) and which belong in host content, styling or code, the signs " +
+        "a build has gone the wrong way, a checklist for rebuilding an existing design, and how business-system data " +
+        "reaches a journey, starting from a mock.")]
+    public static string BuildingWithWayfinder() => ReadEmbeddedDoc("building-with-wayfinder.md");
+
     [McpServerResource(
         Name = "calculation-language",
         UriTemplate = "service-blueprint-docs://calculation-language",
@@ -33,7 +46,7 @@ public static class ServiceBlueprintAuthoringResources
         Title = "Wayfinder Blueprint Authoring Contract",
         MimeType = "text/markdown")]
     [System.ComponentModel.Description(
-        "The full ServiceBlueprint JSON contract: stages, routes, gateways and the gateway " +
+        "The full ServiceBlueprint YAML contract: stages, routes, gateways and the gateway " +
         "routing rule, queues, the component catalog, response stages, and the save/conflict protocol.")]
     public static string AuthoringGuide() => ReadEmbeddedDoc("reference-service-blueprint-contract.md");
 

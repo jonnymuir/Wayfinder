@@ -12,12 +12,14 @@ namespace Wayfinder.Engine.Mcp;
 public static class ServiceBlueprintAuthoringMcpExtensions
 {
     /// <summary>
-    /// Registers the MCP server and discovers <see cref="ServiceBlueprintAuthoringTools"/> and
-    /// <see cref="ServiceBlueprintAuthoringResources"/> from this assembly.
+    /// Registers the MCP server and discovers <see cref="ServiceBlueprintAuthoringTools"/>,
+    /// <see cref="ServiceBlueprintAuthoringResources"/> and <see cref="ServiceBlueprintAuthoringPrompts"/>
+    /// from this assembly.
     /// </summary>
     /// <param name="instructions">
     /// Optional host-specific guidance surfaced to any connecting MCP client at <c>initialize</c>
-    /// time (the MCP spec's <c>ServerInstructions</c> field) — the place for facts specific to
+    /// time (the MCP spec's <c>ServerInstructions</c> field), after
+    /// <see cref="ServiceBlueprintAuthoringInstructions.Default"/> — the place for facts specific to
     /// *this* host's hosting of the generic toolkit (e.g. "this host only ever has one queue"),
     /// which the generic toolkit itself must not hardcode. Leave null for a host with nothing
     /// host-specific to add.
@@ -28,11 +30,12 @@ public static class ServiceBlueprintAuthoringMcpExtensions
 
         services.AddMcpServer(options =>
             {
-                if (instructions is not null) options.ServerInstructions = instructions;
+                options.ServerInstructions = ServiceBlueprintAuthoringInstructions.Compose(instructions);
             })
             .WithHttpTransport()
             .WithToolsFromAssembly()
-            .WithResourcesFromAssembly();
+            .WithResourcesFromAssembly()
+            .WithPromptsFromAssembly();
 
         return services;
     }
