@@ -5,6 +5,13 @@ Every guide, grouped by what you're trying to do. New to Wayfinder? Read the
 [reference app guide](./reference-app.md), then come back here. The
 [glossary](../glossary.md) defines the terms all of these guides use.
 
+## Start here when building a site or service
+
+- **[Building a service with Wayfinder](./building-with-wayfinder.md)**: which parts of what
+  you are building belong in a blueprint and which belong in host content, styling or code, the
+  signs a build has gone the wrong way, and a checklist for rebuilding an existing design. Read
+  this first, and point any AI agent working for you at it.
+
 ## Design and author a service blueprint
 
 For whoever writes blueprints, by hand, in the visual editor, or with an AI agent.

@@ -12,7 +12,9 @@ namespace Wayfinder.Engine.Extensions;
 /// Wires up support systems declared entirely in the <c>Wayfinder:SupportSystems</c>
 /// configuration section — no per-integration C#. Each entry registers a
 /// <see cref="SupportSystemDescriptor"/> in <see cref="SupportSystemRegistry"/> and a keyed
-/// <see cref="WebhookSupportSystemClient"/> that POSTs invocations to the configured URL. The
+/// <see cref="WebhookSupportSystemClient"/> that POSTs invocations to the configured URL, or, for an
+/// entry marked <c>mock: true</c>, a <see cref="MockSupportSystemClient"/> that answers from
+/// configuration without leaving the host. The
 /// inbound half (the callback that resolves an outcome) is <c>MapWebhookSupportSystemCallbacks</c>
 /// in <c>Wayfinder.Engine.Http</c>. See docs/guides/support-systems.md.
 /// </summary>
@@ -45,6 +47,12 @@ public static class SupportSystemServiceCollectionExtensions
 
         foreach (var entry in entries)
         {
+            if (entry.Mock)
+            {
+                RegisterMock(services, entry);
+                continue;
+            }
+
             var endpoint = BuildEndpoint(entry, configuration);
 
             SupportSystemRegistry.Register(ToDescriptor(entry));
@@ -63,6 +71,35 @@ public static class SupportSystemServiceCollectionExtensions
         }
 
         return services;
+    }
+
+    private static void RegisterMock(IServiceCollection services, WebhookSupportSystemOptions entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.Key))
+        {
+            throw new InvalidOperationException(
+                $"A '{WebhookSupportSystemOptions.SectionName}' entry has no 'key'.");
+        }
+
+        // A mock answers on the engine's next check of the waiting join, which is a poll.
+        var descriptor = ToDescriptor(entry) with
+        {
+            Capabilities = ToDescriptor(entry).Capabilities
+                .Select(c => c with { SupportedCompletionModes = [SupportSystemCompletionMode.Poll] })
+                .ToArray(),
+        };
+
+        var capabilities = entry.Capabilities.ToDictionary(
+            c => c.Key,
+            c => MockSupportSystemAnswers.Build(entry.Key, c, descriptor.Capabilities.Single(d => d.Key == c.Key)),
+            StringComparer.Ordinal);
+
+        SupportSystemRegistry.Register(descriptor);
+
+        services.AddSingleton<ISupportSystemClient>(sp => new MockSupportSystemClient(
+            entry.Key,
+            capabilities,
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MockSupportSystemClient>>()));
     }
 
     private static WebhookSupportSystemEndpoint BuildEndpoint(

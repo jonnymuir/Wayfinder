@@ -217,11 +217,19 @@ onto Wayfinder's.
 
 ## AI-ready authoring
 
+**Building with an AI agent?** Point it at
+[Building a service with Wayfinder](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/building-with-wayfinder.md)
+before it writes anything. The rule it teaches: forms, steps, rules, calculations, staff queues
+and calls to other systems are a blueprint, not host code; only editorial pages stay as host
+content. Agents connected over MCP are told the same at connection time.
+
 Service blueprint authoring is exposed to AI agents (Claude Code or any MCP client) the
 same way it's exposed to a human editor: as a toolkit a host app wires into its own
 pipeline. `Wayfinder.Engine.Api` and `Wayfinder.Engine.Mcp` map the same
 list/read/validate/save/simulate operations as REST and MCP-over-HTTP respectively, both
-calling straight into a host's live `Wayfinder.Engine` in-process. See
+calling straight into a host's live `Wayfinder.Engine` in-process. The MCP endpoint also
+serves the authoring guides as resources and three ready-made prompts (`design-a-service`,
+`convert-an-existing-design`, `work-through-design-notes`). See
 [the AI authoring guide](https://github.com/jonnymuir/Wayfinder/blob/main/docs/guides/ai-service-blueprint-authoring.md).
 
 ## Documentation

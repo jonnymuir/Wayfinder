@@ -172,7 +172,7 @@ referencing the capability. Actually calling out to the real external system is 
 takes an `IEnumerable<ISupportSystemClient>`, keyed internally by
 `ISupportSystemClient.SupportSystemKey`.
 
-**`Inputs`/`Outputs` keys must start lowercase.** Found live, the hard way: unlike a component's
+**`Inputs`/`Outputs` keys must start lowercase.** Unlike a component's
 own `ComponentPropertyDescriptor.Key` values (always a real CLR property name passed via
 `nameof`, so the wire converter lowercasing the first letter is a deliberate, harmless
 PascalCase→camelCase translation), a capability's `Inputs`/`Outputs` keys are arbitrary,
@@ -181,9 +181,9 @@ author-chosen identifiers with no backing CLR property, but they reuse the exact
 (the natural instinct, since `nameof`-style PascalCase is the convention everywhere else in this
 toolkit) silently becomes a different string over the wire: the editor's live-fetched catalog and
 a blueprint's own `params.inputs`/`params.outputs` mapping keys stop agreeing, and every reference
-fails validation with no clue why. `SupportSystemRegistry.Register` now rejects an uppercase-first
-key at registration time with a message explaining this, if you hit it, just lowercase the key's
-first letter; nothing else needs to change.
+fails validation. `SupportSystemRegistry.Register` rejects an uppercase-first key at registration
+time with a message explaining this; lowercase the key's first letter and nothing else needs to
+change.
 
 ## Registering one from configuration alone (no C#)
 
@@ -284,6 +284,57 @@ environment that is not a single developer machine.
 
 Call `AddConfiguredSupportSystems` at host startup (it registers descriptors synchronously, so
 before the engine reads any blueprint); it is a no-op when the section is absent and idempotent.
+
+## Mocking a support system
+
+A prototype usually needs a business system before that system's API exists. Mark the entry
+`mock: true`, leave out `endpoint`, and give every capability a `mock` answer. Nothing leaves the
+host: each call answers from configuration, the journey carries on, and the answer's outputs are
+written into the request like a real system's would be.
+
+```jsonc
+"Wayfinder": {
+  "SupportSystems": [{
+    "key": "business-system",
+    "displayName": "Business system (mock)",
+    "mock": true,
+    "capabilities": [{
+      "key": "get-member",
+      "displayName": "Look up a member",
+      "inputs":  [ { "key": "memberNumber", "valueKind": "String", "format": "field-ref", "required": true } ],
+      "outputs": [
+        { "key": "memberName", "valueKind": "String" },
+        { "key": "serviceYears", "valueKind": "Integer" }
+      ],
+      "outcomes": [ { "key": "found" }, { "key": "not-found" } ],
+      "mock": {
+        "outcome": "found",
+        "outputs": { "memberName": "Alex Morgan", "serviceYears": "12" },
+        "cases": [
+          { "when": { "memberNumber": "00000000" }, "outcome": "not-found" }
+        ]
+      }
+    }]
+  }]
+}
+```
+
+- `mock.outcome` and `mock.outputs` are the default answer. Each entry in `cases` answers
+  differently when every input named in its `when` has the given value (compared as text,
+  ignoring case); the first matching case wins. Add a case for each route you want to be able to
+  walk.
+- Outputs are written as text in configuration and converted to the output's declared
+  `valueKind`, so an `Integer` output reaches a calculation as a number.
+- A mocked capability is listed with `Poll` completion, whatever `completionModes` says. It
+  answers on the engine's first check of the waiting join, so the wait is momentary.
+- Startup fails when an answer names an outcome, output or input the capability does not declare,
+  or when a capability has no `mock` answer, so a mistake shows straight away rather than part way
+  through a journey.
+
+**Swapping in the real system** is a configuration change: remove `mock` and the `mock` answers,
+add `endpoint`, and build the receiving side to the same inputs, outputs and outcomes. The
+capability's declaration is the contract, so record beside it what each input and output means
+and any assumptions the mock makes about the real system.
 
 ## Delivering the outcome
 
@@ -397,21 +448,13 @@ Split gateways still deliberately fan out to every route rather than choosing on
 ever changes which routes a *human* is offered on a stage, evaluated the same way and with the
 same fail-open bias as a component's own `showWhen`.
 
-**This replaced an earlier, worse version of the same idea.** The first working version of this
-requirement used a `StageDefinition.Validations` rule scoped to a single action
-(`ServiceBlueprintStageValidationRule.Actions`), both buttons always shown, "Continue to
-decision" blocked with an error message if clicked with a file attached. That's a legitimate
-pattern (see the "Route `showWhen` vs. a scoped stage validation rule" callout in the
-[calculation-language guide](./calculation-language.md#route-visibility-showwhen-on-a-route)),
-but it was the wrong tool for *this* stage, where the two exits are genuinely different courses of
-action, not one action with an extra data requirement. It also depended on an editor route-condition
-UI (an always/event/guard mode selector) that had existed in the codebase since before this
-feature, looked functional, but was never evaluated by the engine anywhere and, because of a
-client/server wire-key mismatch, didn't even survive a save. `ShowWhen` on the route itself is
-what that UI should have been from the start: authored with the same
-`wayfinder-calculation-expression-editor` intellisense as a stage validation's `when`/`rule`.
+A scoped stage validation rule is the other way to require something before an action, see the
+"Route `showWhen` vs. a scoped stage validation rule" callout in the
+[calculation-language guide](./calculation-language.md#route-visibility-showwhen-on-a-route). Use
+route `showWhen` when the exits are different courses of action, as here, and a validation rule
+when one action needs extra data.
 
-## The worked example, verified end to end
+## The worked example
 
 `Wayfinder.ReferenceApp/service-blueprints/juggling-licence.yaml`'s `under-review` stage (now
 "Review application") offers exactly one of two routes, gated by `ShowWhen` as shown above:
@@ -444,30 +487,20 @@ in-memory apps, nothing to seed). The spec drives three separate browser context
 caseworker, and SafetyNet Underwriting's own staff, through the real UI on both real apps, not
 an API shortcut standing in for either.
 
-## Two things the first working version got wrong
+## Behaviour worth knowing
 
-Both found by recording the journey end to end and watching it, not by any test suite, worth
-naming because they generalise beyond this feature.
+**A backstage actor waiting on a support system stays on their own worklist.** A caseworker's
+cursor parked at a join gateway has no actions, but the item stays in their queue:
+`QueueWorkItem.IsWaiting` means "in your queue, nothing to do yet", and the reference app renders
+it with a "Waiting" tag and a "View" link. This applies to any actor parked at any join gateway.
 
-**A backstage actor waiting on a support system must stay on their own worklist.** The engine's
-queue worklist originally meant "what can I act on", so it filtered to items with available
-actions. A caseworker's cursor parked at a join gateway has none, so the moment an application
-was sent to the insurer it vanished from the caseworker's queue entirely, reachable only by a
-remembered URL. `QueueWorkItem.IsWaiting` now carries "in your queue, nothing to do yet", the
-worklist includes those items, and the reference app renders them with a "Waiting" tag and a
-"View" link. This was never support-systems-specific: *any* actor parked at *any* join gateway
-was invisible to their own queue. It only surfaced now because before this feature, the only
-actor who ever waited at a join was the citizen, who has always had a dedicated wait screen.
-
-**Viewing an uploaded file is not a new component.** The engine deliberately never sees file
-bytes or URLs, it holds an opaque `ServiceRequestFileReference`, and `IServiceRequestFileStorage`
-leaves both storage *and* routing to the host. So a blueprint-authored "file download" component
-would have to make the engine mint URLs it has no business knowing. Instead the host fills in
-`FieldRenderPayload.FileUrl` on the way to the renderer, and a `file-upload` field's read-only
-summary row renders its filename as a real link (see `WithFileDownloadUrls` in
-`Wayfinder.ReferenceApp/Program.cs`). A host with no download route leaves it null and gets plain
-filename text, exactly as before. The insurer's own file view is not a Wayfinder concern at all,
-SafetyNet Underwriting serves the bytes it received from its own `GET /submissions/{id}/file`.
+**Viewing an uploaded file is not a component.** The engine never sees file bytes or URLs, it
+holds an opaque `ServiceRequestFileReference`, and `IServiceRequestFileStorage` leaves both
+storage and routing to the host. The host fills in `FieldRenderPayload.FileUrl` on the way to the
+renderer, and a `file-upload` field's read-only summary row renders its filename as a link (see
+`WithFileDownloadUrls` in `Wayfinder.ReferenceApp/Program.cs`). A host with no download route
+leaves it null and gets plain filename text. A support system that received a file serves its own
+copy, as SafetyNet Underwriting does from its own `GET /submissions/{id}/file`.
 
 ## Related documentation
 
