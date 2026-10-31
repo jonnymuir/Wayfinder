@@ -11,6 +11,12 @@ Releases up to and including v0.19.0 are listed on
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-31
+
+Also releases `Wayfinder.Editor` 0.12.0, `Wayfinder.Editor.Http` 0.4.0, `Wayfinder.Engine.Http`
+0.6.0, `Wayfinder.Engine.Journey` 0.4.0, `Wayfinder.Engine.Worklist` 0.6.0 and
+`Wayfinder.Rendering.GovUk` 0.13.0, all built against the changed model.
+
 ### Added
 
 - A Join gateway says when the answer it waits for usually comes back, with `waitingPace`:
