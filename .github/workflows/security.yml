@@ -24,7 +24,7 @@ jobs:
   security:
     # Pinned to a hash (zizmor blanket policy); Dependabot's github-actions ecosystem
     # keeps this current, so ci-security changes arrive as a reviewed bump, not silently.
-    uses: jonnymuir/ci-security/.github/workflows/dotnet-security.yml@d5663651482851ef824487236a7506da02306bef # v1
+    uses: jonnymuir/ci-security/.github/workflows/dotnet-security.yml@a080cb3ded30b38c92820fd8be7860eb29e26b5e # v1.4.0
     permissions:
       contents: read
       security-events: write

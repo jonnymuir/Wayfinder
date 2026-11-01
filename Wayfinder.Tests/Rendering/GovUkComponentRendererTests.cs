@@ -332,7 +332,7 @@ public class GovUkComponentRendererTests
             AvailableActions = [],
         };
 
-        var withToken = Renderer.RenderForm(step, [], "/test", 0, antiforgeryToken: "CfDJ8-abc_123");
+        var withToken = Renderer.RenderForm(step, [], "/test", 0, antiforgeryToken: "CfDJ8-abc_123"); // gitleaks:allow test fixture
         Assert.Contains("<input type=\"hidden\" name=\"__RequestVerificationToken\" value=\"CfDJ8-abc_123\" />", withToken);
 
         var withoutToken = Renderer.RenderForm(step, [], "/test", 0);

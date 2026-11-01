@@ -24,7 +24,7 @@ Umbraco-hosted implementation. All three repos publish to nuget.org only, with n
 Packages feed.
 
 Solo developer project, but every change reaches `main` through a pull request. `main` is
-protected — required status checks, no admin bypass — and stays green at all times. No direct
+protected (required status checks, no admin bypass) and stays green at all times. No direct
 pushes.
 
 ## Projects
@@ -57,6 +57,9 @@ node Wayfinder.Rendering.GovUk/test/wayfinder-calculations.conformance.mjs   # J
 npm run test:component-schema
 npx playwright test --reporter=line               # editor Playwright specs
 
+# Performance tripwire (k6) against a running reference app on :8080; nightly in perf.yml
+k6 run -e BASE_URL=http://127.0.0.1:8080 tests/perf/smoke.js
+
 # Reference app (Aspire)
 dotnet run --project Wayfinder.AppHost
 ```
@@ -68,7 +71,7 @@ new analyzer finding fails the build rather than accumulating. Fix the finding; 
 justification (`SuppressMessage(..., Justification = ...)` or a commented, narrowly scoped `.editorconfig` entry).
 NuGet versions live once in `Directory.Packages.props` (central package management); projects reference packages by
 name only. `.editorconfig` holds formatting. `global.json` pins the exact SDK band (analyzer rules change between SDK
-releases, so an unpinned SDK turns a green build red on its own); CI reads it, and `dast.yml` repeats the version —
+releases, so an unpinned SDK turns a green build red on its own); CI reads it, and `dast.yml` repeats the version:
 bump both together.
 
 CI (`.github/workflows/ci.yml`) also runs the reference app's own Playwright journeys (`reference-app-e2e`;
@@ -104,91 +107,64 @@ Small, single-purpose pieces are a rule, not a preference. `node scripts/check-p
 ## Releasing
 
 Four packages release **in lockstep**: `Wayfinder`, `Wayfinder.Engine`, `Wayfinder.Engine.Api`,
-`Wayfinder.Engine.Mcp`. Bump every one of their `<Version>` together before tagging.
-`Wayfinder.Rendering.GovUk`, `Wayfinder.Editor`, `Wayfinder.Editor.Http` and `Wayfinder.Engine.Http`/`.Journey`/`.Worklist`
-version independently. Move `CHANGELOG.md`'s `[Unreleased]` entries under the new version heading in the release PR.
-`package-release.yml`
-fires on a `v{version}` tag, verifies the four csproj `<Version>` match the tag, packs, and
-pushes to nuget.org via Trusted Publishing. NuGet indexing lags a few minutes; verify against a
-local feed if a downstream needs the new version immediately.
+`Wayfinder.Engine.Mcp`. `Wayfinder.Rendering.GovUk`, `Wayfinder.Editor`, `Wayfinder.Editor.Http`
+and `Wayfinder.Engine.Http`/`.Journey`/`.Worklist` version independently. Run `/release` (from the
+engineering-standards plugin):
 
-Downstream chain: a `Wayfinder` release → bump `Wayfinder.Umbraco`'s package refs → its release →
-bump `Umbraco.Prism`'s. See `Wayfinder.Umbraco/CLAUDE.md`.
+- **Version files:** `<Version>` in the four lockstep csproj files, bumped together. An
+  independent package's own csproj when it changed.
+- **Pre-release checks:** `dotnet test Wayfinder.slnx -c Release`, `node scripts/check-policies.mjs`,
+  `node scripts/check-doc-links.mjs`.
+- **The `v{version}` tag** triggers `package-release.yml`, which verifies the four csproj
+  `<Version>` match the tag, packs, and pushes to nuget.org via Trusted Publishing. NuGet indexing
+  lags a few minutes; verify against a local feed if a downstream needs the new version immediately.
+
+Downstream chain: a `Wayfinder` release, then bump `Wayfinder.Umbraco`'s package refs and release
+it, then bump `Umbraco.Prism`'s. See `Wayfinder.Umbraco/CLAUDE.md`.
 
 ## Key conventions
 
-### Testing: behavioural contracts, not implementation mirrors
+Engineering standards (security, simplicity, testing, change flow, docs, writing style) are in
+[jonnymuir/engineering-standards](https://github.com/jonnymuir/engineering-standards/blob/main/STANDARDS.md).
+Follow them. This section adds only what is specific to this repo.
 
-Every test answers *"what should happen, observed from outside this unit?"*, never *"what does
-the code do internally?"*. Adapted from the Umbraco.Prism squad's Tester charter.
+### Testing
 
-1. **Test behaviour through public seams.** `IProcessManager` methods, an authoring-service call,
-   a rendered HTML fragment, an MCP/REST response, the visible editor. If reaching the thing
-   needs `internal` + `InternalsVisibleTo`, that's the signal you're at the wrong level.
-2. **`InternalsVisibleTo` is a smell, not a tool.** Default to none.
-3. **Prefer real in-memory implementations over mocking frameworks.** `Wayfinder.Tests` has no
-   Moq dependency by design. Use `InMemoryServiceRequestStore`, `SingleDefinitionServiceBlueprintStore`,
-   `PassthroughContentSanitizer`, `NullLogger`, and the `ServiceBlueprintSimulationRunner` for
-   scripted journeys. Assert on outputs and returned envelopes, not private state.
-4. **A behaviour-preserving refactor must not turn a test red.** Rename a private, restructure a
-   DOM node, rename a CSS class → tests stay green.
-5. **Name tests as behaviours, one per test.**
-6. **Business maths lives in the blueprint's `calculations` block**, verified by the shared
-   `Wayfinder/calculation-fixtures/` golden fixtures, run by both `CalculationGoldenTests` (C#)
-   and `node scripts/run-calculation-runtime-tests.mjs` (TS). Change either evaluator only
-   alongside those fixtures. Never hand-write domain maths in a host service or component.
-7. **Prefer the coarsest fast+deterministic test.** A domain/engine test with real in-memory
-   stores; a rendering test asserting the produced HTML; a `ServiceBlueprintSimulationRunner`
-   trace. Reserve `Wayfinder.ReferenceApp.Tests` live Playwright runs for behaviour that only
-   emerges from a booted host, and keep those few.
-8. **Playwright:** semantic selectors only: `getByRole`, `getByLabel`, `getByText`, `aria-*`,
-   `data-*` hooks. Never CSS classes or web-component tag names. Wait for a visible loaded
-   indicator before reading values. For the editor's shadow DOM, target the open shadow root's
-   semantic elements, not host internals.
-9. **Keep every suite green before a PR** (`dotnet test`, the TS conformance scripts, the
-   relevant Playwright configs).
+- **Real in-memory implementations, no mocking framework.** `Wayfinder.Tests` has no Moq
+  dependency by design. Use `InMemoryServiceRequestStore`, `SingleDefinitionServiceBlueprintStore`,
+  `PassthroughContentSanitizer`, `NullLogger`, and the `ServiceBlueprintSimulationRunner` for
+  scripted journeys.
+- **Business maths lives in the blueprint's `calculations` block**, verified by the shared
+  `Wayfinder/calculation-fixtures/` golden fixtures, run by both `CalculationGoldenTests` (C#)
+  and `node scripts/run-calculation-runtime-tests.mjs` (TS). Change either evaluator only
+  alongside those fixtures. Never hand-write domain maths in a host service or component.
+- **Coarsest fast test first:** a domain or engine test with real in-memory stores, a rendering
+  test asserting the produced HTML, or a `ServiceBlueprintSimulationRunner` trace. Keep
+  `Wayfinder.ReferenceApp.Tests` live Playwright runs few.
+- For the editor's shadow DOM, target the open shadow root's semantic elements, not host internals.
 
-### Security: non-negotiable
+### Security
 
-Adapted from the Umbraco.Prism squad's Copper mandate (tenant-isolation and auth-threat
-reduction). Security correctness is a release gate, not a follow-up, held to the same standing
-this project gives behavioural testing.
-
-1. **Auth and trust-chain flows are spec-exact.** OAuth 2.0 / OIDC / PKCE / RFC 8414 / RFC 9207
-   / RFC 9728 token, claim and discovery handling follows the RFC, with no fabricated
-   identifiers, no "works for now" shims, no deviation for convenience. If the spec and an easier
-   path conflict, the spec wins or the work stops and the trade-off is raised explicitly.
-2. **The framework-agnostic core takes no auth or tenant bypass.** Identity, tenancy and
-   authorization enter only through a host-supplied seam (`ResolveServiceInputs`,
-   `IServiceRequestStore`, a policy the host registers). Never a hardcoded actor, queue, tenant
-   or allow-all default in `Wayfinder` / `Wayfinder.Engine`.
-3. **Deny by default at every new seam.** A `Wayfinder.Engine.Api` route or a
-   `Wayfinder.Engine.Mcp` tool ships with an explicit authorization requirement, documented at
-   the call site; anonymous access carries a written reason in the code.
-4. **The calculation language stays total and side-effect-free**: no eval, no loops, no host
-   callouts. That is a security property (untrusted blueprint input is evaluated), not only a
-   design choice.
-5. **No secrets in source, committed config, logs, or test fixtures** (golden fixtures
-   included).
-6. **Evaluate every change through the CIA lens**: confidentiality (cross-actor / cross-tenant
-   leakage), integrity (can input forge state or skip a gateway), availability (can input force
-   unbounded work). Anything that moves the threat surface is called out in the commit body and
-   the PR description.
-7. **Define a security regression check for any boundary you touch**: a behavioural test that
-   goes red if the isolation or the validation regresses, per the testing rules above.
-8. **No unreviewed HTML built from data in browser code.** A dangerous sink (`innerHTML`,
-   `insertAdjacentHTML`, `unsafeHTML`, …) may only take a literal; anything built from data needs an
-   `// html-sink-ok: <reason naming the escaping>` comment, and reading `innerHTML` back as an
-   "escaper" is banned (it does not escape quotes). `npm run test:no-unsafe-html-sinks` enforces it,
-   because CodeQL's JS data flow does not catch this class in this codebase.
-9. **Report security findings plainly.** No minimising language: "just a hack", "edge case",
-   "couldn't survive". Name the defect and its impact.
+- **Auth discovery follows** OAuth 2.0, OIDC, PKCE, RFC 8414, RFC 9207 and RFC 9728 exactly.
+- **The framework-agnostic core takes no auth or tenant bypass.** Identity, tenancy and
+  authorization enter only through a host-supplied seam (`ResolveServiceInputs`,
+  `IServiceRequestStore`, a policy the host registers).
+- **A `Wayfinder.Engine.Api` route or a `Wayfinder.Engine.Mcp` tool** ships with an explicit
+  authorization requirement documented at the call site.
+- **The calculation language stays total and side-effect-free**: no eval, no loops, no host
+  callouts. That is a security property (untrusted blueprint input is evaluated), not only a
+  design choice.
+- **No secrets in golden fixtures** either. Test values that only look like secrets carry a
+  `gitleaks:allow` comment.
+- **HTML sinks:** `npm run test:no-unsafe-html-sinks` enforces the `html-sink-ok` rule, because
+  CodeQL's JS data flow does not catch this class in this codebase.
 
 ### Documentation
 
 - `docs/guides/README.md` indexes every guide; add a new guide there. Use the vocabulary in
   `docs/glossary.md`.
-- A user-visible change adds a line under `CHANGELOG.md`'s `[Unreleased]` heading in the same PR.
+- `CHANGELOG.md` is written at release time from the Conventional Commit history (see Releasing),
+  so write commit subjects a package user can understand.
 - `node scripts/check-doc-links.mjs` (CI) fails on a broken relative link or heading anchor.
 - READMEs that ship inside a NuGet package (the root one and each project's) use absolute
   `https://github.com/jonnymuir/Wayfinder/...` links and `raw.githubusercontent.com` images, because
@@ -198,18 +174,6 @@ this project gives behavioural testing.
   `ReadmeQuickstartTests`.
 - Editor screenshots under `docs/skills/` are generated by tests (`npm run docs:screenshots`), never
   hand-edited. Regenerate them after a visible editor change.
-
-### Branch policy
-
-Every change goes through a feature branch + PR: `{type}/{kebab-slug}`. `main` is protected
-(required checks, branch must be current before merge, no admin bypass) — there are no direct
-commits to `main`, however trivial. An emergency merge means deliberately, and visibly,
-disabling protection.
-
-### Commit conventions
-
-[Conventional Commits](https://www.conventionalcommits.org/). `feat:` = minor, `fix:`/`perf:`/
-`refactor:`/`test:`/`chore:`/`docs:` = patch, `feat!:` or a `BREAKING CHANGE:` body line = major.
 
 ### Code style
 

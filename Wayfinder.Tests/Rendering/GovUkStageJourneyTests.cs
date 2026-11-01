@@ -75,7 +75,7 @@ public class GovUkStageJourneyTests
         var envelope = Envelope(Step("question", "Your details",
             new ComponentRenderPayload { Type = "fieldset", Fields = [] }));
 
-        var body = renderer.RenderJourneyBody(envelope, "/advance", antiforgeryToken: "CfDJ8-abc_123");
+        var body = renderer.RenderJourneyBody(envelope, "/advance", antiforgeryToken: "CfDJ8-abc_123"); // gitleaks:allow test fixture
 
         body.Should().Contain("""<input type="hidden" name="__RequestVerificationToken" value="CfDJ8-abc_123" />""",
             "a host that opted into .ValidateWayfinderAntiforgery() needs the token posted back with the form");
