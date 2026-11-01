@@ -9,8 +9,6 @@ version.
 Releases up to and including v0.19.0 are listed on
 [GitHub Releases](https://github.com/jonnymuir/Wayfinder/releases).
 
-## [Unreleased]
-
 ## [0.27.0] - 2026-10-31
 
 ### Added

@@ -146,7 +146,7 @@ public class ConfiguredWebhookSupportSystemTests
         public HttpClient CreateClient(string name) => client;
     }
 
-    private static WebhookSupportSystemEndpoint Endpoint(string authType = "hmac-sha256", string? secret = "s3cr3t-signing-key") => new()
+    private static WebhookSupportSystemEndpoint Endpoint(string authType = "hmac-sha256", string? secret = "s3cr3t-signing-key") => new() // gitleaks:allow test fixture
     {
         SupportSystemKey = Key,
         Url = new Uri("https://automate.example.test/umbraco/automate/webhook/abc"),

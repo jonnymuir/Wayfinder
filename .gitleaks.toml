@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Minified location picker bundle, built by esbuild from Wayfinder.Rendering.GovUk/src"
+paths = ['''Wayfinder\.Rendering\.GovUk/wwwroot/location-picker/.*\.js''']
