@@ -243,7 +243,7 @@ Changes are listed in the [changelog](https://github.com/jonnymuir/Wayfinder/blo
 
 ## Building
 
-You need the .NET 10 SDK (the exact band is pinned in `global.json`) and Node 20+. The editor
+You need the .NET 11 SDK (pinned in `global.json`), the .NET 10 runtime the packages target, and Node 20+. The editor
 bundles are packed as static web assets, so build them before `dotnet build`:
 
 ```bash

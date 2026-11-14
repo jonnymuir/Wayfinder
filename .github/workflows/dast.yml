@@ -42,7 +42,9 @@ jobs:
       contents: read
     with:
       # Keep in step with the SDK pinned in global.json.
-      dotnet-version: '10.0.401'
+      dotnet-version: |
+        10.0.x
+        11.0.x
       boot-command: dotnet run --project Wayfinder.ReferenceApp --urls http://127.0.0.1:8080
       target-url: http://127.0.0.1:8080
       health-path: /account/login
@@ -58,7 +60,9 @@ jobs:
       contents: read
     with:
       # Keep in step with the SDK pinned in global.json.
-      dotnet-version: '10.0.401'
+      dotnet-version: |
+        10.0.x
+        11.0.x
       boot-command: dotnet run --project Wayfinder.ReferenceApp --urls http://127.0.0.1:8080
       target-url: http://127.0.0.1:8080
       health-path: /account/login

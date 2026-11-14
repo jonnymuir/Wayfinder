@@ -70,9 +70,10 @@ The build treats every warning as an error (`TreatWarningsAsErrors`, .NET analyz
 new analyzer finding fails the build rather than accumulating. Fix the finding; suppress only with a written
 justification (`SuppressMessage(..., Justification = ...)` or a commented, narrowly scoped `.editorconfig` entry).
 NuGet versions live once in `Directory.Packages.props` (central package management); projects reference packages by
-name only. `.editorconfig` holds formatting. `global.json` pins the exact SDK band (analyzer rules change between SDK
-releases, so an unpinned SDK turns a green build red on its own); CI reads it, and `dast.yml` repeats the version:
-bump both together.
+name only. `.editorconfig` holds formatting. `global.json` pins the SDK major (11, `latestFeature`: every 11.x update is taken,
+12 is a deliberate edit), because analyzer rules change between SDK releases and an unpinned SDK turns a green build
+red on its own. The packages target `net10.0`, so CI installs the .NET 10 runtime next to the `global.json` SDK, and
+`dast.yml` lists both: bump them together.
 
 CI (`.github/workflows/ci.yml`) also runs the reference app's own Playwright journeys (`reference-app-e2e`;
 the `-live` specs need Aspire and stay local-only). It runs the editor client build → `dotnet` restore/build/test/pack →

@@ -1,7 +1,7 @@
 definitionKey: money-modeller
 displayName: Money Modeller
 version: 1
-description: 'Interactive pension benefit modeller: model retirement scenarios from your record or a formal quote, then hand a chosen scenario to the scheme administrators as a quote request.'
+description: "Interactive pension benefit modeller: model retirement scenarios from your record or a formal quote, then hand a chosen scenario to the scheme administrators as a quote request."
 schemaVersion: "1.0"
 initialStage: choose-start
 requestPolicy: single
@@ -130,7 +130,7 @@ stages:
         min: 0
         max: 5
         step: 0.5
-        suffix: '%'
+        suffix: "%"
       - type: slider
         showWhen: not quoteMode and member.active
         fieldKey: salaryGrowth
@@ -139,7 +139,7 @@ stages:
         min: 0
         max: 6
         step: 0.5
-        suffix: '%'
+        suffix: "%"
       - type: slider
         showWhen: not quoteMode and hasDc
         fieldKey: invReturn
@@ -148,7 +148,7 @@ stages:
         min: 0
         max: 8
         step: 0.5
-        suffix: '%'
+        suffix: "%"
       - type: radio
         showWhen: not quoteMode
         fieldKey: moneyBasis
