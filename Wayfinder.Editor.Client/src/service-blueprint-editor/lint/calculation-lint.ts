@@ -173,7 +173,7 @@ function describeDiagnostic(
   fields: NormalisedFields,
   series: NormalisedSeries
 ): DefinitionLint {
-  const describe = DESCRIBE[diagnostic.kind] as (diagnostic: CalculationDiagnostic, lookup: Lookup) => Described;
-  const { message, pathHint, anchor } = describe(diagnostic, { fields, series });
+  const describeKind = DESCRIBE[diagnostic.kind] as (diagnostic: CalculationDiagnostic, lookup: Lookup) => Described;
+  const { message, pathHint, anchor } = describeKind(diagnostic, { fields, series });
   return anchor === undefined ? { message, pathHint } : { message, pathHint, line: lineOfString(source, anchor) };
 }
