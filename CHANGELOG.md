@@ -9,6 +9,16 @@ version.
 Releases up to and including v0.19.0 are listed on
 [GitHub Releases](https://github.com/jonnymuir/Wayfinder/releases).
 
+## [0.27.1] - 2026-11-15
+
+### Changed
+
+- `Wayfinder.Engine` uses CsvHelper 34. A bulk dataset upload is read, and a corrected file is
+  written, exactly as before: comma separated, header names matched exactly, values kept as
+  written. A host that also uses CsvHelper directly now gets CsvHelper 34, which has a new API, so
+  its own CSV code needs updating.
+- `Wayfinder.Engine.Mcp` uses ModelContextProtocol.AspNetCore 2.4.0.
+
 ## [0.27.0] - 2026-10-31
 
 ### Added
