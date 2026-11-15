@@ -32,12 +32,9 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
     private readonly BulkDatasetIngestOptions _options;
     private readonly ConcurrentDictionary<string, BulkDataset> _datasets = new(StringComparer.Ordinal);
 
-    // RFC 4180 with a comma, always: CsvHelper would otherwise guess the separator from the file,
-    // so a semicolon-separated export would be read with its columns split differently.
+    // Always a comma (CsvHelper would otherwise guess the separator), and values with a space at
+    // either end are quoted, so a reader that trims unquoted whitespace gets them back exactly.
     private static readonly CsvReaderOptions ReadOptions = new() { Separator = ',' };
-
-    // Values with a space or tab at either end are quoted, so a reader that trims unquoted
-    // whitespace still gets them back exactly.
     private static readonly CsvWriterOptions WriteOptions = new() { Quoting = CsvQuoting.WhenNeededOrWhitespace };
 
     public InMemoryBulkDatasetStore(IServiceRequestFileStorage fileStorage, BulkDatasetIngestOptions? options = null)
@@ -73,7 +70,9 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
             return BulkDatasetIngestResult.Failure("File is empty.");
         }
 
-        var columnIndexes = ExactColumnIndexes(csv.Headers);
+        // Header names match exactly, and the first of any repeated name wins.
+        var columnIndexes = csv.Headers.Select((name, index) => (name, index)).DistinctBy(h => h.name)
+            .ToDictionary(h => h.name, h => h.index, StringComparer.Ordinal);
         var missingColumns = columns.Where(c => !columnIndexes.ContainsKey(c.Key)).Select(c => c.Key).ToArray();
         if (missingColumns.Length > 0)
         {
@@ -359,18 +358,6 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
     /// ever applied to a human-facing export — see <see cref="MaterializeAsync"/>'s own remarks
     /// for why the resubmission path must stay byte-faithful instead.
     /// </summary>
-    // A header name matches exactly, and the first of any repeated name wins.
-    private static Dictionary<string, int> ExactColumnIndexes(IReadOnlyList<string> headers)
-    {
-        var indexes = new Dictionary<string, int>(StringComparer.Ordinal);
-        for (var i = 0; i < headers.Count; i++)
-        {
-            indexes.TryAdd(headers[i], i);
-        }
-
-        return indexes;
-    }
-
     private static string? SanitizeForSpreadsheetExport(string? value)
     {
         if (string.IsNullOrEmpty(value))
