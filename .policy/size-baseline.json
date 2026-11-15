@@ -41,7 +41,7 @@
     "Wayfinder.Engine/Services/WorkAllocation.cs": 147,
     "Wayfinder.Engine/Services/WorkItemFinder.cs": 127,
     "Wayfinder.Engine/Services/WorkQueues.cs": 106,
-    "Wayfinder.Engine/Stores/InMemoryBulkDatasetStore.cs": 116,
+    "Wayfinder.Engine/Stores/InMemoryBulkDatasetStore.cs": 114,
     "Wayfinder.Engine/SupportSystems/WebhookSupportSystemClient.cs": 65,
     "Wayfinder.Engine.Http/StageFileUploads.cs": 66,
     "Wayfinder.Engine.Http/SupportSystemCallbacks.cs": 92,

@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using CsvHelper;
-using CsvHelper.Configuration;
 using Wayfinder.Engine.Abstractions;
 using Wayfinder.Models.ServiceDesign;
 using Wayfinder.Models.ServiceDesign.BulkData;
@@ -34,6 +32,11 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
     private readonly BulkDatasetIngestOptions _options;
     private readonly ConcurrentDictionary<string, BulkDataset> _datasets = new(StringComparer.Ordinal);
 
+    // Always a comma (CsvHelper would otherwise guess the separator), and values with a space at
+    // either end are quoted, so a reader that trims unquoted whitespace gets them back exactly.
+    private static readonly CsvReaderOptions ReadOptions = new() { Separator = ',' };
+    private static readonly CsvWriterOptions WriteOptions = new() { Quoting = CsvQuoting.WhenNeededOrWhitespace };
+
     public InMemoryBulkDatasetStore(IServiceRequestFileStorage fileStorage, BulkDatasetIngestOptions? options = null)
     {
         _fileStorage = fileStorage;
@@ -59,21 +62,18 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
         }
 
         using var reader = new StreamReader(fileStream);
-        var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture)
-        {
-            MissingFieldFound = null,
-            BadDataFound = null,
-        };
-        using var csv = new CsvReader(reader, csvConfig);
+        using var csv = CsvReader.Create(reader, ReadOptions);
 
-        if (!await csv.ReadAsync())
+        await csv.ReadHeaderAsync(ct);
+        if (csv.Headers.Count == 0)
         {
             return BulkDatasetIngestResult.Failure("File is empty.");
         }
 
-        csv.ReadHeader();
-        var header = new HashSet<string>(csv.HeaderRecord ?? [], StringComparer.Ordinal);
-        var missingColumns = columns.Where(c => !header.Contains(c.Key)).Select(c => c.Key).ToArray();
+        // Header names match exactly, and the first of any repeated name wins.
+        var columnIndexes = csv.Headers.Select((name, index) => (name, index)).DistinctBy(h => h.name)
+            .ToDictionary(h => h.name, h => h.index, StringComparer.Ordinal);
+        var missingColumns = columns.Where(c => !columnIndexes.ContainsKey(c.Key)).Select(c => c.Key).ToArray();
         if (missingColumns.Length > 0)
         {
             return BulkDatasetIngestResult.Failure(
@@ -84,7 +84,7 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
         var rowsByKey = new Dictionary<string, MutableRow>(StringComparer.Ordinal);
         var rowIndex = 0;
 
-        while (await csv.ReadAsync())
+        while (await csv.ReadAsync(ct))
         {
             ct.ThrowIfCancellationRequested();
 
@@ -97,7 +97,8 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
             var originalValues = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var column in columns)
             {
-                csv.TryGetField<string>(column.Key, out var value);
+                var index = columnIndexes[column.Key];
+                var value = index < csv.FieldCount ? csv.GetString(index) : null;
                 if (value is { Length: > 0 } && value.Length > _options.MaxCellLength)
                 {
                     return BulkDatasetIngestResult.Failure(
@@ -318,15 +319,14 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
         }
 
         using var buffer = new MemoryStream();
-        await using (var writer = new StreamWriter(buffer, leaveOpen: true))
-        await using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+        await using (var csv = CsvWriter.Create(buffer, WriteOptions, leaveOpen: true))
         {
             foreach (var column in columns)
             {
                 csv.WriteField(column.Key);
             }
 
-            await csv.NextRecordAsync();
+            await csv.EndRecordAsync(ct);
 
             foreach (var row in rowsSnapshot)
             {
@@ -336,7 +336,7 @@ public sealed class InMemoryBulkDatasetStore : IBulkDatasetStore
                     csv.WriteField(sanitizeForHumanExport ? SanitizeForSpreadsheetExport(value) : value);
                 }
 
-                await csv.NextRecordAsync();
+                await csv.EndRecordAsync(ct);
             }
         }
 
