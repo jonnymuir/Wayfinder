@@ -9,6 +9,22 @@ version.
 Releases up to and including v0.19.0 are listed on
 [GitHub Releases](https://github.com/jonnymuir/Wayfinder/releases).
 
+## [0.28.0] - 2026-11-17
+
+### Added
+
+- A support-system call can give an input as a fixed value. A capability input declared with
+  `Format: "fixed"` (`SupportSystemInputFormats.Fixed`) takes the text the blueprint writes in its
+  mapping, the same for every request, such as which template or which queue; nothing is looked
+  up in the request. Inputs with no format are bound to fields exactly as before. See
+  [Support systems](docs/guides/support-systems.md#an-input-the-blueprint-writes-itself).
+
+### Changed
+
+- A required support-system input given a blank value is reported as
+  `SUPPORT_SYSTEM_ACTION_MISSING_REQUIRED_INPUT` when the blueprint is validated, instead of as an
+  unknown field.
+
 ## [0.27.1] - 2026-11-15
 
 ### Changed
