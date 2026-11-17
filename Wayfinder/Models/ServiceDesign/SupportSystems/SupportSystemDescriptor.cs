@@ -36,12 +36,30 @@ public sealed record SupportSystemOutcomeDescriptor
 }
 
 /// <summary>
+/// The <see cref="Components.ComponentPropertyDescriptor.Format"/> values a capability input can carry that change
+/// where its value comes from.
+/// </summary>
+public static class SupportSystemInputFormats
+{
+    /// <summary>The blueprint binds the input to one of its fields; the call sends that field's value. The default.</summary>
+    public const string FieldRef = "field-ref";
+
+    /// <summary>
+    /// The blueprint writes the value itself, the same for every request: which template to use, say, or which
+    /// queue to place work on. The editor shows a text box for it, and nothing is looked up in the request.
+    /// </summary>
+    public const string Fixed = "fixed";
+}
+
+/// <summary>
 /// One thing a support system can be asked to do, e.g. "validate a risk assessment". Declares
 /// its own inputs by reusing <see cref="ComponentPropertyDescriptor"/> — the same recursive
 /// shape already shared with action parameters — so a capability input that should be sourced
 /// from a blueprint field (<c>Format: "field-ref"</c>) gets the existing reference-aware
-/// field-ref editor machinery for free, rather than a bespoke input-authoring UI. A capability
-/// with multiple inputs (e.g. a file plus some metadata) just declares more than one.
+/// field-ref editor machinery for free, rather than a bespoke input-authoring UI. An input with
+/// <c>Format: "fixed"</c> (<see cref="SupportSystemInputFormats.Fixed"/>) is a value the blueprint
+/// writes itself, not a field. A capability with multiple inputs (e.g. a file plus some metadata)
+/// just declares more than one.
 /// </summary>
 public sealed record SupportSystemCapabilityDescriptor
 {

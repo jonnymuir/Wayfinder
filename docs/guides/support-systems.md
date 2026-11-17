@@ -70,6 +70,28 @@ webhook-only, poll-only, needs no engine change, only a new descriptor and a new
 | `SupportedCompletionModes` | `Poll` and/or `Webhook`, must declare at least one, or an invocation could never resolve. |
 | `Outcomes` | The closed set of decisions this capability can resolve to, e.g. `approved`/`rejected`, must declare at least one. A blueprint's outgoing routes from the calling stage are validated against this vocabulary. |
 
+### An input the blueprint writes itself
+
+Most inputs are bound to a field, so each request sends its own value. Some are the same for
+every request: which template a letter uses, which queue a case goes to, a mode. Declare such an
+input with `Format: "fixed"` (`SupportSystemInputFormats.Fixed`) and the blueprint writes the
+value in the mapping instead of a field key:
+
+```yaml
+type: support-system-call
+timing: onEnter
+params:
+  supportSystemKey: heliograph
+  capabilityKey: send-correspondence
+  inputs:
+    correspondence: decision-letter   # a fixed input: this text is the value
+    email: applicantEmail             # a field-ref input: this names the field
+```
+
+The client receives `decision-letter` as written. The editor shows a fixed input as a text box,
+validation does not look it up among the fields, and a required one must not be blank. An input
+with no format is bound to a field, as before.
+
 ## Validation
 
 Registering a descriptor gets a blueprint referencing it real, comprehensive validation for

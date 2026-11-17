@@ -75,44 +75,7 @@ public partial record ServiceBlueprint
                     continue;
                 }
 
-                var inputMapping = action.Parameters.GetMap("inputs");
-                var mappedInputKeys = inputMapping?.Select(kvp => kvp.Key).ToHashSet(StringComparer.Ordinal) ?? [];
-                var declaredInputKeys = capability.Inputs.Select(i => i.Key).ToHashSet(StringComparer.Ordinal);
-
-                foreach (var input in capability.Inputs.Where(i => i.Required))
-                {
-                    if (!mappedInputKeys.Contains(input.Key))
-                    {
-                        diagnostics.Add(new ServiceBlueprintDiagnostic(
-                            "SUPPORT_SYSTEM_ACTION_MISSING_REQUIRED_INPUT",
-                            $"{path}.params.inputs",
-                            $"Capability '{capabilityKey}' requires input '{input.Key}', which this action's " +
-                            "params.inputs doesn't bind to a field."));
-                    }
-                }
-
-                foreach (var mappedKey in mappedInputKeys)
-                {
-                    if (!declaredInputKeys.Contains(mappedKey))
-                    {
-                        diagnostics.Add(new ServiceBlueprintDiagnostic(
-                            "SUPPORT_SYSTEM_ACTION_UNKNOWN_INPUT",
-                            $"{path}.params.inputs.{mappedKey}",
-                            $"'{mappedKey}' is not a declared input of capability '{capabilityKey}' — " +
-                            "call list_support_systems to see what it accepts."));
-                        continue;
-                    }
-
-                    var boundFieldKey = inputMapping?.GetString(mappedKey);
-                    if (string.IsNullOrWhiteSpace(boundFieldKey) || !inputFieldKeys.Contains(boundFieldKey))
-                    {
-                        diagnostics.Add(new ServiceBlueprintDiagnostic(
-                            "SUPPORT_SYSTEM_ACTION_INPUT_UNKNOWN_FIELD",
-                            $"{path}.params.inputs.{mappedKey}",
-                            $"Input '{mappedKey}' is bound to field '{boundFieldKey}', which is not a captured " +
-                            "input field anywhere in this blueprint."));
-                    }
-                }
+                diagnostics.AddRange(ValidateInputs(capability, action, path, inputFieldKeys));
 
                 var declaredOutcomeKeys = capability.Outcomes.Select(o => o.Key).ToHashSet(StringComparer.Ordinal);
                 diagnostics.AddRange(SupportSystems.SupportCallFailurePolicy.Validate(action.Parameters, path, declaredOutcomeKeys));
@@ -132,5 +95,63 @@ public partial record ServiceBlueprint
         }
 
         return diagnostics;
+    }
+
+    /// <summary>
+    /// Checks an action's inputs against its capability: every required input is given, every given input is
+    /// declared, and an input bound to a field names a field this blueprint captures. A fixed input is a value the
+    /// blueprint writes, so it is not looked up.
+    /// </summary>
+    private static List<ServiceBlueprintDiagnostic> ValidateInputs(
+        SupportSystems.SupportSystemCapabilityDescriptor capability, ActionDefinition action, string path, HashSet<string> inputFieldKeys)
+    {
+        var problems = new List<ServiceBlueprintDiagnostic>();
+        var capabilityKey = capability.Key;
+        var inputMapping = action.Parameters.GetMap("inputs");
+        var mappedInputKeys = inputMapping?.Select(kvp => kvp.Key).ToHashSet(StringComparer.Ordinal) ?? [];
+        var declaredInputKeys = capability.Inputs.Select(i => i.Key).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var input in capability.Inputs.Where(i => i.Required))
+        {
+            if (!mappedInputKeys.Contains(input.Key) || string.IsNullOrWhiteSpace(inputMapping?.GetString(input.Key)))
+            {
+                problems.Add(new ServiceBlueprintDiagnostic(
+                    "SUPPORT_SYSTEM_ACTION_MISSING_REQUIRED_INPUT",
+                    $"{path}.params.inputs",
+                    $"Capability '{capabilityKey}' requires input '{input.Key}', which this action's " +
+                    "params.inputs doesn't bind to a field."));
+            }
+        }
+
+        foreach (var mappedKey in mappedInputKeys)
+        {
+            if (!declaredInputKeys.Contains(mappedKey))
+            {
+                problems.Add(new ServiceBlueprintDiagnostic(
+                    "SUPPORT_SYSTEM_ACTION_UNKNOWN_INPUT",
+                    $"{path}.params.inputs.{mappedKey}",
+                    $"'{mappedKey}' is not a declared input of capability '{capabilityKey}' — " +
+                    "call list_support_systems to see what it accepts."));
+                continue;
+            }
+
+            // A fixed input is a value the blueprint writes, not a field, so there is nothing to look up.
+            if (capability.Inputs.First(i => i.Key == mappedKey).Format == SupportSystems.SupportSystemInputFormats.Fixed)
+            {
+                continue;
+            }
+
+            var boundFieldKey = inputMapping?.GetString(mappedKey);
+            if (string.IsNullOrWhiteSpace(boundFieldKey) || !inputFieldKeys.Contains(boundFieldKey))
+            {
+                problems.Add(new ServiceBlueprintDiagnostic(
+                    "SUPPORT_SYSTEM_ACTION_INPUT_UNKNOWN_FIELD",
+                    $"{path}.params.inputs.{mappedKey}",
+                    $"Input '{mappedKey}' is bound to field '{boundFieldKey}', which is not a captured " +
+                    "input field anywhere in this blueprint."));
+            }
+        }
+
+        return problems;
     }
 }
