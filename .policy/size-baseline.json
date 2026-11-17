@@ -25,7 +25,7 @@
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.FieldReferences.cs": 66,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.GatewayRouting.cs": 185,
     "Wayfinder/Models/ServiceDesign/ServiceBlueprint.Reachability.cs": 118,
-    "Wayfinder/Models/ServiceDesign/ServiceBlueprint.SupportSystemActions.cs": 113,
+    "Wayfinder/Models/ServiceDesign/ServiceBlueprint.SupportSystemActions.cs": 76,
     "Wayfinder/Models/ServiceDesign/SupportSystems/SupportSystemRegistry.cs": 62,
     "Wayfinder/Services/Calculations/CalculationEvaluator.cs": 101,
     "Wayfinder/Services/Calculations/CalculationExpression.cs": 92,

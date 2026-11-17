@@ -189,7 +189,11 @@ public class SupportSystemActionExecutionTests
             {
                 Key = CapabilityKey,
                 DisplayName = "Validate a risk assessment",
-                Inputs = [new() { Key = "notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String }],
+                Inputs =
+                [
+                    new() { Key = "notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String },
+                    new() { Key = "mode", Title = "Mode", ValueKind = ComponentPropertyValueKind.String, Format = SupportSystemInputFormats.Fixed },
+                ],
                 SupportedCompletionModes = modes,
                 Outcomes =
                 [
@@ -219,6 +223,31 @@ public class SupportSystemActionExecutionTests
             supportSystemClients: [client]);
 
         return (engine, client);
+    }
+
+    [Fact]
+    public void A_fixed_input_reaches_the_client_as_the_value_the_blueprint_wrote_not_a_field()
+    {
+        var blueprint = BlueprintYaml.Replace("            notes: notes", "            notes: notes\n            mode: express", StringComparison.Ordinal);
+        var (engine, client) = BuildEngine(blueprint, SupportSystemCompletionMode.Poll);
+        try
+        {
+            var started = engine.GetCurrent(DefinitionKey, TenantId, UserId, CaseworkerProfile);
+            var pickedUp = engine.PickupWorkItem(started.InstanceId, RequestCursor.PrimaryCursorId, TenantId, UserId, CaseworkerProfile);
+            var advanced = engine.Advance(
+                started.InstanceId, TenantId, UserId, CaseworkerProfile, "send-to-support-system", pickedUp.StateVersion,
+                new Dictionary<string, object?> { ["notes"] = "please check this one" });
+
+            advanced.ResponseState.Should().Be("defer");
+            var invocation = client.Invocations.Should().ContainSingle().Subject;
+            // The blueprint has no field called "express": the value can only have come from the blueprint itself.
+            invocation.Inputs["mode"].RawValue.Should().Be("express");
+            invocation.Inputs["notes"].RawValue.Should().Be("please check this one");
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
     }
 
     [Fact]

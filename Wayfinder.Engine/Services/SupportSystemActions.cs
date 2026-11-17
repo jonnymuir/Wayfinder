@@ -62,8 +62,10 @@ internal sealed partial class SupportSystemActions(IReadOnlyDictionary<string, I
         var inputs = new Dictionary<string, SupportSystemInputValue>(StringComparer.Ordinal);
         foreach (var input in capability.Inputs)
         {
-            var fieldKey = inputFieldRefs?.GetString(input.Key);
-            var raw = fieldKey is not null ? fieldValues.GetValueOrDefault(fieldKey) : null;
+            var mapped = inputFieldRefs?.GetString(input.Key);
+            var raw = input.Format == SupportSystemInputFormats.Fixed
+                ? mapped
+                : mapped is not null ? fieldValues.GetValueOrDefault(mapped) : null;
             inputs[input.Key] = SupportSystemInputValue.Resolve(raw);
         }
 

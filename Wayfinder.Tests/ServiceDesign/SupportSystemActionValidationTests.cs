@@ -33,6 +33,7 @@ public class SupportSystemActionValidationTests
                 [
                     new() { Key = "file", Title = "File", ValueKind = ComponentPropertyValueKind.String, Required = true },
                     new() { Key = "notes", Title = "Notes", ValueKind = ComponentPropertyValueKind.String },
+                    new() { Key = "template", Title = "Template", ValueKind = ComponentPropertyValueKind.String, Format = SupportSystemInputFormats.Fixed },
                 ],
                 Outputs =
                 [
@@ -287,6 +288,50 @@ public class SupportSystemActionValidationTests
             var blueprint = MakeBlueprint(MakeAction());
 
             blueprint.ValidateDataDisplayBindings().Should().Contain(d => d.Code == "DATA_DISPLAY_UNKNOWN_FIELD");
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public void A_fixed_input_is_a_value_the_blueprint_writes_and_is_not_checked_against_the_fields()
+    {
+        SupportSystemRegistry.ResetForTests();
+        SupportSystemRegistry.Register(FixtureDescriptor());
+        try
+        {
+            var blueprint = MakeBlueprint(MakeAction(new Dictionary<string, object?>
+            {
+                ["supportSystemKey"] = SupportSystemKey,
+                ["capabilityKey"] = CapabilityKey,
+                ["inputs"] = new Dictionary<string, object?> { ["file"] = "riskAssessment", ["template"] = "decision-letter" },
+            }));
+
+            blueprint.ValidateSupportSystemActions().Should().BeEmpty();
+        }
+        finally
+        {
+            SupportSystemRegistry.ResetForTests();
+        }
+    }
+
+    [Fact]
+    public void A_required_input_given_an_empty_value_is_reported_as_missing()
+    {
+        SupportSystemRegistry.ResetForTests();
+        SupportSystemRegistry.Register(FixtureDescriptor());
+        try
+        {
+            var blueprint = MakeBlueprint(MakeAction(new Dictionary<string, object?>
+            {
+                ["supportSystemKey"] = SupportSystemKey,
+                ["capabilityKey"] = CapabilityKey,
+                ["inputs"] = new Dictionary<string, object?> { ["file"] = " " },
+            }));
+
+            blueprint.ValidateSupportSystemActions().Select(d => d.Code).Should().Contain("SUPPORT_SYSTEM_ACTION_MISSING_REQUIRED_INPUT");
         }
         finally
         {
